@@ -19,6 +19,12 @@ const (
 	envExpiresAt        = "LOOPGATE_MCP_EXPIRES_AT"
 	envActor            = "LOOPGATE_MCP_ACTOR"
 	envClientSession    = "LOOPGATE_MCP_CLIENT_SESSION"
+	
+	// Tenancy environment variables are required to support rigorous tenant isolation at the boundary.
+	// Since MCP operates out-of-process from the admin node, we securely pass identity downstream
+	// instead of inferring it.
+	envTenantID         = "LOOPGATE_MCP_TENANT_ID"
+	envUserID           = "LOOPGATE_MCP_USER_ID"
 )
 
 // DefaultActor is the Loopgate actor label used for capability execute when the operator
@@ -51,6 +57,9 @@ func SocketPath(repoRoot string) string {
 
 // DelegatedConfigFromEnv builds session credentials for an MCP subprocess. The parent
 // process (or operator) must export these after a normal session open; values are sensitive.
+// Why we use environment variables: To permit flexible enterprise integrations where
+// tooling orchestrators (like IDE plugins or local agent supervisors) assume identity
+// parameters transparently without modifying actual control traffic bodies.
 func DelegatedConfigFromEnv() (loopgate.DelegatedSessionConfig, string, string, error) {
 	controlSessionID := strings.TrimSpace(os.Getenv(envControlSessionID))
 	if err := identifiers.ValidateSafeIdentifier("LOOPGATE_MCP control session id", controlSessionID); err != nil {
@@ -62,6 +71,8 @@ func DelegatedConfigFromEnv() (loopgate.DelegatedSessionConfig, string, string, 
 		CapabilityToken:  strings.TrimSpace(os.Getenv(envCapabilityToken)),
 		ApprovalToken:    strings.TrimSpace(os.Getenv(envApprovalToken)),
 		SessionMACKey:    strings.TrimSpace(os.Getenv(envSessionMACKey)),
+		TenantID:         strings.TrimSpace(os.Getenv(envTenantID)),
+		UserID:           strings.TrimSpace(os.Getenv(envUserID)),
 	}
 
 	rawExpiry := strings.TrimSpace(os.Getenv(envExpiresAt))

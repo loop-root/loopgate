@@ -27,6 +27,7 @@ func main() {
 	}
 
 	acceptPolicy := flag.Bool("accept-policy", false, "accept a changed policy file hash on startup")
+	enableAdmin := flag.Bool("admin", false, "start loopback admin console TCP server when admin_console.enabled is true in config/runtime.yaml")
 	flag.Parse()
 
 	repoRoot := os.Getenv("MORPH_REPO_ROOT")
@@ -52,7 +53,7 @@ func main() {
 	if envSocket := strings.TrimSpace(os.Getenv("LOOPGATE_SOCKET")); envSocket != "" {
 		socketPath = filepath.Clean(envSocket)
 	}
-	server, err := loopgate.NewServerWithOptions(repoRoot, socketPath, *acceptPolicy)
+	server, err := loopgate.NewServerWithOptions(repoRoot, socketPath, *acceptPolicy, *enableAdmin)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR: initialize loopgate server:", err)
 		os.Exit(1)
@@ -67,6 +68,9 @@ func main() {
 	defer stop()
 
 	fmt.Printf("Loopgate listening on %s\n", socketPath)
+	if adminAddr := server.ConfiguredAdminListenAddr(); adminAddr != "" {
+		fmt.Fprintf(os.Stderr, "Admin console (configured bind): tcp://%s — open http://%s/admin/ after startup\n", adminAddr, adminAddr)
+	}
 	if err := server.Serve(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR: serve loopgate:", err)
 		os.Exit(1)

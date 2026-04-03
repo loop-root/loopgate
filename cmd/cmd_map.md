@@ -17,6 +17,7 @@ Use it when changing:
 - `main.go`
   - constructs socket path `runtime/state/loopgate.sock` under cwd-as-repo-root
   - optional `-accept-policy` for policy hash acknowledgment
+  - optional `-admin` to start the **loopback admin console** TCP listener when `admin_console.enabled` is true in `config/runtime.yaml` (requires `LOOPGATE_ADMIN_TOKEN`); see `docs/setup/ADMIN_CONSOLE.md`
   - runs `memory.InspectUnsupportedRawMemoryArtifacts` with warnings to stderr
   - starts `loopgate.NewServerWithOptions` and runs until signal
 

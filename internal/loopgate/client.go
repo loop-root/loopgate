@@ -60,6 +60,8 @@ type DelegatedSessionConfig struct {
 	CapabilityToken  string
 	ApprovalToken    string
 	SessionMACKey    string
+	TenantID         string
+	UserID           string
 	ExpiresAt        time.Time
 }
 

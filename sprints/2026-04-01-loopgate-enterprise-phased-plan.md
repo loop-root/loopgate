@@ -82,10 +82,10 @@ Phase 4 (chat regressions) ──► parallel; unblocks Haven demo but must not 
 
 **Exit criteria**
 
-- [ ] Tool registration mirrors typed capabilities without inventing a parallel permission model. *(v0: generic `loopgate.execute_capability` + `loopgate.status`; expand to typed tool names.)*
-- [ ] Denials and approvals behave like HTTP paths (tests that compare or share fixtures where practical).
-- [ ] Memory tools (`memory.remember`, recall) go through the same enforcement as existing paths. *(Achievable today via `execute_capability` with `capability=memory.remember`; dedicated MCP tool aliases TBD.)*
-- [ ] MCP lifecycle and request failures are **logged** on the appropriate diagnostic channel (see Operational logging), including **`tenant_id` / `user_id`** on each tool or session-scoped line when the MCP connection is bound to a control session; operators can raise verbosity via `logging.diagnostic` without code changes.
+- [x] Tool registration mirrors typed capabilities without inventing a parallel permission model. *(v0: generic `loopgate.execute_capability` + `loopgate.status`; expand to typed tool names.)*
+- [x] Denials and approvals behave like HTTP paths (tests that compare or share fixtures where practical).
+- [x] Memory tools (`memory.remember`, recall) go through the same enforcement as existing paths. *(Achievable today via `execute_capability` with `capability=memory.remember`; dedicated MCP tool aliases TBD.)*
+- [x] MCP lifecycle and request failures are **logged** on the appropriate diagnostic channel (see Operational logging), including **`tenant_id` / `user_id`** on each tool or session-scoped line when the MCP connection is bound to a control session; operators can raise verbosity via `logging.diagnostic` without code changes.
 - [x] ADR: library choice (e.g. mcp-go) and why, plus escape hatch if we replace it. *(ADR 0005 + `docs/setup/LOOPGATE_MCP.md`.)*
 
 **MCP vs proxy (what Phase 2 does *not* replace):** In a typical IDE setup, **chat** traffic flows **IDE ↔ model provider** (or local model); the MCP server receives **tool calls** only. Loopgate then sits **between the model and governed actions** (capabilities, memory via tools like `memory.remember` / recall, approvals) — **not** automatically between the model and every user token. **Automatic memory-in-context** for the whole prompt requires **transparent proxy mode** (IDE → Loopgate → provider) or an equivalent client-side injection strategy. **Proxy mode** is already a **documented enterprise target** (same policy/audit parity as HTTP) but **deferred behind MCP** in `AGENTS/BUILD_NOW.md` and tracked alongside MCP in `docs/roadmap/roadmap.md` / `context_map.md`. The two surfaces **compose**: MCP for tools + proxy for chat when both ship.
@@ -124,8 +124,8 @@ Phase 4 (chat regressions) ──► parallel; unblocks Haven demo but must not 
 
 **Exit criteria**
 
-- [ ] Canonicalization accepts documented key families; tests for regression.
-- [ ] ADR: why the registry stays compiled-in for now vs external config (tradeoff: deploy velocity vs operator tunability).
+- [x] Canonicalization accepts documented key families; tests for regression.
+- [x] ADR: why the registry stays compiled-in for now vs external config (tradeoff: deploy velocity vs operator tunability).
 
 ---
 
@@ -135,10 +135,10 @@ Phase 4 (chat regressions) ──► parallel; unblocks Haven demo but must not 
 
 **Exit criteria**
 
-- [ ] Panic recovery **logs** at **ERROR** (or **WARN** only if the panic is fully benign and the response is still correct); include a stable message prefix, **`tenant_id` / `user_id`** when the handler has bound a session, request correlation where available, and stack or `panic` value **without** leaking secrets. Recovery must not swallow failures that must fail closed for security — document the distinction in code comments.
-- [ ] Other error paths in the same handlers (timeouts, provider errors, partial write failures) log at **WARN** or **ERROR** with the same redaction rules and **tenant/user** attributes when known so support can follow `server.log` / `model.log` without reproducing in a debugger.
-- [ ] Audit coverage on failure paths where security-relevant work occurred.
-- [ ] Linked issues or ADR snippet if behavior is intentionally product-shaped (e.g. streaming contracts).
+- [x] Panic recovery **logs** at **ERROR** (or **WARN** only if the panic is fully benign and the response is still correct); include a stable message prefix, **`tenant_id` / `user_id`** when the handler has bound a session, request correlation where available, and stack or `panic` value **without** leaking secrets. Recovery must not swallow failures that must fail closed for security — document the distinction in code comments.
+- [x] Other error paths in the same handlers (timeouts, provider errors, partial write failures) log at **WARN** or **ERROR** with the same redaction rules and **tenant/user** attributes when known so support can follow `server.log` / `model.log` without reproducing in a debugger.
+- [x] Audit coverage on failure paths where security-relevant work occurred (`haven.chat`, `haven.chat.error`, `haven.chat.denied` in `server_haven_chat.go`).
+- [x] Linked issues or ADR snippet if behavior is intentionally product-shaped (e.g. streaming contracts). *(Streaming remains product-shaped; no separate ADR — behavior documented in handler comments.)*
 
 ---
 
@@ -148,12 +148,12 @@ Phase 4 (chat regressions) ──► parallel; unblocks Haven demo but must not 
 
 **Exit criteria**
 
-- [ ] No unauthenticated exposure of policy or audit contents.
-- [ ] Respects `tenant_id` (admin sees only authoritative scope for that deployment mode).
-- [ ] Admin-relevant actions and auth failures are **logged** (diagnostic channels) with **`tenant_id`** (and admin identity fields as appropriate, redacted) so operators can trace “why can’t this admin log in?” and “who loaded policy?” per tenant without enabling a separate debug build.
-- [ ] ADR: auth mechanism for v0 and known limitations.
+- [x] No unauthenticated exposure of policy or audit contents.
+- [x] Respects `tenant_id` (admin sees only authoritative scope for that deployment mode).
+- [x] Admin-relevant actions and auth failures are **logged** (diagnostic channels) with **`tenant_id`** (and admin identity fields as appropriate, redacted) so operators can trace “why can’t this admin log in?” and “who loaded policy?” per tenant without enabling a separate debug build.
+- [x] ADR: auth mechanism for v0 and known limitations.
 
-**Note:** `internal/loopgate/web/admin/` may be legacy; confirm in repo before reusing vs greenfield — record decision in ADR.
+**Note:** Greenfield implementation in `internal/loopgate/admin_console.go` (no `internal/loopgate/web/admin/` tree in repo). ADR 0016 + `docs/setup/ADMIN_CONSOLE.md`.
 
 ---
 
@@ -177,6 +177,22 @@ Phases 1–5 deliberately defer **customer-chosen identity and secret infrastruc
 
 ---
 
+## Repository alignment (audit checklist)
+
+Use this when the sprint doc and code drift. **Last verified against tree:** 2026-04-01.
+
+| Phase / claim | Where to verify in repo |
+|---------------|-------------------------|
+| **1** Tenancy + memory partitions | `docs/setup/TENANCY.md`, `memory_partition.go`, ADR 0004, `tenancy_phase1_test.go` |
+| **2** MCP stdio + dynamic tools | `cmd/loopgate/main.go` (`mcp-serve`), `internal/loopgate/mcpserve/`, `docs/setup/LOOPGATE_MCP.md`, ADR 0005 |
+| **3** `goal.*` / `work.*` registry | `internal/tcl/memory_registry.go` (`explicitMemoryPrefixRules`), ADR 0006 |
+| **4** Haven chat logging / audit | `server_haven_chat.go` (`haven_chat_*` diagnostic, `haven.chat*` audit) |
+| **5** Admin console | `internal/loopgate/admin_console.go`, `loopgate --admin`, `config/runtime.yaml` → `admin_console`, `LOOPGATE_ADMIN_TOKEN`, `docs/setup/ADMIN_CONSOLE.md`, ADR 0016 |
+
+**Doc drift fixed:** `LOOPGATE_MCP.md` — `LOOPGATE_MCP_TENANT_ID` / `LOOPGATE_MCP_USER_ID` match code (optional strings for personal mode; omit or empty when deployment tenant is unset).
+
+---
+
 ## Phase completion log
 
 Append rows here as phases ship:
@@ -184,10 +200,10 @@ Append rows here as phases ship:
 | Phase | Completed (date) | Notes |
 |-------|------------------|-------|
 | 1 | 2026-04-01 (complete) | `controlSession` tenancy, session open from `runtime.yaml`, audit + `logEvent` (+ approval-path lock fix), morphling tenant mismatch → deny, memory **partitions** + migration + tests + `TENANCY.md`, ADR 0004, diagnostic **tenant_id** / **user_id** on audit-derived logs + Haven chat. Grants/secrets: instance-scoped for v1; Vault/IdP deferred (see § *Future enterprise integration layers*). |
-| 2 | 2026-04-01 (in progress) | `loopgate mcp-serve` + `internal/loopgate/mcpserve` (mcp-go stdio → UDS client + delegated env). Remaining: typed tools, tests vs HTTP fixtures, diagnostic tenant logging on tool path. |
-| 3 | | |
-| 4 | | |
-| 5 | | |
+| 2 | 2026-04-03 (complete) | `loopgate mcp-serve` now fetches dynamic capabilities and registers them as typed MCP tools (e.g., `memory.remember`, `fs_list`), passing correct environment telemetry through a configured `loopdiag` integration (`tenant_id`, `user_id`). Tests verify denial/success matching HTTP constraints. |
+| 3 | 2026-04-03 (complete) | Added `goal.*` and `work.*` prefixes. Expanded preference facet mappings. Updated capabilities hint. Logged ADR 0006-explicit-memory-key-registry-compiled-until-signed-admin-distribution. |
+| 4 | 2026-04-03 (complete) | Fixed Haven Chat panics (secured fail-closed route explicitly), appended missing loopdiag logs with tenant context to all HTTP early returns, added `haven.chat.error` audit telemetry, elongated local model timeout configs for `openai_compatible` inference, patched Swift array attachment force unwraps, repaired typing indicator. |
+| 5 | 2026-04-01 (complete) | Loopback admin console v0: dual gate (`admin_console.enabled` + `--admin`), bcrypt-hashed `LOOPGATE_ADMIN_TOKEN`, `/admin/*` policy + redacted audit CSV/HTML + session list, tenant filter when `deployment_tenant_id` set, diagnostic `admin_console_*` events with deployment tenant id, tests for redirect/login/redaction/filter. |
 
 ---
 

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+  <!-- Loopgate mark: gate arch + control loop -->
+  <path
+    stroke="#1a1816"
+    stroke-width="2.25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M7.5 27V13.5c0-4.7 3.8-8.5 8.5-8.5s8.5 3.8 8.5 8.5V27"
+  />
+  <path
+    stroke="#c24e1a"
+    stroke-width="2"
+    stroke-linecap="round"
+    d="M11.5 19.5c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5-2 4.5-4.5 4.5c-1.4 0-2.7-.65-3.55-1.65"
+  />
+  <circle cx="16" cy="19.5" r="1.35" fill="#1a1816" />
+</svg>

@@ -43,6 +43,39 @@ func (provider *sequenceModelProvider) recordedRequests() []modelpkg.Request {
 	return recordedRequests
 }
 
+func TestBuildResidentCapabilityFacts_MemoryRememberHintMatchesRegistry(t *testing.T) {
+	capabilitySummaries := []CapabilitySummary{
+		{Name: "memory.remember"},
+	}
+
+	runtimeFacts := buildResidentCapabilityFacts(capabilitySummaries)
+	var memoryFact string
+	for _, runtimeFact := range runtimeFacts {
+		if strings.Contains(runtimeFact, "memory.remember proposes durable facts") {
+			memoryFact = runtimeFact
+			break
+		}
+	}
+	if memoryFact == "" {
+		t.Fatalf("expected memory.remember runtime fact, got %#v", runtimeFacts)
+	}
+	if !strings.Contains(memoryFact, "work details") {
+		t.Fatalf("expected work guidance in memory.remember runtime fact, got %q", memoryFact)
+	}
+	if !strings.Contains(memoryFact, "standing goals") {
+		t.Fatalf("expected goals guidance in memory.remember runtime fact, got %q", memoryFact)
+	}
+	if !strings.Contains(memoryFact, "goal.current_sprint") {
+		t.Fatalf("expected supported goal key example in memory.remember runtime fact, got %q", memoryFact)
+	}
+	if !strings.Contains(memoryFact, "work.focus_area") {
+		t.Fatalf("expected supported work key example in memory.remember runtime fact, got %q", memoryFact)
+	}
+	if strings.Contains(memoryFact, "context.recent_topic") {
+		t.Fatalf("did not expect unsupported context key example in memory.remember runtime fact, got %q", memoryFact)
+	}
+}
+
 func TestHavenChat_EnablesToolsAndExecutesMemoryRemember(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -139,9 +172,9 @@ func TestHavenChat_KeepsApprovalRequiredToolPending(t *testing.T) {
 		responses: []modelpkg.Response{
 			{
 				AssistantText: `<tool_call>{"name":"external_write","args":{}}</tool_call>`,
-				ProviderName: "stub",
-				ModelName:    "stub",
-				FinishReason: "tool_calls",
+				ProviderName:  "stub",
+				ModelName:     "stub",
+				FinishReason:  "tool_calls",
 			},
 		},
 	}

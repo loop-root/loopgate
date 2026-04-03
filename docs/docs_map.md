@@ -31,7 +31,7 @@ Notable entrypoints (see also `context_map.md`):
 
 ## Setup (`docs/setup/`)
 
-- `SETUP.md`, `SECRETS.md` (includes **enterprise secrets roadmap**: Vault/KMS/HSM/TPM-class backends), `TOOL_USAGE.md` — operator-facing setup
+- `SETUP.md`, `SECRETS.md` (includes **enterprise secrets roadmap**: Vault/KMS/HSM/TPM-class backends), `TOOL_USAGE.md`, **`ADMIN_CONSOLE.md`** (v0 loopback admin UI: `--admin`, `LOOPGATE_ADMIN_TOKEN`, tenant-scoped audit/sessions) — operator-facing setup
 - `TENANCY.md` — `tenant_id` / `user_id` on control sessions (`config/runtime.yaml`), audit, morphling checks, **on-disk memory partitions** under `runtime/state/memory/partitions/`, migration from legacy layout, per-tenant Haven reset scope
 - `LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — **HTTP over Unix socket** for Swift/native apps: tokens, HMAC envelope, endpoint inventory (v1 transport)
 - `LOOPGATE_MCP.md` — **`loopgate mcp-serve`**: stdio MCP, delegated `LOOPGATE_MCP_*` env, tools forwarding to socket HTTP (AMP-aligned)

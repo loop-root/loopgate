@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/loopgate-mark.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Loopgate is the local control plane for governed AI: policy, capabilities, approvals, secrets, sandboxing, audit, and morphling lifecycle."
+    />
+    <title>Loopgate — Governed AI control plane</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400;1,9..144,600&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Nunito:ital,wght@0,500;0,600;0,700;0,800;1,600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="page">
+      <header class="site-header">
+        <div class="site-header__stripe" aria-hidden="true"></div>
+        <div class="site-header__chrome">
+          <div class="site-header__titlebar">
+            <span class="mac-traffic" aria-hidden="true"></span>
+            <span class="site-header__win-title">Loopgate</span>
+            <span class="site-header__titlebar-spacer" aria-hidden="true"></span>
+          </div>
+          <div class="site-header__inner">
+            <a class="brand" href="#top">
+              <img src="/loopgate-mark.svg" alt="" width="36" height="36" class="brand__mark" />
+              <span class="brand__name">Loopgate</span>
+            </a>
+            <nav class="nav" aria-label="Primary">
+              <a href="#what">What it is</a>
+              <a href="#how">How it works</a>
+              <a href="#pillars">Principles</a>
+              <a href="#status">Status</a>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      <main id="main">
+        <section class="hero" id="top">
+          <div class="hero__window mac-window animate-in">
+            <div class="mac-window__titlebar">
+              <span class="mac-traffic" aria-hidden="true"></span>
+              <span class="mac-window__title">ReadMe — Governed execution</span>
+              <span class="mac-window__titlebar-spacer" aria-hidden="true"></span>
+            </div>
+            <div class="mac-window__body">
+              <p class="hero__eyebrow animate-in animate-in--2">Local-first control plane</p>
+              <h1 class="hero__title animate-in animate-in--3">
+                Governed AI execution, <em>without</em> treating the model as authority.
+              </h1>
+              <p class="hero__lede animate-in animate-in--4">
+                Loopgate is the enforcement layer for real work with agents: capabilities, approvals,
+                policy, secrets, sandbox mediation, append-only audit, continuity memory, and
+                <strong>morphling</strong> lifecycle—so natural language never mints permission on its own.
+              </p>
+              <div class="hero__actions animate-in animate-in--4">
+                <a class="btn btn--primary" href="#what">Explore Loopgate</a>
+                <a class="btn btn--ghost" href="#status">Experimental preview</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section section--tint" id="what">
+          <div class="section__inner">
+            <h2 class="section__title">What Loopgate is</h2>
+            <p class="section__intro">
+              A <strong>policy-governed</strong> runtime that sits between your operator client (for example,
+              Haven) and anything privileged: filesystem tools, integrations, and durable memory writes.
+              It is not a reverse proxy—it is where allow/deny actually happens.
+            </p>
+            <ul class="feature-grid">
+              <li class="feature-card feature-card--amber">
+                <h3>Capabilities &amp; policy</h3>
+                <p>
+                  Deny-by-default evaluation, scoped capability tokens, and typed results—so only
+                  explicitly allowed actions run.
+                </p>
+              </li>
+              <li class="feature-card feature-card--red">
+                <h3>Approvals &amp; audit</h3>
+                <p>
+                  Human-in-the-loop decisions enforced in the control plane, with append-only,
+                  hash-linked event history for security-relevant transitions.
+                </p>
+              </li>
+              <li class="feature-card feature-card--green">
+                <h3>Secrets &amp; integrations</h3>
+                <p>
+                  Provider credentials stay inside Loopgate. The client sees redacted metadata and
+                  structured outcomes—not raw tokens.
+                </p>
+              </li>
+              <li class="feature-card feature-card--blue">
+                <h3>Sandbox mediation</h3>
+                <p>
+                  Imports, staging, inspection, and export move through explicit, mediated steps under
+                  <code>/morph/home</code>—not ad hoc host access from the model.
+                </p>
+              </li>
+              <li class="feature-card feature-card--orange">
+                <h3>Morphlings</h3>
+                <p>
+                  Bounded subordinate workers with a Loopgate-owned lifecycle: spawn, run, complete,
+                  review, terminate—never self-authorizing background agents.
+                </p>
+              </li>
+              <li class="feature-card feature-card--spectrum">
+                <h3>Memory &amp; continuity</h3>
+                <p>
+                  Governed recall, inspection, and explicit writes—continuity is bounded and
+                  policy-shaped, not an immutable dump of raw chat.
+                </p>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section" id="how">
+          <div class="section__inner section__inner--split">
+            <div>
+              <h2 class="section__title">How the pieces fit</h2>
+              <p class="section__intro">
+                Three roles keep authority clear: the operator supplies intent and approval; the client
+                handles conversation and session UX; Loopgate owns tokens, policy, execution, and
+                authoritative control-plane audit.
+              </p>
+            </div>
+            <ol class="role-list">
+              <li class="role-card role-card--amber">
+                <div class="role-card__title">Operator</div>
+                <p class="role-card__copy">
+                  You ask for real work in plain language—for example: &ldquo;Can you check my calendar and
+                  email Karen to line up an appointment?&rdquo; You also review approvals when Loopgate says
+                  a step needs an explicit yes or no.
+                </p>
+              </li>
+              <li class="role-card role-card--blue">
+                <div class="role-card__title">Client</div>
+                <p class="role-card__copy">
+                  The app you&rsquo;re already in: <strong>Haven</strong>, or a coding assistant such as
+                  <strong>Claude Code</strong>, <strong>Cursor</strong>, <strong>Codex</strong>,
+                  <strong>Antigravity</strong>, and similar tools. It runs the chat, shows tool suggestions,
+                  and <em>renders</em> Loopgate&rsquo;s allow/deny outcomes—it does not get to bypass them.
+                </p>
+              </li>
+              <li class="role-card role-card--orange">
+                <div class="role-card__title">Loopgate</div>
+                <p class="role-card__copy">
+                  The control plane that decides what is allowed. It evaluates policy, mints capability
+                  tokens, holds secrets, mediates sandbox and integrations, governs morphlings and memory
+                  writes, and records authoritative audit—every privileged step goes through it or it
+                  doesn&rsquo;t happen.
+                </p>
+              </li>
+            </ol>
+          </div>
+          <div class="callout">
+            <p>
+              <strong>Core rule:</strong> the model never calls third-party systems directly. The path is
+              model output → client validation → Loopgate capability request → mediated execution →
+              structured response.
+            </p>
+          </div>
+        </section>
+
+        <section class="section section--tint" id="pillars">
+          <div class="section__inner">
+            <h2 class="section__title">Design pillars</h2>
+            <ul class="pillar-list">
+              <li class="pillar-list__item pillar-list__item--amber">
+                <span class="pillar-list__tag">Authority</span>
+                Natural language is not permission—only the control plane mints and spends capability.
+              </li>
+              <li class="pillar-list__item pillar-list__item--red">
+                <span class="pillar-list__tag">Untrusted by default</span>
+                Model output, tool output, and files are content until validated by policy and types.
+              </li>
+              <li class="pillar-list__item pillar-list__item--blue">
+                <span class="pillar-list__tag">Local v1</span>
+                Supported transport is HTTP on a Unix domain socket on the same machine—not a public
+                network API.
+              </li>
+              <li class="pillar-list__item pillar-list__item--orange">
+                <span class="pillar-list__tag">Enterprise direction</span>
+                MCP server, transparent proxy, multi-tenant <code>tenant_id</code> isolation, and admin
+                tooling—without relaxing the same policy and audit rules as local handlers.
+              </li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section" id="status">
+          <div class="section__inner">
+            <h2 class="section__title">Status</h2>
+            <p>
+              Loopgate is <strong>experimental</strong> and under active hardening. Treat it as
+              not production-ready security software without your own review. The implementation is
+              proprietary—see the <code>LICENSE</code> in the repository.
+            </p>
+            <p>
+              Technical documentation, architecture, setup, and threat modeling live alongside the code
+              in the <code>docs/</code> tree (start with <code>docs/README.md</code> and
+              <code>docs/design_overview/</code>).
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="site-footer__inner">
+          <div class="site-footer__left">
+            <span class="site-footer__brand">Loopgate</span>
+            <span class="site-footer__meta">Governed AI control plane · local enforcement</span>
+          </div>
+          <div class="site-footer__retro" aria-hidden="true">
+            <span class="site-footer__counter">hits: <strong>000084</strong></span>
+            <span class="site-footer__best">best viewed with curiosity</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

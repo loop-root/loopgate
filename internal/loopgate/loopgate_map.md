@@ -34,6 +34,10 @@ For this sprint it matters in four ways:
 
 - `mcpserve/` — **`loopgate mcp-serve`**: stdio MCP (`mcp-go`), tools forward to **`loopgate.Client`** + delegated `LOOPGATE_MCP_*` env against the Unix socket (no second control-plane writer). See `docs/setup/LOOPGATE_MCP.md`, ADR 0005.
 
+### Admin console (v0)
+
+- `admin_console.go` — optional **loopback TCP** server (requires `config/runtime.yaml` → `admin_console.enabled` **and** `loopgate --admin` **and** `LOOPGATE_ADMIN_TOKEN`). Routes under `/admin/`: login, policy (active JSON + morphling YAML seed), audit (redacted HTML/CSV), control-session list. Tenant-filtered when `tenancy.deployment_tenant_id` is set. See `docs/setup/ADMIN_CONSOLE.md`, ADR 0016.
+
 ### Authority and Capability Inventory
 
 - `server.go`

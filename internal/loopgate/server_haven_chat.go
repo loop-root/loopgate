@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	maxHavenChatBodyBytes         = 8 * 1024 * 1024 // 8 MB — allows image attachments (base64)
-	maxHavenChatTurns             = 20
-	maxHavenToolIterations        = 12
+	maxHavenChatBodyBytes  = 8 * 1024 * 1024 // 8 MB — allows image attachments (base64)
+	maxHavenChatTurns      = 20
+	maxHavenToolIterations = 12
 	// When the model answers host-folder organize asks with prose only (no tools), re-prompt
 	// it this many times before returning the last assistant text to the client.
 	// Each nudge is an extra full model round-trip in the same HTTP request — high values
@@ -34,9 +34,9 @@ const (
 	// After host.organize.plan succeeds, the model often answers with prose claiming Loopgate
 	// approval is pending — but approvals are only created when host.plan.apply runs. Nudge apply
 	// this many times before giving up (each nudge is one extra model round-trip).
-	maxHavenHostPlanApplyNudges = 2
-	openAICompatibleModelsTimeout     = 4 * time.Second
-	useCompactHavenNativeTools        = true
+	maxHavenHostPlanApplyNudges   = 2
+	openAICompatibleModelsTimeout = 4 * time.Second
+	useCompactHavenNativeTools    = true
 )
 
 const havenToolLoopContinuationFact = "You are after tool results in the thread. Continue from the user's **latest** message; those outputs are authoritative. Do not re-run tools that already succeeded in this thread unless the user explicitly asks to redo or refresh. Do **not** call host.folder.*, host.organize.plan, or host.plan.apply unless (a) the user's latest message is clearly about listing/organizing a granted Mac folder, or (b) you are in the middle of that same workflow in **this** request (e.g. you just listed and must plan, or plan just returned plan_id and apply is next). If the user narrowed scope (e.g. only memory, or said organizing is not needed), answer with text or the tools that match—do not drag in host organize. Do not restart with a generic greeting or onboarding menu unless they changed topic."
@@ -85,32 +85,32 @@ type havenCapabilityDescriptor struct {
 }
 
 var havenCapabilityCatalog = map[string]havenCapabilityDescriptor{
-	"fs_list":              {DisplayName: "Browse Files", RuntimeHint: "browse folders and see what is in your workspace"},
-	"fs_read":              {DisplayName: "Read Documents", RuntimeHint: "read files that already exist in your workspace"},
-	"fs_write":             {DisplayName: "Save Work", RuntimeHint: "create and update files in your workspace"},
-	"fs_mkdir":             {DisplayName: "Create Folders", RuntimeHint: "create new folders to organize your workspace"},
-	"journal.list":         {DisplayName: "Journal", RuntimeHint: "review your private journal entries"},
-	"journal.read":         {DisplayName: "Journal", RuntimeHint: "read a private journal entry"},
-	"journal.write":        {DisplayName: "Journal", RuntimeHint: "write a private journal entry when the user asks for reflection or journaling"},
-	"notes.list":           {DisplayName: "Notes", RuntimeHint: "review your private working notes"},
-	"notes.read":           {DisplayName: "Notes", RuntimeHint: "read a working note from your notebook"},
-	"notes.write":          {DisplayName: "Notes", RuntimeHint: "save a working note for plans, scratch work, or research"},
-	"memory.remember":      {DisplayName: "Remember Things", RuntimeHint: "propose short structured continuity (preferences, routines, profile, goals); Loopgate accepts or rejects; do not invent facts or store secrets"},
-	"paint.list":           {DisplayName: "Paint", RuntimeHint: "review the paintings in your gallery"},
-	"paint.save":           {DisplayName: "Paint", RuntimeHint: "create a painting from explicit strokes and save it to your gallery"},
-	"note.create":          {DisplayName: "Sticky Notes", RuntimeHint: "leave a sticky note on the desktop for the user"},
-	"desktop.organize":     {DisplayName: "Desktop Layout", RuntimeHint: "rearrange the desktop icons to tidy up Haven"},
-	"todo.add":             {DisplayName: "Task Board", RuntimeHint: "add a task when the user wants a reminder or explicitly asks to track something across sessions"},
-	"todo.complete":        {DisplayName: "Task Board", RuntimeHint: "mark a task as done when it no longer needs attention"},
-	"todo.list":            {DisplayName: "Task Board", RuntimeHint: "review your open tasks and active goals"},
-	"goal.set":             {DisplayName: "Goals", RuntimeHint: "set a named persistent goal for ongoing work or a multi-session objective the user wants to track"},
-	"goal.close":           {DisplayName: "Goals", RuntimeHint: "close a goal when the objective has been achieved or the user no longer wants to track it"},
-	"shell_exec":           {DisplayName: "Terminal Commands", RuntimeHint: "run terminal commands when a task genuinely requires the command line"},
-	"host.folder.list":     {DisplayName: "Granted host folders", RuntimeHint: "list files in a user-granted folder on the real host filesystem"},
-	"host.folder.read":     {DisplayName: "Granted host folders", RuntimeHint: "read a file under a granted host folder on disk"},
-	"host.organize.plan":   {DisplayName: "Granted host folders", RuntimeHint: "draft a move or mkdir plan for a granted folder (no host writes until apply)"},
-	"host.plan.apply":      {DisplayName: "Granted host folders", RuntimeHint: "execute an approved organization plan on the real host filesystem"},
-	"invoke_capability":    {DisplayName: "Capability Dispatcher", RuntimeHint: "dispatch a single allowed Haven capability"},
+	"fs_list":            {DisplayName: "Browse Files", RuntimeHint: "browse folders and see what is in your workspace"},
+	"fs_read":            {DisplayName: "Read Documents", RuntimeHint: "read files that already exist in your workspace"},
+	"fs_write":           {DisplayName: "Save Work", RuntimeHint: "create and update files in your workspace"},
+	"fs_mkdir":           {DisplayName: "Create Folders", RuntimeHint: "create new folders to organize your workspace"},
+	"journal.list":       {DisplayName: "Journal", RuntimeHint: "review your private journal entries"},
+	"journal.read":       {DisplayName: "Journal", RuntimeHint: "read a private journal entry"},
+	"journal.write":      {DisplayName: "Journal", RuntimeHint: "write a private journal entry when the user asks for reflection or journaling"},
+	"notes.list":         {DisplayName: "Notes", RuntimeHint: "review your private working notes"},
+	"notes.read":         {DisplayName: "Notes", RuntimeHint: "read a working note from your notebook"},
+	"notes.write":        {DisplayName: "Notes", RuntimeHint: "save a working note for plans, scratch work, or research"},
+	"memory.remember":    {DisplayName: "Remember Things", RuntimeHint: "propose short structured continuity (preferences, routines, profile, goals); Loopgate accepts or rejects; do not invent facts or store secrets"},
+	"paint.list":         {DisplayName: "Paint", RuntimeHint: "review the paintings in your gallery"},
+	"paint.save":         {DisplayName: "Paint", RuntimeHint: "create a painting from explicit strokes and save it to your gallery"},
+	"note.create":        {DisplayName: "Sticky Notes", RuntimeHint: "leave a sticky note on the desktop for the user"},
+	"desktop.organize":   {DisplayName: "Desktop Layout", RuntimeHint: "rearrange the desktop icons to tidy up Haven"},
+	"todo.add":           {DisplayName: "Task Board", RuntimeHint: "add a task when the user wants a reminder or explicitly asks to track something across sessions"},
+	"todo.complete":      {DisplayName: "Task Board", RuntimeHint: "mark a task as done when it no longer needs attention"},
+	"todo.list":          {DisplayName: "Task Board", RuntimeHint: "review your open tasks and active goals"},
+	"goal.set":           {DisplayName: "Goals", RuntimeHint: "set a named persistent goal for ongoing work or a multi-session objective the user wants to track"},
+	"goal.close":         {DisplayName: "Goals", RuntimeHint: "close a goal when the objective has been achieved or the user no longer wants to track it"},
+	"shell_exec":         {DisplayName: "Terminal Commands", RuntimeHint: "run terminal commands when a task genuinely requires the command line"},
+	"host.folder.list":   {DisplayName: "Granted host folders", RuntimeHint: "list files in a user-granted folder on the real host filesystem"},
+	"host.folder.read":   {DisplayName: "Granted host folders", RuntimeHint: "read a file under a granted host folder on disk"},
+	"host.organize.plan": {DisplayName: "Granted host folders", RuntimeHint: "draft a move or mkdir plan for a granted folder (no host writes until apply)"},
+	"host.plan.apply":    {DisplayName: "Granted host folders", RuntimeHint: "execute an approved organization plan on the real host filesystem"},
+	"invoke_capability":  {DisplayName: "Capability Dispatcher", RuntimeHint: "dispatch a single allowed Haven capability"},
 }
 
 type havenChatRequest struct {
@@ -129,29 +129,29 @@ type havenChatAttachment struct {
 
 // HavenChatResponse is the JSON body for POST /v1/haven/chat.
 type HavenChatResponse struct {
-	ThreadID             string `json:"thread_id"`
-	AssistantText        string `json:"assistant_text"`
-	Status               string `json:"status,omitempty"`
-	ApprovalID           string `json:"approval_id,omitempty"`
-	ApprovalCapability   string `json:"approval_capability,omitempty"`
-	ProviderName         string `json:"provider_name,omitempty"`
-	ModelName            string `json:"model_name,omitempty"`
-	FinishReason         string `json:"finish_reason,omitempty"`
-	InputTokens          int    `json:"input_tokens,omitempty"`
-	OutputTokens         int    `json:"output_tokens,omitempty"`
-	TotalTokens          int      `json:"total_tokens,omitempty"`
-	UXSignals            []string `json:"ux_signals,omitempty"`
+	ThreadID           string   `json:"thread_id"`
+	AssistantText      string   `json:"assistant_text"`
+	Status             string   `json:"status,omitempty"`
+	ApprovalID         string   `json:"approval_id,omitempty"`
+	ApprovalCapability string   `json:"approval_capability,omitempty"`
+	ProviderName       string   `json:"provider_name,omitempty"`
+	ModelName          string   `json:"model_name,omitempty"`
+	FinishReason       string   `json:"finish_reason,omitempty"`
+	InputTokens        int      `json:"input_tokens,omitempty"`
+	OutputTokens       int      `json:"output_tokens,omitempty"`
+	TotalTokens        int      `json:"total_tokens,omitempty"`
+	UXSignals          []string `json:"ux_signals,omitempty"`
 }
 
 // havenChatLoopOutcome is the result of the Haven HTTP chat tool loop.
 type havenChatLoopOutcome struct {
-	modelResponse       modelpkg.Response
-	assistantText       string
-	err                 error
-	approvalStatus      string
-	approvalID          string
-	approvalCapability  string
-	uxSignals           []string
+	modelResponse      modelpkg.Response
+	assistantText      string
+	err                error
+	approvalStatus     string
+	approvalID         string
+	approvalCapability string
+	uxSignals          []string
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +252,11 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	var diagTenantID, diagUserID, diagControlSessionID string
 	defer func() {
 		if r := recover(); r != nil {
+			// Panic recovery guarantees the control plane fails safely. We emit an SSE error
+			// so the user knows the turn failed, rather than leaving the stream indefinitely open.
+			// Recovery MUST NOT swallow failures that must fail closed for security — by
+			// recovering here, we abort the HTTP request entirely ensure no permissive state or
+			// capability token is leaked via a half-completed execution.
 			if server.diagnostic != nil && server.diagnostic.Server != nil {
 				args := []any{
 					"panic", fmt.Sprintf("%v", r),
@@ -282,6 +287,14 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	diagTenantID = tokenClaims.TenantID
 	diagUserID = tokenClaims.UserID
 	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
+		if server.diagnostic != nil && server.diagnostic.Server != nil {
+			args := append([]any{"reason", "haven chat requires actor haven"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
+			server.diagnostic.Server.Warn("haven_chat_denied", args...)
+		}
+		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
+			"denial_code": DenialCodeCapabilityTokenInvalid,
+			"reason":      "haven chat requires actor haven",
+		})
 		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "haven chat requires actor haven",
@@ -292,12 +305,28 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxHavenChatBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
+		if server.diagnostic != nil && server.diagnostic.Server != nil {
+			args := append([]any{"reason", denialResponse.DenialReason, "denial_code", denialResponse.DenialCode}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
+			server.diagnostic.Server.Warn("haven_chat_denied", args...)
+		}
+		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
+			"denial_code": denialResponse.DenialCode,
+			"reason":      denialResponse.DenialReason,
+		})
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
 
 	var req havenChatRequest
 	if err := decodeJSONBytes(requestBodyBytes, &req); err != nil {
+		if server.diagnostic != nil && server.diagnostic.Server != nil {
+			args := append([]any{"reason", err.Error()}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
+			server.diagnostic.Server.Warn("haven_chat_denied", args...)
+		}
+		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
+			"denial_code": DenialCodeMalformedRequest,
+			"reason":      err.Error(),
+		})
 		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: err.Error(),
@@ -307,6 +336,14 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	}
 	message := strings.TrimSpace(req.Message)
 	if message == "" {
+		if server.diagnostic != nil && server.diagnostic.Server != nil {
+			args := append([]any{"reason", "message must not be empty"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
+			server.diagnostic.Server.Warn("haven_chat_denied", args...)
+		}
+		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
+			"denial_code": DenialCodeMalformedRequest,
+			"reason":      "message must not be empty",
+		})
 		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "message must not be empty",
@@ -334,6 +371,14 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 
 	homeDir, err := server.resolveUserHomeDir()
 	if err != nil {
+		if server.diagnostic != nil && server.diagnostic.Server != nil {
+			args := append([]any{"reason", "cannot resolve home directory"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
+			server.diagnostic.Server.Error("haven_chat_error", args...)
+		}
+		_ = server.logEvent("haven.chat.error", diagControlSessionID, map[string]interface{}{
+			"denial_code": DenialCodeExecutionFailed,
+			"reason":      "cannot resolve home directory",
+		})
 		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 			Status:       ResponseStatusError,
 			DenialReason: "cannot resolve home directory",
@@ -356,6 +401,10 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	if req.ThreadID != nil && strings.TrimSpace(*req.ThreadID) != "" {
 		threadID = strings.TrimSpace(*req.ThreadID)
 		if _, err := store.LoadThread(threadID); err != nil {
+			if server.diagnostic != nil && server.diagnostic.Server != nil {
+				args := append([]any{"reason", "unknown thread_id", "thread_id", threadID}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
+				server.diagnostic.Server.Warn("haven_chat_denied", args...)
+			}
 			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
 				Status:       ResponseStatusDenied,
 				DenialReason: "unknown thread_id",
@@ -366,6 +415,14 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	} else {
 		summary, err := store.NewThread()
 		if err != nil {
+			if server.diagnostic != nil && server.diagnostic.Server != nil {
+				args := append([]any{"reason", "cannot create thread"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
+				server.diagnostic.Server.Error("haven_chat_error", args...)
+			}
+			_ = server.logEvent("haven.chat.error", diagControlSessionID, map[string]interface{}{
+				"denial_code": DenialCodeExecutionFailed,
+				"reason":      "cannot create thread",
+			})
 			server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 				Status:       ResponseStatusError,
 				DenialReason: "cannot create thread",
@@ -431,7 +488,14 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	modelCtx, cancelModel := context.WithTimeout(request.Context(), 60*time.Second)
+	// Extend the timeout significantly for local models because CPU inference
+	// or slow GPU offload can cause the first token to exceed default windows, 
+	// silently terminating the loop before the response generates.
+	timeoutWindow := 60 * time.Second
+	if runtimeConfig.ProviderName == "openai_compatible" || modelruntime.IsLoopbackModelBaseURL(runtimeConfig.BaseURL) {
+		timeoutWindow = 5 * time.Minute
+	}
+	modelCtx, cancelModel := context.WithTimeout(request.Context(), timeoutWindow)
 	defer cancelModel()
 
 	allowedCapabilitySummaries := filterHavenCapabilitySummaries(server.capabilitySummaries(), tokenClaims.AllowedCapabilities)
@@ -1520,7 +1584,7 @@ func buildResidentCapabilityFacts(capabilitySummaries []CapabilitySummary) []str
 		runtimeFacts = append(runtimeFacts, "You have a Notes app for working memory. Use notes.write for plans, scratch work, or research notes that should persist inside Haven without becoming a journal entry.")
 	}
 	if hasAllHavenCapabilities(availableCapabilities, "memory.remember") {
-		runtimeFacts = append(runtimeFacts, "memory.remember proposes durable facts: call it when the user asks to remember something or states explicit stable preferences, routines, profile or work details, or standing goals for next session. Prefer dotted keys (for example preference.coffee_order, routine.friday_gym, project.current_focus). Loopgate decides what becomes durable memory — a failed call means policy or safety rejected the candidate. Never store secrets, API keys, passwords, or blobs of text.")
+		runtimeFacts = append(runtimeFacts, "memory.remember proposes durable facts: call it when the user asks to remember something or states explicit stable preferences, routines, profile or work details, or standing goals for next session. Prefer dotted keys (for example preference.coffee_order, routine.friday_gym, goal.current_sprint, work.focus_area). Loopgate decides what becomes durable memory — a failed call means policy or safety rejected the candidate. Never store secrets, API keys, passwords, or blobs of text.")
 	}
 	if hasAllHavenCapabilities(availableCapabilities, "todo.add", "todo.complete", "todo.list") {
 		runtimeFacts = append(runtimeFacts, "You have a Task Board. Use todo.add only when the user wants tracking across sessions or explicitly agrees to add a task. Use todo.complete when something is done and todo.list to review open items.")

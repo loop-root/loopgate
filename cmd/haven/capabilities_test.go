@@ -63,6 +63,39 @@ func TestBuildResidentCapabilityFacts_OmitsHostPackWhenIncomplete(t *testing.T) 
 	}
 }
 
+func TestBuildResidentCapabilityFacts_MemoryRememberHintMatchesRegistry(t *testing.T) {
+	caps := []loopgate.CapabilitySummary{
+		{Name: "memory.remember"},
+	}
+
+	facts := buildResidentCapabilityFacts(caps)
+	var memoryFact string
+	for _, fact := range facts {
+		if strings.Contains(fact, "memory.remember proposes short durable facts") {
+			memoryFact = fact
+			break
+		}
+	}
+	if memoryFact == "" {
+		t.Fatalf("expected memory.remember runtime fact, got %#v", facts)
+	}
+	if !strings.Contains(memoryFact, "work context") {
+		t.Fatalf("expected work-context guidance in memory.remember runtime fact, got %q", memoryFact)
+	}
+	if !strings.Contains(memoryFact, "standing goals") {
+		t.Fatalf("expected goals guidance in memory.remember runtime fact, got %q", memoryFact)
+	}
+	if !strings.Contains(memoryFact, "goal.current_sprint") {
+		t.Fatalf("expected supported goal key example in memory.remember runtime fact, got %q", memoryFact)
+	}
+	if !strings.Contains(memoryFact, "work.focus_area") {
+		t.Fatalf("expected supported work key example in memory.remember runtime fact, got %q", memoryFact)
+	}
+	if strings.Contains(memoryFact, "context.recent_topic") {
+		t.Fatalf("did not expect unsupported context key example in memory.remember runtime fact, got %q", memoryFact)
+	}
+}
+
 func TestBuildHavenCapabilityAuditWarnings_WarnsWhenAllowlistedCapabilityMissingFromLoopgate(t *testing.T) {
 	warnings := buildHavenCapabilityAuditWarnings(
 		[]string{"fs_read", "host.folder.list"},

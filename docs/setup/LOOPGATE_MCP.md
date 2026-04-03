@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-01
+**Last updated:** 2026-04-03
 
 # Loopgate MCP server (`loopgate mcp-serve`)
 
@@ -24,15 +24,17 @@ The **Model Context Protocol** (stdio JSON-RPC) lets IDEs (Cursor, Claude Code, 
 | `LOOPGATE_MCP_EXPIRES_AT` | Yes | Token expiry, RFC3339 or RFC3339Nano. |
 | `LOOPGATE_MCP_ACTOR` | No | Client actor label for signing (default: `mcp`). **Effective actor is still the token’s session actor** — use a session opened with the actor/capabilities you need. |
 | `LOOPGATE_MCP_CLIENT_SESSION` | No | Client session label for signing (default: `mcp-stdio`). |
+| `LOOPGATE_MCP_TENANT_ID` | No | Copied into MCP diagnostic context; use same values as the control session / `config/runtime.yaml` tenancy when set. **Empty** for personal / default deployment (matches `docs/setup/TENANCY.md`). |
+| `LOOPGATE_MCP_USER_ID` | No | Same as tenant id row — optional; empty in personal mode. |
 
 Treat these values as **secrets**; do not commit them to `.mcp.json`. Prefer a wrapper script or OS keychain-fed env.
 
-## Tools (initial)
+## Tools (Dynamic)
 
 | Tool | Purpose |
 |------|---------|
 | `loopgate.status` | Same inventory as `GET /v1/status`. |
-| `loopgate.execute_capability` | `capability` + optional `arguments_json` (JSON object of string keys/values) → same path as `POST /v1/capabilities/execute`. |
+| `<Capability Name>` | Each allowed Loopgate capability (e.g., `fs_list`, `memory.remember`) is automatically registered as a native MCP tool, mapped dynamically to `POST /v1/capabilities/execute`. |
 
 ## Example IDE config shape (illustrative)
 
@@ -40,6 +42,5 @@ Exact schema depends on the IDE. The **command** is the `loopgate` binary with f
 
 ## Limitations (v0)
 
-- No dedicated `memory.remember` tool name yet — use `loopgate.execute_capability` with `capability` set to `memory.remember` and appropriate `arguments_json`.
 - Requires a **separate** long-running `loopgate` process; MCP does not start the control plane.
 - Stdout is reserved for MCP; errors use stderr.
