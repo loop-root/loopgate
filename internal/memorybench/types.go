@@ -2,20 +2,59 @@ package memorybench
 
 import "context"
 
+const (
+	ComparisonClassScoredFixtureRun = "scored_fixture_run"
+	ComparisonClassTargetedDebugRun = "targeted_debug_run"
+	ComparisonClassUnscoredDebugRun = "unscored_debug_run"
+
+	ContinuitySeedingModeSyntheticProjectedNodes = "synthetic_projected_nodes"
+	ContinuitySeedingModeProductionWriteParity   = "production_write_parity"
+	ContinuitySeedingModeDebugAmbientRepo        = "debug_ambient_repo"
+
+	ContinuitySeedPathRememberMemoryFact  = "remember_memory_fact"
+	ContinuitySeedPathFixtureIngest       = "continuity_fixture_ingest"
+	ContinuitySeedPathSyntheticProjected  = "synthetic_projected_node"
+	ContinuityAuthorityValidatedWrite     = "validated_explicit_write"
+	ContinuityAuthorityFixtureIngest      = "fixture_ingest_non_authoritative"
+	ContinuityAuthoritySyntheticProjected = "synthetic_projected_node"
+)
+
+type ScenarioFilter struct {
+	ScenarioIDs  []string `json:"scenario_ids,omitempty"`
+	ScenarioSets []string `json:"scenario_sets,omitempty"`
+	Categories   []string `json:"categories,omitempty"`
+	Subfamilies  []string `json:"subfamilies,omitempty"`
+}
+
+func (scenarioFilter ScenarioFilter) IsZero() bool {
+	return len(scenarioFilter.ScenarioIDs) == 0 &&
+		len(scenarioFilter.ScenarioSets) == 0 &&
+		len(scenarioFilter.Categories) == 0 &&
+		len(scenarioFilter.Subfamilies) == 0
+}
+
 type RunMetadata struct {
-	SchemaVersion           string `json:"schema_version"`
-	RunID                   string `json:"run_id"`
-	StartedAtUTC            string `json:"started_at_utc"`
-	FinishedAtUTC           string `json:"finished_at_utc,omitempty"`
-	BenchmarkVersion        string `json:"benchmark_version"`
-	GitCommit               string `json:"git_commit,omitempty"`
-	BackendName             string `json:"backend_name"`
-	CandidateGovernanceMode string `json:"candidate_governance_mode,omitempty"`
-	BenchmarkProfile        string `json:"benchmark_profile,omitempty"`
-	ModelProvider           string `json:"model_provider,omitempty"`
-	ModelName               string `json:"model_name,omitempty"`
-	PromptTemplateHash      string `json:"prompt_template_hash,omitempty"`
-	TokenBudget             int    `json:"token_budget,omitempty"`
+	SchemaVersion                                string         `json:"schema_version"`
+	RunID                                        string         `json:"run_id"`
+	StartedAtUTC                                 string         `json:"started_at_utc"`
+	FinishedAtUTC                                string         `json:"finished_at_utc,omitempty"`
+	BenchmarkVersion                             string         `json:"benchmark_version"`
+	GitCommit                                    string         `json:"git_commit,omitempty"`
+	BackendName                                  string         `json:"backend_name"`
+	CandidateGovernanceMode                      string         `json:"candidate_governance_mode,omitempty"`
+	BenchmarkProfile                             string         `json:"benchmark_profile,omitempty"`
+	ContinuitySeedingMode                        string         `json:"continuity_seeding_mode,omitempty"`
+	ComparisonClass                              string         `json:"comparison_class,omitempty"`
+	ScenarioFilter                               ScenarioFilter `json:"scenario_filter,omitempty"`
+	Scored                                       bool           `json:"scored"`
+	ModelProvider                                string         `json:"model_provider,omitempty"`
+	ModelName                                    string         `json:"model_name,omitempty"`
+	PromptTemplateHash                           string         `json:"prompt_template_hash,omitempty"`
+	TokenBudget                                  int            `json:"token_budget,omitempty"`
+	RAGCollection                                string         `json:"rag_collection,omitempty"`
+	RAGReranker                                  string         `json:"rag_reranker,omitempty"`
+	ContinuityBenchmarkLocalSlotPreference       bool           `json:"continuity_benchmark_local_slot_preference,omitempty"`
+	ContinuityBenchmarkLocalSlotPreferenceMargin int            `json:"continuity_benchmark_local_slot_preference_margin,omitempty"`
 }
 
 type ScenarioMetadata struct {
@@ -83,6 +122,20 @@ type RetrievedArtifact struct {
 	ProvenanceRef string `json:"provenance_ref,omitempty"`
 }
 
+type CandidatePoolArtifact struct {
+	CandidateID                string `json:"candidate_id"`
+	NodeKind                   string `json:"node_kind,omitempty"`
+	SourceKind                 string `json:"source_kind,omitempty"`
+	CanonicalKey               string `json:"canonical_key,omitempty"`
+	AnchorTupleKey             string `json:"anchor_tuple_key,omitempty"`
+	MatchCount                 int    `json:"match_count,omitempty"`
+	RankBeforeSlotPreference   int    `json:"rank_before_slot_preference,omitempty"`
+	RankBeforeTruncation       int    `json:"rank_before_truncation,omitempty"`
+	FinalKeptRank              int    `json:"final_kept_rank,omitempty"`
+	SlotPreferenceTargetAnchor string `json:"slot_preference_target_anchor,omitempty"`
+	SlotPreferenceApplied      bool   `json:"slot_preference_applied,omitempty"`
+}
+
 type ScenarioResult struct {
 	Scenario   ScenarioMetadata    `json:"scenario"`
 	Backend    BackendMetrics      `json:"backend"`
@@ -135,6 +188,9 @@ type TraceEvent struct {
 type ProjectedNodeDiscoverItem struct {
 	NodeID          string
 	NodeKind        string
+	SourceKind      string
+	CanonicalKey    string
+	AnchorTupleKey  string
 	Scope           string
 	CreatedAtUTC    string
 	State           string
@@ -147,6 +203,15 @@ type ProjectedNodeDiscoverItem struct {
 
 type ProjectedNodeDiscoverer interface {
 	DiscoverProjectedNodes(ctx context.Context, scope string, query string, maxItems int) ([]ProjectedNodeDiscoverItem, error)
+}
+
+type DetailedProjectedNodeDiscoverResult struct {
+	Items         []ProjectedNodeDiscoverItem
+	CandidatePool []CandidatePoolArtifact
+}
+
+type DetailedProjectedNodeDiscoverer interface {
+	DiscoverProjectedNodesDetailed(ctx context.Context, scope string, query string, maxItems int) (DetailedProjectedNodeDiscoverResult, error)
 }
 
 type GovernedMemoryCandidate struct {
@@ -167,4 +232,27 @@ type CandidateGovernanceDecision struct {
 
 type CandidateGovernanceEvaluator interface {
 	EvaluateCandidate(ctx context.Context, candidate GovernedMemoryCandidate) (CandidateGovernanceDecision, error)
+}
+
+type ContinuityParitySeedSpec struct {
+	CurrentPath      string `json:"current_path,omitempty"`
+	SuppressedPath   string `json:"suppressed_path,omitempty"`
+	DistractorPath   string `json:"distractor_path,omitempty"`
+	CanonicalFactKey string `json:"canonical_fact_key,omitempty"`
+}
+
+type SeedManifestRecord struct {
+	ScenarioID              string `json:"scenario_id"`
+	SeedGroup               string `json:"seed_group"`
+	SeedPath                string `json:"seed_path"`
+	AuthorityClass          string `json:"authority_class"`
+	ValidatedWriteSupported bool   `json:"validated_write_supported"`
+	CanonicalFactKey        string `json:"canonical_fact_key,omitempty"`
+	FactValue               string `json:"fact_value,omitempty"`
+	AnchorTupleKey          string `json:"anchor_tuple_key,omitempty"`
+	NodeID                  string `json:"node_id,omitempty"`
+	SourceKind              string `json:"source_kind,omitempty"`
+	SourceRef               string `json:"source_ref,omitempty"`
+	LineageStatus           string `json:"lineage_status,omitempty"`
+	SupersedesInspectionID  string `json:"supersedes_inspection_id,omitempty"`
 }

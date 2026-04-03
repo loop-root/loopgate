@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -494,6 +495,257 @@ func TestRememberMemoryFact_DeniesDangerousExplicitMemoryCandidate(t *testing.T)
 	}
 }
 
+func TestRememberMemoryFact_PersistsValidatedCandidateFields(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	rawRequest := MemoryRememberRequest{
+		FactKey:       "user.name",
+		FactValue:     "Ada",
+		SourceChannel: memorySourceChannelUserInput,
+	}
+	validatedRequest, err := server.normalizeMemoryRememberRequest(rawRequest)
+	if err != nil {
+		t.Fatalf("normalize remember request: %v", err)
+	}
+	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	if err != nil {
+		t.Fatalf("build validated candidate: %v", err)
+	}
+
+	rememberResponse, err := client.RememberMemoryFact(context.Background(), rawRequest)
+	if err != nil {
+		t.Fatalf("remember memory fact: %v", err)
+	}
+
+	distillateRecord, found := testDefaultMemoryState(t, server).Distillates[rememberResponse.DistillateID]
+	if !found {
+		t.Fatalf("expected persisted distillate %q", rememberResponse.DistillateID)
+	}
+	if len(distillateRecord.Facts) != 1 {
+		t.Fatalf("expected one persisted fact, got %#v", distillateRecord.Facts)
+	}
+
+	persistedFact := distillateRecord.Facts[0]
+	if rememberResponse.FactKey != validatedCandidateResult.ValidatedCandidate.CanonicalKey {
+		t.Fatalf("expected response fact key from validated candidate, got %#v want %#v", rememberResponse, validatedCandidateResult.ValidatedCandidate)
+	}
+	if persistedFact.Name != validatedCandidateResult.ValidatedCandidate.CanonicalKey {
+		t.Fatalf("expected persisted canonical key from validated candidate, got %#v want %#v", persistedFact, validatedCandidateResult.ValidatedCandidate)
+	}
+	if persistedFact.Value != validatedCandidateResult.ValidatedCandidate.FactValue {
+		t.Fatalf("expected persisted fact value from validated candidate, got %#v want %#v", persistedFact, validatedCandidateResult.ValidatedCandidate)
+	}
+	if !reflect.DeepEqual(persistedFact.SemanticProjection, &validatedCandidateResult.ValidatedCandidate.Projection) {
+		t.Fatalf("expected persisted semantic projection to match validated candidate, got %#v want %#v", persistedFact.SemanticProjection, validatedCandidateResult.ValidatedCandidate.Projection)
+	}
+}
+
+func TestRememberMemoryFact_PersistsTimezoneValidatedCandidateFields(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	rawRequest := MemoryRememberRequest{
+		FactKey:       "timezone",
+		FactValue:     "America/Denver",
+		SourceChannel: memorySourceChannelUserInput,
+	}
+	validatedRequest, err := server.normalizeMemoryRememberRequest(rawRequest)
+	if err != nil {
+		t.Fatalf("normalize remember request: %v", err)
+	}
+	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	if err != nil {
+		t.Fatalf("build validated candidate: %v", err)
+	}
+
+	rememberResponse, err := client.RememberMemoryFact(context.Background(), rawRequest)
+	if err != nil {
+		t.Fatalf("remember timezone fact: %v", err)
+	}
+
+	distillateRecord, found := testDefaultMemoryState(t, server).Distillates[rememberResponse.DistillateID]
+	if !found {
+		t.Fatalf("expected persisted distillate %q", rememberResponse.DistillateID)
+	}
+	if len(distillateRecord.Facts) != 1 {
+		t.Fatalf("expected one persisted fact, got %#v", distillateRecord.Facts)
+	}
+
+	persistedFact := distillateRecord.Facts[0]
+	if rememberResponse.FactKey != validatedCandidateResult.ValidatedCandidate.CanonicalKey {
+		t.Fatalf("expected response fact key from validated candidate, got %#v want %#v", rememberResponse, validatedCandidateResult.ValidatedCandidate)
+	}
+	if persistedFact.Name != validatedCandidateResult.ValidatedCandidate.CanonicalKey {
+		t.Fatalf("expected persisted canonical key from validated candidate, got %#v want %#v", persistedFact, validatedCandidateResult.ValidatedCandidate)
+	}
+	if persistedFact.Value != validatedCandidateResult.ValidatedCandidate.FactValue {
+		t.Fatalf("expected persisted fact value from validated candidate, got %#v want %#v", persistedFact, validatedCandidateResult.ValidatedCandidate)
+	}
+	if !reflect.DeepEqual(persistedFact.SemanticProjection, &validatedCandidateResult.ValidatedCandidate.Projection) {
+		t.Fatalf("expected persisted semantic projection to match validated candidate, got %#v want %#v", persistedFact.SemanticProjection, validatedCandidateResult.ValidatedCandidate.Projection)
+	}
+}
+
+func TestRememberMemoryFact_PersistsLocaleValidatedCandidateFields(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	rawRequest := MemoryRememberRequest{
+		FactKey:       "locale",
+		FactValue:     "en-US",
+		SourceChannel: memorySourceChannelUserInput,
+	}
+	validatedRequest, err := server.normalizeMemoryRememberRequest(rawRequest)
+	if err != nil {
+		t.Fatalf("normalize remember request: %v", err)
+	}
+	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	if err != nil {
+		t.Fatalf("build validated candidate: %v", err)
+	}
+
+	rememberResponse, err := client.RememberMemoryFact(context.Background(), rawRequest)
+	if err != nil {
+		t.Fatalf("remember locale fact: %v", err)
+	}
+
+	distillateRecord, found := testDefaultMemoryState(t, server).Distillates[rememberResponse.DistillateID]
+	if !found {
+		t.Fatalf("expected persisted distillate %q", rememberResponse.DistillateID)
+	}
+	if len(distillateRecord.Facts) != 1 {
+		t.Fatalf("expected one persisted fact, got %#v", distillateRecord.Facts)
+	}
+
+	persistedFact := distillateRecord.Facts[0]
+	if rememberResponse.FactKey != validatedCandidateResult.ValidatedCandidate.CanonicalKey {
+		t.Fatalf("expected response fact key from validated candidate, got %#v want %#v", rememberResponse, validatedCandidateResult.ValidatedCandidate)
+	}
+	if persistedFact.Name != validatedCandidateResult.ValidatedCandidate.CanonicalKey {
+		t.Fatalf("expected persisted canonical key from validated candidate, got %#v want %#v", persistedFact, validatedCandidateResult.ValidatedCandidate)
+	}
+	if persistedFact.Value != validatedCandidateResult.ValidatedCandidate.FactValue {
+		t.Fatalf("expected persisted fact value from validated candidate, got %#v want %#v", persistedFact, validatedCandidateResult.ValidatedCandidate)
+	}
+	if !reflect.DeepEqual(persistedFact.SemanticProjection, &validatedCandidateResult.ValidatedCandidate.Projection) {
+		t.Fatalf("expected persisted semantic projection to match validated candidate, got %#v want %#v", persistedFact.SemanticProjection, validatedCandidateResult.ValidatedCandidate.Projection)
+	}
+}
+
+func TestRememberMemoryFact_RequestAliasStaysInAdapter(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	rememberResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "user.name",
+		FactValue:     "Ada",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err != nil {
+		t.Fatalf("remember aliased name fact: %v", err)
+	}
+	if rememberResponse.FactKey != "name" {
+		t.Fatalf("expected response to use canonical key, got %#v", rememberResponse)
+	}
+
+	distillateRecord, found := testDefaultMemoryState(t, server).Distillates[rememberResponse.DistillateID]
+	if !found {
+		t.Fatalf("expected persisted distillate %q", rememberResponse.DistillateID)
+	}
+	if len(distillateRecord.Facts) != 1 {
+		t.Fatalf("expected one persisted fact, got %#v", distillateRecord.Facts)
+	}
+	if distillateRecord.Facts[0].Name != "name" {
+		t.Fatalf("expected persisted fact to use canonical key, got %#v", distillateRecord.Facts[0])
+	}
+	if distillateRecord.Facts[0].SourceRef != explicitProfileFactSourceKind+":name" {
+		t.Fatalf("expected canonical source ref after adapter boundary, got %#v", distillateRecord.Facts[0])
+	}
+}
+
+func TestRememberMemoryFact_TimezoneAliasStaysInAdapter(t *testing.T) {
+	for _, rawAlias := range []string{"timezone", "user.timezone"} {
+		t.Run(rawAlias, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+			rememberResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+				FactKey:       rawAlias,
+				FactValue:     "America/Denver",
+				SourceChannel: memorySourceChannelUserInput,
+			})
+			if err != nil {
+				t.Fatalf("remember aliased timezone fact: %v", err)
+			}
+			if rememberResponse.FactKey != "profile.timezone" {
+				t.Fatalf("expected response to use canonical timezone key, got %#v", rememberResponse)
+			}
+
+			distillateRecord, found := testDefaultMemoryState(t, server).Distillates[rememberResponse.DistillateID]
+			if !found {
+				t.Fatalf("expected persisted distillate %q", rememberResponse.DistillateID)
+			}
+			if len(distillateRecord.Facts) != 1 {
+				t.Fatalf("expected one persisted fact, got %#v", distillateRecord.Facts)
+			}
+			if distillateRecord.Facts[0].Name != "profile.timezone" {
+				t.Fatalf("expected persisted fact to use canonical timezone key, got %#v", distillateRecord.Facts[0])
+			}
+			if distillateRecord.Facts[0].Name == rawAlias {
+				t.Fatalf("expected raw timezone alias %q to stop at adapter boundary, got %#v", rawAlias, distillateRecord.Facts[0])
+			}
+			if distillateRecord.Facts[0].SourceRef != explicitProfileFactSourceKind+":profile.timezone" {
+				t.Fatalf("expected canonical timezone source ref after adapter boundary, got %#v", distillateRecord.Facts[0])
+			}
+			if distillateRecord.Facts[0].SourceRef == explicitProfileFactSourceKind+":"+rawAlias {
+				t.Fatalf("expected no authoritative source ref to retain raw timezone alias %q, got %#v", rawAlias, distillateRecord.Facts[0])
+			}
+		})
+	}
+}
+
+func TestRememberMemoryFact_LocaleAliasStaysInAdapter(t *testing.T) {
+	for _, rawAlias := range []string{"locale", "user.locale"} {
+		t.Run(rawAlias, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+			rememberResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+				FactKey:       rawAlias,
+				FactValue:     "en-US",
+				SourceChannel: memorySourceChannelUserInput,
+			})
+			if err != nil {
+				t.Fatalf("remember aliased locale fact: %v", err)
+			}
+			if rememberResponse.FactKey != "profile.locale" {
+				t.Fatalf("expected response to use canonical locale key, got %#v", rememberResponse)
+			}
+
+			distillateRecord, found := testDefaultMemoryState(t, server).Distillates[rememberResponse.DistillateID]
+			if !found {
+				t.Fatalf("expected persisted distillate %q", rememberResponse.DistillateID)
+			}
+			if len(distillateRecord.Facts) != 1 {
+				t.Fatalf("expected one persisted fact, got %#v", distillateRecord.Facts)
+			}
+			if distillateRecord.Facts[0].Name != "profile.locale" {
+				t.Fatalf("expected persisted fact to use canonical locale key, got %#v", distillateRecord.Facts[0])
+			}
+			if distillateRecord.Facts[0].Name == rawAlias {
+				t.Fatalf("expected raw locale alias %q to stop at adapter boundary, got %#v", rawAlias, distillateRecord.Facts[0])
+			}
+			if distillateRecord.Facts[0].SourceRef != explicitProfileFactSourceKind+":profile.locale" {
+				t.Fatalf("expected canonical locale source ref after adapter boundary, got %#v", distillateRecord.Facts[0])
+			}
+			if distillateRecord.Facts[0].SourceRef == explicitProfileFactSourceKind+":"+rawAlias {
+				t.Fatalf("expected no authoritative source ref to retain raw locale alias %q, got %#v", rawAlias, distillateRecord.Facts[0])
+			}
+		})
+	}
+}
+
 func TestRememberMemoryFact_AuditsSafeTCLSummaryWithoutRawDeniedPayload(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -528,6 +780,42 @@ func TestRememberMemoryFact_AuditsSafeTCLSummaryWithoutRawDeniedPayload(t *testi
 	}
 	if strings.Contains(auditText, rawDeniedSource) || strings.Contains(auditText, rawDeniedValue) {
 		t.Fatalf("raw denied memory payload leaked into audit: %s", auditText)
+	}
+}
+
+func TestRememberMemoryFact_InvalidValidatedCandidateLeavesNoArtifacts(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	validatedRequest, err := server.normalizeMemoryRememberRequest(MemoryRememberRequest{
+		FactKey:       "name",
+		FactValue:     "Ada",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err != nil {
+		t.Fatalf("normalize remember request: %v", err)
+	}
+	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	if err != nil {
+		t.Fatalf("build validated candidate: %v", err)
+	}
+	invalidCandidateResult := validatedCandidateResult
+	invalidCandidateResult.ValidatedCandidate.AnchorKey = ""
+
+	server.buildValidatedMemoryRememberCandidate = func(MemoryRememberRequest) (memoryValidatedCandidate, error) {
+		return invalidCandidateResult, nil
+	}
+
+	_, err = client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "name",
+		FactValue:     "Ada",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err == nil || !strings.Contains(err.Error(), DenialCodeMemoryCandidateInvalid) {
+		t.Fatalf("expected invalid validated candidate denial, got %v", err)
+	}
+	if len(testDefaultMemoryState(t, server).Distillates) != 0 || len(testDefaultMemoryState(t, server).ResonateKeys) != 0 || len(testDefaultMemoryState(t, server).Inspections) != 0 {
+		t.Fatalf("expected no persisted memory artifacts after invalid validated candidate, got inspections=%d distillates=%d keys=%d", len(testDefaultMemoryState(t, server).Inspections), len(testDefaultMemoryState(t, server).Distillates), len(testDefaultMemoryState(t, server).ResonateKeys))
 	}
 }
 
@@ -753,6 +1041,390 @@ func TestRememberMemoryFact_AllowsBoundedNamespaceKeys(t *testing.T) {
 	}
 }
 
+func TestRememberMemoryFact_PersistsSupportedGoalNamespaceFact(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	beforeState := testDefaultMemoryState(t, server)
+	beforeInspectionCount := len(beforeState.Inspections)
+	beforeDistillateCount := len(beforeState.Distillates)
+	beforeResonateKeyCount := len(beforeState.ResonateKeys)
+
+	rememberResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "goal.current_sprint",
+		FactValue: "ship registry parity",
+	})
+	if err != nil {
+		t.Fatalf("remember goal namespace fact: %v", err)
+	}
+	if rememberResponse.FactKey != "goal.current_sprint" {
+		t.Fatalf("expected canonical goal fact key, got %#v", rememberResponse)
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	if len(afterState.Inspections) != beforeInspectionCount+1 {
+		t.Fatalf("expected one new inspection, got before=%d after=%d", beforeInspectionCount, len(afterState.Inspections))
+	}
+	if len(afterState.Distillates) != beforeDistillateCount+1 {
+		t.Fatalf("expected one new distillate, got before=%d after=%d", beforeDistillateCount, len(afterState.Distillates))
+	}
+	if len(afterState.ResonateKeys) != beforeResonateKeyCount+1 {
+		t.Fatalf("expected one new resonate key, got before=%d after=%d", beforeResonateKeyCount, len(afterState.ResonateKeys))
+	}
+
+	distillateRecord, found := afterState.Distillates[rememberResponse.DistillateID]
+	if !found {
+		t.Fatalf("expected persisted distillate %q", rememberResponse.DistillateID)
+	}
+	if len(distillateRecord.Facts) != 1 {
+		t.Fatalf("expected one persisted fact, got %#v", distillateRecord.Facts)
+	}
+	if distillateRecord.Facts[0].Name != "goal.current_sprint" || distillateRecord.Facts[0].Value != "ship registry parity" {
+		t.Fatalf("expected persisted goal fact, got %#v", distillateRecord.Facts[0])
+	}
+	if _, found := afterState.Inspections[rememberResponse.InspectionID]; !found {
+		t.Fatalf("expected persisted inspection %q", rememberResponse.InspectionID)
+	}
+	if _, found := afterState.ResonateKeys[rememberResponse.ResonateKeyID]; !found {
+		t.Fatalf("expected persisted resonate key %q", rememberResponse.ResonateKeyID)
+	}
+}
+
+func TestRememberMemoryFact_PersistsSupportedWorkNamespaceFact(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	beforeState := testDefaultMemoryState(t, server)
+	beforeInspectionCount := len(beforeState.Inspections)
+	beforeDistillateCount := len(beforeState.Distillates)
+	beforeResonateKeyCount := len(beforeState.ResonateKeys)
+
+	rememberResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "work.focus_area",
+		FactValue: "memory cleanup",
+	})
+	if err != nil {
+		t.Fatalf("remember work namespace fact: %v", err)
+	}
+	if rememberResponse.FactKey != "work.focus_area" {
+		t.Fatalf("expected canonical work fact key, got %#v", rememberResponse)
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	if len(afterState.Inspections) != beforeInspectionCount+1 {
+		t.Fatalf("expected one new inspection, got before=%d after=%d", beforeInspectionCount, len(afterState.Inspections))
+	}
+	if len(afterState.Distillates) != beforeDistillateCount+1 {
+		t.Fatalf("expected one new distillate, got before=%d after=%d", beforeDistillateCount, len(afterState.Distillates))
+	}
+	if len(afterState.ResonateKeys) != beforeResonateKeyCount+1 {
+		t.Fatalf("expected one new resonate key, got before=%d after=%d", beforeResonateKeyCount, len(afterState.ResonateKeys))
+	}
+
+	distillateRecord, found := afterState.Distillates[rememberResponse.DistillateID]
+	if !found {
+		t.Fatalf("expected persisted distillate %q", rememberResponse.DistillateID)
+	}
+	if len(distillateRecord.Facts) != 1 {
+		t.Fatalf("expected one persisted fact, got %#v", distillateRecord.Facts)
+	}
+	if distillateRecord.Facts[0].Name != "work.focus_area" || distillateRecord.Facts[0].Value != "memory cleanup" {
+		t.Fatalf("expected persisted work fact, got %#v", distillateRecord.Facts[0])
+	}
+	if _, found := afterState.Inspections[rememberResponse.InspectionID]; !found {
+		t.Fatalf("expected persisted inspection %q", rememberResponse.InspectionID)
+	}
+	if _, found := afterState.ResonateKeys[rememberResponse.ResonateKeyID]; !found {
+		t.Fatalf("expected persisted resonate key %q", rememberResponse.ResonateKeyID)
+	}
+}
+
+func TestRememberMemoryFact_IncludesSupportedNamespaceFactsInWakeState(t *testing.T) {
+	testCases := []struct {
+		name      string
+		factKey   string
+		factValue string
+	}{
+		{name: "goal namespace", factKey: "goal.current_sprint", factValue: "ship registry parity"},
+		{name: "work namespace", factKey: "work.focus_area", factValue: "memory cleanup"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+			if _, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+				FactKey:   testCase.factKey,
+				FactValue: testCase.factValue,
+			}); err != nil {
+				t.Fatalf("remember supported namespace fact: %v", err)
+			}
+
+			wakeState, err := client.LoadMemoryWakeState(context.Background())
+			if err != nil {
+				t.Fatalf("load wake state: %v", err)
+			}
+			if factValue, found := memoryWakeFactValue(wakeState, testCase.factKey); !found || factValue != testCase.factValue {
+				t.Fatalf("expected supported namespace fact in wake state, got found=%v value=%q facts=%#v", found, factValue, wakeState.RecentFacts)
+			}
+		})
+	}
+}
+
+func TestRememberMemoryFact_RejectsSupportedFamilyWithoutSuffix(t *testing.T) {
+	for _, rawFactKey := range []string{"goal.", "work."} {
+		t.Run(rawFactKey, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+			beforeState := testDefaultMemoryState(t, server)
+			beforeInspectionCount := len(beforeState.Inspections)
+			beforeDistillateCount := len(beforeState.Distillates)
+			beforeResonateKeyCount := len(beforeState.ResonateKeys)
+
+			_, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+				FactKey:   rawFactKey,
+				FactValue: "should not persist",
+			})
+			if err == nil || !strings.Contains(err.Error(), DenialCodeMemoryCandidateInvalid) {
+				t.Fatalf("expected invalid memory candidate denial for %q, got %v", rawFactKey, err)
+			}
+
+			afterState := testDefaultMemoryState(t, server)
+			if len(afterState.Inspections) != beforeInspectionCount || len(afterState.Distillates) != beforeDistillateCount || len(afterState.ResonateKeys) != beforeResonateKeyCount {
+				t.Fatalf("expected no persisted artifacts after denied write, got before=(%d,%d,%d) after=(%d,%d,%d)",
+					beforeInspectionCount, beforeDistillateCount, beforeResonateKeyCount,
+					len(afterState.Inspections), len(afterState.Distillates), len(afterState.ResonateKeys))
+			}
+
+			auditBytes, readErr := os.ReadFile(server.auditPath)
+			if readErr != nil {
+				t.Fatalf("read loopgate audit: %v", readErr)
+			}
+			auditText := string(auditBytes)
+			if strings.Contains(auditText, "\"type\":\"memory.fact.remembered\"") {
+				t.Fatalf("did not expect success remember audit event after denied write, got %s", auditText)
+			}
+		})
+	}
+}
+
+func TestRememberMemoryFact_RejectsUnsupportedFamily(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	beforeState := testDefaultMemoryState(t, server)
+	beforeInspectionCount := len(beforeState.Inspections)
+	beforeDistillateCount := len(beforeState.Distillates)
+	beforeResonateKeyCount := len(beforeState.ResonateKeys)
+
+	_, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "context.recent_topic",
+		FactValue: "should not persist",
+	})
+	if err == nil || !strings.Contains(err.Error(), DenialCodeMemoryCandidateInvalid) {
+		t.Fatalf("expected invalid memory candidate denial, got %v", err)
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	if len(afterState.Inspections) != beforeInspectionCount || len(afterState.Distillates) != beforeDistillateCount || len(afterState.ResonateKeys) != beforeResonateKeyCount {
+		t.Fatalf("expected no persisted artifacts after denied write, got before=(%d,%d,%d) after=(%d,%d,%d)",
+			beforeInspectionCount, beforeDistillateCount, beforeResonateKeyCount,
+			len(afterState.Inspections), len(afterState.Distillates), len(afterState.ResonateKeys))
+	}
+
+	auditBytes, readErr := os.ReadFile(server.auditPath)
+	if readErr != nil {
+		t.Fatalf("read loopgate audit: %v", readErr)
+	}
+	auditText := string(auditBytes)
+	if strings.Contains(auditText, "\"type\":\"memory.fact.remembered\"") {
+		t.Fatalf("did not expect success remember audit event after denied write, got %s", auditText)
+	}
+}
+
+func TestRememberMemoryFact_AuditsUnsupportedKeyDenialWithStableFields(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	_, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "context.recent_topic",
+		FactValue:     "should not persist",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err == nil || !strings.Contains(err.Error(), DenialCodeMemoryCandidateInvalid) {
+		t.Fatalf("expected invalid memory candidate denial, got %v", err)
+	}
+
+	auditBytes, err := os.ReadFile(server.auditPath)
+	if err != nil {
+		t.Fatalf("read loopgate audit: %v", err)
+	}
+	auditText := string(auditBytes)
+	if !strings.Contains(auditText, "\"type\":\"memory.fact.remember_denied\"") {
+		t.Fatalf("expected remember_denied audit event, got %s", auditText)
+	}
+	if !strings.Contains(auditText, "\"fact_key\":\"context.recent_topic\"") {
+		t.Fatalf("expected fact_key in denial audit event, got %s", auditText)
+	}
+	if !strings.Contains(auditText, "\"denial_code\":\""+DenialCodeMemoryCandidateInvalid+"\"") {
+		t.Fatalf("expected denial_code in denial audit event, got %s", auditText)
+	}
+	if !strings.Contains(auditText, "\"tcl_candidate_source\":\"explicit_fact\"") {
+		t.Fatalf("expected tcl_candidate_source in denial audit event, got %s", auditText)
+	}
+	if !strings.Contains(auditText, "\"tcl_source_channel\":\"user_input\"") {
+		t.Fatalf("expected tcl_source_channel in denial audit event, got %s", auditText)
+	}
+	if !strings.Contains(auditText, "\"tcl_reason_code\":\""+DenialCodeMemoryCandidateInvalid+"\"") {
+		t.Fatalf("expected tcl_reason_code in denial audit event, got %s", auditText)
+	}
+}
+
+func TestRememberMemoryFact_TimezoneSupersedesByValidatedAnchor(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	firstResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "profile.timezone",
+		FactValue:     "America/Denver",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err != nil {
+		t.Fatalf("remember initial timezone: %v", err)
+	}
+	secondResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "user.timezone",
+		FactValue:     "America/Los_Angeles",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err != nil {
+		t.Fatalf("remember superseding timezone: %v", err)
+	}
+	if !secondResponse.UpdatedExisting {
+		t.Fatalf("expected timezone write to supersede by validated anchor, got %#v", secondResponse)
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	replacementDistillate := afterState.Distillates[secondResponse.DistillateID]
+	if len(replacementDistillate.Facts) != 1 {
+		t.Fatalf("expected one fact on replacement distillate, got %#v", replacementDistillate.Facts)
+	}
+	anchorVersion, anchorKey := continuityFactAnchorTuple(replacementDistillate.Facts[0])
+	if anchorVersion != "v1" || anchorKey != "usr_profile:settings:fact:timezone" {
+		t.Fatalf("expected timezone anchor tuple, got version=%q key=%q fact=%#v", anchorVersion, anchorKey, replacementDistillate.Facts[0])
+	}
+
+	supersededInspection := afterState.Inspections[firstResponse.InspectionID]
+	if supersededInspection.Lineage.Status != continuityLineageStatusTombstoned {
+		t.Fatalf("expected superseded timezone inspection to be tombstoned, got %#v", supersededInspection.Lineage)
+	}
+	if supersededInspection.Lineage.SupersededByInspectionID != secondResponse.InspectionID {
+		t.Fatalf("expected superseded timezone inspection to point at replacement inspection %q, got %#v", secondResponse.InspectionID, supersededInspection.Lineage)
+	}
+	replacementInspection := afterState.Inspections[secondResponse.InspectionID]
+	if replacementInspection.Lineage.SupersedesInspectionID != firstResponse.InspectionID {
+		t.Fatalf("expected replacement timezone inspection to record superseded inspection %q, got %#v", firstResponse.InspectionID, replacementInspection.Lineage)
+	}
+}
+
+func TestRememberMemoryFact_LocaleSupersedesByValidatedAnchor(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	firstResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "profile.locale",
+		FactValue:     "en-US",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err != nil {
+		t.Fatalf("remember initial locale: %v", err)
+	}
+	secondResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "locale",
+		FactValue:     "en-GB",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err != nil {
+		t.Fatalf("remember superseding locale: %v", err)
+	}
+	if !secondResponse.UpdatedExisting {
+		t.Fatalf("expected locale write to supersede by validated anchor, got %#v", secondResponse)
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	replacementDistillate := afterState.Distillates[secondResponse.DistillateID]
+	if len(replacementDistillate.Facts) != 1 {
+		t.Fatalf("expected one fact on replacement distillate, got %#v", replacementDistillate.Facts)
+	}
+	anchorVersion, anchorKey := continuityFactAnchorTuple(replacementDistillate.Facts[0])
+	if anchorVersion != "v1" || anchorKey != "usr_profile:settings:fact:locale" {
+		t.Fatalf("expected locale anchor tuple, got version=%q key=%q fact=%#v", anchorVersion, anchorKey, replacementDistillate.Facts[0])
+	}
+
+	supersededInspection := afterState.Inspections[firstResponse.InspectionID]
+	if supersededInspection.Lineage.Status != continuityLineageStatusTombstoned {
+		t.Fatalf("expected superseded locale inspection to be tombstoned, got %#v", supersededInspection.Lineage)
+	}
+	if supersededInspection.Lineage.SupersededByInspectionID != secondResponse.InspectionID {
+		t.Fatalf("expected superseded locale inspection to point at replacement inspection %q, got %#v", secondResponse.InspectionID, supersededInspection.Lineage)
+	}
+	replacementInspection := afterState.Inspections[secondResponse.InspectionID]
+	if replacementInspection.Lineage.SupersedesInspectionID != firstResponse.InspectionID {
+		t.Fatalf("expected replacement locale inspection to record superseded inspection %q, got %#v", firstResponse.InspectionID, replacementInspection.Lineage)
+	}
+}
+
+func TestRememberMemoryFact_TimezoneAndLocaleCoexist(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	timezoneResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "profile.timezone",
+		FactValue:     "America/Denver",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err != nil {
+		t.Fatalf("remember timezone fact: %v", err)
+	}
+	localeResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:       "profile.locale",
+		FactValue:     "en-US",
+		SourceChannel: memorySourceChannelUserInput,
+	})
+	if err != nil {
+		t.Fatalf("remember locale fact: %v", err)
+	}
+	if localeResponse.UpdatedExisting {
+		t.Fatalf("expected timezone and locale to coexist, got %#v", localeResponse)
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	timezoneDistillate := afterState.Distillates[timezoneResponse.DistillateID]
+	localeDistillate := afterState.Distillates[localeResponse.DistillateID]
+	if len(timezoneDistillate.Facts) != 1 || len(localeDistillate.Facts) != 1 {
+		t.Fatalf("expected one fact per distillate, got timezone=%#v locale=%#v", timezoneDistillate.Facts, localeDistillate.Facts)
+	}
+	timezoneAnchorVersion, timezoneAnchorKey := continuityFactAnchorTuple(timezoneDistillate.Facts[0])
+	localeAnchorVersion, localeAnchorKey := continuityFactAnchorTuple(localeDistillate.Facts[0])
+	if timezoneAnchorVersion != "v1" || timezoneAnchorKey != "usr_profile:settings:fact:timezone" {
+		t.Fatalf("expected timezone anchor tuple, got version=%q key=%q", timezoneAnchorVersion, timezoneAnchorKey)
+	}
+	if localeAnchorVersion != "v1" || localeAnchorKey != "usr_profile:settings:fact:locale" {
+		t.Fatalf("expected locale anchor tuple, got version=%q key=%q", localeAnchorVersion, localeAnchorKey)
+	}
+	if timezoneAnchorKey == localeAnchorKey {
+		t.Fatalf("expected timezone and locale to keep different anchor tuples, got %q", timezoneAnchorKey)
+	}
+	if afterState.Inspections[timezoneResponse.InspectionID].Lineage.Status != continuityLineageStatusEligible {
+		t.Fatalf("expected timezone inspection to remain eligible, got %#v", afterState.Inspections[timezoneResponse.InspectionID].Lineage)
+	}
+	if afterState.Inspections[localeResponse.InspectionID].Lineage.Status != continuityLineageStatusEligible {
+		t.Fatalf("expected locale inspection to remain eligible, got %#v", afterState.Inspections[localeResponse.InspectionID].Lineage)
+	}
+}
+
 func TestRememberMemoryFact_DifferentPreferenceConflictAnchorsDoNotSupersede(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -829,6 +1501,177 @@ func TestRememberMemoryFact_SamePreferenceConflictAnchorSupersedesOlderValue(t *
 	if supersededInspection.Lineage.Status != continuityLineageStatusTombstoned {
 		t.Fatalf("expected older same-anchor preference to be tombstoned, got %#v", supersededInspection.Lineage)
 	}
+}
+
+func TestRememberMemoryFact_SameFacetPreferenceSupersedes(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	firstResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "preference.stated_preference",
+		FactValue: "I prefer concise answers",
+	})
+	if err != nil {
+		t.Fatalf("remember first fallback preference: %v", err)
+	}
+	secondResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "preference.stated_preference",
+		FactValue: "please be detailed",
+	})
+	if err != nil {
+		t.Fatalf("remember second fallback preference: %v", err)
+	}
+	if !secondResponse.UpdatedExisting {
+		t.Fatalf("expected same-facet preference to supersede, got %#v", secondResponse)
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	replacementDistillate, found := afterState.Distillates[secondResponse.DistillateID]
+	if !found {
+		t.Fatalf("expected replacement distillate %q", secondResponse.DistillateID)
+	}
+	if len(replacementDistillate.Facts) != 1 {
+		t.Fatalf("expected one fact on replacement distillate, got %#v", replacementDistillate.Facts)
+	}
+	anchorVersion, anchorKey := continuityFactAnchorTuple(replacementDistillate.Facts[0])
+	if anchorVersion != "v1" || anchorKey != "usr_preference:stated:fact:preference:verbosity" {
+		t.Fatalf("expected verbosity anchor tuple, got version=%q key=%q fact=%#v", anchorVersion, anchorKey, replacementDistillate.Facts[0])
+	}
+
+	supersededInspection := afterState.Inspections[firstResponse.InspectionID]
+	if supersededInspection.Lineage.Status != continuityLineageStatusTombstoned {
+		t.Fatalf("expected superseded preference inspection to be tombstoned, got %#v", supersededInspection.Lineage)
+	}
+	replacementInspection := afterState.Inspections[secondResponse.InspectionID]
+	if replacementInspection.Lineage.SupersedesInspectionID != firstResponse.InspectionID {
+		t.Fatalf("expected replacement inspection to record superseded inspection %q, got %#v", firstResponse.InspectionID, replacementInspection.Lineage)
+	}
+
+	wakeState, err := client.LoadMemoryWakeState(context.Background())
+	if err != nil {
+		t.Fatalf("load wake state: %v", err)
+	}
+	preferenceValues := memoryWakeFactValues(wakeState, "preference.stated_preference")
+	if len(preferenceValues) != 1 || preferenceValues[0] != "please be detailed" {
+		t.Fatalf("expected only replacement verbosity preference in wake state, got %#v", wakeState.RecentFacts)
+	}
+}
+
+func TestRememberMemoryFact_DifferentFacetPreferencesCoexist(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	firstResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "preference.stated_preference",
+		FactValue: "use bullet points",
+	})
+	if err != nil {
+		t.Fatalf("remember response-format preference: %v", err)
+	}
+	secondResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "preference.stated_preference",
+		FactValue: "use a formal tone",
+	})
+	if err != nil {
+		t.Fatalf("remember tone preference: %v", err)
+	}
+	if secondResponse.UpdatedExisting {
+		t.Fatalf("expected different-facet preferences to coexist, got %#v", secondResponse)
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	firstDistillate := afterState.Distillates[firstResponse.DistillateID]
+	secondDistillate := afterState.Distillates[secondResponse.DistillateID]
+	if len(firstDistillate.Facts) != 1 || len(secondDistillate.Facts) != 1 {
+		t.Fatalf("expected one fact per distillate, got first=%#v second=%#v", firstDistillate.Facts, secondDistillate.Facts)
+	}
+	firstAnchorVersion, firstAnchorKey := continuityFactAnchorTuple(firstDistillate.Facts[0])
+	secondAnchorVersion, secondAnchorKey := continuityFactAnchorTuple(secondDistillate.Facts[0])
+	if firstAnchorVersion != "v1" || firstAnchorKey != "usr_preference:stated:fact:preference:response_format" {
+		t.Fatalf("expected response-format anchor tuple, got version=%q key=%q", firstAnchorVersion, firstAnchorKey)
+	}
+	if secondAnchorVersion != "v1" || secondAnchorKey != "usr_preference:stated:fact:preference:tone" {
+		t.Fatalf("expected tone anchor tuple, got version=%q key=%q", secondAnchorVersion, secondAnchorKey)
+	}
+	if firstAnchorKey == secondAnchorKey {
+		t.Fatalf("expected different-facet preferences to have different anchor tuples, got %q", firstAnchorKey)
+	}
+	if afterState.Inspections[firstResponse.InspectionID].Lineage.Status != continuityLineageStatusEligible {
+		t.Fatalf("expected first preference to remain eligible, got %#v", afterState.Inspections[firstResponse.InspectionID].Lineage)
+	}
+	if afterState.Inspections[secondResponse.InspectionID].Lineage.Status != continuityLineageStatusEligible {
+		t.Fatalf("expected second preference to remain eligible, got %#v", afterState.Inspections[secondResponse.InspectionID].Lineage)
+	}
+
+	wakeState, err := client.LoadMemoryWakeState(context.Background())
+	if err != nil {
+		t.Fatalf("load wake state: %v", err)
+	}
+	preferenceValues := memoryWakeFactValues(wakeState, "preference.stated_preference")
+	if !containsString(preferenceValues, "use bullet points") || !containsString(preferenceValues, "use a formal tone") {
+		t.Fatalf("expected both different-facet preferences in wake state, got %#v", wakeState.RecentFacts)
+	}
+}
+
+func TestRememberMemoryFact_UnknownPreferenceDoesNotAnchor(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	testCases := []struct {
+		name      string
+		factValue string
+	}{
+		{name: "first unknown preference", factValue: "I like things better this way"},
+		{name: "second unknown preference", factValue: "that style works for me"},
+	}
+
+	responses := make([]MemoryRememberResponse, 0, len(testCases))
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			response, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+				FactKey:   "preference.stated_preference",
+				FactValue: testCase.factValue,
+			})
+			if err != nil {
+				t.Fatalf("remember unknown preference: %v", err)
+			}
+			responses = append(responses, response)
+		})
+	}
+
+	if len(responses) != 2 {
+		t.Fatalf("expected two remembered responses, got %#v", responses)
+	}
+	if responses[1].UpdatedExisting {
+		t.Fatalf("expected unknown preference to avoid supersession, got %#v", responses[1])
+	}
+
+	afterState := testDefaultMemoryState(t, server)
+	firstDistillate := afterState.Distillates[responses[0].DistillateID]
+	secondDistillate := afterState.Distillates[responses[1].DistillateID]
+	if len(firstDistillate.Facts) != 1 || len(secondDistillate.Facts) != 1 {
+		t.Fatalf("expected one fact per unknown-preference distillate, got first=%#v second=%#v", firstDistillate.Facts, secondDistillate.Facts)
+	}
+
+	t.Run("remains_unanchored", func(t *testing.T) {
+		firstAnchorVersion, firstAnchorKey := continuityFactAnchorTuple(firstDistillate.Facts[0])
+		secondAnchorVersion, secondAnchorKey := continuityFactAnchorTuple(secondDistillate.Facts[0])
+		if firstAnchorVersion != "" || firstAnchorKey != "" {
+			t.Fatalf("expected first unknown preference to remain unanchored, got version=%q key=%q", firstAnchorVersion, firstAnchorKey)
+		}
+		if secondAnchorVersion != "" || secondAnchorKey != "" {
+			t.Fatalf("expected second unknown preference to remain unanchored, got version=%q key=%q", secondAnchorVersion, secondAnchorKey)
+		}
+	})
+
+	t.Run("coexists_without_supersession", func(t *testing.T) {
+		if afterState.Inspections[responses[0].InspectionID].Lineage.Status != continuityLineageStatusEligible {
+			t.Fatalf("expected first unknown preference to remain eligible, got %#v", afterState.Inspections[responses[0].InspectionID].Lineage)
+		}
+		if afterState.Inspections[responses[1].InspectionID].Lineage.Status != continuityLineageStatusEligible {
+			t.Fatalf("expected second unknown preference to remain eligible, got %#v", afterState.Inspections[responses[1].InspectionID].Lineage)
+		}
+	})
 }
 
 func TestWakeState_ConflictingDerivedFactsUseCertaintyTieBreakWhenRecencyMatches(t *testing.T) {
@@ -2711,6 +3554,522 @@ func TestWriteContinuityArtifacts_WritesRevalidationTicketForStalePreferenceCorr
 	}
 	if len(revalidationEntries) == 0 {
 		t.Fatal("expected revalidation ticket artifact")
+	}
+}
+
+func TestDetectDiscoverSlotPreference_NormalizesQueryCase(t *testing.T) {
+	wantAnchorTupleKey := "v1:usr_profile:settings:fact:timezone"
+	testCases := []string{
+		"WHAT IS THE USER'S TIMEZONE",
+		"What is the User's Timezone",
+		"what is the user's timezone",
+	}
+
+	for _, rawQuery := range testCases {
+		if gotAnchorTupleKey := detectDiscoverSlotPreference(rawQuery); gotAnchorTupleKey != wantAnchorTupleKey {
+			t.Fatalf("expected slot preference %q for query %q, got %q", wantAnchorTupleKey, rawQuery, gotAnchorTupleKey)
+		}
+	}
+}
+
+func TestDetectDiscoverSlotPreference_AmbiguousQueryReturnsNoSlot(t *testing.T) {
+	if gotAnchorTupleKey := detectDiscoverSlotPreference("what is current profile info"); gotAnchorTupleKey != "" {
+		t.Fatalf("expected ambiguous profile query to resolve no slot, got %q", gotAnchorTupleKey)
+	}
+}
+
+func TestDetectDiscoverSlotPreference_MultiSlotQueryReturnsNoSlot(t *testing.T) {
+	if gotAnchorTupleKey := detectDiscoverSlotPreference("what is the user's name and timezone"); gotAnchorTupleKey != "" {
+		t.Fatalf("expected multi-slot query to resolve no slot, got %q", gotAnchorTupleKey)
+	}
+}
+
+func TestDiscoverMemory_SlotSeekingQueryPrefersAnchoredTimezone(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_timezone_anchor",
+			distillateID:  "dist_timezone_anchor",
+			keyID:         "rk_timezone_anchor",
+			threadID:      "thread_timezone_anchor",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "profile.timezone",
+			tags:          []string{"user", "profile", "current", "timezone"},
+			facts: []continuityDistillateFact{{
+				Name:               "profile.timezone",
+				Value:              "PST",
+				SourceRef:          explicitProfileFactSourceKind + ":profile.timezone",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:settings:fact:timezone"),
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_timezone_preview",
+			distillateID:  "dist_timezone_preview",
+			keyID:         "rk_timezone_preview",
+			threadID:      "thread_timezone_preview",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:preview_timezone",
+			tags:          []string{"user", "profile", "current", "timezone"},
+			facts: []continuityDistillateFact{{
+				Name:            "meeting_timezone_preview",
+				Value:           "EST",
+				SourceRef:       "morph_ledger_event:ledger_sequence:preview_timezone",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	assertEligibleDiscoverKeys(t, partition.state, "rk_timezone_anchor", "rk_timezone_preview")
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "what is the user's current timezone",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) < 2 {
+		t.Fatalf("expected both eligible items in discovery response, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_timezone_anchor" {
+		t.Fatalf("expected anchored timezone item to rank first, got %#v", discoverResponse.Items)
+	}
+}
+
+func TestDiscoverMemory_SlotOnlyQueryPrefersAnchoredLocale(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_locale_anchor",
+			distillateID:  "dist_locale_anchor",
+			keyID:         "rk_locale_anchor",
+			threadID:      "thread_locale_anchor",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "profile.locale",
+			tags:          []string{"user", "profile", "locale"},
+			facts: []continuityDistillateFact{{
+				Name:               "profile.locale",
+				Value:              "en-US",
+				SourceRef:          explicitProfileFactSourceKind + ":profile.locale",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:settings:fact:locale"),
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_locale_preview",
+			distillateID:  "dist_locale_preview",
+			keyID:         "rk_locale_preview",
+			threadID:      "thread_locale_preview",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:preview_locale",
+			tags:          []string{"user", "profile", "locale"},
+			facts: []continuityDistillateFact{{
+				Name:            "travel_locale_preview",
+				Value:           "fr-CA",
+				SourceRef:       "morph_ledger_event:ledger_sequence:preview_locale",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	assertEligibleDiscoverKeys(t, partition.state, "rk_locale_anchor", "rk_locale_preview")
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "user locale",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) < 2 {
+		t.Fatalf("expected both eligible items in discovery response, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_locale_anchor" {
+		t.Fatalf("expected anchored locale item to rank first, got %#v", discoverResponse.Items)
+	}
+}
+
+func TestDiscoverMemory_BroadQueryDoesNotApplySlotPreference(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_name_anchor_broad",
+			distillateID:  "dist_name_anchor_broad",
+			keyID:         "rk_name_anchor_broad",
+			threadID:      "thread_name_anchor_broad",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "name",
+			tags:          []string{"project", "work"},
+			facts: []continuityDistillateFact{{
+				Name:               "name",
+				Value:              "Ada",
+				SourceRef:          explicitProfileFactSourceKind + ":name",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:identity:fact:name"),
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_project_context",
+			distillateID:  "dist_project_context",
+			keyID:         "rk_project_context",
+			threadID:      "thread_project_context",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:project_context",
+			tags:          []string{"recent", "work", "context", "project"},
+			facts: []continuityDistillateFact{{
+				Name:            "project.current_focus",
+				Value:           "finish retrieval tuning",
+				SourceRef:       "morph_ledger_event:ledger_sequence:project_context",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "recent work context for the project",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) < 2 {
+		t.Fatalf("expected both items in discovery response, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_project_context" {
+		t.Fatalf("expected broad-query item with stronger overlap to remain first, got %#v", discoverResponse.Items)
+	}
+}
+
+func TestDiscoverMemory_UnrelatedSlotQueryDoesNotBoostDifferentAnchor(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_name_anchor",
+			distillateID:  "dist_name_anchor",
+			keyID:         "rk_name_anchor",
+			threadID:      "thread_name_anchor",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "name",
+			tags:          []string{"user", "profile", "current"},
+			facts: []continuityDistillateFact{{
+				Name:               "name",
+				Value:              "Ada",
+				SourceRef:          explicitProfileFactSourceKind + ":name",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:identity:fact:name"),
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_timezone_anchor_unrelated",
+			distillateID:  "dist_timezone_anchor_unrelated",
+			keyID:         "rk_timezone_anchor_unrelated",
+			threadID:      "thread_timezone_anchor_unrelated",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "profile.timezone",
+			tags:          []string{"user", "profile", "current"},
+			facts: []continuityDistillateFact{{
+				Name:               "profile.timezone",
+				Value:              "PST",
+				SourceRef:          explicitProfileFactSourceKind + ":profile.timezone",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:settings:fact:timezone"),
+			}},
+		},
+	))
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "what is the user's current timezone",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) < 2 {
+		t.Fatalf("expected both items in discovery response, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_timezone_anchor_unrelated" {
+		t.Fatalf("expected timezone slot query to keep unrelated name anchor from ranking first, got %#v", discoverResponse.Items)
+	}
+}
+
+func TestDiscoverMemory_SlotPreferenceOnlyAppliesToEligibleItems(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_timezone_tombstoned",
+			distillateID:  "dist_timezone_tombstoned",
+			keyID:         "rk_timezone_tombstoned",
+			threadID:      "thread_timezone_tombstoned",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "profile.timezone",
+			lineageStatus: continuityLineageStatusTombstoned,
+			reviewStatus:  continuityReviewStatusAccepted,
+			tags:          []string{"user", "profile", "timezone"},
+			facts: []continuityDistillateFact{{
+				Name:               "profile.timezone",
+				Value:              "PST",
+				SourceRef:          explicitProfileFactSourceKind + ":profile.timezone",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:settings:fact:timezone"),
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_timezone_preview_eligible",
+			distillateID:  "dist_timezone_preview_eligible",
+			keyID:         "rk_timezone_preview_eligible",
+			threadID:      "thread_timezone_preview_eligible",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:eligible_preview_timezone",
+			tags:          []string{"user", "profile", "timezone"},
+			facts: []continuityDistillateFact{{
+				Name:            "meeting_timezone_preview",
+				Value:           "EST",
+				SourceRef:       "morph_ledger_event:ledger_sequence:eligible_preview_timezone",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	assertEligibleDiscoverKeys(t, partition.state, "rk_timezone_preview_eligible")
+	assertIneligibleDiscoverKeys(t, partition.state, "rk_timezone_tombstoned")
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "what is the user's current timezone",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) != 1 {
+		t.Fatalf("expected only eligible items in discovery response, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_timezone_preview_eligible" {
+		t.Fatalf("expected eligible preview item to remain after ineligible anchor filtering, got %#v", discoverResponse.Items)
+	}
+}
+
+func TestDiscoverMemory_NonBoostedItemsKeepStableOrder(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_order_old",
+			distillateID:  "dist_order_old",
+			keyID:         "rk_order_old",
+			threadID:      "thread_order_old",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:order_old",
+			tags:          []string{"github"},
+			facts: []continuityDistillateFact{{
+				Name:            "project.note",
+				Value:           "older github note",
+				SourceRef:       "morph_ledger_event:ledger_sequence:order_old",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_order_new",
+			distillateID:  "dist_order_new",
+			keyID:         "rk_order_new",
+			threadID:      "thread_order_new",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:order_new",
+			tags:          []string{"github"},
+			facts: []continuityDistillateFact{{
+				Name:            "project.note",
+				Value:           "newer github note",
+				SourceRef:       "morph_ledger_event:ledger_sequence:order_new",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_order_same_time_b",
+			distillateID:  "dist_order_same_time_b",
+			keyID:         "rk_order_same_time_b",
+			threadID:      "thread_order_same_time_b",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:order_same_time_b",
+			tags:          []string{"github"},
+			facts: []continuityDistillateFact{{
+				Name:            "project.note",
+				Value:           "same-time github note b",
+				SourceRef:       "morph_ledger_event:ledger_sequence:order_same_time_b",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_order_same_time_a",
+			distillateID:  "dist_order_same_time_a",
+			keyID:         "rk_order_same_time_a",
+			threadID:      "thread_order_same_time_a",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:order_same_time_a",
+			tags:          []string{"github"},
+			facts: []continuityDistillateFact{{
+				Name:            "project.note",
+				Value:           "same-time github note a",
+				SourceRef:       "morph_ledger_event:ledger_sequence:order_same_time_a",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "github",
+		MaxItems: 10,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	gotKeyIDs := make([]string, 0, len(discoverResponse.Items))
+	for _, item := range discoverResponse.Items {
+		gotKeyIDs = append(gotKeyIDs, item.KeyID)
+	}
+	wantKeyIDs := []string{
+		"rk_order_new",
+		"rk_order_same_time_a",
+		"rk_order_same_time_b",
+		"rk_order_old",
+	}
+	if strings.Join(gotKeyIDs, ",") != strings.Join(wantKeyIDs, ",") {
+		t.Fatalf("expected non-boosted items to keep recency-then-id order %v, got %v", wantKeyIDs, gotKeyIDs)
+	}
+}
+
+type discoverMemoryTestEntry struct {
+	inspectionID  string
+	distillateID  string
+	keyID         string
+	threadID      string
+	createdAtUTC  string
+	sourceRefKind string
+	sourceRefRef  string
+	lineageStatus string
+	reviewStatus  string
+	tags          []string
+	facts         []continuityDistillateFact
+}
+
+func newDiscoverMemoryTestServer(t *testing.T) (*Server, *memoryPartition) {
+	t.Helper()
+	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{name: "stub"})
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	if partition == nil {
+		t.Fatal("missing default memory partition")
+	}
+	return server, partition
+}
+
+func buildDiscoverMemoryTestState(entries ...discoverMemoryTestEntry) continuityMemoryState {
+	currentState := newEmptyContinuityMemoryState()
+	for _, entry := range entries {
+		lineageStatus := entry.lineageStatus
+		if strings.TrimSpace(lineageStatus) == "" {
+			lineageStatus = continuityLineageStatusEligible
+		}
+		reviewStatus := entry.reviewStatus
+		if strings.TrimSpace(reviewStatus) == "" {
+			reviewStatus = continuityReviewStatusAccepted
+		}
+		currentState.Inspections[entry.inspectionID] = continuityInspectionRecord{
+			InspectionID:      entry.inspectionID,
+			ThreadID:          entry.threadID,
+			Scope:             memoryScopeGlobal,
+			SubmittedAtUTC:    entry.createdAtUTC,
+			CompletedAtUTC:    entry.createdAtUTC,
+			DerivationOutcome: continuityInspectionOutcomeDerived,
+			Review: continuityInspectionReview{
+				Status: reviewStatus,
+			},
+			Lineage: continuityInspectionLineage{
+				Status: lineageStatus,
+			},
+			DerivedDistillateIDs:  []string{entry.distillateID},
+			DerivedResonateKeyIDs: []string{entry.keyID},
+		}
+		currentState.Distillates[entry.distillateID] = continuityDistillateRecord{
+			SchemaVersion:     continuityMemorySchemaVersion,
+			DerivationVersion: continuityDerivationVersion,
+			DistillateID:      entry.distillateID,
+			InspectionID:      entry.inspectionID,
+			ThreadID:          entry.threadID,
+			Scope:             memoryScopeGlobal,
+			CreatedAtUTC:      entry.createdAtUTC,
+			RetentionScore:    50,
+			EffectiveHotness:  50,
+			MemoryState:       memoryStateWarm,
+			SourceRefs: []continuityArtifactSourceRef{{
+				Kind: entry.sourceRefKind,
+				Ref:  entry.sourceRefRef,
+			}},
+			Tags:  normalizeLoopgateMemoryTags(entry.tags),
+			Facts: append([]continuityDistillateFact(nil), entry.facts...),
+		}
+		currentState.ResonateKeys[entry.keyID] = continuityResonateKeyRecord{
+			SchemaVersion:     continuityMemorySchemaVersion,
+			DerivationVersion: continuityDerivationVersion,
+			KeyID:             entry.keyID,
+			DistillateID:      entry.distillateID,
+			ThreadID:          entry.threadID,
+			Scope:             memoryScopeGlobal,
+			CreatedAtUTC:      entry.createdAtUTC,
+			RetentionScore:    50,
+			EffectiveHotness:  50,
+			MemoryState:       memoryStateWarm,
+			Tags:              normalizeLoopgateMemoryTags(entry.tags),
+		}
+	}
+	return currentState
+}
+
+func testSetDiscoverPartitionState(t *testing.T, server *Server, state continuityMemoryState) {
+	t.Helper()
+	testSetDefaultMemoryState(t, server, state)
+}
+
+func assertEligibleDiscoverKeys(t *testing.T, currentState continuityMemoryState, wantedKeyIDs ...string) {
+	t.Helper()
+	activeKeySet := map[string]struct{}{}
+	for _, resonateKeyRecord := range activeLoopgateResonateKeys(currentState) {
+		activeKeySet[resonateKeyRecord.KeyID] = struct{}{}
+	}
+	for _, wantedKeyID := range wantedKeyIDs {
+		if _, ok := activeKeySet[wantedKeyID]; !ok {
+			t.Fatalf("expected key %q to be eligible, active keys=%#v", wantedKeyID, activeKeySet)
+		}
+	}
+}
+
+func assertIneligibleDiscoverKeys(t *testing.T, currentState continuityMemoryState, deniedKeyIDs ...string) {
+	t.Helper()
+	activeKeySet := map[string]struct{}{}
+	for _, resonateKeyRecord := range activeLoopgateResonateKeys(currentState) {
+		activeKeySet[resonateKeyRecord.KeyID] = struct{}{}
+	}
+	for _, deniedKeyID := range deniedKeyIDs {
+		if _, ok := activeKeySet[deniedKeyID]; ok {
+			t.Fatalf("expected key %q to remain ineligible, active keys=%#v", deniedKeyID, activeKeySet)
+		}
 	}
 }
 

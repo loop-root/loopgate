@@ -93,24 +93,15 @@ const (
 	CandidateSourceContinuity   CandidateSource = "continuity_candidate"
 	CandidateSourceTaskMetadata CandidateSource = "explicit_task_metadata"
 	CandidateSourceWorkflowStep CandidateSource = "workflow_transition"
-	CandidateSourceToolOutput   CandidateSource = "tool_output_candidate"
-	CandidateSourceUnknown      CandidateSource = "unknown_candidate"
+	// Tool-output candidates stay in the schema vocabulary so future validated ingestion can use the same source taxonomy.
+	// NormalizeMemoryCandidate still rejects them today because explicit persistence does not yet have a tool-output validation path.
+	CandidateSourceToolOutput CandidateSource = "tool_output_candidate"
+	CandidateSourceUnknown    CandidateSource = "unknown_candidate"
 )
 
 const (
 	RiskMotifPrivateExternalMemoryWrite RiskMotif = "private_external_memory_write"
 )
-
-type MemoryCandidate struct {
-	Source              CandidateSource
-	SourceChannel       string
-	RawSourceText       string
-	NormalizedFactKey   string
-	NormalizedFactValue string
-	Reason              string
-	Trust               Trust
-	Actor               Object
-}
 
 type SignatureSet struct {
 	Exact      string
@@ -177,14 +168,16 @@ type PolicyDecision struct {
 }
 
 type TCLNode struct {
-	ID       string
-	ACT      Action
-	OBJ      Object
-	QUAL     []Qualifier
-	OUT      Action
-	STA      State
-	REL      []TCLRelation
-	META     TCLMeta
-	ANCHOR   *ConflictAnchor
+	ID     string
+	ACT    Action
+	OBJ    Object
+	QUAL   []Qualifier
+	OUT    Action
+	STA    State
+	REL    []TCLRelation
+	META   TCLMeta
+	ANCHOR *ConflictAnchor
+	// DECISION stays on the node shape now so validated TCL payloads can carry downstream guidance without a schema break later.
+	// Current normalization paths mostly rely on external policy output, but keeping the field stable preserves compatibility for that transition.
 	DECISION *TCLDecision
 }

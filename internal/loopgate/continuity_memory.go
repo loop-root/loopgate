@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -1432,10 +1433,15 @@ func (server *Server) loadMemoryDiagnosticWake(tenantID string) MemoryDiagnostic
 
 func (server *Server) discoverMemoryFromPartitionState(partition *memoryPartition, validatedRequest MemoryDiscoverRequest) (MemoryDiscoverResponse, error) {
 	queryTags := tokenizeLoopgateMemoryText(validatedRequest.Query)
+	slotPreferenceAnchorTupleKey := detectDiscoverSlotPreference(validatedRequest.Query)
 	server.memoryMu.Lock()
 	defer server.memoryMu.Unlock()
 
-	discoveredItems := make([]MemoryDiscoverItem, 0, len(partition.state.ResonateKeys))
+	type rankedDiscoverItem struct {
+		item                MemoryDiscoverItem
+		slotPreferenceBoost bool
+	}
+	discoveredItems := make([]rankedDiscoverItem, 0, len(partition.state.ResonateKeys))
 	for _, resonateKeyRecord := range activeLoopgateResonateKeys(partition.state) {
 		if resonateKeyRecord.Scope != validatedRequest.Scope {
 			continue
@@ -1452,36 +1458,132 @@ func (server *Server) discoverMemoryFromPartitionState(partition *memoryPartitio
 		if matchCount == 0 {
 			continue
 		}
-		discoveredItems = append(discoveredItems, MemoryDiscoverItem{
-			KeyID:        resonateKeyRecord.KeyID,
-			ThreadID:     resonateKeyRecord.ThreadID,
-			DistillateID: resonateKeyRecord.DistillateID,
-			Scope:        resonateKeyRecord.Scope,
-			CreatedAtUTC: resonateKeyRecord.CreatedAtUTC,
-			Tags:         append([]string(nil), resonateKeyRecord.Tags...),
-			MatchCount:   matchCount,
+		slotPreferenceBoost := false
+		if slotPreferenceAnchorTupleKey != "" {
+			if distillateRecord, found := partition.state.Distillates[resonateKeyRecord.DistillateID]; found {
+				if explicitProfileFact, found := explicitProfileFactFromDistillate(partition.state, distillateRecord); found && explicitProfileFact.AnchorTupleKey == slotPreferenceAnchorTupleKey {
+					slotPreferenceBoost = true
+				}
+			}
+		}
+		discoveredItems = append(discoveredItems, rankedDiscoverItem{
+			item: MemoryDiscoverItem{
+				KeyID:        resonateKeyRecord.KeyID,
+				ThreadID:     resonateKeyRecord.ThreadID,
+				DistillateID: resonateKeyRecord.DistillateID,
+				Scope:        resonateKeyRecord.Scope,
+				CreatedAtUTC: resonateKeyRecord.CreatedAtUTC,
+				Tags:         append([]string(nil), resonateKeyRecord.Tags...),
+				MatchCount:   matchCount,
+			},
+			slotPreferenceBoost: slotPreferenceBoost,
 		})
 	}
 	sort.Slice(discoveredItems, func(leftIndex int, rightIndex int) bool {
 		leftItem := discoveredItems[leftIndex]
 		rightItem := discoveredItems[rightIndex]
 		switch {
-		case leftItem.MatchCount != rightItem.MatchCount:
-			return leftItem.MatchCount > rightItem.MatchCount
-		case leftItem.CreatedAtUTC != rightItem.CreatedAtUTC:
-			return leftItem.CreatedAtUTC > rightItem.CreatedAtUTC
+		case leftItem.item.MatchCount != rightItem.item.MatchCount:
+			return leftItem.item.MatchCount > rightItem.item.MatchCount
+		// Slot preference only reorders already-eligible discover results. It is not an
+		// admission path, and it stays bounded to a boolean tie-break rather than a score rewrite.
+		case leftItem.slotPreferenceBoost != rightItem.slotPreferenceBoost:
+			return leftItem.slotPreferenceBoost && !rightItem.slotPreferenceBoost
+		case leftItem.item.CreatedAtUTC != rightItem.item.CreatedAtUTC:
+			return leftItem.item.CreatedAtUTC > rightItem.item.CreatedAtUTC
 		default:
-			return leftItem.KeyID < rightItem.KeyID
+			return leftItem.item.KeyID < rightItem.item.KeyID
 		}
 	})
 	if len(discoveredItems) > validatedRequest.MaxItems {
-		discoveredItems = append([]MemoryDiscoverItem(nil), discoveredItems[:validatedRequest.MaxItems]...)
+		discoveredItems = append([]rankedDiscoverItem(nil), discoveredItems[:validatedRequest.MaxItems]...)
+	}
+	responseItems := make([]MemoryDiscoverItem, 0, len(discoveredItems))
+	for _, discoveredItem := range discoveredItems {
+		responseItems = append(responseItems, discoveredItem.item)
 	}
 	return MemoryDiscoverResponse{
 		Scope: validatedRequest.Scope,
 		Query: validatedRequest.Query,
-		Items: discoveredItems,
+		Items: responseItems,
 	}, nil
+}
+
+type discoverSlotPreferenceRule struct {
+	anchorTupleKey string
+	requiredTags   []string
+}
+
+var discoverSlotPreferenceRules = []discoverSlotPreferenceRule{
+	{anchorTupleKey: "v1:usr_profile:identity:fact:name", requiredTags: []string{"name"}},
+	{anchorTupleKey: "v1:usr_profile:identity:fact:preferred_name", requiredTags: []string{"preferred", "name"}},
+	{anchorTupleKey: "v1:usr_profile:settings:fact:timezone", requiredTags: []string{"timezone"}},
+	{anchorTupleKey: "v1:usr_profile:settings:fact:locale", requiredTags: []string{"locale"}},
+}
+
+// Discover slot preference stays on a tiny allowlist of stable profile slots because broad
+// anchor bias would distort general recall and make retrieval drift harder to detect in review.
+func detectDiscoverSlotPreference(rawQuery string) string {
+	queryTags := tokenizeLoopgateMemoryText(rawQuery)
+	if len(queryTags) == 0 {
+		return ""
+	}
+	queryTagSet := make(map[string]struct{}, len(queryTags))
+	for _, queryTag := range queryTags {
+		queryTagSet[queryTag] = struct{}{}
+	}
+	if containsAnyLoopgateMemoryTag(queryTagSet, "project", "task", "goal", "github", "history", "recent", "work", "context") {
+		return ""
+	}
+	if containsAnyLoopgateMemoryTag(queryTagSet, "and", "both") {
+		return ""
+	}
+	if !containsAnyLoopgateMemoryTag(queryTagSet, "user", "profile") {
+		return ""
+	}
+
+	matchedAnchorTupleKeys := make([]string, 0, 1)
+	for _, slotRule := range discoverSlotPreferenceRules {
+		if hasAllLoopgateMemoryTags(queryTagSet, slotRule.requiredTags...) {
+			matchedAnchorTupleKeys = append(matchedAnchorTupleKeys, slotRule.anchorTupleKey)
+		}
+	}
+	if len(matchedAnchorTupleKeys) == 1 {
+		return matchedAnchorTupleKeys[0]
+	}
+	if len(matchedAnchorTupleKeys) == 2 &&
+		containsStringValue(matchedAnchorTupleKeys, "v1:usr_profile:identity:fact:name") &&
+		containsStringValue(matchedAnchorTupleKeys, "v1:usr_profile:identity:fact:preferred_name") {
+		return "v1:usr_profile:identity:fact:preferred_name"
+	}
+	return ""
+}
+
+func containsAnyLoopgateMemoryTag(queryTagSet map[string]struct{}, wantedTags ...string) bool {
+	for _, wantedTag := range wantedTags {
+		if _, found := queryTagSet[wantedTag]; found {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAllLoopgateMemoryTags(queryTagSet map[string]struct{}, wantedTags ...string) bool {
+	for _, wantedTag := range wantedTags {
+		if _, found := queryTagSet[wantedTag]; !found {
+			return false
+		}
+	}
+	return true
+}
+
+func containsStringValue(values []string, wantedValue string) bool {
+	for _, value := range values {
+		if value == wantedValue {
+			return true
+		}
+	}
+	return false
 }
 
 func (server *Server) discoverMemory(tenantID string, rawRequest MemoryDiscoverRequest) (MemoryDiscoverResponse, error) {
@@ -1512,13 +1614,30 @@ func (server *Server) discoverMemory(tenantID string, rawRequest MemoryDiscoverR
 func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest MemoryRememberRequest) (MemoryRememberResponse, error) {
 	validatedRequest, err := server.normalizeMemoryRememberRequest(rawRequest)
 	if err != nil {
+		var governanceError continuityGovernanceError
+		if errors.As(err, &governanceError) && governanceError.denialCode == DenialCodeMemoryCandidateInvalid {
+			auditRequest := sanitizeDeniedMemoryRememberRequest(rawRequest)
+			if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, auditRequest, governanceError.denialCode, governanceError.denialCode, map[string]interface{}{
+				"tcl_source_channel":   auditRequest.SourceChannel,
+				"tcl_candidate_source": auditRequest.CandidateSource,
+				"tcl_reason_code":      governanceError.denialCode,
+			}); auditErr != nil {
+				return MemoryRememberResponse{}, continuityGovernanceError{
+					httpStatus:     503,
+					responseStatus: ResponseStatusError,
+					denialCode:     DenialCodeAuditUnavailable,
+					reason:         "control-plane audit is unavailable",
+				}
+			}
+		}
 		return MemoryRememberResponse{}, err
 	}
-	tclAnalysis, err := server.analyzeExplicitMemoryCandidate(validatedRequest)
+	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
 	if err != nil {
-		if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, validatedRequest, DenialCodeMemoryCandidateInvalid, DenialCodeMemoryCandidateInvalid, map[string]interface{}{
-			"tcl_source_channel":   validatedRequest.SourceChannel,
-			"tcl_candidate_source": validatedRequest.CandidateSource,
+		auditRequest := sanitizeDeniedMemoryRememberRequest(validatedRequest)
+		if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, auditRequest, DenialCodeMemoryCandidateInvalid, DenialCodeMemoryCandidateInvalid, map[string]interface{}{
+			"tcl_source_channel":   auditRequest.SourceChannel,
+			"tcl_candidate_source": auditRequest.CandidateSource,
 			"tcl_reason_code":      DenialCodeMemoryCandidateInvalid,
 		}); auditErr != nil {
 			return MemoryRememberResponse{}, continuityGovernanceError{
@@ -1535,9 +1654,34 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 			reason:         "explicit memory write could not be analyzed safely and was not stored",
 		}
 	}
-	denialCode, safeReason, shouldPersist := memoryRememberGovernanceDecision(tclAnalysis.PolicyDecision)
+	if err := tclpkg.ValidateMemoryCandidateContract(validatedCandidateResult.ValidatedCandidate); err != nil {
+		auditRequest := sanitizeDeniedMemoryRememberRequest(validatedRequest)
+		if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, auditRequest, DenialCodeMemoryCandidateInvalid, DenialCodeMemoryCandidateInvalid, map[string]interface{}{
+			"tcl_source_channel":   auditRequest.SourceChannel,
+			"tcl_candidate_source": auditRequest.CandidateSource,
+			"tcl_reason_code":      DenialCodeMemoryCandidateInvalid,
+		}); auditErr != nil {
+			return MemoryRememberResponse{}, continuityGovernanceError{
+				httpStatus:     503,
+				responseStatus: ResponseStatusError,
+				denialCode:     DenialCodeAuditUnavailable,
+				reason:         "control-plane audit is unavailable",
+			}
+		}
+		return MemoryRememberResponse{}, continuityGovernanceError{
+			httpStatus:     400,
+			responseStatus: ResponseStatusDenied,
+			denialCode:     DenialCodeMemoryCandidateInvalid,
+			reason:         "explicit memory write could not be validated safely and was not stored",
+		}
+	}
+	// Revalidate the seam result so tests, shims, and future adapters cannot bypass the contract by
+	// returning a half-populated candidate after the legacy request has already been accepted.
+	validatedCandidate := validatedCandidateResult.ValidatedCandidate
+
+	denialCode, safeReason, shouldPersist := memoryRememberGovernanceDecision(validatedCandidate.Decision)
 	if !shouldPersist {
-		if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, validatedRequest, denialCode, tclAnalysis.PolicyDecision.REASON, tclAnalysis.AuditSummary); auditErr != nil {
+		if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, validatedRequest, denialCode, validatedCandidate.Decision.ReasonCode, validatedCandidateResult.AuditSummary); auditErr != nil {
 			return MemoryRememberResponse{}, continuityGovernanceError{
 				httpStatus:     503,
 				responseStatus: ResponseStatusError,
@@ -1553,7 +1697,8 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 		}
 	}
 
-	rememberedAnchorVersion, rememberedAnchorKey := memoryAnchorTupleForNode(tclAnalysis.Node)
+	rememberedAnchorVersion := strings.TrimSpace(validatedCandidate.AnchorVersion)
+	rememberedAnchorKey := strings.TrimSpace(validatedCandidate.AnchorKey)
 	server.memoryMu.Lock()
 	partition, partitionErr := server.ensureMemoryPartitionLocked(tokenClaims.TenantID)
 	if partitionErr != nil {
@@ -1562,10 +1707,10 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 	}
 	existingFact, foundExisting := activeExplicitProfileFactByAnchorTuple(partition.state, rememberedAnchorVersion, rememberedAnchorKey)
 	server.memoryMu.Unlock()
-	if foundExisting && existingFact.FactValue == validatedRequest.FactValue {
+	if foundExisting && existingFact.FactValue == validatedCandidate.FactValue {
 		return MemoryRememberResponse{
 			Scope:           validatedRequest.Scope,
-			FactKey:         validatedRequest.FactKey,
+			FactKey:         validatedCandidate.CanonicalKey,
 			FactValue:       existingFact.FactValue,
 			InspectionID:    existingFact.InspectionID,
 			DistillateID:    existingFact.DistillateID,
@@ -1596,8 +1741,8 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 			FactValue string `json:"fact_value"`
 			NowUTC    string `json:"now_utc"`
 		}{
-			FactKey:   validatedRequest.FactKey,
-			FactValue: validatedRequest.FactValue,
+			FactKey:   validatedCandidate.CanonicalKey,
+			FactValue: validatedCandidate.FactValue,
 			NowUTC:    nowUTC.Format(time.RFC3339Nano),
 		})
 		threadID := "thread_" + rememberedThreadSuffix
@@ -1613,7 +1758,7 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 					FactKey string `json:"fact_key"`
 					NowUTC  string `json:"now_utc"`
 				}{
-					FactKey: validatedRequest.FactKey,
+					FactKey: validatedCandidate.CanonicalKey,
 					NowUTC:  nowUTC.Format(time.RFC3339Nano),
 				}),
 				SupersededByInspectionID:  inspectionID,
@@ -1625,7 +1770,7 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 		}
 		sourceRef := continuityArtifactSourceRef{
 			Kind: explicitProfileFactSourceKind,
-			Ref:  validatedRequest.FactKey,
+			Ref:  validatedCandidate.CanonicalKey,
 		}
 		userImportance := "somewhat_important"
 		retentionScore := importanceBase(server.runtimeConfig, userImportance) + server.runtimeConfig.Memory.Scoring.ExplicitUserBonus
@@ -1653,8 +1798,8 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 				SupersedesInspectionID: strings.TrimSpace(existingFact.InspectionID),
 			},
 			EventCount:            1,
-			ApproxPayloadBytes:    len([]byte(validatedRequest.FactValue)),
-			ApproxPromptTokens:    approximateLoopgateTokenCount(validatedRequest.FactValue),
+			ApproxPayloadBytes:    len([]byte(validatedCandidate.FactValue)),
+			ApproxPromptTokens:    approximateLoopgateTokenCount(validatedCandidate.FactValue),
 			DerivedDistillateIDs:  []string{distillateID},
 			DerivedResonateKeyIDs: []string{resonateKeyID},
 		}
@@ -1676,19 +1821,19 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 				FactKey   string `json:"fact_key"`
 				FactValue string `json:"fact_value"`
 			}{
-				FactKey:   validatedRequest.FactKey,
-				FactValue: validatedRequest.FactValue,
+				FactKey:   validatedCandidate.CanonicalKey,
+				FactValue: validatedCandidate.FactValue,
 			}),
 			CreatedAtUTC: nowUTC.Format(time.RFC3339Nano),
 			SourceRefs:   []continuityArtifactSourceRef{sourceRef},
-			Tags:         normalizeLoopgateMemoryTags([]string{validatedRequest.FactKey, validatedRequest.FactValue}),
+			Tags:         normalizeLoopgateMemoryTags([]string{validatedCandidate.CanonicalKey, validatedCandidate.FactValue}),
 			Facts: []continuityDistillateFact{{
-				Name:               validatedRequest.FactKey,
-				Value:              validatedRequest.FactValue,
+				Name:               validatedCandidate.CanonicalKey,
+				Value:              validatedCandidate.FactValue,
 				SourceRef:          sourceRef.Kind + ":" + sourceRef.Ref,
 				EpistemicFlavor:    "remembered",
 				CertaintyScore:     certaintyScoreForEpistemicFlavor("remembered"),
-				SemanticProjection: cloneSemanticProjection(&tclAnalysis.Projection),
+				SemanticProjection: cloneSemanticProjection(&validatedCandidate.Projection),
 			}},
 		}
 		resonateKeyRecord := continuityResonateKeyRecord{
@@ -1713,8 +1858,8 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 
 		rememberResponse = MemoryRememberResponse{
 			Scope:           validatedRequest.Scope,
-			FactKey:         validatedRequest.FactKey,
-			FactValue:       validatedRequest.FactValue,
+			FactKey:         validatedCandidate.CanonicalKey,
+			FactValue:       validatedCandidate.FactValue,
 			InspectionID:    inspectionID,
 			DistillateID:    distillateID,
 			ResonateKeyID:   resonateKeyID,
@@ -1759,13 +1904,13 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 			})
 		}
 		return workingState, mergeMemoryTCLAuditSummary(map[string]interface{}{
-			"fact_key":         validatedRequest.FactKey,
+			"fact_key":         validatedCandidate.CanonicalKey,
 			"inspection_id":    inspectionID,
 			"distillate_id":    distillateID,
 			"resonate_key_id":  resonateKeyID,
 			"updated_existing": foundExisting,
 			"scope":            validatedRequest.Scope,
-		}, tclAnalysis.AuditSummary), mutationEvents, nil
+		}, validatedCandidateResult.AuditSummary), mutationEvents, nil
 	})
 	if err != nil {
 		return MemoryRememberResponse{}, err
@@ -1872,7 +2017,7 @@ func (server *Server) normalizeMemoryRememberRequest(rawRequest MemoryRememberRe
 	if validatedRequest.Scope == "" {
 		validatedRequest.Scope = memoryScopeGlobal
 	}
-	validatedRequest.FactKey = tclpkg.CanonicalizeExplicitMemoryFactKey(validatedRequest.FactKey)
+	validatedRequest.FactKey = strings.TrimSpace(validatedRequest.FactKey)
 	validatedRequest.FactValue = strings.TrimSpace(validatedRequest.FactValue)
 	validatedRequest.Reason = strings.TrimSpace(validatedRequest.Reason)
 	validatedRequest.SourceText = strings.TrimSpace(validatedRequest.SourceText)
@@ -1884,16 +2029,31 @@ func (server *Server) normalizeMemoryRememberRequest(rawRequest MemoryRememberRe
 	if validatedRequest.Scope != memoryScopeGlobal {
 		return MemoryRememberRequest{}, fmt.Errorf("scope must be %q", memoryScopeGlobal)
 	}
-	if validatedRequest.FactKey == "" {
-		return MemoryRememberRequest{}, fmt.Errorf("fact_key is unsupported")
-	}
-	if err := identifiers.ValidateSafeIdentifier("fact_key", validatedRequest.FactKey); err != nil {
-		return MemoryRememberRequest{}, err
-	}
 	if len([]byte(validatedRequest.FactValue)) > server.runtimeConfig.Memory.ExplicitFactWrites.MaxValueBytes {
 		return MemoryRememberRequest{}, fmt.Errorf("fact_value exceeds max_value_bytes")
 	}
 	return validatedRequest, nil
+}
+
+func sanitizeDeniedMemoryRememberRequest(rawRequest MemoryRememberRequest) MemoryRememberRequest {
+	sanitizedRequest := rawRequest
+	sanitizedRequest.Scope = strings.TrimSpace(sanitizedRequest.Scope)
+	if sanitizedRequest.Scope == "" {
+		sanitizedRequest.Scope = memoryScopeGlobal
+	}
+	sanitizedRequest.FactKey = strings.TrimSpace(sanitizedRequest.FactKey)
+	sanitizedRequest.CandidateSource = strings.TrimSpace(sanitizedRequest.CandidateSource)
+	if sanitizedRequest.CandidateSource == "" {
+		sanitizedRequest.CandidateSource = memoryCandidateSourceExplicitFact
+	}
+	sanitizedRequest.SourceChannel = strings.TrimSpace(sanitizedRequest.SourceChannel)
+	if sanitizedRequest.SourceChannel == "" {
+		sanitizedRequest.SourceChannel = memorySourceChannelUnknown
+	}
+	sanitizedRequest.FactValue = ""
+	sanitizedRequest.SourceText = ""
+	sanitizedRequest.Reason = ""
+	return sanitizedRequest
 }
 
 func (server *Server) consumeMemoryFactWriteBudgetLocked(controlSessionID string, peerUID uint32, nowUTC time.Time) error {

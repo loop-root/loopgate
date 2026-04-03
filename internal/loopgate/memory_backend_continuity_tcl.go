@@ -10,9 +10,10 @@ import (
 )
 
 type continuityTCLMemoryBackend struct {
-	server    *Server
-	partition *memoryPartition
-	store     *continuitySQLiteStore
+	server                          *Server
+	partition                       *memoryPartition
+	store                           *continuitySQLiteStore
+	productionParityMaterialization []productionParityMaterializedFactDebugRecord
 }
 
 const continuityTCLStoreFilename = "continuity_tcl.sqlite"
@@ -102,6 +103,9 @@ func (backend *continuityTCLMemoryBackend) DiscoverProjectedNodes(ctx context.Co
 		discoveredItems = append(discoveredItems, ProjectedNodeDiscoverItem{
 			NodeID:          projectedNode.NodeID,
 			NodeKind:        projectedNode.NodeKind,
+			SourceKind:      projectedNodeSearchMetadata(projectedNode).SourceKind,
+			CanonicalKey:    projectedNodeSearchMetadata(projectedNode).FactKey,
+			AnchorTupleKey:  anchorTupleKey(projectedNode.AnchorVersion, projectedNode.AnchorKey),
 			Scope:           projectedNode.Scope,
 			CreatedAtUTC:    projectedNode.CreatedAtUTC,
 			State:           projectedNode.State,
@@ -113,4 +117,55 @@ func (backend *continuityTCLMemoryBackend) DiscoverProjectedNodes(ctx context.Co
 		})
 	}
 	return discoveredItems, nil
+}
+
+func (backend *continuityTCLMemoryBackend) TraceProjectedNodeCandidates(ctx context.Context, rawRequest ProjectedNodeDiscoverRequest) ([]ProjectedNodeCandidateTrace, error) {
+	_ = ctx
+	validatedRequest := rawRequest
+	if strings.TrimSpace(validatedRequest.Scope) == "" {
+		validatedRequest.Scope = memoryScopeGlobal
+	}
+	if validatedRequest.MaxItems <= 0 {
+		validatedRequest.MaxItems = 5
+	}
+
+	searchDebugReport, err := backend.store.debugSearchProjectedNodes(validatedRequest.Scope, validatedRequest.Query, validatedRequest.MaxItems)
+	if err != nil {
+		return nil, err
+	}
+	candidateTrace := make([]ProjectedNodeCandidateTrace, 0, len(searchDebugReport.Nodes))
+	for _, debugNode := range searchDebugReport.Nodes {
+		if debugNode.AdmissionResult != "matched_query_overlap" {
+			continue
+		}
+		candidateTrace = append(candidateTrace, ProjectedNodeCandidateTrace{
+			CandidateID:                debugNode.NodeID,
+			NodeKind:                   debugNode.NodeKind,
+			SourceKind:                 debugNode.SourceKind,
+			CanonicalKey:               debugNode.CanonicalKey,
+			AnchorTupleKey:             debugNode.AnchorTupleKey,
+			MatchCount:                 debugNode.MatchCount,
+			RankBeforeSlotPreference:   debugNode.RankBeforeSlotPreference,
+			RankBeforeTruncation:       debugNode.RankBeforeTruncation,
+			FinalKeptRank:              debugNode.FinalKeptRank,
+			SlotPreferenceTargetAnchor: debugNode.SlotPreferenceTargetAnchor,
+			SlotPreferenceApplied:      debugNode.SlotPreferenceApplied,
+		})
+	}
+	return candidateTrace, nil
+}
+
+func (backend *continuityTCLMemoryBackend) debugProductionParityMaterializedFacts(scope string) []productionParityMaterializedFactDebugRecord {
+	trimmedScope := strings.TrimSpace(scope)
+	if trimmedScope == "" {
+		trimmedScope = memoryScopeGlobal
+	}
+	debugRecords := make([]productionParityMaterializedFactDebugRecord, 0, len(backend.productionParityMaterialization))
+	for _, debugRecord := range backend.productionParityMaterialization {
+		if strings.TrimSpace(debugRecord.Scope) != trimmedScope {
+			continue
+		}
+		debugRecords = append(debugRecords, debugRecord)
+	}
+	return debugRecords
 }

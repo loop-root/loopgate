@@ -10,6 +10,7 @@ import (
 
 type fakeProjectedNodeDiscoverer struct {
 	items            []ProjectedNodeDiscoverItem
+	candidatePool    []CandidatePoolArtifact
 	err              error
 	recordedScope    *string
 	recordedQuery    *string
@@ -30,6 +31,17 @@ func (discoverer fakeProjectedNodeDiscoverer) DiscoverProjectedNodes(ctx context
 		return nil, discoverer.err
 	}
 	return append([]ProjectedNodeDiscoverItem(nil), discoverer.items...), nil
+}
+
+func (discoverer fakeProjectedNodeDiscoverer) DiscoverProjectedNodesDetailed(ctx context.Context, scope string, query string, maxItems int) (DetailedProjectedNodeDiscoverResult, error) {
+	projectedItems, err := discoverer.DiscoverProjectedNodes(ctx, scope, query, maxItems)
+	if err != nil {
+		return DetailedProjectedNodeDiscoverResult{}, err
+	}
+	return DetailedProjectedNodeDiscoverResult{
+		Items:         projectedItems,
+		CandidatePool: append([]CandidatePoolArtifact(nil), discoverer.candidatePool...),
+	}, nil
 }
 
 type fakeCandidateGovernanceEvaluator struct {
@@ -1004,6 +1016,61 @@ func TestRunScenarioFixtures_UsesSlotOnlyMaxItemsBudgetForContradictionFixture(t
 	}
 	if !runResult.ScenarioResults[0].Outcome.Passed {
 		t.Fatalf("expected slot-only contradiction fixture to pass with only current item, got %#v", runResult.ScenarioResults[0].Outcome)
+	}
+}
+
+func TestRunScenarioFixtures_UsesPreTruncationCandidatePoolMetricsWhenAvailable(t *testing.T) {
+	fixture := ContradictionProfileTimezoneInterleavedPreviewChainFixture()
+	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{
+		RunID:            "run_contradiction_candidate_pool_trace",
+		StartedAtUTC:     "2026-03-26T12:00:00Z",
+		BackendName:      "continuity_tcl",
+		BenchmarkProfile: "fixtures",
+		Observer:         NoopObserver{},
+		Discoverer: fakeProjectedNodeDiscoverer{
+			items: []ProjectedNodeDiscoverItem{{
+				NodeID:          "preview",
+				NodeKind:        BenchmarkNodeKindStep,
+				SourceKind:      "memorybench_fixture",
+				Scope:           BenchmarkScenarioScope(fixture.Metadata.ScenarioID),
+				State:           "active",
+				HintText:        "mountain time label",
+				ProvenanceEvent: "fixture:preview",
+				MatchCount:      5,
+			}},
+			candidatePool: []CandidatePoolArtifact{
+				{
+					CandidateID:          "preview",
+					NodeKind:             BenchmarkNodeKindStep,
+					SourceKind:           "memorybench_fixture",
+					MatchCount:           5,
+					RankBeforeTruncation: 1,
+					FinalKeptRank:        1,
+				},
+				{
+					CandidateID:          "current",
+					NodeKind:             "explicit_remembered_fact",
+					SourceKind:           "explicit_profile_fact",
+					CanonicalKey:         "profile.timezone",
+					AnchorTupleKey:       "v1:usr_profile:settings:fact:timezone",
+					MatchCount:           2,
+					RankBeforeTruncation: 2,
+				},
+			},
+		},
+	}, []ScenarioFixture{fixture})
+	if err != nil {
+		t.Fatalf("RunScenarioFixtures: %v", err)
+	}
+	if len(runResult.ScenarioResults) != 1 {
+		t.Fatalf("expected one scenario result, got %#v", runResult)
+	}
+	scenarioResult := runResult.ScenarioResults[0]
+	if scenarioResult.Backend.CandidatesConsidered != 2 || scenarioResult.Backend.ProjectedNodesMatched != 2 {
+		t.Fatalf("expected pre-truncation candidate pool metrics, got %#v", scenarioResult.Backend)
+	}
+	if scenarioResult.Backend.ItemsReturned != 1 {
+		t.Fatalf("expected returned item count to remain truncated output size, got %#v", scenarioResult.Backend)
 	}
 }
 

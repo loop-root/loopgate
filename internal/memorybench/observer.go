@@ -7,7 +7,7 @@ const SchemaVersion = "1"
 type Observer interface {
 	OnRunStarted(ctx context.Context, runMetadata RunMetadata) error
 	OnScenarioStarted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata) error
-	OnRetrievalCompleted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata, backendMetrics BackendMetrics, retrievedArtifacts []RetrievedArtifact) error
+	OnRetrievalCompleted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata, backendMetrics BackendMetrics, retrievedArtifacts []RetrievedArtifact, candidatePool []CandidatePoolArtifact) error
 	OnEvaluationCompleted(ctx context.Context, runMetadata RunMetadata, scenarioResult ScenarioResult) error
 	OnRunCompleted(ctx context.Context, runResult RunResult) error
 }
@@ -38,9 +38,9 @@ func (observer MultiObserver) OnScenarioStarted(ctx context.Context, runMetadata
 	return nil
 }
 
-func (observer MultiObserver) OnRetrievalCompleted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata, backendMetrics BackendMetrics, retrievedArtifacts []RetrievedArtifact) error {
+func (observer MultiObserver) OnRetrievalCompleted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata, backendMetrics BackendMetrics, retrievedArtifacts []RetrievedArtifact, candidatePool []CandidatePoolArtifact) error {
 	for _, childObserver := range observer.observers {
-		if err := childObserver.OnRetrievalCompleted(ctx, runMetadata, scenarioMetadata, backendMetrics, retrievedArtifacts); err != nil {
+		if err := childObserver.OnRetrievalCompleted(ctx, runMetadata, scenarioMetadata, backendMetrics, retrievedArtifacts, candidatePool); err != nil {
 			return err
 		}
 	}
@@ -75,7 +75,7 @@ func (NoopObserver) OnScenarioStarted(ctx context.Context, runMetadata RunMetada
 	return nil
 }
 
-func (NoopObserver) OnRetrievalCompleted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata, backendMetrics BackendMetrics, retrievedArtifacts []RetrievedArtifact) error {
+func (NoopObserver) OnRetrievalCompleted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata, backendMetrics BackendMetrics, retrievedArtifacts []RetrievedArtifact, candidatePool []CandidatePoolArtifact) error {
 	return nil
 }
 

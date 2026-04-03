@@ -10,6 +10,9 @@ import (
 
 func TestPathsForRun_DefaultRoot(t *testing.T) {
 	outputPaths := PathsForRun("", "run_123")
+	if outputPaths.RunMetadataPath != filepath.Join(DefaultOutputRoot, "run_123", runMetadataFilename) {
+		t.Fatalf("unexpected run metadata path: %q", outputPaths.RunMetadataPath)
+	}
 	if outputPaths.RunDirectory != filepath.Join(DefaultOutputRoot, "run_123") {
 		t.Fatalf("unexpected run directory: %q", outputPaths.RunDirectory)
 	}
@@ -28,22 +31,33 @@ func TestPathsForRun_DefaultRoot(t *testing.T) {
 	if outputPaths.TracePath != filepath.Join(DefaultOutputRoot, "run_123", traceFilename) {
 		t.Fatalf("unexpected trace path: %q", outputPaths.TracePath)
 	}
+	if outputPaths.SeedManifestPath != filepath.Join(DefaultOutputRoot, "run_123", seedManifestFilename) {
+		t.Fatalf("unexpected seed manifest path: %q", outputPaths.SeedManifestPath)
+	}
 }
 
 func TestFilesystemObserver_WritesStructuredArtifacts(t *testing.T) {
 	outputRoot := t.TempDir()
 	observer := NewFilesystemObserver(outputRoot, "run_123")
 	runMetadata := RunMetadata{
-		SchemaVersion:           SchemaVersion,
-		RunID:                   "run_123",
-		StartedAtUTC:            "2026-03-26T12:00:00Z",
-		FinishedAtUTC:           "2026-03-26T12:01:00Z",
-		BenchmarkVersion:        "v0",
-		BackendName:             "continuity_tcl",
-		CandidateGovernanceMode: CandidateGovernanceBackendDefault,
-		ModelProvider:           "test",
-		ModelName:               "stub",
-		TokenBudget:             4096,
+		SchemaVersion:                          SchemaVersion,
+		RunID:                                  "run_123",
+		StartedAtUTC:                           "2026-03-26T12:00:00Z",
+		FinishedAtUTC:                          "2026-03-26T12:01:00Z",
+		BenchmarkVersion:                       "v0",
+		BackendName:                            "continuity_tcl",
+		CandidateGovernanceMode:                CandidateGovernanceBackendDefault,
+		ContinuitySeedingMode:                  ContinuitySeedingModeSyntheticProjectedNodes,
+		ComparisonClass:                        ComparisonClassScoredFixtureRun,
+		Scored:                                 true,
+		ScenarioFilter:                         ScenarioFilter{ScenarioSets: []string{"profile_slot_same_entity_preview"}},
+		ModelProvider:                          "test",
+		ModelName:                              "stub",
+		TokenBudget:                            4096,
+		RAGCollection:                          "memorybench_default",
+		RAGReranker:                            "stub-reranker",
+		ContinuityBenchmarkLocalSlotPreference: true,
+		ContinuityBenchmarkLocalSlotPreferenceMargin: 1,
 	}
 	scenarioMetadata := ScenarioMetadata{
 		ScenarioID:      "scenario_pref_update",
@@ -59,11 +73,25 @@ func TestFilesystemObserver_WritesStructuredArtifacts(t *testing.T) {
 		Reason:       "anchor_exact_match",
 		MatchCount:   2,
 	}}
+	candidatePool := []CandidatePoolArtifact{{
+		CandidateID:                "dist_123",
+		NodeKind:                   "explicit_remembered_fact",
+		SourceKind:                 "explicit_profile_fact",
+		CanonicalKey:               "profile.timezone",
+		AnchorTupleKey:             "v1:usr_profile:settings:fact:timezone",
+		MatchCount:                 2,
+		RankBeforeSlotPreference:   4,
+		RankBeforeTruncation:       2,
+		FinalKeptRank:              1,
+		SlotPreferenceTargetAnchor: "v1:usr_profile:settings:fact:timezone",
+		SlotPreferenceApplied:      true,
+	}}
 	backendMetrics := BackendMetrics{
 		RetrievalLatencyMillis: 12,
 		CandidatesConsidered:   4,
 		ItemsReturned:          1,
 		RetrievedPromptTokens:  16,
+		ProjectedNodesMatched:  4,
 	}
 	runResult := RunResult{
 		Run: runMetadata,
@@ -147,7 +175,7 @@ func TestFilesystemObserver_WritesStructuredArtifacts(t *testing.T) {
 	if err := observer.OnScenarioStarted(context.Background(), runMetadata, scenarioMetadata); err != nil {
 		t.Fatalf("OnScenarioStarted: %v", err)
 	}
-	if err := observer.OnRetrievalCompleted(context.Background(), runMetadata, scenarioMetadata, backendMetrics, retrievedArtifacts); err != nil {
+	if err := observer.OnRetrievalCompleted(context.Background(), runMetadata, scenarioMetadata, backendMetrics, retrievedArtifacts, candidatePool); err != nil {
 		t.Fatalf("OnRetrievalCompleted: %v", err)
 	}
 	if err := observer.OnEvaluationCompleted(context.Background(), runMetadata, runResult.ScenarioResults[0]); err != nil {
@@ -158,6 +186,23 @@ func TestFilesystemObserver_WritesStructuredArtifacts(t *testing.T) {
 	}
 
 	outputPaths := PathsForRun(outputRoot, "run_123")
+	runMetadataBytes, err := os.ReadFile(outputPaths.RunMetadataPath)
+	if err != nil {
+		t.Fatalf("read run_metadata.json: %v", err)
+	}
+	runMetadataText := string(runMetadataBytes)
+	for _, expectedFragment := range []string{
+		`"backend_name": "continuity_tcl"`,
+		`"continuity_seeding_mode": "synthetic_projected_nodes"`,
+		`"comparison_class": "scored_fixture_run"`,
+		`"scored": true`,
+		`"run_metadata_path": "`,
+		`"trace_path": "`,
+	} {
+		if !strings.Contains(runMetadataText, expectedFragment) {
+			t.Fatalf("expected %q in run_metadata.json, got %s", expectedFragment, runMetadataText)
+		}
+	}
 	resultsBytes, err := os.ReadFile(outputPaths.ResultsPath)
 	if err != nil {
 		t.Fatalf("read results.json: %v", err)
@@ -210,6 +255,22 @@ func TestFilesystemObserver_WritesStructuredArtifacts(t *testing.T) {
 	for _, expectedEvent := range []string{`"event_type":"run_started"`, `"event_type":"scenario_started"`, `"event_type":"retrieval_completed"`, `"event_type":"evaluation_completed"`, `"event_type":"run_completed"`} {
 		if !strings.Contains(traceText, expectedEvent) {
 			t.Fatalf("expected %s in trace.jsonl, got %s", expectedEvent, traceText)
+		}
+	}
+	for _, expectedFragment := range []string{
+		`"candidate_pool":[`,
+		`"candidate_id":"dist_123"`,
+		`"source_kind":"explicit_profile_fact"`,
+		`"canonical_key":"profile.timezone"`,
+		`"anchor_tuple_key":"v1:usr_profile:settings:fact:timezone"`,
+		`"rank_before_slot_preference":4`,
+		`"rank_before_truncation":2`,
+		`"final_kept_rank":1`,
+		`"slot_preference_target_anchor":"v1:usr_profile:settings:fact:timezone"`,
+		`"slot_preference_applied":true`,
+	} {
+		if !strings.Contains(traceText, expectedFragment) {
+			t.Fatalf("expected %q in trace.jsonl, got %s", expectedFragment, traceText)
 		}
 	}
 }

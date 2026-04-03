@@ -40,6 +40,9 @@ type ProjectedNodeDiscoverRequest struct {
 type ProjectedNodeDiscoverItem struct {
 	NodeID          string
 	NodeKind        string
+	SourceKind      string
+	CanonicalKey    string
+	AnchorTupleKey  string
 	Scope           string
 	CreatedAtUTC    string
 	State           string
@@ -48,4 +51,22 @@ type ProjectedNodeDiscoverItem struct {
 	FamilySignature string
 	ProvenanceEvent string
 	MatchCount      int
+}
+
+type ProjectedNodeCandidateTrace struct {
+	CandidateID                string
+	NodeKind                   string
+	SourceKind                 string
+	CanonicalKey               string
+	AnchorTupleKey             string
+	MatchCount                 int
+	RankBeforeSlotPreference   int
+	RankBeforeTruncation       int
+	FinalKeptRank              int
+	SlotPreferenceTargetAnchor string
+	SlotPreferenceApplied      bool
+}
+
+type ProjectedNodeDiscoverTraceBackend interface {
+	TraceProjectedNodeCandidates(ctx context.Context, rawRequest ProjectedNodeDiscoverRequest) ([]ProjectedNodeCandidateTrace, error)
 }

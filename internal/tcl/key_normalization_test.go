@@ -92,3 +92,102 @@ func TestNormalizeExplicitFactKey_PreferenceAliasesCollapseToStableFacet(t *test
 		})
 	}
 }
+
+func TestNormalizeExplicitFactKey_PreferenceFallbackFacetAnchors(t *testing.T) {
+	testCases := []struct {
+		name          string
+		factValue     string
+		wantAnchorKey string
+	}{
+		{
+			name:          "concise answers maps to verbosity",
+			factValue:     "I prefer concise answers",
+			wantAnchorKey: "usr_preference:stated:fact:preference:verbosity",
+		},
+		{
+			name:          "brief maps to verbosity",
+			factValue:     "please be brief",
+			wantAnchorKey: "usr_preference:stated:fact:preference:verbosity",
+		},
+		{
+			name:          "detailed maps to verbosity",
+			factValue:     "be detailed",
+			wantAnchorKey: "usr_preference:stated:fact:preference:verbosity",
+		},
+		{
+			name:          "bullet points map to response format",
+			factValue:     "use bullet points",
+			wantAnchorKey: "usr_preference:stated:fact:preference:response_format",
+		},
+		{
+			name:          "numbered lists map to response format",
+			factValue:     "numbered lists please",
+			wantAnchorKey: "usr_preference:stated:fact:preference:response_format",
+		},
+		{
+			name:          "formal tone maps to tone",
+			factValue:     "use a formal tone",
+			wantAnchorKey: "usr_preference:stated:fact:preference:tone",
+		},
+		{
+			name:          "casual maps to tone",
+			factValue:     "be casual",
+			wantAnchorKey: "usr_preference:stated:fact:preference:tone",
+		},
+		{
+			name:          "one question maps to question style",
+			factValue:     "ask one question at a time",
+			wantAnchorKey: "usr_preference:stated:fact:preference:question_style",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			node, err := NormalizeMemoryCandidate(MemoryCandidate{
+				Source:              CandidateSourceExplicitFact,
+				SourceChannel:       "user_input",
+				NormalizedFactKey:   "preference.stated_preference",
+				NormalizedFactValue: testCase.factValue,
+				Trust:               TrustUserOriginated,
+				Actor:               ObjectUser,
+			})
+			if err != nil {
+				t.Fatalf("normalize: %v", err)
+			}
+			if node.ANCHOR == nil {
+				t.Fatalf("expected anchor %q, got nil", testCase.wantAnchorKey)
+			}
+			if node.ANCHOR.Version != "v1" {
+				t.Fatalf("expected anchor version v1, got %#v", node.ANCHOR)
+			}
+			if node.ANCHOR.CanonicalKey() != testCase.wantAnchorKey {
+				t.Fatalf("value %q: want anchor %q, got %#v", testCase.factValue, testCase.wantAnchorKey, node.ANCHOR)
+			}
+		})
+	}
+}
+
+func TestNormalizeExplicitFactKey_UnknownPreferenceDoesNotAnchor(t *testing.T) {
+	for _, factValue := range []string{
+		"I like things better this way",
+		"that style works for me",
+		"do what feels right",
+	} {
+		t.Run(factValue, func(t *testing.T) {
+			node, err := NormalizeMemoryCandidate(MemoryCandidate{
+				Source:              CandidateSourceExplicitFact,
+				SourceChannel:       "user_input",
+				NormalizedFactKey:   "preference.stated_preference",
+				NormalizedFactValue: factValue,
+				Trust:               TrustUserOriginated,
+				Actor:               ObjectUser,
+			})
+			if err != nil {
+				t.Fatalf("normalize: %v", err)
+			}
+			if node.ANCHOR != nil {
+				t.Fatalf("value %q: expected no anchor, got %#v", factValue, node.ANCHOR)
+			}
+		})
+	}
+}

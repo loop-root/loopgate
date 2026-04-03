@@ -11,7 +11,7 @@ type AnalysisResult struct {
 	Projection     SemanticProjection
 }
 
-func AnalyzeMemoryCandidate(candidate MemoryCandidate) (AnalysisResult, error) {
+func AnalyzeMemoryCandidate(candidate MemoryCandidateInput) (AnalysisResult, error) {
 	normalizedNode, err := NormalizeMemoryCandidate(candidate)
 	if err != nil {
 		return AnalysisResult{}, err

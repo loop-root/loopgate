@@ -26,7 +26,7 @@ func (discoverer fakeMainProjectedNodeDiscoverer) DiscoverProjectedNodes(tctx co
 }
 
 func TestSelectProjectedNodeDiscoverer_DefaultContinuityWithoutRepoRoot(t *testing.T) {
-	discoverer, backendName, err := selectProjectedNodeDiscoverer("continuity_tcl", "", memorybench.RAGBaselineConfig{}, false, continuityAblationNone, true, 1)
+	discoverer, backendName, _, err := selectProjectedNodeDiscoverer("continuity_tcl", "", memorybench.RAGBaselineConfig{}, memorybench.DefaultScenarioFixtures(), memorybench.ContinuitySeedingModeSyntheticProjectedNodes, continuityAblationNone, true, 1)
 	if err != nil {
 		t.Fatalf("selectProjectedNodeDiscoverer: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestSelectProjectedNodeDiscoverer_DefaultContinuityWithoutRepoRoot(t *testi
 }
 
 func TestSelectProjectedNodeDiscoverer_RejectsUnwiredRAGBaseline(t *testing.T) {
-	_, _, err := selectProjectedNodeDiscoverer("rag_baseline", "", memorybench.RAGBaselineConfig{}, false, continuityAblationNone, true, 1)
+	_, _, _, err := selectProjectedNodeDiscoverer("rag_baseline", "", memorybench.RAGBaselineConfig{}, memorybench.DefaultScenarioFixtures(), "", continuityAblationNone, true, 1)
 	if err == nil {
 		t.Fatal("expected rag_baseline selection without repo root to fail")
 	}
@@ -47,10 +47,10 @@ func TestSelectProjectedNodeDiscoverer_RejectsUnwiredRAGBaseline(t *testing.T) {
 		t.Fatalf("expected repo-root requirement error, got %v", err)
 	}
 
-	_, _, err = selectProjectedNodeDiscoverer("rag_baseline", "", memorybench.RAGBaselineConfig{
+	_, _, _, err = selectProjectedNodeDiscoverer("rag_baseline", "", memorybench.RAGBaselineConfig{
 		QdrantURL:      "http://127.0.0.1:6333",
 		CollectionName: "memorybench_default",
-	}, false, continuityAblationNone, true, 1)
+	}, memorybench.DefaultScenarioFixtures(), "", continuityAblationNone, true, 1)
 	if err == nil {
 		t.Fatal("expected rag_baseline selection without repo root to fail closed")
 	}
@@ -60,7 +60,7 @@ func TestSelectProjectedNodeDiscoverer_RejectsUnwiredRAGBaseline(t *testing.T) {
 }
 
 func TestSelectProjectedNodeDiscoverer_RejectsStrongerRAGWithoutRepoRoot(t *testing.T) {
-	_, _, err := selectProjectedNodeDiscoverer("rag_stronger", "", memorybench.RAGBaselineConfig{}, false, continuityAblationNone, true, 1)
+	_, _, _, err := selectProjectedNodeDiscoverer("rag_stronger", "", memorybench.RAGBaselineConfig{}, memorybench.DefaultScenarioFixtures(), "", continuityAblationNone, true, 1)
 	if err == nil {
 		t.Fatal("expected rag_stronger selection without repo root to fail")
 	}
@@ -71,10 +71,10 @@ func TestSelectProjectedNodeDiscoverer_RejectsStrongerRAGWithoutRepoRoot(t *test
 
 func TestSelectProjectedNodeDiscoverer_RejectsMissingRAGRuntimePaths(t *testing.T) {
 	repoRoot := t.TempDir()
-	_, _, err := selectProjectedNodeDiscoverer("rag_baseline", repoRoot, memorybench.RAGBaselineConfig{
+	_, _, _, err := selectProjectedNodeDiscoverer("rag_baseline", repoRoot, memorybench.RAGBaselineConfig{
 		QdrantURL:      "http://127.0.0.1:6333",
 		CollectionName: "memorybench_default",
-	}, false, continuityAblationNone, true, 1)
+	}, memorybench.DefaultScenarioFixtures(), "", continuityAblationNone, true, 1)
 	if err == nil {
 		t.Fatal("expected missing rag runtime paths to fail")
 	}
@@ -100,10 +100,10 @@ func TestSelectProjectedNodeDiscoverer_WiresRAGBaselineWithLocalHelperPaths(t *t
 		t.Fatalf("write fake helper script: %v", err)
 	}
 
-	discoverer, backendName, err := selectProjectedNodeDiscoverer("rag_baseline", repoRoot, memorybench.RAGBaselineConfig{
+	discoverer, backendName, _, err := selectProjectedNodeDiscoverer("rag_baseline", repoRoot, memorybench.RAGBaselineConfig{
 		QdrantURL:      "http://127.0.0.1:6333",
 		CollectionName: "memorybench_default",
-	}, false, continuityAblationNone, true, 1)
+	}, memorybench.DefaultScenarioFixtures(), "", continuityAblationNone, true, 1)
 	if err != nil {
 		t.Fatalf("selectProjectedNodeDiscoverer: %v", err)
 	}
@@ -132,11 +132,11 @@ func TestSelectProjectedNodeDiscoverer_WiresStrongerRAGWithLocalHelperPaths(t *t
 		t.Fatalf("write fake helper script: %v", err)
 	}
 
-	discoverer, backendName, err := selectProjectedNodeDiscoverer("rag_stronger", repoRoot, memorybench.RAGBaselineConfig{
+	discoverer, backendName, _, err := selectProjectedNodeDiscoverer("rag_stronger", repoRoot, memorybench.RAGBaselineConfig{
 		QdrantURL:      "http://127.0.0.1:6333",
 		CollectionName: "memorybench_default",
 		RerankerName:   "Xenova/ms-marco-MiniLM-L-6-v2",
-	}, false, continuityAblationNone, true, 1)
+	}, memorybench.DefaultScenarioFixtures(), "", continuityAblationNone, true, 1)
 	if err != nil {
 		t.Fatalf("selectProjectedNodeDiscoverer: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestSelectProjectedNodeDiscoverer_WiresStrongerRAGWithLocalHelperPaths(t *t
 }
 
 func TestSelectProjectedNodeDiscoverer_RejectsUnknownBackend(t *testing.T) {
-	_, _, err := selectProjectedNodeDiscoverer("mystery_backend", "", memorybench.RAGBaselineConfig{}, false, continuityAblationNone, true, 1)
+	_, _, _, err := selectProjectedNodeDiscoverer("mystery_backend", "", memorybench.RAGBaselineConfig{}, memorybench.DefaultScenarioFixtures(), "", continuityAblationNone, true, 1)
 	if err == nil {
 		t.Fatal("expected unknown backend selection to fail")
 	}
@@ -271,13 +271,13 @@ func TestSelectCandidateGovernanceEvaluator_AllowsFairnessOverrides(t *testing.T
 }
 
 func TestMaybeSeedRAGFixtureCorpus_NoOpForContinuityBackend(t *testing.T) {
-	if err := maybeSeedRAGFixtureCorpus(t.Context(), "", "continuity_tcl", memorybench.RAGBaselineConfig{}); err != nil {
+	if err := maybeSeedRAGFixtureCorpus(t.Context(), "", "continuity_tcl", memorybench.RAGBaselineConfig{}, memorybench.DefaultScenarioFixtures()); err != nil {
 		t.Fatalf("maybeSeedRAGFixtureCorpus: %v", err)
 	}
 }
 
 func TestBuildContinuityFixtureProjectedNodeSeeds_ReturnsFixtureCorpusSeeds(t *testing.T) {
-	projectedNodeSeeds, err := buildContinuityFixtureProjectedNodeSeeds(continuityAblationNone)
+	projectedNodeSeeds, err := buildContinuityFixtureProjectedNodeSeeds(memorybench.DefaultScenarioFixtures(), continuityAblationNone)
 	if err != nil {
 		t.Fatalf("buildContinuityFixtureProjectedNodeSeeds: %v", err)
 	}
@@ -398,6 +398,86 @@ func TestBuildContinuityFixtureProjectedNodeSeeds_ReturnsFixtureCorpusSeeds(t *t
 	}
 }
 
+func TestBuildContinuityProductionParitySeeds_ManifestAuthorityInvariants(t *testing.T) {
+	selectedScenarioFixtures, err := memorybench.SelectScenarioFixtures(memorybench.DefaultScenarioFixtures(), memorybench.ScenarioFilter{
+		ScenarioIDs: []string{
+			"contradiction.profile_timezone_same_entity_wrong_current_probe.v1",
+			"contradiction.profile_timezone_preview_only_control.v1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	rememberedFactSeeds, fixtureSeedNodes, seedManifestRecords, err := buildContinuityProductionParitySeeds(selectedScenarioFixtures)
+	if err != nil {
+		t.Fatalf("buildContinuityProductionParitySeeds: %v", err)
+	}
+	if len(rememberedFactSeeds) == 0 {
+		t.Fatal("expected production parity remembered fact seeds")
+	}
+	if len(fixtureSeedNodes) == 0 {
+		t.Fatal("expected production parity fixture-ingest seeds")
+	}
+	if len(seedManifestRecords) == 0 {
+		t.Fatal("expected production parity seed manifest records")
+	}
+	for _, seedManifestRecord := range seedManifestRecords {
+		switch seedManifestRecord.SeedPath {
+		case memorybench.ContinuitySeedPathRememberMemoryFact:
+			if seedManifestRecord.AuthorityClass != memorybench.ContinuityAuthorityValidatedWrite || !seedManifestRecord.ValidatedWriteSupported {
+				t.Fatalf("expected remember_memory_fact manifest record to stay authoritative, got %#v", seedManifestRecord)
+			}
+		case memorybench.ContinuitySeedPathFixtureIngest:
+			if seedManifestRecord.AuthorityClass != memorybench.ContinuityAuthorityFixtureIngest {
+				t.Fatalf("expected fixture-ingest manifest record to stay non-authoritative, got %#v", seedManifestRecord)
+			}
+		default:
+			t.Fatalf("unexpected production parity seed path %#v", seedManifestRecord)
+		}
+	}
+}
+
+func TestContinuitySyntheticAndProductionParityPlansAreDistinct(t *testing.T) {
+	selectedScenarioFixtures, err := memorybench.SelectScenarioFixtures(memorybench.DefaultScenarioFixtures(), memorybench.ScenarioFilter{
+		ScenarioIDs: []string{"contradiction.profile_timezone_same_entity_wrong_current_probe.v1"},
+	})
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	syntheticSeedNodes, err := buildContinuityFixtureProjectedNodeSeeds(selectedScenarioFixtures, continuityAblationNone)
+	if err != nil {
+		t.Fatalf("buildContinuityFixtureProjectedNodeSeeds: %v", err)
+	}
+	rememberedFactSeeds, fixtureSeedNodes, _, err := buildContinuityProductionParitySeeds(selectedScenarioFixtures)
+	if err != nil {
+		t.Fatalf("buildContinuityProductionParitySeeds: %v", err)
+	}
+	if len(syntheticSeedNodes) == 0 || len(rememberedFactSeeds) == 0 || len(fixtureSeedNodes) == 0 {
+		t.Fatalf("expected both synthetic and production-parity seeds, got synthetic=%d remembered=%d fixture=%d", len(syntheticSeedNodes), len(rememberedFactSeeds), len(fixtureSeedNodes))
+	}
+	foundSyntheticCurrentNode := false
+	for _, syntheticSeedNode := range syntheticSeedNodes {
+		if syntheticSeedNode.NodeID == "contradiction.profile_timezone_same_entity_wrong_current_probe.v1::current" && syntheticSeedNode.NodeKind == memorybench.BenchmarkNodeKindStep {
+			foundSyntheticCurrentNode = true
+			break
+		}
+	}
+	if !foundSyntheticCurrentNode {
+		t.Fatalf("expected synthetic mode to seed a projected current node, got %#v", syntheticSeedNodes)
+	}
+	if rememberedFactSeeds[0].FactKey != "profile.timezone" {
+		t.Fatalf("expected production parity to seed remembered profile.timezone fact, got %#v", rememberedFactSeeds[0])
+	}
+	if rememberedFactSeeds[0].Scope != memorybench.BenchmarkScenarioScope("contradiction.profile_timezone_same_entity_wrong_current_probe.v1") {
+		t.Fatalf("expected production parity remembered facts to stay scenario-scoped, got %#v", rememberedFactSeeds[0])
+	}
+	for _, parityFixtureSeedNode := range fixtureSeedNodes {
+		if parityFixtureSeedNode.NodeID == "contradiction.profile_timezone_same_entity_wrong_current_probe.v1::current" {
+			t.Fatalf("production parity must not seed current canonical slot via fixture ingest, got %#v", parityFixtureSeedNode)
+		}
+	}
+}
+
 func TestNormalizeContinuityAblation_DefaultsAndRejectsUnknownModes(t *testing.T) {
 	validatedAblation, err := normalizeContinuityAblation("")
 	if err != nil {
@@ -421,19 +501,56 @@ func TestNormalizeContinuityAblation_DefaultsAndRejectsUnknownModes(t *testing.T
 	}
 }
 
+func TestNormalizeContinuitySeedingMode_DefaultsAliasAndRejectsUnknownModes(t *testing.T) {
+	validatedContinuitySeedingMode, err := normalizeContinuitySeedingMode("", false)
+	if err != nil {
+		t.Fatalf("normalizeContinuitySeedingMode empty: %v", err)
+	}
+	if validatedContinuitySeedingMode != "" {
+		t.Fatalf("expected empty continuity seeding mode to stay empty, got %q", validatedContinuitySeedingMode)
+	}
+
+	validatedContinuitySeedingMode, err = normalizeContinuitySeedingMode("", true)
+	if err != nil {
+		t.Fatalf("normalizeContinuitySeedingMode legacy alias: %v", err)
+	}
+	if validatedContinuitySeedingMode != memorybench.ContinuitySeedingModeSyntheticProjectedNodes {
+		t.Fatalf("expected legacy alias to normalize to synthetic mode, got %q", validatedContinuitySeedingMode)
+	}
+
+	if _, err := normalizeContinuitySeedingMode("debug_ambient_repo", true); err == nil {
+		t.Fatal("expected legacy seed alias plus explicit seeding mode to fail")
+	}
+	if _, err := normalizeContinuitySeedingMode("mystery_mode", false); err == nil {
+		t.Fatal("expected unknown continuity seeding mode to fail")
+	}
+}
+
+func TestBenchmarkComparisonClass_DistinguishesScoredAndDebugRuns(t *testing.T) {
+	if got := benchmarkComparisonClass("fixtures", memorybench.BackendContinuityTCL, memorybench.ContinuitySeedingModeSyntheticProjectedNodes, memorybench.ScenarioFilter{}); got != memorybench.ComparisonClassScoredFixtureRun {
+		t.Fatalf("expected scored fixture run, got %q", got)
+	}
+	if got := benchmarkComparisonClass("fixtures", memorybench.BackendContinuityTCL, memorybench.ContinuitySeedingModeDebugAmbientRepo, memorybench.ScenarioFilter{}); got != memorybench.ComparisonClassUnscoredDebugRun {
+		t.Fatalf("expected unscored debug run for ambient repo mode, got %q", got)
+	}
+	if got := benchmarkComparisonClass("fixtures", memorybench.BackendContinuityTCL, memorybench.ContinuitySeedingModeSyntheticProjectedNodes, memorybench.ScenarioFilter{ScenarioSets: []string{"profile_slot_preview_bias"}}); got != memorybench.ComparisonClassTargetedDebugRun {
+		t.Fatalf("expected targeted debug run for filtered fixtures, got %q", got)
+	}
+}
+
 func TestSelectProjectedNodeDiscoverer_RejectsContinuityAblationWithoutFixtureSeeds(t *testing.T) {
 	repoRoot := t.TempDir()
-	_, _, err := selectProjectedNodeDiscoverer("continuity_tcl", repoRoot, memorybench.RAGBaselineConfig{}, false, continuityAblationAnchorsOff, true, 1)
+	_, _, _, err := selectProjectedNodeDiscoverer("continuity_tcl", repoRoot, memorybench.RAGBaselineConfig{}, memorybench.DefaultScenarioFixtures(), memorybench.ContinuitySeedingModeDebugAmbientRepo, continuityAblationAnchorsOff, true, 1)
 	if err == nil {
 		t.Fatal("expected continuity ablation without fixture seeds to fail")
 	}
-	if !strings.Contains(err.Error(), "requires -continuity-seed-fixtures") {
+	if !strings.Contains(err.Error(), "requires -continuity-seeding-mode") {
 		t.Fatalf("expected fixture seed requirement error, got %v", err)
 	}
 }
 
 func TestBuildContinuityFixtureProjectedNodeSeeds_AppliesAnchorAndHintAblations(t *testing.T) {
-	anchorlessSeeds, err := buildContinuityFixtureProjectedNodeSeeds(continuityAblationAnchorsOff)
+	anchorlessSeeds, err := buildContinuityFixtureProjectedNodeSeeds(memorybench.DefaultScenarioFixtures(), continuityAblationAnchorsOff)
 	if err != nil {
 		t.Fatalf("buildContinuityFixtureProjectedNodeSeeds anchors_off: %v", err)
 	}
@@ -446,7 +563,7 @@ func TestBuildContinuityFixtureProjectedNodeSeeds_AppliesAnchorAndHintAblations(
 		}
 	}
 
-	hintlessSeeds, err := buildContinuityFixtureProjectedNodeSeeds(continuityAblationHintsOff)
+	hintlessSeeds, err := buildContinuityFixtureProjectedNodeSeeds(memorybench.DefaultScenarioFixtures(), continuityAblationHintsOff)
 	if err != nil {
 		t.Fatalf("buildContinuityFixtureProjectedNodeSeeds hints_off: %v", err)
 	}
@@ -478,7 +595,7 @@ func TestContinuityAblationProjectedNodeDiscoverer_ReducesContextBreadth(t *test
 }
 
 func TestBuildContinuitySlotOnlyRankingPreferences_TracksSameEntityPreviewScopes(t *testing.T) {
-	scopePreferences := buildContinuitySlotOnlyRankingPreferences(1)
+	scopePreferences := buildContinuitySlotOnlyRankingPreferences(memorybench.DefaultScenarioFixtures(), 1)
 	timezoneScope := memorybench.BenchmarkScenarioScope("contradiction.profile_timezone_same_entity_wrong_current_probe.v1")
 	timezonePreference, foundTimezonePreference := scopePreferences[timezoneScope]
 	if !foundTimezonePreference {
@@ -625,7 +742,7 @@ func TestContinuitySlotOnlyPreferenceProjectedNodeDiscoverer_PromotesWhenConfigu
 
 func TestMaybeWrapContinuitySlotOnlyPreference_DisabledReturnsInnerDiscoverer(t *testing.T) {
 	innerDiscoverer := fakeMainProjectedNodeDiscoverer{items: []memorybench.ProjectedNodeDiscoverItem{{NodeID: "current"}}}
-	wrappedDiscoverer := maybeWrapContinuitySlotOnlyPreference(innerDiscoverer, false, 1)
+	wrappedDiscoverer := maybeWrapContinuitySlotOnlyPreference(innerDiscoverer, memorybench.DefaultScenarioFixtures(), false, 1)
 	if _, isWrappedDiscoverer := wrappedDiscoverer.(continuitySlotOnlyPreferenceProjectedNodeDiscoverer); isWrappedDiscoverer {
 		t.Fatalf("expected disabled preview preference to return inner discoverer, got %#v", wrappedDiscoverer)
 	}
@@ -641,7 +758,7 @@ func TestMaybeSeedRAGFixtureCorpus_RejectsMissingRepoRoot(t *testing.T) {
 	err := maybeSeedRAGFixtureCorpus(t.Context(), "", "rag_baseline", memorybench.RAGBaselineConfig{
 		QdrantURL:      "http://127.0.0.1:6333",
 		CollectionName: "memorybench_default",
-	})
+	}, memorybench.DefaultScenarioFixtures())
 	if err == nil {
 		t.Fatal("expected missing repo root to fail")
 	}
@@ -670,7 +787,7 @@ func TestMaybeSeedRAGFixtureCorpus_UsesLocalRuntimePaths(t *testing.T) {
 	if err := maybeSeedRAGFixtureCorpus(t.Context(), repoRoot, "rag_baseline", memorybench.RAGBaselineConfig{
 		QdrantURL:      "http://127.0.0.1:6333",
 		CollectionName: "memorybench_default",
-	}); err != nil {
+	}, memorybench.DefaultScenarioFixtures()); err != nil {
 		t.Fatalf("maybeSeedRAGFixtureCorpus: %v", err)
 	}
 }
@@ -712,7 +829,7 @@ func TestMaybeSeedRAGFixtureCorpus_UsesIsolatedCollectionName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("isolateRAGBenchmarkConfig: %v", err)
 	}
-	if err := maybeSeedRAGFixtureCorpus(t.Context(), repoRoot, "rag_stronger", isolatedConfig); err != nil {
+	if err := maybeSeedRAGFixtureCorpus(t.Context(), repoRoot, "rag_stronger", isolatedConfig, memorybench.DefaultScenarioFixtures()); err != nil {
 		t.Fatalf("maybeSeedRAGFixtureCorpus: %v", err)
 	}
 	argsBytes, err := os.ReadFile(argsOutputPath)

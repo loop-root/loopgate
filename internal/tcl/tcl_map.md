@@ -18,13 +18,29 @@ Conflict anchors let the system detect supersession and conflicts for the same l
 
 ## Key Files
 
+- `candidate_input.go`
+  - raw TCL analysis input shape (`MemoryCandidateInput`) plus the temporary `MemoryCandidate` alias for older callers
+  - analysis input is intentionally separate from the validated write contract
+
 - `types.go`
   - actions, objects, qualifiers, trust, `ConflictAnchor`, node types
 
+- `validated_candidate.go` / `validated_candidate_test.go`
+  - raw-text-free validated memory write contract built on top of the existing TCL analysis pipeline
+  - Phase 1 only supports `explicit_fact` as a validated write source even though lower-level analysis supports more candidate kinds
+  - overwrite/persistence paths are expected to consume this contract in later phases instead of reinterpreting raw analysis input
+  - contract validation now checks anchor-to-slot consistency, so a candidate cannot carry a syntactically valid but semantically wrong anchor tuple
+
 - `normalize.go` / `normalize_test.go`
   - normalization of candidates into stable TCL nodes and anchor derivation
-  - `canonicalizeExplicitFactKey` — narrow alias table applied **before** `deriveExplicitFactConflictAnchor` (identity and preference keys only; no fuzzy matching)
-  - dangerous-candidate shaping also lives here; continuity and explicit candidates that look like memory poisoning, authority spoofing, or secret-exfiltration instructions are forced into a review/quarantine semantic family before policy evaluation
+  - `CanonicalizeExplicitMemoryFactKey` — narrow compiled registry applied **before** anchor derivation
+  - registry currently allows explicit profile/preference/routine/project plus conservative `goal.*` and `work.*` namespaces; unknown or bare namespace keys fail closed
+  - explicit profile/settings support now includes canonical `profile.timezone` and `profile.locale` with exact aliases for bare `timezone` / `locale`
+  - `deriveExplicitPreferenceFacet` is still a narrow secondary fallback for explicit preference writes, not the target TCL-first preference path
+
+- `dangerous_candidate.go`
+  - isolated risk classifier for explicit/continuity candidates that look like memory poisoning, authority spoofing, or secret-exfiltration instructions
+  - normalization still consumes that classifier, but keeping it separate makes review-heuristic changes easier to test without mixing them into anchor/key shaping
 
 - `key_normalization_test.go`
   - explicit fact key aliases collapse to the same TCL conflict anchor (`TestNormalizeExplicitFactKey_*`)
@@ -56,5 +72,9 @@ Conflict anchors let the system detect supersession and conflicts for the same l
 ## Important Watchouts
 
 - Model output must still pass through validation; TCL types are not trust by themselves.
+- Keep analysis input and validated write contracts distinct. `MemoryCandidateInput` is untrusted pipeline input; `ValidatedMemoryCandidate` is the later trust boundary.
 - Keep canonical keys stable when changing normalization—migration implications for stored facts.
+- Do not widen the explicit-memory registry casually; see `docs/adr/0006-explicit-memory-key-registry-compiled-until-signed-admin-distribution.md`.
+- Do not broaden fallback preference anchoring casually; see `docs/adr/0007-preference-anchor-fallback-stays-secondary.md`.
+- Do not widen validated write sources casually; the contract is intentionally narrower than the analysis pipeline until persistence semantics are updated to consume it directly.
 - Grow conformance fixtures when RFC semantics change; do not let code silently drift from the TCL RFCs.

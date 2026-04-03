@@ -52,6 +52,7 @@ type ScenarioFixture struct {
 	ContradictionExpectation   *ContradictionExpectation   `json:"contradiction_expectation,omitempty"`
 	SafetyPrecisionExpectation *SafetyPrecisionExpectation `json:"safety_precision_expectation,omitempty"`
 	TaskResumptionExpectation  *TaskResumptionExpectation  `json:"task_resumption_expectation,omitempty"`
+	ContinuityParitySeedSpec   *ContinuityParitySeedSpec   `json:"continuity_parity_seed_spec,omitempty"`
 }
 
 type scenarioDesignIntent struct {
@@ -459,6 +460,7 @@ func DefaultScenarioFixtures() []ScenarioFixture {
 	}
 	for fixtureIndex := range defaultFixtures {
 		defaultFixtures[fixtureIndex] = annotateFixtureDesignIntent(defaultFixtures[fixtureIndex])
+		defaultFixtures[fixtureIndex] = mustAnnotateFixtureContinuityParitySeedSpec(defaultFixtures[fixtureIndex])
 	}
 	return defaultFixtures
 }

@@ -1,4 +1,4 @@
-**Last updated:** 2026-03-27
+**Last updated:** 2026-04-03
 
 # Memorybench Running Results
 
@@ -10,57 +10,80 @@ These numbers are a running engineering record, not a white paper. Treat them
 as current benchmark evidence, tied to the exact fixture families and run IDs
 listed here.
 
+This file is conservative on promotion. A benchmark result is headline-eligible
+only if it is a `scored_fixture_run` and its top-level `run_metadata.json`
+confirms the expected backend and seeding mode. `targeted_debug_run` and
+`unscored_debug_run` results are useful investigation artifacts, but they are
+not headline evidence.
+
 ## Current headline run
 
 Current fair comparison runs:
 
-- `continuity_live_fixture_v23`
-- `rag_baseline_resetcheck_default_v2`
-- `rag_stronger_resetcheck_default_v2`
+- `continuity_full_parity_slotpref_20260403`
+- `continuity_full_synth_slotpref_20260403` (retrieval-only control)
+- `rag_baseline_full_default_slotpref_20260403`
+- `rag_stronger_full_default_slotpref_20260403`
 
 Fair-run requirements:
 
-- `continuity_tcl` must use `-continuity-seed-fixtures` so it reads an isolated
-  fixture-derived store rather than ambient repo memory.
+- `continuity_tcl` must use an explicit scored seeding mode:
+  - `synthetic_projected_nodes` for the synthetic retrieval microbench
+  - `production_write_parity` for product-faithful continuity seeding
+- `debug_ambient_repo` is never eligible for headline comparison.
 - `rag_baseline` and `rag_stronger` must use `-rag-seed-fixtures` so they index
   the same checked-in fixture corpus before the run.
 - the current headline runs use `-candidate-governance backend_default`
   (continuity resolves to TCL governance; RAG resolves to permissive benchmark ingest)
 
+Promotion requirements for this headline were:
+
+- repeated targeted reruns, not just one targeted pass
+- stable passes on the old timezone/locale `4/4` regression guard
+- stable passes on the harder preview-bias targeted `5/5` set
+
+This promoted headline uses the hardened `61`-fixture scored matrix. Treat
+`production_write_parity` continuity as the benchmark truth and
+`synthetic_projected_nodes` continuity as retrieval-only control evidence.
+
 Current live summaries:
 
-- Continuity summary: `/tmp/memorybench-live-continuity/continuity_live_fixture_v23/summary.csv`
-- Continuity family summary: `/tmp/memorybench-live-continuity/continuity_live_fixture_v23/family_summary.csv`
-- Continuity subfamily summary: `/tmp/memorybench-live-continuity/continuity_live_fixture_v23/subfamily_summary.csv`
-- RAG summary: `/tmp/memorybench-integrity-g/rag_baseline_resetcheck_default_v2/summary.csv`
-- RAG family summary: `/tmp/memorybench-integrity-g/rag_baseline_resetcheck_default_v2/family_summary.csv`
-- RAG subfamily summary: `/tmp/memorybench-integrity-g/rag_baseline_resetcheck_default_v2/subfamily_summary.csv`
-- Stronger RAG summary: `/tmp/memorybench-integrity-c/rag_stronger_resetcheck_default_v2/summary.csv`
-- Stronger RAG family summary: `/tmp/memorybench-integrity-c/rag_stronger_resetcheck_default_v2/family_summary.csv`
-- Stronger RAG subfamily summary: `/tmp/memorybench-integrity-c/rag_stronger_resetcheck_default_v2/subfamily_summary.csv`
+- Continuity parity summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/summary.csv`
+- Continuity parity family summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/family_summary.csv`
+- Continuity parity subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/subfamily_summary.csv`
+- Continuity synthetic control summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_synth_slotpref_20260403/summary.csv`
+- Continuity synthetic control family summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_synth_slotpref_20260403/family_summary.csv`
+- Continuity synthetic control subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_synth_slotpref_20260403/subfamily_summary.csv`
+- RAG baseline summary: `/tmp/memorybench-full-matrix-slot-preference/rag_baseline_full_default_slotpref_20260403/summary.csv`
+- RAG baseline family summary: `/tmp/memorybench-full-matrix-slot-preference/rag_baseline_full_default_slotpref_20260403/family_summary.csv`
+- RAG baseline subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/rag_baseline_full_default_slotpref_20260403/subfamily_summary.csv`
+- Stronger RAG summary: `/tmp/memorybench-full-matrix-slot-preference/rag_stronger_full_default_slotpref_20260403/summary.csv`
+- Stronger RAG family summary: `/tmp/memorybench-full-matrix-slot-preference/rag_stronger_full_default_slotpref_20260403/family_summary.csv`
+- Stronger RAG subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/rag_stronger_full_default_slotpref_20260403/subfamily_summary.csv`
 
 Policy-matched fairness reruns:
 
-- `continuity_governed_fixture_v5`
-- `rag_baseline_resetcheck_governed_v2`
-- `rag_stronger_resetcheck_governed_v2`
+- `continuity_full_parity_slotpref_20260403`
+- `rag_baseline_full_governed_slotpref_20260403`
+- `rag_stronger_full_governed_slotpref_20260403`
 
 Policy-matched summaries:
 
-- Continuity governed family summary: `/tmp/memorybench-live-continuity/continuity_governed_fixture_v5/family_summary.csv`
-- Continuity governed subfamily summary: `/tmp/memorybench-live-continuity/continuity_governed_fixture_v5/subfamily_summary.csv`
-- RAG governed family summary: `/tmp/memorybench-integrity-i/rag_baseline_resetcheck_governed_v2/family_summary.csv`
-- RAG governed subfamily summary: `/tmp/memorybench-integrity-i/rag_baseline_resetcheck_governed_v2/subfamily_summary.csv`
-- Stronger RAG governed family summary: `/tmp/memorybench-integrity-e/rag_stronger_resetcheck_governed_v2/family_summary.csv`
-- Stronger RAG governed subfamily summary: `/tmp/memorybench-integrity-e/rag_stronger_resetcheck_governed_v2/subfamily_summary.csv`
+- Continuity governed family summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/family_summary.csv`
+- Continuity governed subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/subfamily_summary.csv`
+- RAG governed family summary: `/tmp/memorybench-full-matrix-slot-preference/rag_baseline_full_governed_slotpref_20260403/family_summary.csv`
+- RAG governed subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/rag_baseline_full_governed_slotpref_20260403/subfamily_summary.csv`
+- Stronger RAG governed family summary: `/tmp/memorybench-full-matrix-slot-preference/rag_stronger_full_governed_slotpref_20260403/family_summary.csv`
+- Stronger RAG governed subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/rag_stronger_full_governed_slotpref_20260403/subfamily_summary.csv`
 
 ### Headline numbers
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` | `42/46` | `8/8` | `15/19` | `13/13` | `6/6` |
-| `rag_baseline` | `16/46` | `0/8` | `10/19` | `0/13` | `6/6` |
-| `rag_stronger` | `14/46` | `0/8` | `8/19` | `0/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`) | `48/61` | `4/8` | `25/34` | `13/13` | `6/6` |
+| `continuity_tcl` (`synthetic_projected_nodes`, control) | `42/61` | `4/8` | `19/34` | `13/13` | `6/6` |
+| `rag_baseline` | `25/61` | `0/8` | `19/34` | `0/13` | `6/6` |
+| `rag_stronger` | `21/61` | `0/8` | `15/34` | `0/13` | `6/6` |
 
 Poisoning footnote:
 
@@ -81,40 +104,40 @@ for all compared runs:
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` | `42/46` | `8/8` | `15/19` | `13/13` | `6/6` |
-| `rag_baseline` | `24/46` | `8/8` | `10/19` | `0/13` | `6/6` |
-| `rag_stronger` | `22/46` | `8/8` | `8/19` | `0/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`) | `48/61` | `4/8` | `25/34` | `13/13` | `6/6` |
+| `rag_baseline` | `29/61` | `4/8` | `19/34` | `0/13` | `6/6` |
+| `rag_stronger` | `25/61` | `4/8` | `15/34` | `0/13` | `6/6` |
 
 Read:
 
 - once governance is policy-matched, poisoning becomes a tie in this harness
-- the surviving gap is now concentrated in truth maintenance and task resumption
-- the promoted 46-fixture slice is based on rerun-confirmed stable RAG outputs,
-  not the earlier unstable `rag_stronger` interleaved-chain run
-- the policy-matched snapshot reproduces four stable continuity misses, all in
-  the same weakness family:
-  - `contradiction.profile_timezone_same_entity_wrong_current_probe.v1`
-  - `contradiction.profile_locale_same_entity_wrong_current_probe.v1`
-  - `contradiction.profile_timezone_interleaved_preview_chain_slot_probe.v1`
-  - `contradiction.profile_locale_interleaved_preview_chain_slot_probe.v1`
-- the different-entity timezone and locale probes still pass, which narrows the
-  weakness to current-looking same-entity preview labels rather than broad
-  cross-entity contamination
+- the surviving gap is concentrated in truth maintenance and task resumption
+- the hardened, production-parity benchmark no longer reproduces the old timezone/locale preview-label weakness
+- contradiction improved materially without broad regressions:
+  - production-parity continuity moved from the earlier `9/34` contradiction floor
+    to `25/34` on the same hardened `61`-fixture matrix
+  - task resumption, safety precision, and poisoning totals stayed unchanged
+- the old timezone/locale `4/4` regression guard and the harder preview-bias `5/5`
+  set both stay green in the promoted production-parity run
+- synthetic continuity still reproduces those slot-family misses, which is why it
+  remains retrieval-only control evidence rather than benchmark truth
+- remaining contradiction misses are now elsewhere, not in the old timezone/locale
+  preview-label family
 
 Policy-matched contradiction subfamilies:
 
 | Backend | `answer_in_query` | `slot_only` |
 | --- | --- | --- |
-| `continuity_tcl` | `7/7` | `8/12` |
-| `rag_baseline` | `0/7` | `10/12` |
-| `rag_stronger` | `0/7` | `8/12` |
+| `continuity_tcl` (`production_write_parity`) | `5/7` | `20/27` |
+| `rag_baseline` | `0/7` | `19/27` |
+| `rag_stronger` | `0/7` | `15/27` |
 
 ### Per-family deltas
 
 | Family | Continuity | RAG baseline | Delta vs baseline | Stronger RAG | Delta vs stronger |
 | --- | --- | --- | --- | --- | --- |
-| `memory_poisoning` | `8/8` | `0/8` | `+8` | `0/8` | `+8` |
-| `memory_contradiction` | `15/19` | `10/19` | `+5` | `8/19` | `+7` |
+| `memory_poisoning` | `4/8` | `0/8` | `+4` | `0/8` | `+4` |
+| `memory_contradiction` | `25/34` | `19/34` | `+6` | `15/34` | `+10` |
 | `task_resumption` | `13/13` | `0/13` | `+13` | `0/13` | `+13` |
 | `memory_safety_precision` | `6/6` | `6/6` | `0` | `6/6` | `0` |
 
@@ -131,27 +154,30 @@ Task-resumption family summary with latency and prompt burden surfaced together:
 ### Current early read
 
 - `continuity_tcl` is still winning decisively on truth maintenance under the
-  promoted 46-fixture skeptical set, but it no longer gets a clean contradiction sweep
-- the current primary continuity limitation is now clearer and broader:
-  same-entity preview-label confusion reproduces across both timezone and locale
-  slots, including the longer interleaved preview-chain variants
+  promoted `61`-fixture scored matrix, and the product-faithful continuity run
+  is now the benchmark truth rather than the old synthetic control
+- the hardened, production-parity benchmark no longer reproduces the old timezone/locale
+  preview-label weakness
+- contradiction improved materially without broad regressions, and the slot-family
+  win is confirmed by both targeted reruns and the full scored matrix
+- the remaining contradiction misses are now elsewhere
 - the slot-only contradiction split is the most informative part of the current
   scoreboard:
-  - continuity `8/12`
-  - rag baseline `10/12`
-  - rag stronger `8/12`
+  - continuity parity `20/27`
+  - continuity synthetic control `12/27`
+  - rag baseline `19/27`
+  - rag stronger `15/27`
 - the answer-in-query split pulls the other way:
-  - continuity `7/7`
+  - continuity parity `5/7`
   - both RAG comparators `0/7`
 - the RAG integrity fixes made the task-resumption story harsher but more
   believable: both RAG comparators now fail the entire task-resumption family
   while still incurring much higher prompt burden
 - the interleaved-chain slice is promoted only after rerun-confirmed stability
-  on both `rag_baseline` and `rag_stronger`; the earlier unstable stronger-RAG
-  run is no longer the reference point
+  on continuity parity and both RAG comparators
 - the largest remaining differentiator is now:
   - continuity still keeps a strong contradiction edge overall
-  - continuity still has a local, repeated same-entity preview-label weakness
+  - the old timezone/locale preview-label weakness is no longer the blocker
   - RAG remains much more expensive on resume-like retrieval and still does not
     recover the answer-in-query contradiction family
 
@@ -169,7 +195,7 @@ Task-resumption family aggregates from `family_summary.csv`:
 
 These are still the last validated ablation runs from the earlier 44-fixture
 anchor-sensitive snapshot. They remain useful mechanism evidence, but they have
-not yet been rerun on the promoted 46-fixture interleaved-chain slice.
+not yet been rerun on the promoted `61`-fixture production-parity matrix.
 
 Benchmark-local continuity ablation runs:
 
@@ -190,10 +216,11 @@ Ablation read:
 - reducing related-context breadth still collapses task resumption while leaving contradiction mostly intact
 - turning anchors off now fails every slot-only contradiction probe (`0/10`),
   including the interleaved alias-chain, timezone slot, and locale slot families
-- the same-entity timezone and locale preview misses both persist even in full
-  continuity, which is a useful warning that anchor-like signatures are helping
-  a lot but are not yet sufficient for every same-entity current-looking
-  distractor shape
+- before the bounded slot-seeking preference landed, the same-entity timezone
+  and locale preview misses both persisted even in full continuity
+- keep that historical ablation result in mind when reading the anchor-only
+  mechanism story: anchor-like signatures helped a lot, but they were not
+  sufficient by themselves for that weakness family
 
 ### Contradiction reporting note
 
@@ -237,11 +264,11 @@ Ablation read:
   not a universal proof that all production RAG stacks would surface the same
   attacks after indexing.
 - The interleaved-chain slice originally exposed RAG reproducibility problems;
-  the promoted 46-fixture snapshot uses rerun-confirmed stable results only
+  the promoted `61`-fixture snapshot uses rerun-confirmed stable results only
   after collection isolation, scoped retrieval, and scoped overfetch fixes.
-- The new locale and preview-chain slot families widened the same-entity
-  preview-label skepticism, and they exposed a local continuity weakness more
-  clearly than the previous two-slot snapshot.
+- The hardened, production-parity continuity benchmark no longer reproduces the
+  old timezone/locale preview-label weakness; remaining contradiction misses are
+  now elsewhere in the `34`-fixture contradiction family.
 - Current operational metrics focus on retrieval-side burden and benchmark
   latency, not full end-to-end product runtime cost.
 
@@ -269,6 +296,11 @@ Guard families:
 
 ### Contradiction / truth maintenance
 
+The promoted `34`-fixture contradiction family now explicitly includes the old
+timezone/locale `4/4` regression guard, the harder preview-bias `5/5` set, and
+their preview-only controls. The inventory below matches the current checked-in
+fixture set.
+
 - `contradiction.preference_latest_theme_wins.v1`
 - `contradiction.identity_old_name_suppressed.v1`
 - `contradiction.preference_multiple_theme_supersessions.v1`
@@ -286,6 +318,23 @@ Guard families:
 - `contradiction.profile_timezone_different_entity_wrong_current_probe.v1`
 - `contradiction.profile_locale_same_entity_wrong_current_probe.v1`
 - `contradiction.profile_locale_different_entity_wrong_current_probe.v1`
+- `contradiction.profile_timezone_interleaved_preview_chain_slot_probe.v1`
+- `contradiction.profile_locale_interleaved_preview_chain_slot_probe.v1`
+- `contradiction.profile_timezone_close_preview_label_slot_probe.v1`
+- `contradiction.profile_timezone_preview_bias_far_match_slot_probe.v1`
+- `contradiction.profile_timezone_preview_bias_margin_two_slot_probe.v1`
+- `contradiction.profile_timezone_preview_bias_distractor_chain_slot_probe.v1`
+- `contradiction.profile_timezone_multiple_preview_labels_slot_probe.v1`
+- `contradiction.profile_timezone_conflicting_recent_preview_labels_slot_probe.v1`
+- `contradiction.profile_timezone_preview_only_control.v1`
+- `contradiction.profile_locale_preview_bias_far_match_slot_probe.v1`
+- `contradiction.profile_locale_preview_bias_distractor_chain_slot_probe.v1`
+- `contradiction.profile_locale_preview_only_control.v1`
+- `contradiction.profile_pronouns_same_entity_wrong_current_probe.v1`
+- `contradiction.profile_pronouns_preview_bias_far_match_slot_probe.v1`
+- `contradiction.profile_pronouns_preview_only_control.v1`
+- `contradiction.identity_profile_name_preview_bias_far_match_slot_probe.v1`
+- `contradiction.identity_profile_name_preview_only_control.v1`
 
 ### Task resumption
 
@@ -315,37 +364,76 @@ Guard families:
 ## Reproduction commands
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
-  -output-root /tmp/memorybench-live-continuity \
-  -run-id continuity_live_fixture_v23 \
+  -output-root /tmp/memorybench-full-matrix-slot-preference \
+  -run-id continuity_full_parity_slotpref_20260403 \
   -profile fixtures \
   -backend continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
-  -continuity-seed-fixtures
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode production_write_parity
 ```
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
-  -output-root /tmp/memorybench-integrity-g \
-  -run-id rag_baseline_resetcheck_default_v2 \
+  -output-root /tmp/memorybench-full-matrix-slot-preference \
+  -run-id continuity_full_synth_slotpref_20260403 \
+  -profile fixtures \
+  -backend continuity_tcl \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode synthetic_projected_nodes
+```
+
+```bash
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
+  go run ./cmd/memorybench \
+  -output-root /tmp/memorybench-full-matrix-slot-preference \
+  -run-id rag_baseline_full_default_slotpref_20260403 \
   -profile fixtures \
   -backend rag_baseline \
-  -repo-root /Users/adalaide/Dev/morph \
+  -repo-root /Users/adalaide/Dev/loopgate \
   -rag-qdrant-url http://127.0.0.1:6333 \
   -rag-collection memorybench_default \
   -rag-seed-fixtures
 ```
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
-  -output-root /tmp/memorybench-integrity-c \
-  -run-id rag_stronger_resetcheck_default_v2 \
+  -output-root /tmp/memorybench-full-matrix-slot-preference \
+  -run-id rag_stronger_full_default_slotpref_20260403 \
   -profile fixtures \
   -backend rag_stronger \
-  -repo-root /Users/adalaide/Dev/morph \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -rag-qdrant-url http://127.0.0.1:6333 \
+  -rag-collection memorybench_rerank \
+  -rag-seed-fixtures
+```
+
+```bash
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
+  go run ./cmd/memorybench \
+  -output-root /tmp/memorybench-full-matrix-slot-preference \
+  -run-id rag_baseline_full_governed_slotpref_20260403 \
+  -profile fixtures \
+  -backend rag_baseline \
+  -candidate-governance continuity_tcl \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -rag-qdrant-url http://127.0.0.1:6333 \
+  -rag-collection memorybench_default \
+  -rag-seed-fixtures
+```
+
+```bash
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
+  go run ./cmd/memorybench \
+  -output-root /tmp/memorybench-full-matrix-slot-preference \
+  -run-id rag_stronger_full_governed_slotpref_20260403 \
+  -profile fixtures \
+  -backend rag_stronger \
+  -candidate-governance continuity_tcl \
+  -repo-root /Users/adalaide/Dev/loopgate \
   -rag-qdrant-url http://127.0.0.1:6333 \
   -rag-collection memorybench_rerank \
   -rag-seed-fixtures

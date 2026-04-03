@@ -1,4 +1,4 @@
-**Last updated:** 2026-03-29
+**Last updated:** 2026-04-03
 
 # Memorybench Benchmark Guide
 
@@ -7,7 +7,7 @@ the continuity-memory benchmark locally.
 
 It assumes the repo root is:
 
-- `/Users/adalaide/Dev/morph`
+- `/Users/adalaide/Dev/loopgate`
 
 It does not assume prior knowledge of the benchmark code.
 
@@ -24,8 +24,8 @@ Product context: [Haven_Memory_Candidates_and_Loopgate_Plan.md](./HavenOS/Haven_
 
 If you are new to memorybench, start here first:
 
-- [Memorybench In Plain English](/Users/adalaide/Dev/morph/docs/memorybench_plain_english.md)
-- [Memorybench Glossary](/Users/adalaide/Dev/morph/docs/memorybench_glossary.md)
+- [Memorybench In Plain English](/Users/adalaide/Dev/loopgate/docs/memorybench_plain_english.md)
+- [Memorybench Glossary](/Users/adalaide/Dev/loopgate/docs/memorybench_glossary.md)
 
 ## What memorybench is
 
@@ -47,27 +47,27 @@ Current skeptical fixture count:
 
 Current promoted running scoreboard:
 
-- still the stable `46`-fixture snapshot in
-  [memorybench_running_results.md](/Users/adalaide/Dev/morph/docs/memorybench_running_results.md)
-- newer preview-slot skepticism runs are tracked in the maintainer-only
-  `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`
-  until they are promoted
-- the newer `61`-fixture lexical-trap extension remains benchmark-local
-  heuristic evaluation only; it is not yet part of the promoted running-results headline
+- the stable `61`-fixture scored matrix in
+  [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
+- the older `46`-fixture snapshot is historical only
+- maintainer-only internal notes still live in
+  `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`,
+  but the timezone/locale preview-slot skepticism is now part of the promoted
+  running-results headline
 
 The CLI entrypoint is:
 
-- [main.go](/Users/adalaide/Dev/morph/cmd/memorybench/main.go)
+- [main.go](/Users/adalaide/Dev/loopgate/cmd/memorybench/main.go)
 
 The core harness logic lives in:
 
-- [runner.go](/Users/adalaide/Dev/morph/internal/memorybench/runner.go)
-- [fixtures.go](/Users/adalaide/Dev/morph/internal/memorybench/fixtures.go)
-- [types.go](/Users/adalaide/Dev/morph/internal/memorybench/types.go)
+- [runner.go](/Users/adalaide/Dev/loopgate/internal/memorybench/runner.go)
+- [fixtures.go](/Users/adalaide/Dev/loopgate/internal/memorybench/fixtures.go)
+- [types.go](/Users/adalaide/Dev/loopgate/internal/memorybench/types.go)
 
 The live scoreboard lives in:
 
-- [memorybench_running_results.md](/Users/adalaide/Dev/morph/docs/memorybench_running_results.md)
+- [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
 
 The internal methodology report lives in (maintainer checkout, not in clone):
 
@@ -80,6 +80,10 @@ Do not violate these while extending the benchmark:
 - benchmark helpers are benchmark-local only
 - do not turn benchmark bridges into Loopgate control-plane APIs
 - continuity fair runs must use isolated fixture-seeded state, not ambient repo memory
+- continuity scored fixture runs must declare an explicit seeding mode:
+  - `synthetic_projected_nodes`
+  - `production_write_parity`
+- `debug_ambient_repo` is debug-only and must not be used for scored runs
 - new adversarial fixture families must ship with a benign or distractor guard
 - every new fixture family must be recorded with:
   - the architectural mechanism under test
@@ -87,14 +91,63 @@ Do not violate these while extending the benchmark:
   - the benign control or distractor that proves we are not just rewarding overblocking
 - fail closed on unknown backend or unknown ablation mode
 - do not silently substitute one backend for another
+- fail closed when scenario filtering matches zero fixtures
+- fail closed when production-parity fixture metadata asks for
+  `remember_memory_fact` on a slot family the validated write contract does not support
+- preview and distractor seeds must never use `remember_memory_fact`
 - keep benchmark-local continuity heuristic controls explicit when used:
-  - `-continuity-preview-slot-preference=true`
-  - `-continuity-preview-slot-preference=false`
-  - `-continuity-preview-slot-preference-margin=<n>`
+  - `-continuity-benchmark-local-slot-preference=true`
+  - `-continuity-benchmark-local-slot-preference=false`
+  - `-continuity-benchmark-local-slot-preference-margin=<n>`
 - keep candidate governance mode explicit in benchmark runs:
   - `backend_default`
   - `continuity_tcl`
   - `permissive`
+
+## Run classes and artifacts
+
+Do not blend scored continuity runs and debug continuity runs into one number.
+
+- `synthetic_projected_nodes`
+  - scored fixture run
+  - retrieval microbench over synthetic projected nodes
+- `production_write_parity`
+  - scored fixture run
+  - authoritative supported slots are seeded through real `RememberMemoryFact`
+    writes, then materialized into a temporary projected-node store for benchmark
+    discovery
+- `debug_ambient_repo`
+  - unscored debug run only
+  - never eligible for headline comparison
+
+Every run now writes top-level metadata:
+
+- `run_metadata.json`
+- `seed_manifest.json` for continuity seeded runs
+
+Before trusting a continuity result, inspect `run_metadata.json` and confirm:
+
+- `backend_name`
+- `continuity_seeding_mode`
+- `comparison_class`
+- `scored`
+
+For production-parity continuity runs, inspect `seed_manifest.json` and confirm:
+
+- authoritative explicit seeds use `seed_path=remember_memory_fact`
+- those authoritative seeds also have:
+  - `authority_class=validated_explicit_write`
+  - `validated_write_supported=true`
+- preview and distractor seeds use `seed_path=continuity_fixture_ingest`
+- preview and distractor seeds never appear as authoritative explicit writes
+
+`comparison_class` is part of the evidence boundary:
+
+- `scored_fixture_run`
+- `targeted_debug_run`
+- `unscored_debug_run`
+
+Do not compare these classes as if they were the same benchmark.
 
 ## Local prerequisites
 
@@ -103,19 +156,19 @@ Do not violate these while extending the benchmark:
 Use the repo-local Go build cache:
 
 ```bash
-export GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build
+export GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build
 ```
 
 ### 2. Python helper runtime
 
 The RAG benchmark helper expects:
 
-- `/Users/adalaide/Dev/morph/.cache/memorybench-venv/bin/python`
+- `/Users/adalaide/Dev/loopgate/.cache/memorybench-venv/bin/python`
 
 Create it if needed:
 
 ```bash
-cd /Users/adalaide/Dev/morph
+cd /Users/adalaide/Dev/loopgate
 python3 -m venv .cache/memorybench-venv
 ./.cache/memorybench-venv/bin/pip install --upgrade pip
 ./.cache/memorybench-venv/bin/pip install haystack-ai qdrant-haystack fastembed-haystack
@@ -153,8 +206,8 @@ Expected:
 Before any live runs:
 
 ```bash
-cd /Users/adalaide/Dev/morph
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+cd /Users/adalaide/Dev/loopgate
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go test ./cmd/memorybench ./internal/memorybench/... ./internal/tcl/... -count=1
 ```
 
@@ -180,75 +233,119 @@ That yields a policy-matched RAG comparison instead of the raw-ingest baseline.
 
 ### Continuity
 
-Use isolated fixture seeds:
+Use isolated fixture seeds and declare the seeding mode explicitly:
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-live-continuity \
-  -run-id continuity_live_fixture_v22 \
+  -run-id continuity_fixture_synth_v1 \
   -profile fixtures \
   -backend continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
-  -continuity-seed-fixtures
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode synthetic_projected_nodes
+```
+
+Production-parity continuity runs use the same checked-in fixtures, but
+authoritative supported slot seeds go through the validated write path:
+
+```bash
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
+  go run ./cmd/memorybench \
+  -output-root /tmp/memorybench-live-continuity \
+  -run-id continuity_fixture_parity_v1 \
+  -profile fixtures \
+  -backend continuity_tcl \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode production_write_parity
 ```
 
 Tuned vs untuned continuity control for preview-slot skepticism:
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-heuristic-attack \
   -run-id continuity_preview_attack_tuned_v1 \
   -profile fixtures \
   -backend continuity_tcl \
   -candidate-governance continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
-  -continuity-seed-fixtures \
-  -continuity-preview-slot-preference=true
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode synthetic_projected_nodes \
+  -continuity-benchmark-local-slot-preference=true
 ```
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-heuristic-attack \
   -run-id continuity_preview_attack_untuned_v1 \
   -profile fixtures \
   -backend continuity_tcl \
   -candidate-governance continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
-  -continuity-seed-fixtures \
-  -continuity-preview-slot-preference=false
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode synthetic_projected_nodes \
+  -continuity-benchmark-local-slot-preference=false
 ```
 
 Stronger benchmark-local preview-slot margin experiment:
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-heuristic-attack-v2 \
   -run-id continuity_preview_attack_margin3_v1 \
   -profile fixtures \
   -backend continuity_tcl \
   -candidate-governance continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
-  -continuity-seed-fixtures \
-  -continuity-preview-slot-preference=true \
-  -continuity-preview-slot-preference-margin=3
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode synthetic_projected_nodes \
+  -continuity-benchmark-local-slot-preference=true \
+  -continuity-benchmark-local-slot-preference-margin=3
 ```
+
+### Scenario filtering and targeted reruns
+
+For focused investigation, use scenario filters instead of editing fixture code.
+
+Supported selectors:
+
+- `-scenario-id`
+- `-scenario-set`
+- `-category`
+- `-subfamily`
+
+Built-in targeted scenario sets currently include:
+
+- `profile_slot_same_entity_preview`
+- `profile_slot_preview_bias`
+- `profile_slot_preview_controls`
+
+Targeted runs are debug evidence, not headline evidence. They should show
+`comparison_class=targeted_debug_run` in `run_metadata.json`.
+
+Before promoting any new benchmark headline tied to a local improvement:
+
+- rerun the affected targeted scenario sets repeatedly, not just once
+- require stable targeted results across repeated reruns before promotion
+- treat the old timezone/locale `4/4` regression guard as required but not sufficient
+
+Passing the old `4/4` guard is required, but you still need stable targeted
+reruns on the harder preview-bias set before claiming a real headline
+improvement.
 
 ### Plain RAG
 
 Seed the checked-in fixture corpus:
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-live-rag \
   -run-id rag_live_fixture_v22 \
   -profile fixtures \
   -backend rag_baseline \
-  -repo-root /Users/adalaide/Dev/morph \
+  -repo-root /Users/adalaide/Dev/loopgate \
   -rag-qdrant-url http://127.0.0.1:6333 \
   -rag-collection memorybench_default \
   -rag-seed-fixtures
@@ -257,13 +354,13 @@ env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
 ### Stronger RAG
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-live-rag \
   -run-id rag_stronger_live_fixture_v8 \
   -profile fixtures \
   -backend rag_stronger \
-  -repo-root /Users/adalaide/Dev/morph \
+  -repo-root /Users/adalaide/Dev/loopgate \
   -rag-qdrant-url http://127.0.0.1:6333 \
   -rag-collection memorybench_rerank \
   -rag-seed-fixtures
@@ -274,14 +371,14 @@ env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
 Use the same retrieval backend with continuity/TCL candidate governance:
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-live-rag \
   -run-id rag_governed_fixture_v4 \
   -profile fixtures \
   -backend rag_baseline \
   -candidate-governance continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
+  -repo-root /Users/adalaide/Dev/loopgate \
   -rag-qdrant-url http://127.0.0.1:6333 \
   -rag-collection memorybench_default \
   -rag-seed-fixtures
@@ -290,14 +387,14 @@ env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
 Stronger governed rerun:
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-live-rag \
   -run-id rag_stronger_governed_fixture_v4 \
   -profile fixtures \
   -backend rag_stronger \
   -candidate-governance continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
+  -repo-root /Users/adalaide/Dev/loopgate \
   -rag-qdrant-url http://127.0.0.1:6333 \
   -rag-collection memorybench_rerank \
   -rag-seed-fixtures
@@ -305,11 +402,11 @@ env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
 
 Current policy-matched read:
 
-- see [memorybench_running_results.md](/Users/adalaide/Dev/morph/docs/memorybench_running_results.md)
-  for the current promoted `46`-fixture policy-matched numbers
+- see [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
+  for the current promoted `61`-fixture policy-matched numbers
 - see `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`
-  for the newer `61`-fixture preview-slot skepticism comparison, including
-  tuned, untuned, and stronger-margin continuity controls
+  for the historical chronology, intermediate ablations, and tuned versus
+  untuned continuity-control notes that are not part of the promoted scoreboard
 
 ## Current continuity ablations
 
@@ -318,8 +415,8 @@ These are benchmark-local continuity ablations.
 Flag:
 
 - `-continuity-ablation`
-- `-continuity-preview-slot-preference`
-- `-continuity-preview-slot-preference-margin`
+- `-continuity-benchmark-local-slot-preference`
+- `-continuity-benchmark-local-slot-preference-margin`
 
 Accepted values:
 
@@ -333,10 +430,10 @@ Important caveat:
 - `reduced_context_breadth` is a proxy for “reduced graph expansion”
 - the current continuity benchmark path does not traverse graph edges yet
 - this mode reduces returned related-context breadth instead of disabling a real edge-expansion stage
-- `-continuity-preview-slot-preference` is not an ablation of the product
+- `-continuity-benchmark-local-slot-preference` is not an ablation of the product
   backend; it is a benchmark-local tuned-vs-untuned control for the narrow
   canonical-over-preview reranking experiment
-- `-continuity-preview-slot-preference-margin` is also benchmark-local only;
+- `-continuity-benchmark-local-slot-preference-margin` is also benchmark-local only;
   it changes the allowed match-count gap for that same heuristic experiment and
   must not be treated as shipped Loopgate behavior
 
@@ -355,42 +452,42 @@ Current ablation read on the 44-fixture snapshot:
 ### Anchors off
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-live-continuity \
   -run-id continuity_ablation_anchors_off_v6 \
   -profile fixtures \
   -backend continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
-  -continuity-seed-fixtures \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode synthetic_projected_nodes \
   -continuity-ablation anchors_off
 ```
 
 ### Hints off
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-live-continuity \
   -run-id continuity_ablation_hints_off_v6 \
   -profile fixtures \
   -backend continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
-  -continuity-seed-fixtures \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode synthetic_projected_nodes \
   -continuity-ablation hints_off
 ```
 
 ### Reduced related-context breadth
 
 ```bash
-env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   go run ./cmd/memorybench \
   -output-root /tmp/memorybench-live-continuity \
   -run-id continuity_ablation_reduced_breadth_v6 \
   -profile fixtures \
   -backend continuity_tcl \
-  -repo-root /Users/adalaide/Dev/morph \
-  -continuity-seed-fixtures \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode synthetic_projected_nodes \
   -continuity-ablation reduced_context_breadth
 ```
 
@@ -398,14 +495,23 @@ env GOCACHE=/Users/adalaide/Dev/morph/.cache/go-build \
 
 Each run writes:
 
+- `run_metadata.json`
 - `results.json`
 - `summary.csv`
 - `family_summary.csv`
 - `subfamily_summary.csv`
 - `trace.jsonl`
+- `seed_manifest.json` for continuity seeded runs
 
 Interpret them like this:
 
+- `run_metadata.json`
+  - top-level evidence classification
+  - check `backend_name`, `continuity_seeding_mode`, `comparison_class`, and `scored`
+- `seed_manifest.json`
+  - continuity seeding proof
+  - use this to confirm which records were authoritative validated writes and
+    which were non-authoritative fixture-ingest distractors
 - `summary.csv`
   - one row per fixture
   - quickest way to see passes/fails
@@ -456,18 +562,18 @@ Important poisoning caveat:
 
 ## How to add a new fixture family
 
-1. Add the fixture(s) to [fixtures.go](/Users/adalaide/Dev/morph/internal/memorybench/fixtures.go).
+1. Add the fixture(s) to [fixtures.go](/Users/adalaide/Dev/loopgate/internal/memorybench/fixtures.go).
 2. Add or update the corresponding guard or distractor fixture.
-3. Update [fixtures_test.go](/Users/adalaide/Dev/morph/internal/memorybench/fixtures_test.go).
-4. Add runner regressions in [runner_test.go](/Users/adalaide/Dev/morph/internal/memorybench/runner_test.go).
+3. Update [fixtures_test.go](/Users/adalaide/Dev/loopgate/internal/memorybench/fixtures_test.go).
+4. Add runner regressions in [runner_test.go](/Users/adalaide/Dev/loopgate/internal/memorybench/runner_test.go).
 5. If continuity fair seeding should include it, make sure the existing generic seed builders already cover it:
-   - [main.go](/Users/adalaide/Dev/morph/cmd/memorybench/main.go)
+   - [main.go](/Users/adalaide/Dev/loopgate/cmd/memorybench/main.go)
    For contradiction fixtures, do not stop at the generic path.
    Add slot-sensitive seed signatures when the point of the fixture is anchor contribution.
 6. Run tests.
 7. Run fresh live comparisons.
 8. Update:
-   - [memorybench_running_results.md](/Users/adalaide/Dev/morph/docs/memorybench_running_results.md)
+   - [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
    - `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`
 9. Record the family in the running-results or internal-report tables with:
    - mechanism under test
@@ -518,9 +624,9 @@ If you add a new family without a guard, the benchmark becomes easier to game.
 
 Primary files:
 
-- [backend_config.go](/Users/adalaide/Dev/morph/internal/memorybench/backend_config.go)
-- [rag_exec_client.go](/Users/adalaide/Dev/morph/internal/memorybench/rag_exec_client.go)
-- [rag_search.py](/Users/adalaide/Dev/morph/cmd/memorybench/rag_search.py)
+- [backend_config.go](/Users/adalaide/Dev/loopgate/internal/memorybench/backend_config.go)
+- [rag_exec_client.go](/Users/adalaide/Dev/loopgate/internal/memorybench/rag_exec_client.go)
+- [rag_search.py](/Users/adalaide/Dev/loopgate/cmd/memorybench/rag_search.py)
 
 Rules:
 
@@ -531,8 +637,10 @@ Rules:
 
 ## Common failure modes
 
-- forgetting `-continuity-seed-fixtures`
-  - this contaminates continuity with ambient repo state
+- forgetting `-continuity-seeding-mode`
+  - scored continuity fixture runs now fail closed without an explicit seeding mode
+- using `-continuity-seeding-mode debug_ambient_repo` for a scored comparison
+  - this is debug-only and invalid headline evidence
 - forgetting `-rag-seed-fixtures`
   - this makes RAG comparison unfair or stale
 - using a missing Python helper runtime

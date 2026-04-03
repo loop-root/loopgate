@@ -15,33 +15,25 @@ const (
 	memorySourceChannelShellCommand   = "shell_command"
 )
 
-type memoryTCLAnalysis struct {
-	Node           tclpkg.TCLNode
-	Signatures     tclpkg.SignatureSet
-	PolicyDecision tclpkg.PolicyDecision
-	Projection     tclpkg.SemanticProjection
-	AuditSummary   map[string]interface{}
+type memoryValidatedCandidate struct {
+	ValidatedCandidate tclpkg.ValidatedMemoryCandidate
+	AuditSummary       map[string]interface{}
 }
 
-func memoryAnchorTupleForNode(node tclpkg.TCLNode) (string, string) {
-	return tclpkg.AnchorTupleForNode(node)
-}
-
-func analyzeExplicitMemoryCandidate(validatedRequest MemoryRememberRequest) (memoryTCLAnalysis, error) {
-	memoryCandidate, err := memoryCandidateFromRememberRequest(validatedRequest)
+// This adapter is the last place legacy remember requests are interpreted.
+// Persistence should consume the validated contract it returns, not re-read semantic meaning from request fields.
+func buildValidatedMemoryRememberCandidate(validatedRequest MemoryRememberRequest) (memoryValidatedCandidate, error) {
+	candidateInput, err := memoryCandidateInputFromRememberRequest(validatedRequest)
 	if err != nil {
-		return memoryTCLAnalysis{}, err
+		return memoryValidatedCandidate{}, err
 	}
-	analysisResult, err := tclpkg.AnalyzeMemoryCandidate(memoryCandidate)
+	validatedCandidate, err := tclpkg.BuildValidatedMemoryCandidate(candidateInput)
 	if err != nil {
-		return memoryTCLAnalysis{}, err
+		return memoryValidatedCandidate{}, err
 	}
-	return memoryTCLAnalysis{
-		Node:           analysisResult.Node,
-		Signatures:     analysisResult.Signatures,
-		PolicyDecision: analysisResult.PolicyDecision,
-		Projection:     analysisResult.Projection,
-		AuditSummary:   memoryTCLAuditSummary(validatedRequest, analysisResult.Signatures, analysisResult.PolicyDecision),
+	return memoryValidatedCandidate{
+		ValidatedCandidate: validatedCandidate,
+		AuditSummary:       memoryValidatedCandidateAuditSummary(validatedCandidate),
 	}, nil
 }
 
@@ -53,7 +45,9 @@ func deriveMemoryCandidateSemanticProjection(memoryCandidate tclpkg.MemoryCandid
 	return cloneSemanticProjection(&analysisResult.Projection)
 }
 
-func memoryCandidateFromRememberRequest(validatedRequest MemoryRememberRequest) (tclpkg.MemoryCandidate, error) {
+// The request-to-input adapter stays separate from request preflight so key canonicalization and anchor semantics
+// live in the TCL validated-candidate boundary, not in scattered request-normalization helpers.
+func memoryCandidateInputFromRememberRequest(validatedRequest MemoryRememberRequest) (tclpkg.MemoryCandidateInput, error) {
 	candidateSource := strings.TrimSpace(validatedRequest.CandidateSource)
 	if candidateSource == "" {
 		candidateSource = memoryCandidateSourceExplicitFact
@@ -65,14 +59,14 @@ func memoryCandidateFromRememberRequest(validatedRequest MemoryRememberRequest) 
 
 	tclCandidateSource, err := tclCandidateSourceFromString(candidateSource)
 	if err != nil {
-		return tclpkg.MemoryCandidate{}, err
+		return tclpkg.MemoryCandidateInput{}, err
 	}
-	return tclpkg.MemoryCandidate{
+	return tclpkg.MemoryCandidateInput{
 		Source:              tclCandidateSource,
 		SourceChannel:       sourceChannel,
 		RawSourceText:       strings.TrimSpace(validatedRequest.SourceText),
-		NormalizedFactKey:   validatedRequest.FactKey,
-		NormalizedFactValue: validatedRequest.FactValue,
+		NormalizedFactKey:   strings.TrimSpace(validatedRequest.FactKey),
+		NormalizedFactValue: strings.TrimSpace(validatedRequest.FactValue),
 		Trust:               trustForMemorySourceChannel(sourceChannel),
 		Actor:               actorForMemorySourceChannel(sourceChannel),
 	}, nil
@@ -117,31 +111,23 @@ func actorForMemorySourceChannel(sourceChannel string) tclpkg.Object {
 	}
 }
 
-func memoryTCLAuditSummary(validatedRequest MemoryRememberRequest, signatureSet tclpkg.SignatureSet, policyDecision tclpkg.PolicyDecision) map[string]interface{} {
-	candidateSource := strings.TrimSpace(validatedRequest.CandidateSource)
-	if candidateSource == "" {
-		candidateSource = memoryCandidateSourceExplicitFact
-	}
-	sourceChannel := strings.TrimSpace(validatedRequest.SourceChannel)
-	if sourceChannel == "" {
-		sourceChannel = memorySourceChannelUnknown
-	}
+func memoryValidatedCandidateAuditSummary(validatedCandidate tclpkg.ValidatedMemoryCandidate) map[string]interface{} {
 	return map[string]interface{}{
-		"tcl_disposition":      string(policyDecision.DISP),
-		"tcl_reason_code":      policyDecision.REASON,
-		"tcl_signature_family": signatureSet.Family,
-		"tcl_risk_tier":        memoryTCLRiskTier(policyDecision),
-		"tcl_risk_motifs":      riskMotifStrings(signatureSet.RiskMotifs),
-		"tcl_source_channel":   sourceChannel,
-		"tcl_candidate_source": candidateSource,
+		"tcl_disposition":      string(validatedCandidate.Decision.Disposition),
+		"tcl_reason_code":      validatedCandidate.Decision.ReasonCode,
+		"tcl_signature_family": validatedCandidate.Signatures.Family,
+		"tcl_risk_tier":        memoryTCLRiskTier(validatedCandidate.Decision),
+		"tcl_risk_motifs":      riskMotifStrings(validatedCandidate.Signatures.RiskMotifs),
+		"tcl_source_channel":   validatedCandidate.SourceChannel,
+		"tcl_candidate_source": string(validatedCandidate.Source),
 	}
 }
 
-func memoryTCLRiskTier(policyDecision tclpkg.PolicyDecision) string {
+func memoryTCLRiskTier(validatedDecision tclpkg.ValidatedMemoryDecision) string {
 	switch {
-	case policyDecision.HardDeny:
+	case validatedDecision.HardDeny:
 		return "high"
-	case policyDecision.RISKY:
+	case validatedDecision.Risky:
 		return "medium"
 	default:
 		return "low"
@@ -176,15 +162,15 @@ func (server *Server) logDeniedMemoryRememberCandidate(controlSessionID string, 
 	return server.logEvent("memory.fact.remember_denied", controlSessionID, auditData)
 }
 
-func memoryRememberGovernanceDecision(policyDecision tclpkg.PolicyDecision) (denialCode string, safeReason string, shouldPersist bool) {
+func memoryRememberGovernanceDecision(validatedDecision tclpkg.ValidatedMemoryDecision) (denialCode string, safeReason string, shouldPersist bool) {
 	switch {
-	case policyDecision.HardDeny:
+	case validatedDecision.HardDeny:
 		return DenialCodeMemoryCandidateDangerous, "explicit memory write was denied as unsafe and was not stored", false
-	case policyDecision.DISP == tclpkg.DispositionKeep:
+	case validatedDecision.Disposition == tclpkg.DispositionKeep:
 		return "", "", true
-	case policyDecision.DISP == tclpkg.DispositionQuarantine:
+	case validatedDecision.Disposition == tclpkg.DispositionQuarantine:
 		return DenialCodeMemoryCandidateQuarantineRequired, "explicit memory write requires quarantine review and was not stored", false
-	case policyDecision.DISP == tclpkg.DispositionReview || policyDecision.DISP == tclpkg.DispositionFlag:
+	case validatedDecision.Disposition == tclpkg.DispositionReview || validatedDecision.Disposition == tclpkg.DispositionFlag:
 		return DenialCodeMemoryCandidateReviewRequired, "explicit memory write requires review and was not stored", false
 	default:
 		return DenialCodeMemoryCandidateDropped, "explicit memory write was not retained and was not stored", false

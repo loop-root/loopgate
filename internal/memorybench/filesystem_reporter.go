@@ -12,20 +12,35 @@ import (
 
 const (
 	DefaultOutputRoot        = "runtime/benchmarks"
+	runMetadataFilename      = "run_metadata.json"
 	resultsFilename          = "results.json"
 	summaryFilename          = "summary.csv"
 	familySummaryFilename    = "family_summary.csv"
 	subfamilySummaryFilename = "subfamily_summary.csv"
 	traceFilename            = "trace.jsonl"
+	seedManifestFilename     = "seed_manifest.json"
 )
 
 type OutputPaths struct {
+	RunMetadataPath      string
 	RunDirectory         string
 	ResultsPath          string
 	SummaryPath          string
 	FamilySummaryPath    string
 	SubfamilySummaryPath string
 	TracePath            string
+	SeedManifestPath     string
+}
+
+type persistedRunMetadata struct {
+	RunMetadata          RunMetadata `json:"run"`
+	RunMetadataPath      string      `json:"run_metadata_path"`
+	ResultsPath          string      `json:"results_path"`
+	SummaryPath          string      `json:"summary_path"`
+	FamilySummaryPath    string      `json:"family_summary_path"`
+	SubfamilySummaryPath string      `json:"subfamily_summary_path"`
+	TracePath            string      `json:"trace_path"`
+	SeedManifestPath     string      `json:"seed_manifest_path,omitempty"`
 }
 
 func PathsForRun(outputRoot string, runID string) OutputPaths {
@@ -35,12 +50,14 @@ func PathsForRun(outputRoot string, runID string) OutputPaths {
 	}
 	runDirectory := filepath.Join(trimmedOutputRoot, runID)
 	return OutputPaths{
+		RunMetadataPath:      filepath.Join(runDirectory, runMetadataFilename),
 		RunDirectory:         runDirectory,
 		ResultsPath:          filepath.Join(runDirectory, resultsFilename),
 		SummaryPath:          filepath.Join(runDirectory, summaryFilename),
 		FamilySummaryPath:    filepath.Join(runDirectory, familySummaryFilename),
 		SubfamilySummaryPath: filepath.Join(runDirectory, subfamilySummaryFilename),
 		TracePath:            filepath.Join(runDirectory, traceFilename),
+		SeedManifestPath:     filepath.Join(runDirectory, seedManifestFilename),
 	}
 }
 
@@ -57,6 +74,9 @@ func NewFilesystemObserver(outputRoot string, runID string) FilesystemObserver {
 func (observer FilesystemObserver) OnRunStarted(ctx context.Context, runMetadata RunMetadata) error {
 	if err := os.MkdirAll(observer.outputPaths.RunDirectory, 0o700); err != nil {
 		return fmt.Errorf("create benchmark output directory: %w", err)
+	}
+	if err := observer.writeRunMetadata(runMetadata); err != nil {
+		return err
 	}
 	return observer.appendTraceEvent(TraceEvent{
 		TimestampUTC: runMetadata.StartedAtUTC,
@@ -91,17 +111,21 @@ func (observer FilesystemObserver) OnScenarioStarted(ctx context.Context, runMet
 	})
 }
 
-func (observer FilesystemObserver) OnRetrievalCompleted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata, backendMetrics BackendMetrics, retrievedArtifacts []RetrievedArtifact) error {
+func (observer FilesystemObserver) OnRetrievalCompleted(ctx context.Context, runMetadata RunMetadata, scenarioMetadata ScenarioMetadata, backendMetrics BackendMetrics, retrievedArtifacts []RetrievedArtifact, candidatePool []CandidatePoolArtifact) error {
+	tracePayload := map[string]any{
+		"backend_metrics":     backendMetrics,
+		"retrieved_artifacts": retrievedArtifacts,
+	}
+	if len(candidatePool) > 0 {
+		tracePayload["candidate_pool"] = candidatePool
+	}
 	return observer.appendTraceEvent(TraceEvent{
 		TimestampUTC: runMetadata.StartedAtUTC,
 		RunID:        runMetadata.RunID,
 		ScenarioID:   scenarioMetadata.ScenarioID,
 		BackendName:  runMetadata.BackendName,
 		EventType:    "retrieval_completed",
-		Payload: map[string]any{
-			"backend_metrics":     backendMetrics,
-			"retrieved_artifacts": retrievedArtifacts,
-		},
+		Payload:      tracePayload,
 	})
 }
 
@@ -121,6 +145,9 @@ func (observer FilesystemObserver) OnEvaluationCompleted(ctx context.Context, ru
 
 func (observer FilesystemObserver) OnRunCompleted(ctx context.Context, runResult RunResult) error {
 	if err := observer.writeResultsJSON(runResult); err != nil {
+		return err
+	}
+	if err := observer.writeRunMetadata(runResult.Run); err != nil {
 		return err
 	}
 	if err := observer.writeSummaryCSV(runResult); err != nil {
@@ -236,6 +263,48 @@ func (observer FilesystemObserver) writeResultsJSON(runResult RunResult) error {
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(runResult); err != nil {
 		return fmt.Errorf("encode benchmark results file: %w", err)
+	}
+	return nil
+}
+
+func (observer FilesystemObserver) WriteSeedManifest(seedManifestRecords []SeedManifestRecord) error {
+	if err := os.MkdirAll(observer.outputPaths.RunDirectory, 0o700); err != nil {
+		return fmt.Errorf("create benchmark output directory: %w", err)
+	}
+	seedManifestFile, err := os.OpenFile(observer.outputPaths.SeedManifestPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("open benchmark seed manifest file: %w", err)
+	}
+	defer seedManifestFile.Close()
+
+	encoder := json.NewEncoder(seedManifestFile)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(seedManifestRecords); err != nil {
+		return fmt.Errorf("encode benchmark seed manifest: %w", err)
+	}
+	return nil
+}
+
+func (observer FilesystemObserver) writeRunMetadata(runMetadata RunMetadata) error {
+	runMetadataFile, err := os.OpenFile(observer.outputPaths.RunMetadataPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("open benchmark run metadata file: %w", err)
+	}
+	defer runMetadataFile.Close()
+
+	encoder := json.NewEncoder(runMetadataFile)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(persistedRunMetadata{
+		RunMetadata:          runMetadata,
+		RunMetadataPath:      observer.outputPaths.RunMetadataPath,
+		ResultsPath:          observer.outputPaths.ResultsPath,
+		SummaryPath:          observer.outputPaths.SummaryPath,
+		FamilySummaryPath:    observer.outputPaths.FamilySummaryPath,
+		SubfamilySummaryPath: observer.outputPaths.SubfamilySummaryPath,
+		TracePath:            observer.outputPaths.TracePath,
+		SeedManifestPath:     observer.outputPaths.SeedManifestPath,
+	}); err != nil {
+		return fmt.Errorf("encode benchmark run metadata: %w", err)
 	}
 	return nil
 }

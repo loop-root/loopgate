@@ -10,18 +10,26 @@ import (
 const BenchmarkVersion = "0.1.0"
 
 type RunnerConfig struct {
-	RunID                   string
-	StartedAtUTC            string
-	BackendName             string
-	CandidateGovernanceMode string
-	BenchmarkProfile        string
-	GitCommit               string
-	ModelProvider           string
-	ModelName               string
-	TokenBudget             int
-	Observer                Observer
-	Discoverer              ProjectedNodeDiscoverer
-	CandidateEvaluator      CandidateGovernanceEvaluator
+	RunID                                        string
+	StartedAtUTC                                 string
+	BackendName                                  string
+	CandidateGovernanceMode                      string
+	BenchmarkProfile                             string
+	ContinuitySeedingMode                        string
+	ComparisonClass                              string
+	ScenarioFilter                               ScenarioFilter
+	Scored                                       bool
+	GitCommit                                    string
+	ModelProvider                                string
+	ModelName                                    string
+	TokenBudget                                  int
+	RAGCollection                                string
+	RAGReranker                                  string
+	ContinuityBenchmarkLocalSlotPreference       bool
+	ContinuityBenchmarkLocalSlotPreferenceMargin int
+	Observer                                     Observer
+	Discoverer                                   ProjectedNodeDiscoverer
+	CandidateEvaluator                           CandidateGovernanceEvaluator
 }
 
 func RunSyntheticSmoke(ctx context.Context, runnerConfig RunnerConfig) (RunResult, error) {
@@ -66,17 +74,25 @@ func RunScenarioFixtures(ctx context.Context, runnerConfig RunnerConfig, scenari
 
 func buildRunMetadataAndObserver(runnerConfig RunnerConfig) (RunMetadata, Observer) {
 	validatedRunMetadata := RunMetadata{
-		SchemaVersion:           SchemaVersion,
-		RunID:                   runnerConfig.RunID,
-		StartedAtUTC:            nonEmptyString(runnerConfig.StartedAtUTC, time.Now().UTC().Format(time.RFC3339Nano)),
-		BenchmarkVersion:        BenchmarkVersion,
-		GitCommit:               runnerConfig.GitCommit,
-		BackendName:             nonEmptyString(runnerConfig.BackendName, "synthetic_smoke"),
-		CandidateGovernanceMode: nonEmptyString(runnerConfig.CandidateGovernanceMode, CandidateGovernanceBackendDefault),
-		BenchmarkProfile:        nonEmptyString(runnerConfig.BenchmarkProfile, "smoke"),
-		ModelProvider:           runnerConfig.ModelProvider,
-		ModelName:               runnerConfig.ModelName,
-		TokenBudget:             runnerConfig.TokenBudget,
+		SchemaVersion:                          SchemaVersion,
+		RunID:                                  runnerConfig.RunID,
+		StartedAtUTC:                           nonEmptyString(runnerConfig.StartedAtUTC, time.Now().UTC().Format(time.RFC3339Nano)),
+		BenchmarkVersion:                       BenchmarkVersion,
+		GitCommit:                              runnerConfig.GitCommit,
+		BackendName:                            nonEmptyString(runnerConfig.BackendName, "synthetic_smoke"),
+		CandidateGovernanceMode:                nonEmptyString(runnerConfig.CandidateGovernanceMode, CandidateGovernanceBackendDefault),
+		BenchmarkProfile:                       nonEmptyString(runnerConfig.BenchmarkProfile, "smoke"),
+		ContinuitySeedingMode:                  runnerConfig.ContinuitySeedingMode,
+		ComparisonClass:                        runnerConfig.ComparisonClass,
+		ScenarioFilter:                         runnerConfig.ScenarioFilter,
+		Scored:                                 runnerConfig.Scored,
+		ModelProvider:                          runnerConfig.ModelProvider,
+		ModelName:                              runnerConfig.ModelName,
+		TokenBudget:                            runnerConfig.TokenBudget,
+		RAGCollection:                          runnerConfig.RAGCollection,
+		RAGReranker:                            runnerConfig.RAGReranker,
+		ContinuityBenchmarkLocalSlotPreference: runnerConfig.ContinuityBenchmarkLocalSlotPreference,
+		ContinuityBenchmarkLocalSlotPreferenceMargin: runnerConfig.ContinuityBenchmarkLocalSlotPreferenceMargin,
 	}
 	observer := runnerConfig.Observer
 	if observer == nil {
@@ -91,11 +107,11 @@ func runScenarioFixture(ctx context.Context, observer Observer, runMetadata RunM
 		return ScenarioResult{}, err
 	}
 
-	retrievedArtifacts, backendMetrics, outcomeMetrics, err := evaluateScenarioFixture(ctx, discoverer, candidateEvaluator, scenarioFixture)
+	retrievedArtifacts, candidatePool, backendMetrics, outcomeMetrics, err := evaluateScenarioFixture(ctx, discoverer, candidateEvaluator, scenarioFixture)
 	if err != nil {
 		return ScenarioResult{}, err
 	}
-	if err := observer.OnRetrievalCompleted(ctx, runMetadata, scenarioMetadata, backendMetrics, retrievedArtifacts); err != nil {
+	if err := observer.OnRetrievalCompleted(ctx, runMetadata, scenarioMetadata, backendMetrics, retrievedArtifacts, candidatePool); err != nil {
 		return ScenarioResult{}, err
 	}
 
@@ -112,7 +128,7 @@ func runScenarioFixture(ctx context.Context, observer Observer, runMetadata RunM
 	return scenarioResult, nil
 }
 
-func evaluateScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, candidateEvaluator CandidateGovernanceEvaluator, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, BackendMetrics, OutcomeMetrics, error) {
+func evaluateScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, candidateEvaluator CandidateGovernanceEvaluator, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
 	switch scenarioFixture.Metadata.Category {
 	case CategoryMemoryPoisoning:
 		return evaluatePoisoningScenarioFixture(ctx, discoverer, candidateEvaluator, scenarioFixture)
@@ -147,13 +163,28 @@ func evaluateScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscov
 			RetrievalCorrectness: 1,
 			ProvenanceCorrect:    true,
 		}
-		return retrievedArtifacts, backendMetrics, outcomeMetrics, nil
+		return retrievedArtifacts, nil, backendMetrics, outcomeMetrics, nil
 	}
 }
 
-func evaluateTaskResumptionScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, BackendMetrics, OutcomeMetrics, error) {
+func discoverProjectedNodesWithTrace(ctx context.Context, discoverer ProjectedNodeDiscoverer, scope string, query string, maxItems int) ([]ProjectedNodeDiscoverItem, []CandidatePoolArtifact, error) {
+	if detailedDiscoverer, isDetailedDiscoverer := discoverer.(DetailedProjectedNodeDiscoverer); isDetailedDiscoverer {
+		detailedResult, err := detailedDiscoverer.DiscoverProjectedNodesDetailed(ctx, scope, query, maxItems)
+		if err != nil {
+			return nil, nil, err
+		}
+		return detailedResult.Items, detailedResult.CandidatePool, nil
+	}
+	projectedItems, err := discoverer.DiscoverProjectedNodes(ctx, scope, query, maxItems)
+	if err != nil {
+		return nil, nil, err
+	}
+	return projectedItems, nil, nil
+}
+
+func evaluateTaskResumptionScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
 	if scenarioFixture.TaskResumptionExpectation == nil {
-		return nil, BackendMetrics{}, OutcomeMetrics{
+		return nil, nil, BackendMetrics{}, OutcomeMetrics{
 			Passed: false,
 			Score:  0,
 			Notes:  "task resumption fixture missing expectation",
@@ -198,11 +229,16 @@ func evaluateTaskResumptionScenarioFixture(ctx context.Context, discoverer Proje
 	}
 
 	if discoverer != nil {
-		discoveredItems, err := discoverer.DiscoverProjectedNodes(ctx, BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID), taskResumptionProbeQuery(scenarioFixture), 5)
+		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(ctx, discoverer, BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID), taskResumptionProbeQuery(scenarioFixture), 5)
 		if err != nil {
-			return nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for task resumption fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for task resumption fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
 		}
-		backendMetrics.CandidatesConsidered = len(discoveredItems)
+		if len(candidatePool) > 0 {
+			backendMetrics.CandidatesConsidered = len(candidatePool)
+			backendMetrics.ProjectedNodesMatched = len(candidatePool)
+		} else {
+			backendMetrics.CandidatesConsidered = len(discoveredItems)
+		}
 		backendMetrics.ItemsReturned = len(discoveredItems)
 		backendMetrics.HintBytesRetrieved = 0
 		backendMetrics.HintBytesInjected = 0
@@ -265,19 +301,19 @@ func evaluateTaskResumptionScenarioFixture(ctx context.Context, discoverer Proje
 		outcomeMetrics,
 	)
 	applyOutcomeBucketScores(&outcomeMetrics, backendMetrics)
-	return retrievedArtifacts, backendMetrics, outcomeMetrics, nil
+	return retrievedArtifacts, nil, backendMetrics, outcomeMetrics, nil
 }
 
-func evaluateSafetyPrecisionScenarioFixture(ctx context.Context, candidateEvaluator CandidateGovernanceEvaluator, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, BackendMetrics, OutcomeMetrics, error) {
+func evaluateSafetyPrecisionScenarioFixture(ctx context.Context, candidateEvaluator CandidateGovernanceEvaluator, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
 	if scenarioFixture.SafetyPrecisionExpectation == nil {
-		return nil, BackendMetrics{}, OutcomeMetrics{
+		return nil, nil, BackendMetrics{}, OutcomeMetrics{
 			Passed: false,
 			Score:  0,
 			Notes:  "safety precision fixture missing expectation",
 		}, nil
 	}
 	if scenarioFixture.GovernedCandidate == nil {
-		return nil, BackendMetrics{}, OutcomeMetrics{
+		return nil, nil, BackendMetrics{}, OutcomeMetrics{
 			Passed: false,
 			Score:  0,
 			Notes:  "safety precision fixture missing governed candidate",
@@ -292,7 +328,7 @@ func evaluateSafetyPrecisionScenarioFixture(ctx context.Context, candidateEvalua
 	if candidateEvaluator != nil {
 		evaluatedDecision, err := candidateEvaluator.EvaluateCandidate(ctx, *scenarioFixture.GovernedCandidate)
 		if err != nil {
-			return nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("evaluate safety precision candidate for fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("evaluate safety precision candidate for fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
 		}
 		governanceDecision = evaluatedDecision
 	}
@@ -326,12 +362,12 @@ func evaluateSafetyPrecisionScenarioFixture(ctx context.Context, candidateEvalua
 		PromptTokens:  0,
 		ProvenanceRef: scenarioFixture.Metadata.ScenarioInputRef,
 	}}
-	return retrievedArtifacts, backendMetrics, outcomeMetrics, nil
+	return retrievedArtifacts, nil, backendMetrics, outcomeMetrics, nil
 }
 
-func evaluateContradictionScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, BackendMetrics, OutcomeMetrics, error) {
+func evaluateContradictionScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
 	if scenarioFixture.ContradictionExpectation == nil {
-		return nil, BackendMetrics{}, OutcomeMetrics{
+		return nil, nil, BackendMetrics{}, OutcomeMetrics{
 			Passed: false,
 			Score:  0,
 			Notes:  "contradiction fixture missing contradiction expectation",
@@ -365,16 +401,22 @@ func evaluateContradictionScenarioFixture(ctx context.Context, discoverer Projec
 		if scenarioFixture.ContradictionExpectation.MaxItemsReturned > 0 {
 			maxItemsReturned = scenarioFixture.ContradictionExpectation.MaxItemsReturned
 		}
-		discoveredItems, err := discoverer.DiscoverProjectedNodes(
+		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(
 			ctx,
+			discoverer,
 			BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID),
 			contradictionProbeQuery(scenarioFixture),
 			maxItemsReturned,
 		)
 		if err != nil {
-			return nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for contradiction fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for contradiction fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
 		}
-		backendMetrics.CandidatesConsidered = len(discoveredItems)
+		if len(candidatePool) > 0 {
+			backendMetrics.CandidatesConsidered = len(candidatePool)
+			backendMetrics.ProjectedNodesMatched = len(candidatePool)
+		} else {
+			backendMetrics.CandidatesConsidered = len(discoveredItems)
+		}
 		backendMetrics.ItemsReturned = len(discoveredItems)
 		retrievedArtifacts = make([]RetrievedArtifact, 0, len(discoveredItems))
 		foundPrimaryHint := false
@@ -411,6 +453,13 @@ func evaluateContradictionScenarioFixture(ctx context.Context, discoverer Projec
 			outcomeMetrics.EndToEndSuccess = false
 			outcomeMetrics.RetrievalCorrectness = 0
 		}
+		outcomeMetrics.Passed, outcomeMetrics.Score, outcomeMetrics.Notes = scoreContradictionExpectation(
+			*scenarioFixture.ContradictionExpectation,
+			backendMetrics,
+			outcomeMetrics,
+		)
+		applyOutcomeBucketScores(&outcomeMetrics, backendMetrics)
+		return retrievedArtifacts, candidatePool, backendMetrics, outcomeMetrics, nil
 	}
 
 	outcomeMetrics.Passed, outcomeMetrics.Score, outcomeMetrics.Notes = scoreContradictionExpectation(
@@ -419,12 +468,12 @@ func evaluateContradictionScenarioFixture(ctx context.Context, discoverer Projec
 		outcomeMetrics,
 	)
 	applyOutcomeBucketScores(&outcomeMetrics, backendMetrics)
-	return retrievedArtifacts, backendMetrics, outcomeMetrics, nil
+	return retrievedArtifacts, nil, backendMetrics, outcomeMetrics, nil
 }
 
-func evaluatePoisoningScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, candidateEvaluator CandidateGovernanceEvaluator, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, BackendMetrics, OutcomeMetrics, error) {
+func evaluatePoisoningScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, candidateEvaluator CandidateGovernanceEvaluator, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
 	if scenarioFixture.PoisoningExpectation == nil {
-		return nil, BackendMetrics{}, OutcomeMetrics{
+		return nil, nil, BackendMetrics{}, OutcomeMetrics{
 			Passed: false,
 			Score:  0,
 			Notes:  "poisoning fixture missing poisoning expectation",
@@ -436,7 +485,7 @@ func evaluatePoisoningScenarioFixture(ctx context.Context, discoverer ProjectedN
 	if candidateEvaluator != nil && scenarioFixture.GovernedCandidate != nil {
 		governanceDecision, err := candidateEvaluator.EvaluateCandidate(ctx, *scenarioFixture.GovernedCandidate)
 		if err != nil {
-			return nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("evaluate governed memory candidate for fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("evaluate governed memory candidate for fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
 		}
 		persistenceDisposition = governanceDecision.PersistenceDisposition
 		governanceBlocked = !governanceDecision.ShouldPersist
@@ -459,9 +508,13 @@ func evaluatePoisoningScenarioFixture(ctx context.Context, discoverer ProjectedN
 	}}
 	backendMetrics := BackendMetrics{RetrievalLatencyMillis: 1, CandidatesConsidered: 1}
 	if discoverer != nil {
-		discoveredItems, err := discoverer.DiscoverProjectedNodes(ctx, BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID), poisoningProbeQuery(scenarioFixture), 5)
+		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(ctx, discoverer, BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID), poisoningProbeQuery(scenarioFixture), 5)
 		if err != nil {
-			return nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+		}
+		if len(candidatePool) > 0 {
+			backendMetrics.CandidatesConsidered = len(candidatePool)
+			backendMetrics.ProjectedNodesMatched = len(candidatePool)
 		}
 		backendMetrics.ItemsReturned = len(discoveredItems)
 		retrievedArtifacts = make([]RetrievedArtifact, 0, len(discoveredItems))
@@ -522,7 +575,7 @@ func evaluatePoisoningScenarioFixture(ctx context.Context, discoverer ProjectedN
 		outcomeMetrics,
 	)
 	applyOutcomeBucketScores(&outcomeMetrics, backendMetrics)
-	return retrievedArtifacts, backendMetrics, outcomeMetrics, nil
+	return retrievedArtifacts, nil, backendMetrics, outcomeMetrics, nil
 }
 
 func applyOutcomeBucketScores(outcomeMetrics *OutcomeMetrics, backendMetrics BackendMetrics) {

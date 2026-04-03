@@ -90,8 +90,8 @@ func TestRememberMemoryFact_FailsClosedWhenTCLValidationFails(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	server.analyzeExplicitMemoryCandidate = func(MemoryRememberRequest) (memoryTCLAnalysis, error) {
-		return memoryTCLAnalysis{}, fmt.Errorf("synthetic TCL validation failure")
+	server.buildValidatedMemoryRememberCandidate = func(MemoryRememberRequest) (memoryValidatedCandidate, error) {
+		return memoryValidatedCandidate{}, fmt.Errorf("synthetic validated candidate build failure")
 	}
 
 	_, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{

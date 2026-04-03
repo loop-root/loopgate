@@ -120,8 +120,11 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - **`maybeMigrateMemoryToPartitionedLayout`**: one-time move of legacy top-level artifacts into `partitions/default/` when `partitions/` is absent; idempotent when already migrated
   - **`ensureMemoryPartitionLocked`**, wake rebuild and SQLite sync iterate partitions so each namespace stays consistent with its own authoritative JSON/JSONL
 - `memory_tcl.go`
-  - bridges explicit remember requests into `internal/tcl` (`NormalizeMemoryCandidate`, policy, signatures)
-  - `memoryConflictAnchorTuple` — derives persisted `(conflict_key_version, conflict_key)` from `TCLNode.ANCHOR` (empty when unanchored)
+  - bridges explicit remember requests into `internal/tcl` through `buildValidatedMemoryRememberCandidate`
+  - legacy request parsing now stops at a `tcl.ValidatedMemoryCandidate`; persistence and benchmark governance consume that contract instead of loose analysis fields
+  - explicit-memory denials for unsupported key families are audited with stable `memory_candidate_invalid` fields instead of falling through as silent persistence misses
+  - current preference supersession still depends on a narrow secondary fallback facet table for `preference.stated_preference`; see ADR 0007
+  - explicit profile/settings writes now feed `profile.timezone` and `profile.locale` through the same validated contract instead of synthetic retrieval-only anchors
 
 - `memory_conflict_anchor_test.go`
   - Phase 1 anchor persistence and fail-closed TCL failures: `TestRememberMemoryFact_SupersedesOnlyWhenAnchorTupleMatches`, `TestRememberMemoryFact_CoexistsWhenTCLReturnsNoAnchor`, `TestRememberMemoryFact_FailsClosedWhenTCLValidationFails`
@@ -137,6 +140,10 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - explicit remembered facts
   - wake-state generation
   - wake-state diagnostics
+  - explicit remember persistence now revalidates and consumes `tcl.ValidatedMemoryCandidate` directly; request normalization is preflight only
+  - timezone/locale alias handling ends at the adapter boundary, so persistence only sees canonical `profile.timezone` / `profile.locale`
+  - discover-memory retrieval remains tag-overlap first, with a narrow slot-preference tie-break for a tiny allowlist of stable profile slots (`name`, `preferred_name`, `timezone`, `locale`)
+  - that tie-break only reorders already-eligible discover results; it is not an admission path and must not bypass lineage or review filters
   - now rehydrates task metadata for unresolved items from continuity facts
   - durable mutation ordering: audit before continuity JSONL append; `saveContinuityMemoryState(..., nowUTC)` for testable / consistent artifact timestamps
 - `continuity_mutation_ordering_test.go`
@@ -158,6 +165,7 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `memorybench_bridge.go`
   - narrow internal bridge that lets `cmd/memorybench` read the `continuity_tcl`
     projected discovery surface without widening Loopgate’s public API
+  - benchmark governance now uses the same validated-candidate write path as production explicit memory writes
 
 ## Current Sprint Focus
 
@@ -206,4 +214,5 @@ That means the first diagnostics pass should expose existing truth before invent
 - If a capability appears in Haven, it should still come from Loopgate's registered tool inventory.
 - Keep explicit memory denials and diagnostic state visible. Silent success-looking memory failures will make Haven feel fake very quickly.
 - Compare-before-sync exists to preserve observability without flooding the audit trail. Do not turn routine folder polling into fake security activity.
+- Keep retrieval tuning bounded and inspectable. Do not turn discover-memory ranking into a hidden heuristic stack that can bypass current eligibility rules.
 - Benchmark bridges must stay read-only and internal. Do not turn them into a public convenience API.
