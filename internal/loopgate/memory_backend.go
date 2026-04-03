@@ -1,0 +1,51 @@
+package loopgate
+
+import "context"
+
+const (
+	memoryBackendContinuityTCL = "continuity_tcl"
+	memoryBackendRAGBaseline   = "rag_baseline"
+	memoryBackendHybrid        = "hybrid"
+)
+
+// MemoryBackend is the internal Loopgate boundary for governed memory storage,
+// wake-state assembly, and bounded retrieval. Haven should continue using the
+// existing Loopgate memory API regardless of which backend implementation is active.
+type MemoryBackend interface {
+	Name() string
+	SyncAuthoritativeState(ctx context.Context, authoritativeState continuityMemoryState) error
+
+	StoreInspection(ctx context.Context, inspectionRecord continuityInspectionRecord) error
+	StoreDistillate(ctx context.Context, distillateRecord continuityDistillateRecord) error
+	StoreExplicitRememberedFact(ctx context.Context, distillateRecord continuityDistillateRecord) error
+
+	BuildWakeState(ctx context.Context, request MemoryWakeStateRequest) (MemoryWakeStateResponse, error)
+	Discover(ctx context.Context, request MemoryDiscoverRequest) (MemoryDiscoverResponse, error)
+	Recall(ctx context.Context, request MemoryRecallRequest) (MemoryRecallResponse, error)
+}
+
+// MemoryWakeStateRequest is the internal backend request shape for bounded wake-state
+// construction. It keeps the backend boundary independent of the current HTTP route
+// shape while still returning the public Loopgate wake-state response.
+type MemoryWakeStateRequest struct {
+	Scope string
+}
+
+type ProjectedNodeDiscoverRequest struct {
+	Scope    string
+	Query    string
+	MaxItems int
+}
+
+type ProjectedNodeDiscoverItem struct {
+	NodeID          string
+	NodeKind        string
+	Scope           string
+	CreatedAtUTC    string
+	State           string
+	HintText        string
+	ExactSignature  string
+	FamilySignature string
+	ProvenanceEvent string
+	MatchCount      int
+}

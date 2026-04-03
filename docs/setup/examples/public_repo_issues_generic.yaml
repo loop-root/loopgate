@@ -1,0 +1,26 @@
+provider: repoapi
+grant_type: public_read
+subject: public-issues
+api_base_url: https://example.invalid/api
+allowed_hosts:
+  - example.invalid
+capabilities:
+  - name: repo.issues_list
+    description: Read the latest open repository issues from a public issue feed.
+    method: GET
+    path: /issues.json
+    content_class: structured_json
+    extractor: json_object_list_selector
+    response_fields:
+      - name: issues
+        json_path: issues.items
+        json_list_item_fields:
+          - number
+          - title
+          - state
+          - updated_at
+          - html_url
+        max_items: 5
+        sensitivity: tainted_text
+        max_inline_bytes: 4096
+        allow_blob_ref_fallback: false

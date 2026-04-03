@@ -1,0 +1,590 @@
+# Loopgate Context Map
+
+This file is the **master index** for the repository: a quick orientation guide for agents and contributors, and the **table of contents** for every `*_map.md` navigation file (those files are gitignored like this one so they stay out of review noise but remain on disk for local use).
+
+Its goals:
+
+- explain what the project is now
+- show where the important code lives **without pasting large trees into prompts** — follow the map for the area you are changing
+- call out the non-negotiable invariants
+- separate real source from generated, runtime, local-only, or legacy paths
+
+If this file disagrees with code, the code wins. If this file disagrees with the security constitution in `AGENTS.md` (repo root) or `AGENTS/AGENTS.md` (local-only), the agent guidance wins on safety and authority rules.
+
+## Project in One Paragraph
+
+Loopgate is a policy-governed AI governance engine.
+
+This repo implements the enforcement runtime (`cmd/loopgate`, `internal/loopgate`) and shared backend libraries. It is the authority boundary for AI capability execution — locally on developer machines, and in enterprise deployment as a distributed enforcement network with centralized governance.
+
+Product surfaces:
+
+- **Enterprise integration (primary target):** Loopgate exposes an MCP server and transparent proxy mode so developers use their existing tools (Claude Code, Cursor, VS Code) with governed capability execution. No new UI for developers to learn.
+- **Admin console (enterprise):** a minimal web UI for IT admins — policy configuration, user provisioning, audit log viewer. Served by an admin-mode Loopgate node.
+- **Haven (consumer demo):** the native **macOS Swift/SwiftUI** app (separate repository; maintainer checkout `~/Dev/Haven`). Demonstrates what Loopgate enables in a personal assistant context. Not the primary enterprise target.
+
+In the **Haven** consumer demo, the in-app assistant identity is a product concern of that app; **this** repository centers on **Loopgate** as the governance engine.
+
+## Current Product Shape
+
+- `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, memory continuity, morphling lifecycle.
+- The **enterprise integration surface** (current development priority): MCP server + proxy mode lets developers use Loopgate from existing IDEs. Admin console provides IT admin governance surface.
+- `Haven` is the consumer demo product around Morph: Messenger, Workspace, Journal, Paint, Task Board, Notes, sticky notes, presence. Demonstrates what Loopgate enables.
+- **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile). Admin node connects via mTLS over TCP. Apple XPC is optional post-launch hardening (no committed date).
+- `Morphlings` are bounded subordinate workers governed by Loopgate, not free agents.
+- **Multi-tenancy:** `tenant_id` namespace isolation is the foundation for enterprise deployment — being added now. Every resource, audit event, and capability grant will carry a `tenant_id`.
+
+Useful mental model (enterprise):
+
+```text
+Developer IDE (Claude Code / Cursor)
+  -> Loopgate MCP server / proxy (local node)
+  -> Policy evaluation, audit, memory, approvals
+  -> Admin node (governance, IDP, audit aggregation)
+```
+
+Useful mental model (consumer):
+
+```text
+User
+  -> Haven Desktop
+  -> Morph runtime
+  -> Loopgate (local node)
+  -> Sandbox, artifacts, integrations, secrets, approvals
+```
+
+## Non-Negotiable Invariants
+
+These are the rules to keep in your head before editing anything:
+
+- Loopgate is the authority boundary.
+- Natural language never creates authority.
+- Model output is untrusted input.
+- Morph is not privileged just because it initiated a request.
+- Local privileged transport stays local-only by default.
+- The sandbox boundary matters. Haven should operate in `/morph/home`, not on arbitrary host paths.
+- Host access must stay explicit, mediated, and reviewable.
+- Audit history is append-only and security-relevant actions must remain observable.
+- User-visible summaries are derived views, not source-of-truth state.
+- Secrets must stay out of logs, ledgers, plain config, and UI surfaces.
+- Fail closed is preferred over fail open.
+
+For the full safety constitution, read `AGENTS.md` at the repo root (and `AGENTS/AGENTS.md` if you maintain a local `AGENTS/` directory).
+
+## Read This First
+
+If you are new to the repo, read in this order:
+
+1. `README.md`
+2. `AGENTS.md` (repo root; tracked) — security constitution and system model
+3. `AGENTS/AGENTS.md` (optional local copy under ignored `AGENTS/`)
+4. `AGENTS/ARCHITECTURE.md` — enterprise architecture, deployment models, component boundaries
+5. `AGENTS/BUILD_NOW.md` — current implementation slice and priorities
+6. `internal/loopgate/server.go` — central server object, session/token state, mux registration
+7. `internal/loopgate/continuity_memory.go` — memory and wake-state
+8. `internal/tcl/` — Thought Compression Language: memory normalization, anchors, policy
+9. `docs/reviews/memory_reviewGaps.md` — documented memory system gaps and fixes
+10. `docs/plans/` — session handoff docs
+11. Native **Haven** app — separate checkout (`~/Dev/Haven`); start with that repo’s `context_map.md`
+12. `docs/HavenOS/` — Haven OS product docs (background context; Haven is now the consumer demo)
+
+Notes:
+
+- `AGENTS.md` at the repo root is the tracked security constitution; `AGENTS/` is a local-only directory (gitignored). It may not exist on every clone.
+- The enterprise pivot (MCP server, multi-tenancy, admin console) is the current primary direction. Haven OS docs under `docs/HavenOS/` are still accurate for the Haven consumer product but are not the current focus.
+
+## Top-Level Map
+
+```text
+/Users/adalaide/Dev/loopgate
+├── AGENTS/                Local agent guidance (ignored by git in normal workflows)
+├── cmd/                   Executable entrypoints
+├── config/                Checked-in runtime and alias config
+├── core/                  Checked-in policy and some historical memory artifacts
+├── docs/                  Architecture, setup, RFCs, Haven product docs
+├── internal/              Real implementation packages
+├── persona/               Morph persona and values
+├── runtime/               Local runtime state, socket, logs, sandbox, caches
+├── start.sh               Legacy launcher (Loopgate + old prototype shell); see Entrypoints
+├── README.md              Top-level project summary
+├── go.mod / go.sum        Go module definition
+├── haven                  Local build output binary
+├── morph                  Local build output binary
+└── loopgate-admin         Stale leftover binary from a removed admin-UI path; should not be present
+```
+
+Important interpretation:
+
+- `cmd/` and `internal/` are the main source trees.
+- `docs/` is authoritative for design intent and product shape.
+- `runtime/` is local machine state, not source.
+- top-level binaries like `haven` and `morph` are local build outputs and usually not meaningful source artifacts.
+- `loopgate-admin` comes from a removed admin-UI path and should be treated as stale local output if it appears at all.
+
+## Where the Agent Files Live
+
+Local agent guidance may live in:
+
+- `AGENTS.md` (repo root)
+- `AGENTS/AGENTS.md`, `AGENTS/ARCHITECTURE.md`, `AGENTS/BUILD_NOW.md` (when `AGENTS/` exists locally)
+
+These are useful because they capture:
+
+- the security constitution
+- the intended Haven OS architecture
+- the current implementation slice
+
+They are local/ignored rather than core product docs, so do not assume every clone or CI environment has them.
+
+## Entrypoints
+
+### Native Haven (canonical operator UI)
+
+- **Repository:** separate from Morph; typical path `~/Dev/Haven` (Swift/SwiftUI).
+- **Orientation:** that repo’s `context_map.md`, `AGENTS.md`, and `Haven/API/` (e.g. `MorphHTTPClient`).
+- **Control plane:** talks to Loopgate over **HTTP on the Unix socket** — `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`.
+
+### `start.sh`
+
+Legacy helper: verifies Go, starts Loopgate if needed, then builds and runs an **old Wails-based prototype** still present under this repo for reference/tests only (**not** the product UI — see root `AGENTS.md`). **Product flows:** run Loopgate from this repo and the **Swift Haven** app from its own checkout.
+
+### `cmd/loopgate/`
+
+The local control-plane server.
+
+- `main.go`: starts Loopgate on the repo-local Unix socket under `runtime/state/loopgate.sock`
+
+### `cmd/morphling-runner/`
+
+Separate-process runner for a morphling task plan lease.
+
+This is a thin execution wrapper, not a full isolation boundary by itself.
+
+## Internal Package Map
+
+### `internal/loopgate/`
+
+The most important backend package in the repo.
+
+What lives here:
+
+- control-plane server and handlers
+- session and token integrity
+- approval workflows
+- sandbox import / export / stage / list / metadata
+- memory continuity and wake-state
+- model connection storage and validation
+- morphling lifecycle and worker governance
+- site trust and outbound integration hooks
+- UI status queries used by Haven
+- shared-folder mediation
+- folder-grant mirroring and compare-before-sync refresh
+
+Key files:
+
+- `server.go`: central server object, session/token state, audit chain
+- `server_*_handlers.go`: split handlers by concern
+- `ui_client.go` and `ui_types.go`: Haven-facing control-plane queries
+- `client.go`: Go HTTP client for Loopgate (**HTTP on Unix domain socket** for v1; used by tests and non-Swift tooling; Swift Haven uses its own client—see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`; optional future XPC adapter TBD—see `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`)
+- `shared_folder.go`: default shared-space mediation
+- `folder_access.go`: explicit host-folder grant storage and compare-before-sync mirror logic
+- `continuity_memory.go`: Loopgate-owned durable memory selection and task-board wake-state reconstruction
+- `continuity_runtime.go`: wake-state/runtime projection helpers; now part of the task-metadata and future scheduler groundwork
+- `todo_capability.go`: Loopgate-owned task-board authority; persists task metadata into continuity state
+- `morphlings.go`, `morphling_workers.go`: bounded worker lifecycle
+
+Important note:
+
+- The old standalone Loopgate HTTP admin UI and its embedded frontend tree have been **removed** from the active server path. Do not hunt for `internal/loopgate/web/admin/` — it is gone. Future **admin console** work is the enterprise admin-mode surface, not that path.
+
+### `internal/sandbox/`
+
+Sandbox path and copy primitives.
+
+This package matters whenever host files move into or out of Haven.
+
+Responsibilities:
+
+- path normalization
+- root enforcement
+- symlink rejection
+- atomic copy / mirror
+- virtual path mapping helpers
+
+### `internal/tools/`
+
+Typed tool registry and core tool implementations.
+
+Important distinction:
+
+- `NewDefaultRegistry(...)` is repo-root oriented and used by Loopgate and non-Haven runtime paths
+- `NewSandboxRegistry(...)` is sandbox-home oriented and used for Haven-class sandbox actors in Loopgate and related runtimes
+
+Current core tools:
+
+- `fs_list`
+- `fs_read`
+- `fs_write`
+- `shell_exec`
+- `path_open`
+- `journal.*` (Haven-native)
+- `paint.*` (Haven-native)
+- `note.create` (Haven-native)
+- `memory.remember` (explicit durable memory lane)
+- `todo.*` (Task Board operating-memory tools)
+- `notes.*` (private working-notes tools)
+
+### `internal/policy/`
+
+Policy checker and policy decision types.
+
+The checked-in YAML policy lives under `core/policy/`, but this package enforces it.
+
+### `internal/secrets/`
+
+Secret storage and redaction.
+
+Important here:
+
+- macOS Keychain support
+- secure-store selection
+- redaction helpers
+- audit-safe secret summaries
+
+### `internal/memory/`
+
+Memory and continuity primitives.
+
+This is lower-level memory logic that both Morph and Loopgate build on.
+
+### `internal/haven/threadstore/`
+
+Haven's append-only thread/event storage.
+
+Use this when working on Messenger persistence or rebuilding UI state from thread history.
+
+### `internal/model/` and `internal/modelruntime/`
+
+Model-provider adapters and runtime configuration.
+
+Current provider work includes:
+
+- Anthropic
+- OpenAI-compatible endpoints
+
+### `internal/orchestrator/`
+
+Task planning / structured orchestration helpers used by the runtime.
+
+### `internal/audit/` and `internal/ledger/`
+
+Append-only event persistence and related file-state helpers.
+
+If your change affects auditability, denial paths, or write ordering, read these packages.
+
+## Config and Policy
+
+### `core/policy/policy.yaml`
+
+Checked-in default policy:
+
+- filesystem roots and denials
+- read/write enablement
+- shell / HTTP policy
+- morphling spawn defaults
+- memory thresholds
+- safety toggles
+
+### `core/policy/morphling_classes.yaml`
+
+Morphling class definitions and resource envelopes.
+
+### `persona/morph.yaml`
+
+Morph persona config.
+
+### `config/runtime.yaml`
+
+Runtime model/provider configuration.
+
+### `config/goal_aliases.yaml`
+
+Goal alias mapping used by the system.
+
+## Docs Map
+
+For a **folder-by-folder overview** of `docs/`, see `docs/docs_map.md`. Agent phase reports for the master implementation plan live under `docs/superpowers/reports/` (see `docs_map.md`).
+
+**Execution roadmap:** `sprints/` (repo root) — timestamped phased plans with exit criteria; start with `sprints/README.md`.
+
+**Architecture Decision Records:** `docs/adr/` — short, dated decisions (tradeoffs + escape hatches); index in `docs/adr/README.md`.
+
+### Current product docs
+
+These are the best docs for the current Haven direction:
+
+- `docs/HavenOS/MVP Experience Spec.md`
+- `docs/HavenOS/Haven OS Implementation Roadmap.md`
+- `docs/HavenOS/Dashboard and Agent OS Model.md`
+- `docs/HavenOS/Host Access and Action Model.md`
+- `docs/HavenOS/Experience Direction and Future Roadmap.md`
+- `docs/HavenOS/App Surface and Capability Taxonomy.md`
+- `docs/HavenOS/Loopgate Capability System.md`
+- `docs/HavenOS/HavenOS_Northstar.md`
+- `docs/HavenOS/Desktop Blueprint.md`
+
+### Architecture and security docs
+
+- `docs/design_overview/architecture.md`
+- `docs/design_overview/loopgate.md`
+- `docs/design_overview/systems_contract.md`
+- `docs/loopgate-threat-model.md`
+- `docs/roadmap/roadmap.md`
+
+### Setup docs
+
+- `docs/setup/SETUP.md`
+- `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — Swift/native clients: Unix-socket HTTP, signing, routes
+- `docs/setup/SECRETS.md`
+- `docs/setup/TOOL_USAGE.md`
+
+### Repository map index (master TOC)
+
+These `*_map.md` files (gitignored like this file) are the **navigation layer**: open the map for the directory you are working in, then open only the source files that map lists.
+
+**Entrypoints and top-level trees**
+
+- `cmd/cmd_map.md` — `cmd/loopgate/`, `cmd/morphling-runner/`, and other binaries (the shipped **Haven UI** is the **Swift app**, not under `cmd/`)
+- `core/core_map.md` — checked-in policy YAML and `core/memory/` interpretation
+- `config/config_map.md` — tracked `config/*.yaml` (not the Go package)
+- `persona/persona_map.md` — `morph.yaml` and values
+- `docs/docs_map.md` — documentation tree overview
+
+**`internal/` — every package has a map**
+
+- `internal/audit/audit_map.md` — audit severity over ledger append
+- `internal/config/config_map.md` — Go loaders for policy, persona, JSON state (`Policy` struct, store helpers)
+- `internal/haven/threadstore/threadstore_map.md` — Haven Messenger thread JSONL
+- `internal/identifiers/identifiers_map.md` — safe identifier validation
+- `internal/integration/integration_map.md` — Loopgate integration tests (`*_test.go` only)
+- `internal/ledger/ledger_map.md` — append-only hash-chained ledger
+- `internal/loopgate/loopgate_map.md` — control plane (main package)
+- `internal/loopgateresult/loopgateresult_map.md` — Loopgate result formatting for display/prompts
+- `internal/memory/memory_map.md` — continuity/memory primitives
+- `internal/model/model_map.md` — provider adapters and tool schema
+- `internal/modelruntime/modelruntime_map.md` — `model.Client` construction from repo/env
+- `internal/orchestrator/orchestrator_map.md` — tool orchestration and structured parsing
+- `internal/policy/policy_map.md` — tool policy checker
+- `internal/prompt/prompt_map.md` — system prompt compilation
+- `internal/safety/safety_map.md` — strict path resolution (`resolvePathStrict`)
+- `internal/sandbox/sandbox_map.md` — sandbox paths and safe copy
+- `internal/secrets/secrets_map.md` — secret refs, backends, redaction
+- `internal/setup/setup_map.md` — interactive model setup wizard
+- `internal/shell/shell_map.md` — slash-commands and terminal integration
+- `internal/signal/signal_map.md` — SIGINT/SIGTERM handling
+- `internal/state/state_map.md` — compact Morph runtime state file
+- `internal/tcl/tcl_map.md` — typed continuity language (normalize, anchors, validation)
+- `internal/tools/tools_map.md` — typed tool registry and implementations
+- `internal/ui/ui_map.md` — terminal UI primitives (not the Swift Haven app)
+
+**When to update maps**
+
+- Swift Haven app (separate repo), Loopgate in this repo: resident behavior, onboarding, folder grants, visible Morph experience, control-plane surfaces, **Haven↔Loopgate transport (v1: HTTP on UDS; future XPC TBD) and security-hardening checklist** (`docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`)
+- Tools, prompt, model, modelruntime: capability or prompt/model/runtime contracts
+- Sandbox, policy, secrets, safety, memory, TCL, audit, ledger, threadstore: boundaries or persistence semantics
+- Config (Go), core/policy, checked-in `config/`: governance YAML or loader shape
+- `docs/docs_map.md`: new major doc folders or renamed doc entrypoints
+- Any map: when you add or rename primary files in that directory so the map stays a reliable shortcut
+
+**Convention**
+
+- One `_map.md` per logical parent directory; this file links them all
+- Maps summarize roles and boundaries — they are not a substitute for reading AGENTS invariants before security-sensitive edits
+
+## Runtime, Generated, and Local-Only Paths
+
+These paths are easy to misread if you are new to the repo.
+
+### Treat as local runtime state
+
+- `runtime/`
+- `output/`
+- `tmp/`
+- `.claude/`
+
+### Treat as local build outputs
+
+- `haven`
+- `morph`
+- `loopgate-admin`
+
+### Treat carefully
+
+- `core/memory/`
+
+The repo currently contains memory-related files under `core/memory/`. Many of those paths are also ignored by `.gitignore` for normal runtime output. Do not assume everything under `core/memory/` is stable source code; some of it is historical or runtime-like data.
+
+### Treat as local scratch unless a user says otherwise
+
+- `HelloWorld.py`
+- `body/`
+
+## If You Are Changing X, Start Here
+
+### Haven desktop UX
+
+Start in:
+
+- Native **Haven** Swift repo (e.g. `~/Dev/Haven`) — see its `context_map.md`
+- `docs/HavenOS/` for product intent
+- `internal/loopgate/` when changing control-plane APIs the app calls
+
+### Messenger / chat behavior
+
+Start in:
+
+- `internal/haven/threadstore/` (append-only thread/event storage in this repo)
+- `internal/loopgate/server_haven_chat.go` and related handlers (Loopgate chat/Messenger HTTP API)
+- Swift **Haven** repo for UI and `MorphHTTPClient` streaming/consumption
+
+Important note:
+
+- the future product direction is not a conventional IM-style Haven chat window
+- the current thread/feed model is still the persistence and audit substrate
+- the likely future split is ambient conversation inside Haven and fuller Messenger history in the later sidebar shell
+
+### Sandbox / file import / export / shared-space behavior
+
+Start in:
+
+- `internal/sandbox/`
+- `internal/loopgate/server_sandbox_handlers.go`
+- `internal/loopgate/shared_folder.go`
+- `internal/loopgate/folder_access.go`
+- Swift **Haven** repo for operator UX around workspace and shared space
+
+### New native tool or capability
+
+Start in:
+
+- `internal/tools/`
+- `internal/loopgate/server.go`
+- `internal/loopgate/server_*_handlers.go`
+- `internal/loopgate/types.go`
+- `internal/loopgate/ui_client.go`
+- tests in the same package
+
+### Policy semantics
+
+Start in:
+
+- `core/policy/policy.yaml`
+- `core/policy/morphling_classes.yaml`
+- `internal/policy/`
+- `internal/loopgate/`
+
+### Secrets or model-provider setup
+
+Start in:
+
+- `internal/secrets/`
+- `internal/loopgate/model_connections.go`
+- `internal/modelruntime/`
+- Swift **Haven** repo for first-run and settings UI
+
+### Morphlings
+
+Start in:
+
+- `internal/loopgate/morphlings.go`
+- `internal/loopgate/morphling_workers.go`
+- `internal/loopgate/morphling_classes.go`
+- `cmd/morphling-runner/main.go`
+
+### Continuity / memory / wake-state
+
+Start in:
+
+- `internal/memory/`
+- `internal/loopgate/continuity_memory.go`
+- `internal/loopgate/server_memory_handlers.go`
+- `internal/loopgate/client.go`
+
+Important note:
+
+- explicit "remember this" requests should eventually use Loopgate's explicit remember path rather than relying only on thread distillation
+- if memory feels broken, inspect threshold behavior, remembered-fact normalization, wake-state projection, and client-side prompt claims before inventing a new algorithm
+- Haven now has a first explicit remember lane through `memory.remember`; the next work is strengthening diagnostics, resident continuity, and product-language clarity around it
+
+## Useful Commands
+
+Primary flows:
+
+```bash
+go test ./...
+go run ./cmd/loopgate
+```
+
+Native **Haven:** open the Swift project (e.g. `~/Dev/Haven`) in Xcode and run the **Haven 1** scheme with Loopgate already listening on the expected socket.
+
+Legacy all-in-one script (includes non-Swift prototype shell):
+
+```bash
+./start.sh
+```
+
+## Current Direction
+
+Loopgate is pivoting from a personal AI workstation backend to an enterprise AI governance engine.
+
+The enforcement runtime, policy evaluation, audit system, memory continuity, and morphling lifecycle are solid — that work is done. The current mission is adding the integration surface and administrative interface that make Loopgate viable as enterprise infrastructure.
+
+**Primary work right now:**
+
+1. **MCP server** — Loopgate exposes itself as an MCP server. Claude Code, Cursor, and any MCP-compatible IDE connects with a single config entry. The developer's existing tool is the UI. We don't build another one.
+2. **Multi-tenancy foundation** — `tenant_id` isolation across all resources. Prerequisite for everything multi-tenant.
+3. **Memory system fixes** — key registry expansion (`goal.*`, `work.*`), preference facet coverage. Silent data-loss bugs that must be fixed before memory is relied on.
+4. **Chat regression fixes** — panic recovery, audit log coverage, typing indicator. Blocking Haven demo use.
+5. **Admin console v0** — policy viewer, audit log, user list. First enterprise customer-facing surface.
+
+**Haven** continues as the consumer demo product. It demonstrates Loopgate to prospective enterprise customers. Haven UI features are lower priority until the enterprise integration surface is in shape.
+
+**Engineering invariants that don't change:** HTTP on local Unix socket for local client transport. mTLS over TCP for admin node. XPC optional post-launch. Policy-aligned routes over ad-hoc sprawl.
+
+## Active Product Gaps
+
+These are the known gaps to fix before the next milestone. See `docs/reviews/memory_reviewGaps.md` for detailed analysis.
+
+**Blocking enterprise readiness:**
+
+- No MCP server. The primary developer integration surface does not exist yet.
+- No `tenant_id` on resources. Multi-tenancy is not implementable without this foundation.
+- No admin console. No enterprise customer-facing surface for policy or audit.
+
+**Memory system (silent data-loss bugs):**
+
+- `goal.*` and `work.*` key prefixes are not in the registry — `memory.remember` fails silently for these keys.
+- Preference facet coverage is too narrow — repeated preferences on the same topic accumulate as separate distillates instead of superseding.
+- 4 benchmark fixtures fail: same-entity preview-label confusion in timezone/locale contradiction cases.
+- Slot-only contradiction: RAG baseline (10/12) beats continuity (8/12) — hints are the load-bearing retrieval mechanism, not anchors alone.
+
+**Haven demo (blocking demo use):**
+
+- Chat regression: Anthropic provider returns "I can't reach home base" for tool-heavy requests. Likely panic in `handleHavenChat` that closes the connection before a response is written.
+- Chat regression: local model hangs silently for 120s with no typing indicator.
+- Attachments crash the app (nil dereference or JSON decode failure in message handler).
+
+**Lower priority:**
+
+- Haven capability hint references key patterns that don't pass canonicalization (`goal.*`, `work.*`).
+- Continuity inspection threshold is opaque — not surfaced in settings or benchmark.
+- Graduated policy rules (`DispositionReview`, `DispositionDrop`) not implemented — current policy is one motif, two outcomes.
+
+## Useful Working Assumptions
+
+- The underlying thread store and audit history should remain durable even if the Haven conversation UI becomes ephemeral.
+- "Feels alive" should come from causality, continuity, and visible traces of work, not fake rituals or unexplained automation.
+- Native Haven tools should have visible homes in apps. If a capability has no obvious UI home, the product model is probably not ready yet.
+- If a user asks Morph to remember something, that should be treated as a deterministic product contract, not a best-effort inference.
+
+If you are unsure whether a change fits, check whether it moves the repo toward that product shape without weakening the Loopgate boundary.

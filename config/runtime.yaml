@@ -1,0 +1,68 @@
+version: "1"
+
+# Single-node deployment identity (optional). Applied when a control session opens — not read from client JSON.
+# Leave empty for personal/desktop mode. Enterprise: set from node provisioning / operator config (future: IDP).
+tenancy:
+  deployment_tenant_id: ""
+  deployment_user_id: ""
+
+logging:
+  audit_ledger:
+    max_event_bytes: 262144
+    rotate_at_bytes: 134217728
+    segment_dir: "runtime/state/loopgate_event_segments"
+    manifest_path: "runtime/state/loopgate_event_segments/manifest.jsonl"
+    verify_closed_segments_on_startup: true
+  # Optional text logs under directory (slog). Not authoritative; loopgate_events.jsonl is.
+  # Levels: error, warn, info, debug, trace (per-channel keys: audit, server, client, socket, memory, ledger, model).
+  # Haven Settings can write runtime/state/loopgate_diagnostic_logging.override.json (merged on load; restart Loopgate).
+  diagnostic:
+    enabled: true
+    default_level: debug
+    directory: runtime/logs
+    levels: {}
+    files:
+      audit: audit.log
+      server: server.log
+      client: client.log
+      socket: socket.log
+      memory: memory.log
+      ledger: ledger.log
+      model: model.log
+
+memory:
+  candidate_panel_size: 3
+  decomposition_preference: "hybrid_schema_guided"
+  review_preference: "risk_tiered"
+  soft_morphling_concurrency: 3
+  batching_preference: "pause_on_wave_failure"
+  explicit_fact_writes:
+    window_seconds: 60
+    max_writes_per_session: 50
+    max_writes_per_peer_uid: 50
+    max_value_bytes: 128
+  corrections: []
+  scoring:
+    importance_base:
+      not_important: 0
+      somewhat_important: 30
+      critical: 60
+    approved_goal_anchor: 25
+    explicit_user_bonus: 25
+    stale_penalty_resolved_30d: 20
+    hotness_base:
+      not_important: 0
+      somewhat_important: 20
+      critical: 35
+    active_goal_bonus: 25
+    due_bonus_within_24h: 25
+    due_bonus_within_7d: 10
+    current_goal_match_bonus: 20
+    stale_penalty_overdue: 10
+    duplicate_family_penalty: 15
+    positive_support_reviewed_accepted: 12
+    negative_task_dismissal: 8
+    negative_goal_rejection: 10
+    negative_completion_rejection: 15
+    promotion_threshold_emerging: 2
+    promotion_threshold_active: 3

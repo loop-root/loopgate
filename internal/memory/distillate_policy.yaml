@@ -1,0 +1,28 @@
+version: 0.1.0
+
+importance:
+  base: 0.10
+  max: 1.00
+
+  weights:
+    approvals: 0.15
+    denials: 0.20
+    files_touched: 0.10
+    tools_used: 0.05
+    policy_events: 0.10
+
+  keyword_boosts:
+    - pattern: "(?i)password|secret|token|apikey|private key"
+      boost: 0.40
+    - pattern: "(?i)error|panic|failed|broken|bug|fix"
+      boost: 0.20
+    - pattern: "(?i)deploy|prod|incident|sev|outage"
+      boost: 0.50
+
+capture:
+  # where to scan for keywords (ledger event 'type' and selected 'data' fields)
+  scan_fields:
+    - type
+    - data.text
+    - data.path
+    - data.output

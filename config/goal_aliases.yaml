@@ -1,0 +1,39 @@
+version: "1"
+
+aliases:
+  technical_review:
+    - rfc_review
+    - design_doc_review
+    - implementation_concern_synthesis
+  architecture_planning:
+    - architecture_session
+    - system_design
+    - design_planning
+  security_hardening:
+    - security_pass
+    - hardening_pass
+    - threat_review
+  documentation_update:
+    - readme_update
+    - docs_revision
+    - rfc_edit
+  debugging_investigation:
+    - incident_debug
+    - failure_analysis
+    - bug_investigation
+  workflow_followup:
+    - status_followup
+    - handoff_followup
+    - todo_followup
+  scheduling_commitment:
+    - deadline_tracking
+    - calendar_commitment
+    - reminder_tracking
+  research_synthesis:
+    - options_comparison
+    - recommendation_brief
+    - research_summary
+  preference_or_config_update:
+    - preference_change
+    - config_tuning
+    - setup_update

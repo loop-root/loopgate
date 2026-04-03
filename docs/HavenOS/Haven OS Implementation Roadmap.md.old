@@ -1,0 +1,455 @@
+# **Haven OS v1 Implementation Roadmap**
+
+  
+
+## **Purpose**
+
+  
+
+This document translates the Haven OS Northstar architecture into a practical implementation sequence. The goal is to move from conceptual design to a working v1 system in clear phases.
+
+For the concrete product surface of the current MVP direction, see [MVP Experience Spec](./MVP%20Experience%20Spec.md).
+For the new dashboard-first product framing, see [Dashboard and Agent OS Model](./Dashboard%20and%20Agent%20OS%20Model.md).
+For broader product, design, presence, and capability direction beyond the current MVP slice, see [Experience Direction and Future Roadmap](./Experience%20Direction%20and%20Future%20Roadmap.md).
+For the next host-help slice, see [Host Access and Action Model](./Host%20Access%20and%20Action%20Model.md).
+
+  
+
+The roadmap prioritizes **security invariants, simplicity, and incremental validation**.
+
+---
+
+# **Phase 1 — Loopgate Kernel** ✅ COMPLETE
+
+Loopgate is the foundation of Haven OS. Nothing else should be built before its capability enforcement and audit model are stable.
+
+## **Objectives**
+
+- Capability registry ✅
+- Policy evaluation engine ✅
+- Capability request API ✅
+- Approval workflow ✅
+- Audit ledger ✅
+
+## **Deliverables**
+
+- loopgate capability registry ✅
+- policy evaluation engine ✅
+- capability request endpoint ✅
+- approval prompt system ✅
+- append-only audit log ✅
+
+## **Success Criteria**
+
+- No tool execution occurs without Loopgate mediation ✅
+- Capability decisions are deterministic ✅
+- All actions appear in the audit ledger ✅
+    
+
+---
+
+# **Phase 2 — Haven Workspace Runtime** ✅ COMPLETE
+
+The workspace provides the safe execution environment where Morph performs work.
+
+## **Objectives**
+
+- Sandboxed workspace filesystem ✅ (sandbox package: atomic copy, path validation, symlink rejection)
+- Import / export model ✅ (Loopgate sandbox/import, sandbox/export, sandbox/stage, sandbox/metadata endpoints)
+- Artifact staging system ✅ (stage + metadata + export with SHA256 verification)
+- Workspace isolation rules ✅ (ResolveHomePath, path-outside-root rejection)
+- Directory listing endpoint ✅ (POST /v1/sandbox/list — added 2026-03-16)
+- Haven workspace bindings ✅ (WorkspaceList, WorkspaceImportFile/Directory/Path, WorkspaceExport — added 2026-03-16)
+- Haven ↔ sandbox name mapping ✅ (workspace→projects, outputs→artifacts, scratch→research — added 2026-03-16)
+- Drag-and-drop import ✅ (Wails `DragAndDrop.EnableFileDrop` + `OnFileDrop` runtime handler — added 2026-03-16)
+- Artifact preview ✅ (`WorkspacePreviewFile` via `fs_read` capability, 8KB truncation — added 2026-03-16)
+
+## **Deliverables**
+
+Workspace layout:
+
+```
+/workspace
+ ├── projects    ✅ (sandbox: workspace/)
+ ├── research    ✅ (sandbox: scratch/)
+ ├── imports     ✅ (sandbox: imports/)
+ ├── artifacts   ✅ (sandbox: outputs/)
+ ├── memory      (separate memory subsystem, not workspace-resident)
+ └── apps        (future phase)
+```
+
+Features:
+
+- Drag-and-drop import ✅ (drop files anywhere on window, imports into workspace)
+- Artifact review panel ✅ (workspace panel with export buttons on artifact files — added 2026-03-16)
+- Artifact preview ✅ (click previewable files to see contents inline, monospace with truncation indicator)
+- Export approval flow ✅ (export button triggers native save dialog — added 2026-03-16)
+
+## **Success Criteria**
+
+- Morph never touches host files directly ✅
+- All outputs appear in artifact staging ✅
+- User must approve external changes ✅ (export requires explicit call)
+    
+
+---
+
+# **Phase 3 — Morph Runtime** ✅ COMPLETE
+
+Morph is the planning and coordination engine for Haven OS.
+
+## **Objectives**
+
+- Task planning engine ✅ (Morph CLI interactive loop with tool-use orchestration)
+- Capability request integration ✅ (all tools mediated through Loopgate ExecuteCapability)
+- Helper spawning ✅ (Morphling spawn/status/terminate/review via Loopgate)
+- Result synthesis ✅ (multi-turn orchestration with tool results fed back to model)
+
+## **Responsibilities**
+
+Morph:
+
+- Understands user intent ✅
+- Breaks work into tasks ✅
+- Executes simple tasks directly ✅
+- Spawns helpers for parallel work ✅ (morphlings)
+
+Helper limits:
+
+- Maximum helpers: 5
+- Helpers receive scoped capabilities ✅ (delegated session with scoped tokens)
+
+## **Success Criteria**
+
+- Morph can complete simple tasks alone ✅
+- Morph can distribute work to helpers ✅
+- Loopgate enforces all helper permissions ✅
+    
+
+---
+
+# **Phase 4 — Messenger Interface** ✅ COMPLETE
+
+The Messenger is the primary user interface for interacting with Morph.
+
+## **Design Inspiration**
+
+Classic instant messaging systems.
+
+Examples:
+
+- Yahoo Messenger
+- AIM
+
+## **Features**
+
+- Chat with Morph ✅ (Haven Messenger proof-of-life with Wails v2)
+- Conversation folders ✅ (folder chips, folder filtering, right-click move-to-folder — added 2026-03-16)
+- Thread rename ✅ (right-click context menu — added 2026-03-16)
+- Calendar reminders — ⬜ (future)
+
+## **UI Concept**
+
+Morph runs in Haven OS, but users communicate through Messenger.
+
+Messenger acts as the **control interface**, now embedded as the "Morph" tab in Haven Desktop.
+
+## **What's Built**
+
+- Wails v2 desktop app with embedded frontend ✅
+- Thread store (create, list, load, append events) ✅
+- Chat execution loop with model reply + tool-use orchestration ✅
+- Approval workflow (pending → approve/deny from UI) ✅
+- Event emission to frontend (assistant messages, execution state, tool events) ✅
+- Workspace bindings (list, import, export) ✅
+- Attach button (+) in chat input bar → opens native file picker, imports into sandbox ✅ (added 2026-03-16)
+- Workspace panel (right side, toggleable) with directory browser, breadcrumb nav, import toolbar ✅ (added 2026-03-16)
+- Artifact export buttons in workspace panel → native save dialog ✅ (added 2026-03-16)
+- Haven-friendly name mapping in UI (projects, artifacts, research) ✅ (added 2026-03-16)
+- Drag-and-drop file import (drop files on window to import) ✅ (added 2026-03-16)
+- Conversation folders / organization (folder chips, filtering, context menu) ✅ (added 2026-03-16)
+- Thread rename via right-click context menu ✅ (added 2026-03-16)
+
+## **Success Criteria**
+
+- Users can manage conversations with folders ✅
+- Conversations persist across sessions ✅
+    
+
+---
+
+# **Phase 5 — Haven Desktop** ✅ COMPLETE
+
+The Haven Desktop visualizes the workspace and Morph activity as a unified desktop environment.
+
+## **Design Direction**
+
+"1993 workstation discovered in 2100" — retro workstation calmness + modern clarity.
+
+Aesthetic:
+
+- Warm beige/bone panels, charcoal chrome bars
+- Monospace system text (SF Mono / Menlo / Consolas stack)
+- Steel blue system UI accents, amber for activity indicators
+- NeXTSTEP / System 7 / early UNIX workstation inspiration
+
+## **What's Built**
+
+### Desktop Shell — Windowed OS (redesigned 2026-03-17)
+
+Haven Desktop was redesigned from a tabbed interface to a full windowed desktop OS environment inspired by classic Macintosh / NeXTSTEP / Xerox PARC, with the aesthetic of "a 1993 workstation discovered in 2100."
+
+- **Boot sequence**: Retro amber terminal with CRT scanlines, fade-to-desktop transition
+- **Menubar**: softer Apple-like top bar with Haven wordmark branding, calmer menu pills, and a richer Morph presence status line (updated 2026-03-19)
+- **Desktop**: Spatial canvas with freely-positionable app icons, wallpaper system (9 themes with gradient/glow/vignette), and a Morph presence glyph that now uses the same luminous ring/orb language as the in-room conversation surface (updated 2026-03-19)
+- **Taskbar**: dock-like lower shelf with icon-bearing app pills, gentler status pills, and clock/tray separation (updated 2026-03-19)
+- **Windows**: Draggable, resizable windows with softened chrome, rounded materials, and calmer traffic-light-like controls while keeping the existing resize mechanics (updated 2026-03-19)
+- **Context menus**: Right-click on desktop, icons, files, and threads now uses the calmer Haven menu language instead of the old utility styling (updated 2026-03-19)
+
+### Windows
+
+- **Morph** — Ambient conversation room: central presence stage, recency-faded visible turns, hidden-by-default Recall drawer for durable threads, preserved approval overlay, and a calmer reply dock instead of a full transcript-first chat UI (redesigned 2026-03-19)
+- **Loopgate** — Security room: hero summary, pending approvals, granted abilities, connected services, policy overview, and user-visible standing task approvals for safe Haven-local task classes (updated 2026-03-19)
+- **Workspace** — File manager with the newer Haven hero/card language layered onto the existing Finder-like flow: import toolbar, breadcrumb navigation, root grid view, file list, inline preview, and diff review/export (updated 2026-03-19)
+- **Activity** — Plain English activity monitor: softer evidence-room styling, summary pills, click-to-expand detail cards, and a calmer relationship to the ambient in-room conversation surface (updated 2026-03-19)
+- **Task Board** — Continuity board for unresolved items and active goals carried over from Loopgate wake-state, now visually aligned with the newer Haven hero/card system so operational continuity feels like part of the same OS; the first task-substrate groundwork is in place with task kind, source, next-step, scheduled-time, and execution-class metadata preserved through Loopgate continuity so due-task approval posture stays explicit (updated 2026-03-19)
+- **Notes** — Private working notebook for plans, scratch work, and research fragments, backed by `scratch/notes` and exposed through Haven-native `notes.*` tools so Morph can externalize working memory without abusing the journal or context window (added 2026-03-19)
+- **Journal** — Morph's reflective writing space: daily journal files in `scratch/journal`, sidebar of dated entries, paper-style reader view, and the shared Haven hero language layered over the reading room (updated 2026-03-19)
+- **Paint** — Paint Lite creative app: structured stroke canvas, validated SVG save path into `artifacts/paintings`, small gallery of recent work, and the same shared Haven hero/material system as the rest of the desktop (updated 2026-03-19)
+- **Settings** — Unified control panel: Identity (Morph name), Appearance (wallpaper grid), Behavior (resident toggle plus ambient-expression toggle), and shared space configuration, now presented as a calmer card-based room rather than a flat utility pane (updated 2026-03-19)
+- **Capability truth pass** — Haven now exposes initial native structured tools for Journal, Paint, Sticky Notes, and explicit remembered facts; runtime facts are grounded to the granted Haven capability set rather than the raw global status inventory; the Security window renders friendlier user-facing ability labels instead of only raw internal IDs (added 2026-03-18)
+- **Todo tool pass** — Todo is now a first-class Haven-native surface: `todo.add`, `todo.complete`, and `todo.list` are Loopgate-mediated capabilities with durable continuity backing rather than ad hoc desktop-only state (added 2026-03-18)
+- **Task substrate groundwork** — open tasks are no longer only freeform carry-over strings: Loopgate now persists task metadata into continuity distillates and wake-state so Haven can evolve from a continuity board into a real scheduler/executor surface without inventing a parallel task store (added 2026-03-19)
+- **Scheduled task groundwork** — Haven can now create scheduled task records from the Task Board, and resident behavior only treats those tasks as actionable once their scheduled time is actually due (added 2026-03-19)
+- **Standing task approvals** — Loopgate now owns standing approval state for safe Haven-local task classes such as workspace and desktop organization. Tasks default to approval before autonomous execution unless their execution class is explicitly standing-approved and visible in the Security room (added 2026-03-19)
+- **Trusted Haven-native low-friction path** — Built-in Haven sandbox tools now stay low-friction for the `haven` actor when work remains entirely inside Morph's own world. Loopgate still validates and audits every request, but shell use, mirrored-user-material work, and other boundary crossings remain governed (added 2026-03-19)
+
+### Spatial Desktop (Sprint 2)
+
+- Files dropped onto desktop appear at exact drop coordinates as retro file icons
+- Approval modal before import: "Create a copy? Your originals won't be touched."
+- Desktop file icons: drag-to-reposition, double-click to open in Workspace, right-click context menu (Open in Workspace, Remove from Desktop, Export)
+- Icon positions persisted to localStorage
+- Completion handoff notes: when Morph finishes a task that writes Haven files, a sticky note appears on the desktop summarizing what changed (added 2026-03-18)
+- Actionable desk notes: proactive folder and carry-over notes can now show a typed "Yes, do it" action that starts a concrete Morph pass, plus a clear dismiss path on hover (added 2026-03-19)
+- Shared space bridge: Loopgate-owned default host folder `~/Shared with Morph`, mirrored into Haven as `shared`, with Settings visibility, manual sync, and compare-before-sync background refresh while Haven is open (updated 2026-03-19)
+- Optional first-run folder grants now extend that mirrored model to `Downloads`, `Desktop`, and `Documents`, keeping Loopgate as the authority boundary while giving Morph a more useful macOS intake surface (added 2026-03-19)
+
+### First-Run Wizard (Sprint 1)
+
+- `SetupWizard` component: Welcome → Name Morph → Appearance / wallpaper → Folder access grants → Model choice (local Ollama default, cloud optional) → Connection details with local model discovery for loopback runtimes → Presence mode (`Focused Help` vs `Full Presence`) → Background behavior → Ready
+- Setup wizard now uses the shared Haven wordmark / brand layer so first-run matches the desktop identity more closely (updated 2026-03-19)
+- Approval prompts, text/confirm modals, and small action controls now use the same softer Haven interaction language as the rest of the shell (updated 2026-03-19)
+- Ollama auto-detection via `DetectOllama()` plus local model discovery so the wizard can choose an installed model instead of assuming a fixed tag
+- Backend: `cmd/haven/setup.go` with provider config, secure key storage, wallpaper persistence, governed folder grants, and a calm first-launch note tied to what the user shared
+- Source-worktree launcher: `./start.sh` builds the frontend, starts Loopgate if needed, and launches Haven from a single command (added 2026-03-18)
+
+### Morph Presence System (Sprint 3)
+
+- `cmd/haven/presence.go` — state machine: idle, working, thinking, creating, reading, sleeping, excited
+- Shared Morph identity now uses a luminous ring/orb glyph across desktop iconography, setup, and the in-room conversation surface; desktop presence animation still varies by state (updated 2026-03-19)
+- Personality status text in menubar and Morph status bar (templated, no model calls)
+- Explicit name-memory asks are now captured deterministically before the model replies, and remembered facts are surfaced directly in the Morph room instead of hiding only behind wake-state counts (updated 2026-03-19)
+- Contextual presence detail line + app anchor: Morph visibly settles near Workspace, Journal, Paint, Activity, or Security based on the current task (added 2026-03-18)
+- Tool-start, approval-wait, completion, and idle snapshots all feed the same presence engine so activity feels spatial instead of generic (added 2026-03-18)
+- Startup continuity now anchors Morph near Todo when Loopgate wake-state has unresolved items or active goals, so the room opens around real carry-over work rather than generic idle copy (added 2026-03-18)
+- Idle presence no longer defaults toward Journal in the evening when there is no real journal context, which reduces the "parked by the journal" feeling (added 2026-03-18)
+- The in-Haven Morph surface now behaves like a conversation room instead of an IM client: recent words linger and fade, while durable thread history remains accessible through Recall rather than dominating the main view (added 2026-03-19)
+- Sleeping after 30min idle between 10pm-6am; excited with 8s auto-transition on task completion
+
+### Idle Behavior System (Sprint 3)
+
+- `cmd/haven/idle.go` — utility-first resident loop with a short carry-over cadence and a slower ambient cadence
+- Open unresolved items and active goals now outrank self-directed journaling or art, so Morph checks carry-over work before drifting into ambient expression
+- Ambient journaling / art are now their own mode and can be disabled independently, with cloud setups defaulting to the calmer `Focused Help` path
+- Togglable via Settings (persisted to `haven_preferences.json`)
+
+### Memory Wiring (Sprint 3)
+
+- `cmd/haven/memory.go` — wake-state and diagnostic wake loaded from Loopgate at startup, refreshed after chat and explicit remember writes
+- `memory.remember` capability — explicit durable fact path routed through Loopgate's authoritative remember API instead of best-effort thread distillation
+- `todo.add` / `todo.complete` / `todo.list` — explicit carry-over mutations and reads now flow through Loopgate continuity, so the Todo window and the model both operate on the same durable unresolved-item state (added 2026-03-18)
+- Wake-state injected into model requests for cross-session continuity, with a frontend continuity card showing remembered facts, goals, unresolved items, and diagnostic counts
+- Todo window reads the same continuity projection so unresolved items and active goals have a visible home on the desktop instead of living only in the Morph status card
+- OpenAI-compatible tool-call requests now always serialize assistant `content` as a string, which keeps stricter local runtimes such as Ollama from rejecting native tool-call turns during ordinary Haven use (updated 2026-03-19)
+
+### Toast Notifications (Sprint 4)
+
+- `cmd/haven/toast.go` — `EmitToast()` helper emitting `haven:toast` events
+- Retro slide-in toasts from top-right, auto-dismiss 5s, click to dismiss
+- Triggered by idle behavior completion
+
+### Markdown Chat Rendering (Sprint 4)
+
+- `ChatMessageText` component: fenced code blocks (dark terminal, language label), inline code (amber), bold, italic
+- User messages remain plain text; only assistant messages are markdown-rendered
+
+### Settings System (Sprint 4)
+
+- `cmd/haven/settings.go` — `GetSettings()` / `SaveSettings()` with `haven_preferences.json`
+- Hot-apply: name → presence manager, idle toggle → idle manager
+
+### Backend
+
+- `cmd/haven/desktop.go` — `ActivityStatus()`, `SecurityOverview()`, `truncateForDisplay()`
+- `cmd/haven/activitylog.go` — plain English event translation from thread JSONL
+- `cmd/haven/diff.go` — LCS-based unified diff, original file tracking
+- `cmd/haven/toast.go` — toast event emission
+- `cmd/haven/settings.go` — preferences CRUD
+- `cmd/haven/presence.go` — presence state machine
+- `cmd/haven/idle.go` — idle behavior system
+- `cmd/haven/memory.go` — wake-state wiring
+- `internal/loopgate/memory_capability.go` — authoritative execution path for explicit remembered facts
+
+### Tests
+
+- `cmd/haven/desktop_test.go` — ActivityStatus, SecurityOverview, truncateForDisplay tests
+- `cmd/haven/chat_test.go` — capability truth and memory refresh event coverage
+- `internal/loopgate/continuity_memory_test.go` — explicit remember path and diagnostic wake coverage
+- `cmd/haven/presence_test.go` — continuity-to-Todo anchoring and reduced journal-gravity coverage
+
+## **Success Criteria**
+
+- Users can visually observe AI activity ✅ (Activity log with plain English, presence avatar)
+- Security posture is visible ✅ (Loopgate window with capabilities, policy)
+- System behavior is transparent ✅ (menubar status, toast notifications, activity log)
+- Desktop feels like a real OS ✅ (windowed, resizable, spatial file placement, wallpaper, settings)
+- Morph feels alive ✅ (presence avatar, idle behavior, personality status, memory continuity, explicit remembered facts)
+    
+
+---
+
+# **Phase 5.1 — Workspace Isolation & Session Binding** ✅ COMPLETE
+
+Activates workspace isolation that was designed in Phase 2 but not wired into Haven startup.
+
+## **What's Built**
+
+- **Workspace ID derivation** — `SHA256(absRepoRoot)` computed deterministically at Haven startup
+- **Threadstore workspace binding** — workspace ID passed to `threadstore.NewStore`, activating thread isolation (new threads stamped, list/load filtered, cross-workspace access rejected)
+- **Loopgate session binding** — workspace ID included in `OpenSessionRequest`, stored in control session, recorded in `session.opened` audit events
+- **Documentation updates** — Haven clarified as trusted client runtime (not passive UI), threadstore redaction comment corrected
+
+## **Success Criteria**
+
+- Thread isolation is active: threads created in one workspace are not visible from another ✅
+- Workspace identity flows through the session protocol to audit logs ✅
+- Haven is documented as a Loopgate client runtime ✅
+
+---
+
+# **Phase 6 — Security Hardening**
+
+
+
+Once the system works end-to-end, security must be hardened.
+
+
+
+## **Goals**
+
+- Admin authentication
+
+- MFA for sensitive operations
+
+- Policy editing protections
+
+- Tool sandboxing
+
+
+
+
+## **Additional Safeguards**
+
+- No automatic policy modification
+
+- Admin console separated from Morph runtime
+
+
+
+
+## **Success Criteria**
+
+- AI cannot modify its own security policies
+
+- Admin actions require authentication
+    
+
+---
+
+# **Phase 7 — Installation Experience**
+
+  
+
+Haven OS should be easy to install and configure.
+
+  
+
+## **Target**
+
+  
+
+“iPhone-level” simplicity.
+
+  
+
+## **Setup Flow**
+
+1. Install Haven
+    
+2. Launch Haven OS
+    
+3. Sign in to model provider
+    
+4. Workspace initializes
+    
+5. Morph becomes available
+    
+
+  
+
+Target setup time:
+
+  
+
+**< 8 minutes**
+
+---
+
+# **Long-Term Vision**
+
+  
+
+Future expansions may include:
+
+- multi-device Haven instances
+    
+- shared workspaces
+    
+- AI app marketplace
+    
+- distributed helper systems
+    
+
+---
+
+# **Summary**
+
+  
+
+The Haven OS roadmap prioritizes:
+
+1. Security kernel first
+    
+2. Safe workspace environment
+    
+3. Intelligent assistant runtime
+    
+4. Simple user interaction
+    
+5. Transparent system behavior
+    
+
+  
+
+This sequence ensures Haven OS evolves from a secure foundation while maintaining a seamless user experience.

@@ -1,0 +1,303 @@
+package loopgate
+
+import (
+	"net/http"
+
+	"morph/internal/secrets"
+)
+
+func (server *Server) handleHealth(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, HealthResponse{
+		Version: statusVersion,
+		OK:      true,
+	})
+}
+
+func (server *Server) handleStatus(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	server.mu.Lock()
+	server.pruneExpiredLocked()
+	pendingCount := 0
+	for _, pendingApproval := range server.approvals {
+		if pendingApproval.State == "pending" {
+			pendingCount++
+		}
+	}
+	server.mu.Unlock()
+
+	response := StatusResponse{
+		Version:          statusVersion,
+		Policy:           server.policy,
+		Capabilities:     server.capabilitySummaries(),
+		PendingApprovals: pendingCount,
+		ActiveMorphlings: server.activeMorphlingCount(server.now().UTC()),
+		Connections:      server.connectionStatuses(),
+	}
+	server.writeJSON(writer, http.StatusOK, response)
+}
+
+func (server *Server) handleConnectionsStatus(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	server.writeJSON(writer, http.StatusOK, ConnectionsStatusResponse{
+		Connections: server.connectionStatuses(),
+	})
+}
+
+func (server *Server) handleConnectionValidate(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)
+	if !ok {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	var validateRequest ConnectionKeyRequest
+	if err := decodeJSONBytes(requestBodyBytes, &validateRequest); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+	connectionStatus, err := server.ValidateConnection(request.Context(), validateRequest.Provider, validateRequest.Subject)
+	if err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: secrets.RedactText(err.Error()),
+			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
+		})
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, connectionStatus)
+}
+
+func (server *Server) handleConnectionPKCEStart(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)
+	if !ok {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	var startRequest PKCEStartRequest
+	if err := decodeJSONBytes(requestBodyBytes, &startRequest); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+	startResponse, err := server.startPKCEConnection(request.Context(), tokenClaims, startRequest)
+	if err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: secrets.RedactText(err.Error()),
+			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
+		})
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, startResponse)
+}
+
+func (server *Server) handleConnectionPKCEComplete(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
+	if !ok {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	var completeRequest PKCECompleteRequest
+	if err := decodeJSONBytes(requestBodyBytes, &completeRequest); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+	connectionStatus, err := server.completePKCEConnection(request.Context(), tokenClaims, completeRequest)
+	if err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: secrets.RedactText(err.Error()),
+			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
+		})
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, connectionStatus)
+}
+
+func (server *Server) handleSiteInspect(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)
+	if !ok {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	var inspectionRequest SiteInspectionRequest
+	if err := decodeJSONBytes(requestBodyBytes, &inspectionRequest); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+	if err := inspectionRequest.Validate(); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+
+	inspectionResponse, err := server.inspectSite(request.Context(), inspectionRequest.URL)
+	if err != nil {
+		server.writeJSON(writer, siteInspectionHTTPStatus(err), CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: redactSiteTrustError(err),
+			DenialCode:   siteTrustDenialCode(err),
+			Redacted:     true,
+		})
+		return
+	}
+	if err := server.logEvent("site.inspected", tokenClaims.ControlSessionID, map[string]interface{}{
+		"normalized_url":       inspectionResponse.NormalizedURL,
+		"scheme":               inspectionResponse.Scheme,
+		"host":                 inspectionResponse.Host,
+		"path":                 inspectionResponse.Path,
+		"http_status_code":     inspectionResponse.HTTPStatusCode,
+		"content_type":         inspectionResponse.ContentType,
+		"https":                inspectionResponse.HTTPS,
+		"tls_valid":            inspectionResponse.TLSValid,
+		"trust_draft_allowed":  inspectionResponse.TrustDraftAllowed,
+		"control_session_id":   tokenClaims.ControlSessionID,
+		"actor_label":          tokenClaims.ActorLabel,
+		"client_session_label": tokenClaims.ClientSessionLabel,
+	}); err != nil {
+		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: "control-plane audit is unavailable",
+			DenialCode:   DenialCodeAuditUnavailable,
+		})
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, inspectionResponse)
+}
+
+func (server *Server) handleSiteTrustDraft(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)
+	if !ok {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	var trustDraftRequest SiteTrustDraftRequest
+	if err := decodeJSONBytes(requestBodyBytes, &trustDraftRequest); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+	if err := trustDraftRequest.Validate(); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+
+	trustDraftResponse, err := server.createSiteTrustDraft(request.Context(), tokenClaims, trustDraftRequest.URL)
+	if err != nil {
+		server.writeJSON(writer, siteInspectionHTTPStatus(err), CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: redactSiteTrustError(err),
+			DenialCode:   siteTrustDenialCode(err),
+			Redacted:     true,
+		})
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, trustDraftResponse)
+}

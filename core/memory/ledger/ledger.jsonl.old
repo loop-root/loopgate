@@ -1,0 +1,129 @@
+{"ts":"2026-02-26T00:45:28.689969Z","type":"session.started","session":"s-20260226-2b30afbe117a69bf","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T00:45:45.944343Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"test\\"}}
+{"ts":"2026-02-26T00:45:45.945937Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Morph (helpful, witty, pragmatic): I heard you say: \"test\\\\\""}}
+{"ts":"2026-02-26T00:45:47.948679Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"test"}}
+{"ts":"2026-02-26T00:45:47.949354Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Morph (helpful, witty, pragmatic): I heard you say: \"test\""}}
+{"ts":"2026-02-26T01:06:38.319577Z","type":"session.started","session":"s-20260226-2b30afbe117a69bf","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:06:41.410506Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"/help"}}
+{"ts":"2026-02-26T01:06:41.411195Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Commands: /help, /exit, /reset (clears working state only)."}}
+{"ts":"2026-02-26T01:06:53.546711Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"/policy"}}
+{"ts":"2026-02-26T01:06:53.547629Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Morph (helpful, witty, pragmatic): I heard you say: \"/policy\""}}
+{"ts":"2026-02-26T01:06:59.276006Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"/ls"}}
+{"ts":"2026-02-26T01:06:59.276677Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Morph (helpful, witty, pragmatic): I heard you say: \"/ls\""}}
+{"ts":"2026-02-26T01:08:00.266314Z","type":"session.started","session":"s-20260226-2b30afbe117a69bf","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:08:03.481391Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"/policy"}}
+{"ts":"2026-02-26T01:08:03.481986Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Morph (helpful, witty, pragmatic): I heard you say: \"/policy\""}}
+{"ts":"2026-02-26T01:08:06.685685Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"/help"}}
+{"ts":"2026-02-26T01:08:06.686341Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Commands: /help, /exit, /reset (clears working state only)."}}
+{"ts":"2026-02-26T01:08:26.354053Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"/ls"}}
+{"ts":"2026-02-26T01:08:26.35462Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Morph (helpful, witty, pragmatic): I heard you say: \"/ls\""}}
+{"ts":"2026-02-26T01:08:30.782078Z","type":"chat.user","session":"s-20260226-2b30afbe117a69bf","data":{"text":"/cat"}}
+{"ts":"2026-02-26T01:08:30.782767Z","type":"chat.assistant","session":"s-20260226-2b30afbe117a69bf","data":{"text":"Morph (helpful, witty, pragmatic): I heard you say: \"/cat\""}}
+{"ts":"2026-02-26T01:09:56.86097Z","type":"session.started","session":"s-20260226-2b30afbe117a69bf","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:09:58.711384Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/policy","output":"Policy v0.1.0\n- filesystem.read_enabled: true\n- filesystem.write_enabled: true\n- filesystem.write_requires_approval: true\n- filesystem.allowed_roots: .\n- filesystem.denied_paths: core/memory/ledger, core/memory/distillates, persona\n- logging.log_commands: true\n- logging.log_memory_promotions: true\n- memory.auto_distillate: true\n"}}
+{"ts":"2026-02-26T01:10:00.55498Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/ls","output":".gitignore\nREADME.md\nbody/\ncmd/\ncore/\ndocs/\ngo.mod\ngo.sum\nmorphlings/\npersona/\nruntime/\nskele.sh\ntests/"}}
+{"ts":"2026-02-26T01:10:01.906462Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/cat","output":"Usage: /cat \u003cfile\u003e"}}
+{"ts":"2026-02-26T01:10:17.005122Z","type":"session.started","session":"s-20260226-2b30afbe117a69bf","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:10:19.843783Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/policy","output":"Policy v0.1.0\n- filesystem.read_enabled: true\n- filesystem.write_enabled: true\n- filesystem.write_requires_approval: true\n- filesystem.allowed_roots: .\n- filesystem.denied_paths: core/memory/ledger, core/memory/distillates, persona\n- logging.log_commands: true\n- logging.log_memory_promotions: true\n- memory.auto_distillate: true\n"}}
+{"ts":"2026-02-26T01:10:33.194119Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/help","output":"Commands:\n  /help\n  /exit\n  /reset\n  /pwd\n  /ls [path]\n  /cat \u003cfile\u003e\n  /write \u003cfile\u003e \u003ctext...\u003e   (policy-gated)\n  /policy                   (show loaded policy summary)"}}
+{"ts":"2026-02-26T01:11:35.687783Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/cat persona/morph.yaml","output":"Denied: path is denied by policy"}}
+{"ts":"2026-02-26T01:11:42.815959Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/write test.txt hello","output":"Denied: writes require approval (set tools.filesystem.write_requires_approval=false to allow)."}}
+{"ts":"2026-02-26T01:11:51.832397Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/write core/memory/ledger/ledger.jsonl","output":"Denied: writes require approval (set tools.filesystem.write_requires_approval=false to allow)."}}
+{"ts":"2026-02-26T01:12:02.661183Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/cat README.md","output":"# Morph\n\nA capability-governed, file-auditable AI orchestrator with persistent memory via:\n- append-only ledger\n- curated distillates\n- session capsules (\"resonate keys\")\n\n## Structure\n- core/         kernel: orchestrator, policy, tasks, memory engine + stores\n- persona/      declarative identity \u0026 values\n- body/         tools (capabilities) + skills (behaviors)\n- morphlings/   subagents (active/archived) + registry\n- runtime/      ephemeral working state/cache (gitignored)\n"}}
+{"ts":"2026-02-26T01:15:36.955787Z","type":"session.started","session":"s-20260226-2b30afbe117a69bf","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:15:45.456348Z","type":"tool.fs.write.approval","session":"s-20260226-2b30afbe117a69bf","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","approved":true,"path":"test.txt"}}
+{"ts":"2026-02-26T01:15:45.457712Z","type":"tool.fs.write","session":"s-20260226-2b30afbe117a69bf","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","bytes":5,"path":"test.txt"}}
+{"ts":"2026-02-26T01:15:45.457896Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/write test.txt hello","output":"Wrote test.txt"}}
+{"ts":"2026-02-26T01:15:53.728316Z","type":"tool.fs.write.denied","session":"s-20260226-2b30afbe117a69bf","data":{"path":"persona/morph.yaml","reason":"path is denied by policy"}}
+{"ts":"2026-02-26T01:15:53.728973Z","type":"command","session":"s-20260226-2b30afbe117a69bf","data":{"input":"/write persona/morph.yaml nope","output":"Denied: path is denied by policy"}}
+{"ts":"2026-02-26T01:22:55.174083Z","type":"session.started","session":"s-20260226-012255-b679c4801642ab80","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:22:57.492678Z","type":"command","session":"s-20260226-012255-b679c4801642ab80","data":{"input":"/help","output":"Commands:\n  /help\n  /exit\n  /reset\n  /pwd\n  /ls [path]\n  /cat \u003cfile\u003e\n  /write \u003cfile\u003e \u003ctext...\u003e   (policy-gated)\n  /policy                   (show loaded policy summary)"}}
+{"ts":"2026-02-26T01:23:12.452492Z","type":"tool.fs.write.approval","session":"s-20260226-012255-b679c4801642ab80","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","approved":true,"path":"test.txt"}}
+{"ts":"2026-02-26T01:23:12.453374Z","type":"tool.fs.write","session":"s-20260226-012255-b679c4801642ab80","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","bytes":13,"path":"test.txt"}}
+{"ts":"2026-02-26T01:23:12.453547Z","type":"command","session":"s-20260226-012255-b679c4801642ab80","data":{"input":"/write test.txt testing 1 2 3","output":"Wrote test.txt"}}
+{"ts":"2026-02-26T01:23:18.820886Z","type":"tool.fs.read","session":"s-20260226-012255-b679c4801642ab80","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","path":"test.txt"}}
+{"ts":"2026-02-26T01:23:18.821785Z","type":"command","session":"s-20260226-012255-b679c4801642ab80","data":{"input":"/cat test.txt","output":"testing 1 2 3"}}
+{"ts":"2026-02-26T01:26:56.348959Z","type":"session.started","session":"s-20260226-012656-9059c1ca4b88c793","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:27:22.370376Z","type":"tool.fs.write.approval","session":"s-20260226-012656-9059c1ca4b88c793","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","approved":true,"path":"test.txt"}}
+{"ts":"2026-02-26T01:27:22.370856Z","type":"tool.fs.write","session":"s-20260226-012656-9059c1ca4b88c793","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","bytes":17,"path":"test.txt"}}
+{"ts":"2026-02-26T01:27:22.370966Z","type":"command","session":"s-20260226-012656-9059c1ca4b88c793","data":{"input":"/write test.txt testing 122233 33","output":"Wrote test.txt"}}
+{"ts":"2026-02-26T01:32:17.107752Z","type":"memory.resonate_key.created","session":"s-20260226-012656-9059c1ca4b88c793","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-012656-9059c1ca4b88c793.json","turns":1}}
+{"ts":"2026-02-26T01:32:17.107967Z","type":"session.ended","session":"s-20260226-012656-9059c1ca4b88c793","data":{"turns":1}}
+{"ts":"2026-02-26T01:32:19.219217Z","type":"session.started","session":"s-20260226-013219-7795dd8c2f84a4e7","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:34:19.107035Z","type":"memory.resonate_key.created","session":"s-20260226-013219-7795dd8c2f84a4e7","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-013219-7795dd8c2f84a4e7.json","turns":0}}
+{"ts":"2026-02-26T01:34:19.10754Z","type":"session.ended","session":"s-20260226-013219-7795dd8c2f84a4e7","data":{"turns":0}}
+{"ts":"2026-02-26T01:34:20.791857Z","type":"session.started","session":"s-20260226-013420-ce7d6d51d538c7e8","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:34:26.655559Z","type":"memory.resonate_key.created","session":"s-20260226-013420-ce7d6d51d538c7e8","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-013420-ce7d6d51d538c7e8.json","turns":0}}
+{"ts":"2026-02-26T01:34:26.655896Z","type":"session.ended","session":"s-20260226-013420-ce7d6d51d538c7e8","data":{"turns":0}}
+{"ts":"2026-02-26T01:34:32.89055Z","type":"session.started","session":"s-20260226-013432-2b883b8f0c957e70","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:35:26.447385Z","type":"memory.resonate_key.created","session":"s-20260226-013432-2b883b8f0c957e70","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-013432-2b883b8f0c957e70.json","turns":0}}
+{"ts":"2026-02-26T01:35:26.447832Z","type":"session.ended","session":"s-20260226-013432-2b883b8f0c957e70","data":{"turns":0}}
+{"ts":"2026-02-26T01:35:28.931176Z","type":"session.started","session":"s-20260226-013528-bcf6617682f0a423","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:35:55.129008Z","type":"memory.resonate_key.created","session":"s-20260226-013528-bcf6617682f0a423","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-013528-bcf6617682f0a423.json","turns":0}}
+{"ts":"2026-02-26T01:35:55.129251Z","type":"session.ended","session":"s-20260226-013528-bcf6617682f0a423","data":{"turns":0}}
+{"ts":"2026-02-26T01:36:05.580043Z","type":"session.started","session":"s-20260226-013605-a993b97bf4f31fad","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:36:31.715341Z","type":"memory.resonate_key.created","session":"s-20260226-013605-a993b97bf4f31fad","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-013605-a993b97bf4f31fad.json","turns":0}}
+{"ts":"2026-02-26T01:36:31.715869Z","type":"session.ended","session":"s-20260226-013605-a993b97bf4f31fad","data":{"turns":0}}
+{"ts":"2026-02-26T01:36:33.194405Z","type":"session.started","session":"s-20260226-013633-1af1939b019b67f0","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:38:26.29809Z","type":"memory.resonate_key.created","session":"s-20260226-013633-1af1939b019b67f0","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-013633-1af1939b019b67f0.json","turns":0}}
+{"ts":"2026-02-26T01:38:26.298324Z","type":"session.ended","session":"s-20260226-013633-1af1939b019b67f0","data":{"turns":0}}
+{"ts":"2026-02-26T01:38:28.07942Z","type":"session.started","session":"s-20260226-013828-7cf681483edc95f8","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:39:41.473914Z","type":"memory.resonate_key.created","session":"s-20260226-013828-7cf681483edc95f8","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-013828-7cf681483edc95f8.json","turns":0}}
+{"ts":"2026-02-26T01:39:41.474584Z","type":"session.ended","session":"s-20260226-013828-7cf681483edc95f8","data":{"turns":0}}
+{"ts":"2026-02-26T01:39:46.942448Z","type":"session.started","session":"s-20260226-013946-7b9d39d420baff89","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:41:24.278103Z","type":"memory.resonate_key.created","session":"s-20260226-013946-7b9d39d420baff89","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-013946-7b9d39d420baff89.json","turns":0}}
+{"ts":"2026-02-26T01:41:24.278289Z","type":"session.ended","session":"s-20260226-013946-7b9d39d420baff89","data":{"turns":0}}
+{"ts":"2026-02-26T01:41:26.060292Z","type":"session.started","session":"s-20260226-014126-4b0a0fbd5db9b197","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T01:50:58.026023Z","type":"memory.resonate_key.created","session":"s-20260226-014126-4b0a0fbd5db9b197","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-014126-4b0a0fbd5db9b197.json","turns":0}}
+{"ts":"2026-02-26T01:50:58.027074Z","type":"session.ended","session":"s-20260226-014126-4b0a0fbd5db9b197","data":{"turns":0}}
+{"ts":"2026-02-26T01:51:26.64306Z","type":"session.started","session":"s-20260226-015126-16d9b22203ced15e","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:01:31.07786Z","type":"memory.resonate_key.created","session":"s-20260226-015126-16d9b22203ced15e","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-015126-16d9b22203ced15e.json","turns":0}}
+{"ts":"2026-02-26T02:01:31.078312Z","type":"session.ended","session":"s-20260226-015126-16d9b22203ced15e","data":{"turns":0}}
+{"ts":"2026-02-26T02:02:51.246714Z","type":"session.started","session":"s-20260226-020251-f92c93b0f15063ef","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:05:32.401943Z","type":"memory.resonate_key.created","session":"s-20260226-020251-f92c93b0f15063ef","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-020251-f92c93b0f15063ef.json","turns":0}}
+{"ts":"2026-02-26T02:05:32.402023Z","type":"session.ended","session":"s-20260226-020251-f92c93b0f15063ef","data":{"turns":0}}
+{"ts":"2026-02-26T02:07:34.095842Z","type":"session.started","session":"s-20260226-020734-da060b177ec7f7d4","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:07:45.489397Z","type":"tool.fs.write.approval","session":"s-20260226-020734-da060b177ec7f7d4","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","approved":true,"path":"test.txt"}}
+{"ts":"2026-02-26T02:07:45.490594Z","type":"tool.fs.write","session":"s-20260226-020734-da060b177ec7f7d4","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","bytes":14,"path":"test.txt"}}
+{"ts":"2026-02-26T02:07:45.490865Z","type":"command","session":"s-20260226-020734-da060b177ec7f7d4","data":{"input":"/write test.txt testing 123344","output":"Wrote test.txt"}}
+{"ts":"2026-02-26T02:07:48.710379Z","type":"memory.resonate_key.created","session":"s-20260226-020734-da060b177ec7f7d4","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-020734-da060b177ec7f7d4.json","turns":1}}
+{"ts":"2026-02-26T02:07:48.710513Z","type":"session.ended","session":"s-20260226-020734-da060b177ec7f7d4","data":{"turns":1}}
+{"ts":"2026-02-26T02:13:07.84384Z","type":"session.started","session":"s-20260226-021307-d2939729d069d78f","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:13:12.779033Z","type":"memory.resonate_key.created","session":"s-20260226-021307-d2939729d069d78f","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-021307-d2939729d069d78f.json","turns":0}}
+{"ts":"2026-02-26T02:13:12.779216Z","type":"session.ended","session":"s-20260226-021307-d2939729d069d78f","data":{"turns":0}}
+{"ts":"2026-02-26T02:13:14.320031Z","type":"session.started","session":"s-20260226-021314-bc2a37c7ac70261c","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:13:22.266513Z","type":"session.ended","session":"s-20260226-021314-bc2a37c7ac70261c","data":{"turns":0}}
+{"ts":"2026-02-26T02:15:35.914488Z","type":"session.started","session":"s-20260226-021535-0d326262ed888ecc","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:15:37.689571Z","type":"session.ended","session":"s-20260226-021535-0d326262ed888ecc","data":{"turns":0}}
+{"ts":"2026-02-26T02:15:39.152205Z","type":"session.started","session":"s-20260226-021539-8496f245c5821919","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:15:40.763798Z","type":"chat.user","session":"s-20260226-021539-8496f245c5821919","data":{"text":"hello"}}
+{"ts":"2026-02-26T02:15:40.764278Z","type":"chat.assistant","session":"s-20260226-021539-8496f245c5821919","data":{"text":"Morph (helpful): I heard you say: \"hello\""}}
+{"ts":"2026-02-26T02:15:46.30956Z","type":"memory.resonate_key.created","session":"s-20260226-021539-8496f245c5821919","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-021539-8496f245c5821919.json","turns":1}}
+{"ts":"2026-02-26T02:15:46.30969Z","type":"session.ended","session":"s-20260226-021539-8496f245c5821919","data":{"turns":1}}
+{"ts":"2026-02-26T02:20:37.918153Z","type":"session.started","session":"s-20260226-022037-c6f4107e5be7bee1","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:20:49.199757Z","type":"session.ended","session":"s-20260226-022037-c6f4107e5be7bee1","data":{"turns":0}}
+{"ts":"2026-02-26T02:20:53.471666Z","type":"session.started","session":"s-20260226-022053-e18a78b237318a5c","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:41:53.332574Z","type":"session.ended","session":"s-20260226-022053-e18a78b237318a5c","data":{"turns":0}}
+{"ts":"2026-02-26T02:41:56.401266Z","type":"session.started","session":"s-20260226-024156-c9bef9af635dad63","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:41:59.511288Z","type":"chat.user","session":"s-20260226-024156-c9bef9af635dad63","data":{"text":"hello"}}
+{"ts":"2026-02-26T02:41:59.511628Z","type":"chat.assistant","session":"s-20260226-024156-c9bef9af635dad63","data":{"text":"Morph (helpful): I heard you say: \"hello\""}}
+{"ts":"2026-02-26T02:42:10Z","type":"memory.resonate_key.created","session":"s-20260226-024156-c9bef9af635dad63","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-024156-c9bef9af635dad63.json","turns":1}}
+{"ts":"2026-02-26T02:42:10.537878Z","type":"session.ended","session":"s-20260226-024156-c9bef9af635dad63","data":{"turns":1}}
+{"ts":"2026-02-26T02:44:33.859831Z","type":"session.started","session":"s-20260226-024433-aa31e8b25772b0d5","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T02:44:41.775058Z","type":"tool.fs.write.approval","session":"s-20260226-024433-aa31e8b25772b0d5","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","approved":true,"path":"test.txt"}}
+{"ts":"2026-02-26T02:44:41.776187Z","type":"tool.fs.write","session":"s-20260226-024433-aa31e8b25772b0d5","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","bytes":11,"path":"test.txt"}}
+{"ts":"2026-02-26T02:44:41.776322Z","type":"command","session":"s-20260226-024433-aa31e8b25772b0d5","data":{"input":"/write test.txt hello world","output":"Wrote test.txt"}}
+{"ts":"2026-02-26T02:44:47Z","type":"memory.resonate_key.created","session":"s-20260226-024433-aa31e8b25772b0d5","data":{"key_path":"/Users/adalaide/Dev/morph/core/memory/keys/s-20260226-024433-aa31e8b25772b0d5.json","turns":1}}
+{"ts":"2026-02-26T02:44:47.315358Z","type":"session.ended","session":"s-20260226-024433-aa31e8b25772b0d5","data":{"turns":1}}
+{"ts":"2026-02-26T03:04:08.620537Z","type":"session.started","session":"s-20260226-030408-7ee7b2761efcdb0f","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T03:04:16.369997Z","type":"tool.fs.listdir","session":"s-20260226-030408-7ee7b2761efcdb0f","data":{"abs":"/Users/adalaide/Dev/morph","path":"."}}
+{"ts":"2026-02-26T03:04:16.370602Z","type":"command","session":"s-20260226-030408-7ee7b2761efcdb0f","data":{"input":"/ls","output":".gitignore\nREADME.md\nbody/\ncmd/\ncore/\ndocs/\ngo.mod\ngo.sum\ninternal/\nmorphlings/\npersona/\nruntime/\nskele.sh\ntest.txt\ntests/"}}
+{"ts":"2026-02-26T03:04:32.263719Z","type":"tool.fs.write.approval","session":"s-20260226-030408-7ee7b2761efcdb0f","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","approved":true,"path":"test.txt"}}
+{"ts":"2026-02-26T03:04:32.264778Z","type":"tool.fs.write","session":"s-20260226-030408-7ee7b2761efcdb0f","data":{"abs":"/Users/adalaide/Dev/morph/test.txt","bytes":17,"path":"test.txt"}}
+{"ts":"2026-02-26T03:04:32.264978Z","type":"command","session":"s-20260226-030408-7ee7b2761efcdb0f","data":{"input":"/write test.txt hello world again","output":"Wrote test.txt"}}
+{"ts":"2026-02-26T03:04:38.496634Z","type":"session.reset","session":"s-20260226-030438-da4d617a17cfc2ca"}
+{"ts":"2026-02-26T03:06:45.096296Z","type":"session.ended","session":"s-20260226-030438-da4d617a17cfc2ca","data":{"turns":0}}
+{"ts":"2026-02-26T03:06:59.606898Z","type":"session.started","session":"s-20260226-030659-bc54f01a55293834","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T03:09:35.424825Z","type":"session.ended","session":"s-20260226-030659-bc54f01a55293834","data":{"turns":0}}
+{"ts":"2026-02-26T03:09:37.619199Z","type":"session.started","session":"s-20260226-030937-28e1790f4cf72b68","data":{"persona_name":"Morph","persona_version":"0.1.0"}}
+{"ts":"2026-02-26T03:09:47.641031Z","type":"session.ended","session":"s-20260226-030937-28e1790f4cf72b68","data":{"turns":0}}

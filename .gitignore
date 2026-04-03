@@ -1,0 +1,46 @@
+# Root-built binaries (do not commit)
+/morph
+/haven
+/loopgate-admin
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Go
+*.exe
+*.test
+*.out
+/vendor/
+
+# Node (legacy Wails frontend)
+node_modules/
+cmd/haven/frontend/dist/
+
+# Archives
+*.tar.gz
+*.zip
+
+# Local tooling
+.claude/
+
+# Ephemeral dirs
+/tmp/
+tmp/
+output/
+
+# Sandbox import copy (nested git checkout; canonical AMP is docs/AMP)
+runtime/sandbox/root/home/imports/amp/
+
+# Operator-generated runtime (logs, sockets, ledger, quarantine, memory, benchmarks)
+runtime/logs/
+runtime/state/
+runtime/memorybench/
+
+# Runtime / memory artifacts (see internal/config/gitignore_test.go)
+runtime/.morph.lock
+core/memory/ledger/*.jsonl
+core/memory/distillates/*.jsonl
+core/memory/keys/
+core/memory/keys_old/
