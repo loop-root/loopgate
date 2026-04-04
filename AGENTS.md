@@ -1,6 +1,6 @@
 # Claude Code Agent Instructions for Loopgate
 
-**Last updated:** 2026-04-01 (enterprise pivot; MCP surface and multi-tenancy model added).
+**Last updated:** 2026-04-03 (Loopgate-only docs; MCP-first integrations).
 
 You are working on a security-sensitive Go project for governing and constraining AI agent activity.
 
@@ -39,8 +39,7 @@ Important assumptions:
 - In multi-node enterprise deployment: each **local node** enforces policy from an **admin node**. The admin node is the governance authority. Local nodes are full enforcement runtimes — not thin clients.
 - The admin node holds: policy configuration, identity and IDP integration, audit aggregation, and org-level memory. Local nodes enforce that policy, run model calls locally, maintain per-user memory, and stream audit events to the admin node.
 - Tenant isolation is enforced by `tenant_id` namespace across all resources — memory, audit, capability grants, secrets. Cross-tenant access is always a hard denial.
-- Connected developer tools (Claude Code, Cursor, VS Code, and any MCP-compatible IDE) are clients. They are not authority sources.
-- Haven is the consumer-facing demo product. It demonstrates what Loopgate enables in a personal context. It is not the primary enterprise product target.
+- Connected developer tools (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, and any MCP-compatible IDE) are clients. They are not authority sources.
 - Morphlings are bounded subordinate agent contexts governed by Loopgate, not self-authorizing workers.
 - Agents, model outputs, tool outputs, external files, environment variables, and config loaded from disk are untrusted unless explicitly validated.
 - Audit data must be reliable, append-only, and tamper-evident where the format supports it.
@@ -57,7 +56,7 @@ These rules align with the local control-plane design and AMP direction.
 - The control plane is the only authority for privileged actions.
 - Natural language never creates authority.
 - References are identifiers, not trust grants.
-- Morph must not be treated as an authority source just because it initiated a request.
+- Unprivileged **operator clients** (IDE, MCP host, or in-repo reference shell) must not be treated as an authority source just because they initiated a request.
 - Model output, memory strings, summaries, and UI-visible state are content, not authority.
 - Internal control-plane features must not be turned into public network APIs by convenience.
 - Local transport must remain local-only by default.
@@ -66,9 +65,9 @@ These rules align with the local control-plane design and AMP direction.
 
 ### Transport standards
 
-- **Local client ↔ Loopgate (v1 standard):** HTTP over a Unix domain socket (local control-plane binding). Haven, MCP subprocess, proxy mode, and any local tooling connect this way. Not Apple XPC.
+- **Local client ↔ Loopgate (v1 standard):** HTTP over a Unix domain socket (local control-plane binding). MCP subprocess hosts, proxy mode, IDE adapters, and other local tooling connect this way. Not Apple XPC.
 - **Local node ↔ admin node (enterprise):** mTLS over TCP. Admin node authority must be cryptographically verified — IP address or hostname alone is not sufficient.
-- **Apple XPC hardening** is optional post-launch backlog only (no committed date). See `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`.
+- **Apple XPC hardening** is optional post-launch backlog only (no committed date). See `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`.
 
 For local privileged requests, preserve the existing layered model:
 
@@ -81,19 +80,15 @@ Bearer possession alone is not enough.
 
 ## Boundary split
 
-### Consumer product (Haven) owns
+### Enterprise integration surface owns (primary)
 
-- **Haven** desktop UI and operator UX: the **native Swift app** (separate repo; maintainer layout `~/Dev/Haven`). **`cmd/haven/` (Wails) is not a product surface** — prototype/reference only; see [Product surfaces](#product-surfaces) below.
-- model interaction and prompt compilation
-- local session state
-- local memory, distillation, and ledger on the Haven side
-- rendering Loopgate decisions, approvals, events, and projected status
-
-### Enterprise integration surface owns
-
-- **MCP server:** exposes Loopgate capabilities to connected developer tools (Claude Code, Cursor, any MCP-compatible IDE). Developers do not need a separate UI.
+- **MCP server:** exposes Loopgate capabilities to connected developer tools (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, any MCP-compatible IDE). Developers do not need a separate Loopgate UI.
 - **Proxy mode:** transparent API proxy between developer IDEs and model endpoints — intercepts requests, injects memory context, applies policy, logs to audit.
 - **Admin console:** web UI for IT admins — policy configuration, user/team provisioning, IDP integration, audit log viewer. Not a developer-facing surface.
+
+### In-repo reference shell (`cmd/haven/`) — not a product surface
+
+- **Wails + React** under `cmd/haven/` is a **frozen reference** for contracts and tests only. **Do not evolve it for product features.** Prefer MCP/proxy integrations for real operator workflows.
 
 ### Loopgate owns
 
@@ -116,32 +111,11 @@ Morphlings are internal Loopgate-governed runtime objects.
 - They must not create their own permissions through prompts, plans, or self-description.
 - They exist only inside a parent authority context created and validated by Loopgate.
 - Their lifecycle, execution envelope, and audit trail are owned by Loopgate.
-- Morph may render a pool of morphlings and their projected status, but Morph is not the source of truth for morphling state.
+- A client UI (IDE, MCP host, or reference shell) may render a pool of morphlings and their projected status, but that UI is not the source of truth for morphling state.
 
-## Product surfaces
+**MCP handlers must apply the same policy evaluation, approval workflows, and audit logging as HTTP handlers. MCP is not a trust boundary bypass.** The proxy mode must not weaken policy or audit. The admin console must require authentication before serving routes.
 
-### Consumer product (Haven)
-
-The native macOS **Haven** app (`~/Dev/Haven`, Swift/SwiftUI) is the consumer-facing product surface. It demonstrates what Loopgate enables in a personal assistant context: governed workspace, memory continuity, task resumption, journaling, ambient presence.
-
-**Prototype / frozen (this repo):** `cmd/haven/` is a **Go/Wails + React/TypeScript** shell retained only as a historical prototype. **Do not evolve Wails for product features.** Do not treat `cmd/haven/frontend/` as a ship target.
-
-**When changing Haven-facing behavior:** implement in **Loopgate** (this repo) and **Swift Haven** (`~/Dev/Haven`). Avoid edits under `cmd/haven/` unless fixing an urgent build/security break.
-
-### Enterprise integration (MCP + proxy + admin console)
-
-The primary enterprise integration surface is the Loopgate MCP server. Connected developer tools connect to Loopgate via a single config entry and get governed capability execution, memory, and policy enforcement without changing their workflow.
-
-**MCP handlers must apply the same policy evaluation, approval workflows, and audit logging as HTTP handlers. MCP is not a trust boundary bypass.**
-
-The proxy mode sits between the developer's IDE and the model API. Policy evaluation and audit logging must not be weakened or skipped in proxy mode.
-
-The admin console is a web UI for IT admins, not a developer-facing surface. It must require authentication before serving any route.
-
-Historical layout docs (read-only context for the old shell):
-
-- **`docs/HavenOS/Haven_Frontend_Source_Map.md`** — former Wails/React layout.
-- **`cmd/haven/frontend/README.md`** — legacy reference shell build notes.
+**Reference shell:** `cmd/haven/frontend/README.md` — Wails tree build notes only.
 
 ## Multi-tenancy model
 

@@ -388,7 +388,7 @@ Run:
 go test ./internal/tcl/... ./internal/loopgate/... ./cmd/haven/... ./internal/shell/...
 ```
 
-Expected: PASS with no new failures in TCL, Loopgate, Haven, or shell packages.
+Expected: PASS with no new failures in TCL, Loopgate, or shell packages.
 
 ---
 

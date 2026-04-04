@@ -1,16 +1,16 @@
-**Last updated:** 2026-04-01
+**Last updated:** 2026-04-03
 
 # Loopgate architecture overview
 
 This repository is centered on **Loopgate**: the policy-governed **AI governance engine** and local control plane (`cmd/loopgate`, `internal/loopgate`).
 
-**Operator clients** connect over **HTTP on a Unix domain socket** (v1). The **canonical** consumer demo UI is **native Swift Haven** (separate repository, e.g. `~/Dev/Haven`). The in-repo **`cmd/haven/`** Wails application is a **reference-only** shell for contracts and tests — not the shipped product client.
+**Operator clients** connect over **HTTP on a Unix domain socket** (v1). **Primary direction:** MCP hosts and proxy clients (**Claude Code**, **Cursor**, **VS Code**, **Anti‑Gravity**, **OpenAI Codex**, …) — see `docs/setup/LOOPGATE_MCP.md`. The in-repo **Wails** application under **`cmd/haven/`** is a **reference-only** shell for contracts and tests — not a ship target.
 
 **Morphlings** are Loopgate-governed bounded workers (naming unchanged).
 
 ## 1) Current system classification
 
-As of **2026-04-01**, the implemented deployment is:
+As of **2026-04-03**, the implemented deployment is:
 
 - **local** control plane (typical socket: `runtime/state/loopgate.sock`)
 - **single-tenant** in code today; **multi-tenant `tenant_id`** is an explicit enterprise direction (see root `AGENTS.md`)
@@ -22,21 +22,23 @@ As of **2026-04-01**, the implemented deployment is:
 
 ## 2) High-level execution model
 
-Typical **consumer demo** flow:
+Typical **IDE / MCP** flow (target primary):
 
-`input → Haven (Swift) → Loopgate (model/capability request) → validation / policy / approval / tool execution → structured result → client continuity → Loopgate durable memory projection`
+`developer tool → Loopgate (MCP or proxy) → validation / policy / approval / tool execution → structured result → Loopgate durable memory / audit`
 
-**Integration** flow (target): developer IDE → **MCP or proxy** → Loopgate → same enforcement and audit paths.
+Typical **reference Wails** flow (in-repo tests only):
+
+`input → reference client (`cmd/haven/`) → Loopgate (model/capability request) → validation / policy / approval / tool execution → structured result → client continuity → Loopgate durable memory projection`
 
 Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/model`, `internal/modelruntime`, `internal/memory`, `internal/loopgate`, `internal/shell`, `internal/setup`, and policy/tools/safety packages.
 
 ## 3) Component ownership
 
-### Haven (operator client)
+### Unprivileged operator clients
 
-- **Shipped:** Swift/macOS app (out of tree).
-- **In-repo reference:** Wails/React + Go under `cmd/haven/` — frozen for product UX per `AGENTS.md`.
-- Persona loading, prompt compilation, model runtime configuration (non-secret), local session state, continuity thread projection, local ledger, Loopgate approval UX — on the **unprivileged** side of the boundary.
+- **Shipped integrations:** MCP- and proxy-capable IDEs (see `docs/setup/LOOPGATE_MCP.md`).
+- **In-repo reference:** Wails/React + Go under `cmd/haven/` — frozen per `AGENTS.md`.
+- Persona loading, prompt compilation, model runtime configuration (non-secret), local session state, continuity thread projection, local ledger, approval UX — on the **unprivileged** side of the boundary (same pattern any client must follow).
 
 ### Loopgate
 
@@ -46,7 +48,7 @@ Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/mo
 
 ## 4) Trust boundaries
 
-**Trusted:** Loopgate binary, policy enforcement inside Loopgate, Haven **binary** (Swift or reference) as a client — but **not** model output routed through it.
+**Trusted:** Loopgate binary, policy enforcement inside Loopgate, any local client **binary** (IDE bridge, MCP host, Wails reference) as a transport — but **not** model output routed through it.
 
 **Untrusted:** model output, user input, tool arguments/output, config until validated, external integration responses.
 
@@ -58,7 +60,7 @@ Model output is content, not authority. The client presents capability intent; L
 - Loopgate is the execution choke point for governed capabilities and task-plan mediation.
 - Approvals are created and enforced in Loopgate.
 - Capability tokens are short-lived and scoped.
-- The Haven client does not receive raw secret material from Loopgate through the implemented contracts.
+- Unprivileged operator clients do not receive raw secret material from Loopgate through the implemented contracts.
 - Startup fails closed if Loopgate is unavailable (client paths that require it).
 - Continuity thread transitions monotonic where designed; wake-state projection is derived and rebuilt from Loopgate authority.
 

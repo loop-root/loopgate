@@ -3,13 +3,13 @@
 # RFC 0001: Loopgate Token and Request Integrity Policy
 
 - Status: Draft
-- Applies to: local Haven / Morph client ↔ Loopgate control plane
+- Applies to: local **operator client** ↔ Loopgate control plane (HTTP on UDS in v1)
 
 **AMP alignment:** Neutral transport and integrity rules for the same class of deployment are specified in the vendored [AMP RFC 0001](../AMP/AMP-RFCs/0001-local-transport-profile.md) (`local-uds-v1`) and [AMP RFC 0004](../AMP/AMP-RFCs/0004-canonical-envelope-and-integrity-binding.md) (canonical envelope and MAC). **On conflict, AMP RFC 0004 is authoritative** for canonical request serialization and MAC; this document describes Loopgate’s current HTTP routes, tokens, and operator-facing denial codes.
 
 ## 1. Purpose
 
-This document defines the normative token and request-integrity rules for the local Haven / Loopgate control-plane boundary.
+This document defines the normative token and request-integrity rules for the local **operator client** / Loopgate control-plane boundary.
 
 The goal is to make the token model reviewable and deterministic rather than inferred from code or model-generated implementation choices.
 
@@ -35,9 +35,9 @@ This RFC does not yet cover:
 
 ## 3. Terminology
 
-- `Morph`: the unprivileged local client/runtime shell
+- `Operator client`: the unprivileged local client/runtime (IDE agent, CLI, native UI, or test harness)
 - `Loopgate`: the local privileged control plane
-- `control session`: a Loopgate-issued server-side session binding for one Morph client
+- `control session`: a Loopgate-issued server-side session binding for one operator client instance
 - `capability token`: an opaque Loopgate-issued token authorizing scoped capability requests
 - `approval token`: an opaque Loopgate-issued token authorizing approval decisions only
 - `decision nonce`: a single-use Loopgate-issued proof bound to one pending approval request
@@ -48,7 +48,7 @@ This RFC does not yet cover:
 The token system MUST:
 
 - keep provider credentials and secret material inside Loopgate
-- prevent Morph from exchanging Loopgate tokens for provider credentials
+- prevent the operator client from exchanging Loopgate tokens for provider credentials
 - keep capability authorization scoped and short-lived
 - distinguish execution authorization from approval authorization
 - make replay attempts detectable and deniable
@@ -67,7 +67,7 @@ The token system MUST:
 ### 5.2 Session MAC key
 
 - Issued only by Loopgate at session open.
-- Shared only with the Morph client bound to that control session.
+- Shared only with the operator client bound to that control session.
 - Used to sign privileged requests with HMAC-SHA256.
 - MUST NOT be logged, persisted in repo state, or surfaced in user-visible audit output.
 - Expires with the control session.
@@ -92,7 +92,7 @@ That derived execution token:
 - is single-use
 - is bound to one capability
 - is bound to the normalized argument set for that execution
-- is not exposed to Morph
+- is not exposed to the operator client
 
 ### 5.4 Approval token
 
@@ -189,7 +189,7 @@ Token possession alone MUST NOT be sufficient.
 ### 7.2 Request ID
 
 - Capability requests MUST carry a `request_id`.
-- If Morph omits it, Loopgate may assign one before execution.
+- If the operator client omits it, Loopgate may assign one before execution.
 - Loopgate MUST reject duplicate `request_id` values per control session for requests that enter execution/approval flow.
 
 ### 7.3 Approval decision nonce
@@ -233,7 +233,7 @@ For high-risk execution, derived execution tokens MUST narrow scope further, not
 
 ## 10. Result and secret boundaries
 
-Loopgate responses to Morph MUST NOT include:
+Loopgate responses to the operator client MUST NOT include:
 
 - provider credentials
 - access tokens
@@ -291,12 +291,12 @@ Loopgate MUST fail closed and return explicit denial codes for token and integri
 
 The implementation MUST NOT:
 
-- expose raw provider tokens or raw secrets to Morph
+- expose raw provider tokens or raw secrets to the operator client
 - treat capability tokens as provider credentials
 - allow approval tokens to execute capabilities directly
 - accept unsigned privileged requests
 - silently widen token scope
-- silently fall back from Loopgate authority into Morph authority
+- silently fall back from Loopgate authority into unprivileged client-side authority
 - feed raw transport payloads into prompt compilation by default
 
 ## 14. Current implementation notes
@@ -313,7 +313,7 @@ As of this RFC revision:
 
 ## 15. Future work
 
-- launch-bound Morph -> Loopgate bootstrap identity
+- launch-bound operator client → Loopgate bootstrap identity
 - stronger single-use JTI semantics for risky execution tokens
 - persistent revocation and replay state beyond process lifetime
 - remote deployment transport profile

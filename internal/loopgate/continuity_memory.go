@@ -247,7 +247,11 @@ func loadContinuityMemoryState(rootPath string, legacyStatePath string) (continu
 	memoryPaths := newContinuityMemoryPaths(rootPath, legacyStatePath)
 	_, continuityEventsErr := os.Stat(memoryPaths.ContinuityEventsPath)
 	if continuityEventsErr == nil {
-		return replayContinuityMemoryStateFromEvents(memoryPaths)
+		replayedState, replayErr := replayContinuityMemoryStateFromEvents(memoryPaths)
+		if replayErr != nil {
+			return continuityMemoryState{}, fmt.Errorf("replay continuity event log: %w", replayErr)
+		}
+		return replayedState, nil
 	}
 	if !os.IsNotExist(continuityEventsErr) {
 		return continuityMemoryState{}, continuityEventsErr

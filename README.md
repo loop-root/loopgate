@@ -1,14 +1,15 @@
 # Loopgate
 
-**Last updated:** 2026-04-01 — primary product: policy-governed AI governance engine. See `docs/README.md`, `docs/roadmap/roadmap.md`, `docs/DOCUMENTATION_SCOPE.md`, and root `AGENTS.md`.
+**Last updated:** 2026-04-03 — primary product: policy-governed AI governance engine. See `docs/README.md`, `docs/roadmap/roadmap.md`, `docs/DOCUMENTATION_SCOPE.md`, and root `AGENTS.md`.
 
-![Loopgate](./docs/assets/morph-logo.png)
+![Loopgate](./docs/assets/morph-logo.png)  
+*(Image filename is historical; branding is Loopgate.)*
 
 **Loopgate** is the enforcement and control plane for governed AI agent activity: capabilities, approvals, policy, sandboxing, secrets, audit, continuity memory, and **morphling** lifecycle. This repository implements the Loopgate server (`cmd/loopgate`, `internal/loopgate`) and shared libraries.
 
-**Enterprise direction (primary engineering focus):** MCP server, transparent proxy mode, multi-tenant **`tenant_id`** isolation, and an admin console for IT governance — without weakening the same policy and audit rules as local HTTP handlers.
+**Enterprise direction (primary engineering focus):** MCP server, transparent proxy mode, multi-tenant **`tenant_id`** isolation, and an admin console for IT governance — without weakening the same policy and audit rules as local HTTP handlers. Integrations target **existing developer tools** (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, and other MCP- or proxy-capable clients).
 
-**Haven** (native Swift/macOS app, separate checkout e.g. `~/Dev/Haven`) is the **consumer demo** operator client. The in-repo **`cmd/haven/`** Wails shell is **reference-only** (tests, contracts); it is not the shipped product UI.
+The in-repo **`cmd/haven/`** Wails shell is **reference-only** (contracts, tests); it is not a ship target.
 
 ## What Loopgate is for
 
@@ -26,20 +27,20 @@ go test ./...
 go run ./cmd/loopgate
 ```
 
-For the **Swift Haven** app, run Loopgate as above, then build and run **Haven** from its Xcode project.
+Configure your IDE via the MCP server: `docs/setup/LOOPGATE_MCP.md`.
 
 ### Legacy all-in-one script
 
-`./start.sh` builds the in-repo Wails reference shell and launches it with Loopgate. Use only when you intentionally need that prototype; **product flows** use **`go run ./cmd/loopgate`** plus **Swift Haven**.
+`./start.sh` builds the in-repo Wails reference shell and launches it with Loopgate. Use only when you intentionally need that prototype.
 
 ## Repository layout
 
 - `cmd/loopgate/` — Loopgate control-plane service
-- `cmd/haven/` — **Reference** Wails desktop (not the shipped Haven UI)
+- `cmd/haven/` — **Reference** Wails desktop (not a product surface)
 - `cmd/morphling-runner/` — lease-bound runner subprocess
 - `internal/` — implementation packages
 - `core/policy/` — checked-in policy and morphling class definitions
-- `persona/` — persona config (operator-facing demos)
+- `persona/` — default operator persona (`default.yaml`) for unprivileged clients
 - `docs/` — architecture, RFCs, setup, **[Loopgate threat model](./docs/loopgate-threat-model.md)**
 - `runtime/` — local state and logs (typically gitignored)
 

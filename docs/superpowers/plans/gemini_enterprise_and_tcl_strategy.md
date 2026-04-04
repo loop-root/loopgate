@@ -3,7 +3,7 @@
 # Architecture & Enterprise Strategy Consolidation Plan
 **Date:** 2026-03-24
 **Author:** Gemini 
-**Target:** Morph / Loopgate Core Architecture
+**Target:** Loopgate core architecture
 
 This plan consolidates the architectural feedback, security redaction strategy, and enterprise viability assessment into actionable next steps for the project.
 
@@ -55,10 +55,10 @@ This trains the system to capture new secrets dynamically.
 
 ## 3. Enterprise / CISO Viability Assessment
 
-If I were a CISO evaluating Morph/Loopgate for production deployment in an enterprise, here are my thoughts:
+If I were a CISO evaluating Loopgate for production deployment in an enterprise, here are my thoughts:
 
 **The Green Flags (Why I would buy it):**
-*   **The Architecture is Correct:** You fundamentally understand that LLMs are a hostile attack vector. The split between the unprivileged planner (Morph) and the privileged control plane (Loopgate) is exactly what enterprise security teams want.
+*   **The Architecture is Correct:** You fundamentally understand that LLMs are a hostile attack vector. The split between the unprivileged planner (operator client) and the privileged control plane (Loopgate) is exactly what enterprise security teams want.
 *   **Auditability:** The append-only, tamper-evident cryptographic ledger is a massive selling point for compliance (SOC2, HIPAA).
 *   **Local Execution:** The ability to run this over Unix domain sockets with Apple XPC transport means the attack surface is heavily minimized.
 

@@ -17,7 +17,7 @@ Use it when changing:
 ## Relationship Notes
 
 - Go-side loading: `internal/config/goal_aliases.go`, `internal/config/runtime.go` where applicable
-- Persona: `persona/morph.yaml` (separate directory)
+- Persona: `persona/default.yaml` (separate directory)
 
 ## Important Watchouts
 

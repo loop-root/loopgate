@@ -6,6 +6,7 @@ package mcpserve
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -19,14 +20,15 @@ import (
 	"morph/internal/loopgate"
 )
 
-// Run starts the MCP stdio server. It requires a Loopgate daemon listening on the socket
-// and valid LOOPGATE_MCP_* delegated credentials (see docs/setup/LOOPGATE_MCP.md).
+// Run starts the MCP stdio server with delegated credentials from the environment.
 func Run(ctx context.Context) error {
-	delegatedCfg, actor, clientSession, err := DelegatedConfigFromEnv()
-	if err != nil {
-		return err
-	}
+	return RunWithOptions(ctx, RunOptions{})
+}
 
+// RunWithOptions starts the MCP stdio server. The default path requires a Loopgate daemon
+// plus LOOPGATE_MCP_* delegated credentials; the optional local_open_session mode is for
+// local/dev IDE integration only and still uses the normal Unix-socket session-open flow.
+func RunWithOptions(ctx context.Context, options RunOptions) error {
 	repoRoot, err := LoadRepoRoot()
 	if err != nil {
 		return err
@@ -44,26 +46,41 @@ func Run(ctx context.Context) error {
 	if diagnostic != nil && diagnostic.Server != nil {
 		diagServer = diagnostic.Server
 	}
-	
-	// Why we inject context here: Any action executed by the MCP server inherently executes
-	// within the constraints of the bound session. Tagging all diagnostic traces with the 
-	// TenantID ensures logs can be securely segregated without complex correlation later.
-	diagServer = diagServer.With(
-		"tenant_id", delegatedCfg.TenantID,
-		"user_id", delegatedCfg.UserID,
-		"actor", actor,
-	)
-
-	diagServer.Debug("mcp_server_start", "control_session_id", delegatedCfg.ControlSessionID)
-
 	socketPath := SocketPath(repoRoot)
-
-	lgClient, err := loopgate.NewClientFromDelegatedSession(socketPath, delegatedCfg)
-	if err != nil {
-		diagServer.Error("mcp_delegated_session_failed", "error", err.Error())
-		return fmt.Errorf("mcp delegated session: %w", err)
+	var lgClient *loopgate.Client
+	var actor string
+	var clientSession string
+	if options.LocalOpenSession != nil {
+		lgClient, actor, clientSession, err = newLoopgateClientForServeMode(socketPath, nil, options.LocalOpenSession)
+		if err != nil {
+			diagServer.Error("mcp_local_open_session_failed", "error", err.Error())
+			return err
+		}
+		// This path is intentionally local/dev only: it opens an ordinary local Loopgate
+		// session instead of reusing delegated credentials, and must not be repurposed as
+		// a remote or production auth surface.
+		diagServer = diagServer.With("actor", actor)
+		diagServer.Info("mcp_server_local_open_session", "client_session", clientSession)
+	} else {
+		delegatedCfg, delegatedActor, delegatedClientSession, delegatedErr := DelegatedConfigFromEnv()
+		if delegatedErr != nil {
+			return delegatedErr
+		}
+		diagServer = diagServer.With(
+			"tenant_id", delegatedCfg.TenantID,
+			"user_id", delegatedCfg.UserID,
+			"actor", delegatedActor,
+		)
+		diagServer.Debug("mcp_server_start", "control_session_id", delegatedCfg.ControlSessionID)
+		lgClient, _, _, err = newLoopgateClientForServeMode(socketPath, &delegatedCfg, nil)
+		if err != nil {
+			diagServer.Error("mcp_delegated_session_failed", "error", err.Error())
+			return err
+		}
+		actor = delegatedActor
+		clientSession = delegatedClientSession
+		lgClient.ConfigureSession(actor, clientSession, nil)
 	}
-	lgClient.ConfigureSession(actor, clientSession, nil)
 
 	mcpServer := server.NewMCPServer(
 		"loopgate",
@@ -71,38 +88,109 @@ func Run(ctx context.Context) error {
 		server.WithToolCapabilities(true),
 	)
 
-	mcpServer.AddTool(mcp.NewTool("loopgate.status",
-		mcp.WithDescription("Returns Loopgate capability inventory and policy summary for the delegated session (same as HTTP GET /v1/status)."),
-	), handleStatusTool(lgClient, diagServer))
-
-	mcpServer.AddTool(mcp.NewTool("loopgate.execute_capability",
-		mcp.WithDescription("Executes a Loopgate capability by name. Consider using the typed tools instead."),
-		mcp.WithString("capability",
-			mcp.Description("Capability name, e.g. memory.remember"),
-			mcp.Required(),
-		),
-		mcp.WithString("arguments_json",
-			mcp.Description(`JSON object of string key/value arguments.`),
-		),
-	), handleExecuteCapabilityTool(lgClient, diagServer))
-
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	registeredTools, err := registeredLoopgateTools(ctx, lgClient, diagServer)
+	if err != nil {
+		return err
+	}
+	mcpServer.AddTools(registeredTools...)
+
+	stdioSrv := server.NewStdioServer(mcpServer)
+	return stdioSrv.Listen(ctx, os.Stdin, os.Stdout)
+}
+
+func registeredLoopgateTools(ctx context.Context, lgClient *loopgate.Client, logger *slog.Logger) ([]server.ServerTool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	registeredTools := []server.ServerTool{
+		{
+			Tool: mcp.NewTool("loopgate.status",
+				mcp.WithDescription("Returns Loopgate capability inventory and policy summary for the delegated session (same as HTTP GET /v1/status)."),
+			),
+			Handler: handleStatusTool(lgClient, logger),
+		},
+		{
+			Tool: mcp.NewTool("loopgate.execute_capability",
+				mcp.WithDescription("Executes a Loopgate capability by name. Consider using the typed tools instead."),
+				mcp.WithString("capability",
+					mcp.Description("Capability name, e.g. memory.remember"),
+					mcp.Required(),
+				),
+				mcp.WithString("arguments_json",
+					mcp.Description(`JSON object of string key/value arguments.`),
+				),
+			),
+			Handler: handleExecuteCapabilityTool(lgClient, logger),
+		},
+		{
+			Tool: mcp.NewTool("loopgate.memory_wake_state",
+				mcp.WithDescription("Loads the current Loopgate memory wake state for the delegated session tenant."),
+			),
+			Handler: handleMemoryWakeStateTool(lgClient, logger),
+		},
+		{
+			Tool: mcp.NewTool("loopgate.memory_discover",
+				mcp.WithDescription("Discovers memory items for a slot- or task-seeking query without JSON argument juggling."),
+				mcp.WithString("query",
+					mcp.Description("Natural-language memory query."),
+					mcp.Required(),
+				),
+				mcp.WithString("scope",
+					mcp.Description("Optional scope override. Defaults to Loopgate's global memory scope."),
+				),
+				mcp.WithNumber("max_items",
+					mcp.Description("Optional maximum number of items to return."),
+				),
+			),
+			Handler: handleMemoryDiscoverTool(lgClient, logger),
+		},
+		{
+			Tool: mcp.NewTool("loopgate.memory_remember",
+				mcp.WithDescription("Remembers an explicit fact through Loopgate's validated memory write path."),
+				mcp.WithString("fact_key",
+					mcp.Description("Canonical or alias fact key, e.g. profile.timezone."),
+					mcp.Required(),
+				),
+				mcp.WithString("fact_value",
+					mcp.Description("Fact value to remember."),
+					mcp.Required(),
+				),
+				mcp.WithString("scope",
+					mcp.Description("Optional scope override. Defaults to Loopgate's global memory scope."),
+				),
+				mcp.WithString("reason",
+					mcp.Description("Optional operator-visible reason for the memory write."),
+				),
+				mcp.WithString("source_text",
+					mcp.Description("Optional source text from which the explicit fact was derived."),
+				),
+				mcp.WithString("candidate_source",
+					mcp.Description("Optional explicit candidate source, e.g. explicit_fact."),
+				),
+				mcp.WithString("source_channel",
+					mcp.Description("Optional source channel, e.g. conversation."),
+				),
+			),
+			Handler: handleMemoryRememberTool(lgClient, logger),
+		},
 	}
 
 	statusResp, err := lgClient.Status(ctx)
 	if err != nil {
-		diagServer.Error("mcp_status_fetch_failed", "error", err.Error())
-		return fmt.Errorf("fetch capability inventory: %w", err)
+		logger.Error("mcp_status_fetch_failed", "error", err.Error())
+		return nil, fmt.Errorf("fetch capability inventory: %w", err)
 	}
 
-	// Why we map MCP Tools one-to-one with Loopgate Capabilities: 
-	// 1. By registering typed tools dynamically, the caller doesn't need to learn a bespoke format;
-	//    they just invoke "memory.remember" like a native tool. 
-	// 2. This does not bypass the policy engine since all requests natively route
-	//    to executeCapabilityWithArgs regardless.
+	// Register capability names directly so callers can still invoke the raw Loopgate
+	// surface when a typed wrapper does not exist yet.
 	for _, capSum := range statusResp.Capabilities {
-		// Skip registering a tool that clashes with the built-in system tools above.
 		if capSum.Name == "loopgate.status" || capSum.Name == "loopgate.execute_capability" {
 			continue
 		}
@@ -110,16 +198,18 @@ func Run(ctx context.Context) error {
 		if desc == "" {
 			desc = fmt.Sprintf("Execute loopgate capability %s", capSum.Name)
 		}
-		mcpServer.AddTool(mcp.NewTool(capSum.Name,
-			mcp.WithDescription(desc),
-			mcp.WithString("arguments_json",
-				mcp.Description(`JSON object of string key/value arguments.`),
+		registeredTools = append(registeredTools, server.ServerTool{
+			Tool: mcp.NewTool(capSum.Name,
+				mcp.WithDescription(desc),
+				mcp.WithString("arguments_json",
+					mcp.Description(`JSON object of string key/value arguments.`),
+				),
 			),
-		), handleTypedCapabilityTool(lgClient, capSum.Name, diagServer))
+			Handler: handleTypedCapabilityTool(lgClient, capSum.Name, logger),
+		})
 	}
 
-	stdioSrv := server.NewStdioServer(mcpServer)
-	return stdioSrv.Listen(ctx, os.Stdin, os.Stdout)
+	return registeredTools, nil
 }
 
 func handleStatusTool(lgClient *loopgate.Client, logger *slog.Logger) server.ToolHandlerFunc {
@@ -152,6 +242,52 @@ func handleExecuteCapabilityTool(lgClient *loopgate.Client, logger *slog.Logger)
 func handleTypedCapabilityTool(lgClient *loopgate.Client, capabilityName string, logger *slog.Logger) server.ToolHandlerFunc {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return executeCapabilityWithArgs(ctx, lgClient, logger, capabilityName, request.GetString("arguments_json", ""))
+	}
+}
+
+func handleMemoryWakeStateTool(lgClient *loopgate.Client, logger *slog.Logger) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		wakeStateResponse, err := lgClient.LoadMemoryWakeState(ctx)
+		if err != nil {
+			return toolResultFromLoopgateError(logger, "loopgate.memory_wake_state", err)
+		}
+		return toolResultJSON(wakeStateResponse, false)
+	}
+}
+
+func handleMemoryDiscoverTool(lgClient *loopgate.Client, logger *slog.Logger) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		rawQuery := strings.TrimSpace(request.GetString("query", ""))
+		if rawQuery == "" {
+			return toolResultError(fmt.Errorf("query is required"))
+		}
+		discoverResponse, err := lgClient.DiscoverMemory(ctx, loopgate.MemoryDiscoverRequest{
+			Scope:    strings.TrimSpace(request.GetString("scope", "")),
+			Query:    rawQuery,
+			MaxItems: request.GetInt("max_items", 0),
+		})
+		if err != nil {
+			return toolResultFromLoopgateError(logger, "loopgate.memory_discover", err)
+		}
+		return toolResultJSON(discoverResponse, false)
+	}
+}
+
+func handleMemoryRememberTool(lgClient *loopgate.Client, logger *slog.Logger) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		rememberResponse, err := lgClient.RememberMemoryFact(ctx, loopgate.MemoryRememberRequest{
+			Scope:           strings.TrimSpace(request.GetString("scope", "")),
+			FactKey:         strings.TrimSpace(request.GetString("fact_key", "")),
+			FactValue:       request.GetString("fact_value", ""),
+			Reason:          strings.TrimSpace(request.GetString("reason", "")),
+			SourceText:      request.GetString("source_text", ""),
+			CandidateSource: strings.TrimSpace(request.GetString("candidate_source", "")),
+			SourceChannel:   strings.TrimSpace(request.GetString("source_channel", "")),
+		})
+		if err != nil {
+			return toolResultFromLoopgateError(logger, "loopgate.memory_remember", err)
+		}
+		return toolResultJSON(rememberResponse, false)
 	}
 }
 
@@ -209,4 +345,33 @@ func toolResultError(err error) (*mcp.CallToolResult, error) {
 		Content: []mcp.Content{mcp.NewTextContent(err.Error())},
 		IsError: true,
 	}, nil
+}
+
+func toolResultJSON(payload interface{}, isError bool) (*mcp.CallToolResult, error) {
+	rawPayload, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return toolResultError(fmt.Errorf("encode tool response: %w", err))
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{mcp.NewTextContent(string(rawPayload))},
+		IsError: isError,
+	}, nil
+}
+
+func toolResultFromLoopgateError(logger *slog.Logger, toolName string, toolErr error) (*mcp.CallToolResult, error) {
+	var deniedError loopgate.RequestDeniedError
+	if errors.As(toolErr, &deniedError) {
+		if logger != nil {
+			logger.Warn("mcp_tool_denied", "tool", toolName, "denial_code", deniedError.DenialCode)
+		}
+		return toolResultJSON(loopgate.CapabilityResponse{
+			Status:       loopgate.ResponseStatusError,
+			DenialCode:   deniedError.DenialCode,
+			DenialReason: deniedError.DenialReason,
+		}, true)
+	}
+	if logger != nil {
+		logger.Error("mcp_tool_failed", "tool", toolName, "error", toolErr.Error())
+	}
+	return toolResultError(toolErr)
 }

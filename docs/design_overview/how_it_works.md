@@ -1,12 +1,14 @@
-**Last updated:** 2026-04-01
+**Last updated:** 2026-04-03
 
 # How it works (operator client and Loopgate)
 
-**Canonical operator UI:** native **Swift Haven** (separate repository). This document walks the **in-repo reference** path: **Wails Haven** under **`cmd/haven/`** — same Loopgate contracts, **not** the shipped product shell.
+**Primary operator experience:** developer tools via **MCP** or **proxy** (see `docs/setup/LOOPGATE_MCP.md` and root `AGENTS.md`).
 
-There is **no separate Morph CLI** in the supported product path. Privileged work goes through **Loopgate** on a local Unix socket.
+This document walks the **in-repo reference** path: **Wails** under **`cmd/haven/`** — same Loopgate contracts used in integration tests, **not** a ship target.
 
-## 1) Startup — reference Haven (`cmd/haven/`)
+There is **no separate product CLI** in the supported path for new integrations. Privileged work goes through **Loopgate** on a local Unix socket.
+
+## 1) Startup — reference shell (`cmd/haven/`)
 
 On launch, the Wails backend + local state:
 
@@ -25,20 +27,20 @@ On launch, the Wails backend + local state:
 
 If Loopgate is unavailable, the client fails explicitly rather than running “offline privileged” mode.
 
-**Swift Haven** follows the same control-plane pattern; see [`LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md).
+Other HTTP-native clients follow the same control-plane pattern; see [`LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md).
 
 ## 2) Input routing
 
 ### Slash commands and shell-backed actions
 
-Handled through `internal/shell` from the reference Haven backend. Read-only commands summarize local and Loopgate-visible state. Capability commands are **forwarded to Loopgate** as typed requests.
+Handled through `internal/shell` from the reference backend. Read-only commands summarize local and Loopgate-visible state. Capability commands are **forwarded to Loopgate** as typed requests.
 
 ### Natural language input
 
 - user message is recorded in the **client** ledger (session history)
 - the client compiles a persona-aware prompt
 - the active model produces assistant text (always **untrusted content**)
-- tool calls are parsed from model output (**native structured tools** with Loopgate on the supported Haven path)
+- tool calls are parsed from model output (**native structured tools** with Loopgate on supported paths)
 - each capability request is sent to **Loopgate** for validation and execution
 
 ## 3) Loopgate capability execution path
@@ -50,7 +52,7 @@ For each capability request:
 3. Loopgate validates capability name and argument schema against policy.
 4. Loopgate applies authoritative policy (deny-by-default).
 5. Loopgate creates a **pending approval** when required.
-6. **Haven** renders the approval; the operator sends the decision back through Loopgate.
+6. The **operator client** renders the approval; the operator sends the decision back through Loopgate.
 7. Loopgate executes the capability if allowed.
 8. Loopgate returns a structured result or typed denial.
 9. The client records the outcome in its ledger and session history.
@@ -78,35 +80,13 @@ Filesystem capabilities use hardened path logic; enforcement is **Loopgate**. Pr
 
 Separation is intentional: the client ledger is operator-facing session history; Loopgate events are **authoritative** for control-plane actions, morphlings, and promotions.
 
-## 6) Loopgate UI surface
+## 6) Shutdown
 
-Loopgate exposes a **display-safe** HTTP API for frontends (`/v1/ui/*`): status, events, approvals, and approval decisions. This is not a second authority: Loopgate classifies what may be shown; callers must not tail raw audit files or expose secrets.
+Ordered cleanup seals continuity threads, submits inspection when thresholds are met, and appends `session.ended` when that path is active.
 
-## 7) Continuity and memory
+## 7) Where to read more
 
-**Haven** (Swift or reference) owns:
-
-- the local append-only continuity ledger (session ordering)
-- explicit `current` / `next` / `previous` thread-role state
-- session-bound continuity rollover
-- ephemeral projection of live thread context into prompts
-
-**Loopgate** owns:
-
-- sealed-thread **inspection**
-- durable **distillates** and governed derivation
-- **resonate-key** minting
-- **wake-state** projection and governed recall (with TCL policy on explicit writes per `docs/rfcs/`)
-
-Loopgate decisions appear as **external control-plane events** in the client session history.
-
-## 8) Shutdown ordering
-
-On exit:
-
-1. stop the UI / input handling
-2. seal and roll the active continuity thread when it contains continuity-bearing events
-3. submit sealed `previous` threads to Loopgate for **idempotent inspection** when thresholds are met
-4. append `session.ended` to the client ledger
-
-Loopgate remains the **durable-memory derivation boundary** for governed facts; the client remains responsible for thread structure and session ordering.
+- [`LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
+- [`loopgate.md`](./loopgate.md)
+- [`architecture.md`](./architecture.md)
+- [Threat model](../loopgate-threat-model.md)

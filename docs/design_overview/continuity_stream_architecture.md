@@ -3,25 +3,25 @@
 # Continuity Stream Architecture
 
 Status: implemented with authoritative lineage governance
-Scope: Morph + Loopgate continuity and durable memory boundary  
+Scope: operator client + Loopgate continuity and durable memory boundary  
 Date: 2026-03-12
 
 ## Intent
 
-Morph now uses a bounded three-thread continuity model:
+The operator client now uses a bounded three-thread continuity model:
 
 - `current`: live continuity intake for the active session
 - `next`: empty staged continuation buffer
 - `previous`: most recently sealed thread
 
-The continuity stream remains local and append-only in the Morph ledger.
-Durable memory artifacts do not stay Morph-local anymore. Once a sealed
-`previous` thread crosses policy thresholds, Morph submits it to Loopgate for
+The continuity stream remains local and append-only in the The operator client ledger.
+Durable memory artifacts do not stay client-local anymore. Once a sealed
+`previous` thread crosses policy thresholds, The operator client submits it to Loopgate for
 inspection. Loopgate decides whether any durable memory artifacts are created.
 
 ## Authority split
 
-Morph owns:
+The operator client owns:
 
 - continuity event emission into the local append-only ledger
 - explicit `current / next / previous` thread-role state
@@ -40,7 +40,7 @@ Continuity and memory remain content, not authority.
 
 ## Data model
 
-Morph persists thread-role state in:
+The operator client persists thread-role state in:
 
 - `runtime/state/continuity_threads.json`
 
@@ -134,7 +134,7 @@ Current threshold policy is an OR rule on the sealed `previous` thread:
 - `memory.submit_previous_min_payload_bytes`
 - `memory.submit_previous_min_prompt_tokens`
 
-If any threshold is met, Morph submits the sealed thread for Loopgate
+If any threshold is met, The operator client submits the sealed thread for Loopgate
 inspection.
 
 The current defaults are:
@@ -145,7 +145,7 @@ The current defaults are:
 
 ## Inspection handoff
 
-Morph submits:
+The operator client submits:
 
 - deterministic `inspection_id`
 - sealed thread metadata
@@ -194,10 +194,10 @@ from raw chat history.
 
 ## Prompt projection model
 
-Morph prompt continuity is now the combination of:
+The operator client prompt continuity is now the combination of:
 
 1. Loopgate durable wake-state summary
-2. Morph-local three-thread projection
+2. client-local three-thread projection
 
 The local projection is ephemeral and derived on demand from the append-only
 ledger. It is not stored as a durable memory artifact.
@@ -206,13 +206,13 @@ ledger. It is not stored as a durable memory artifact.
 
 Crash assumptions are explicit:
 
-- if Morph crashes before rollover, `current` remains open and startup recovery
+- if The operator client crashes before rollover, `current` remains open and startup recovery
   will seal and roll it if it contains continuity events
-- if Morph crashes after sealing but before inspection, the thread remains
+- if The operator client crashes after sealing but before inspection, the thread remains
   `sealed` and can be retried
-- if Morph crashes after Loopgate inspection but before local state update,
+- if The operator client crashes after Loopgate inspection but before local state update,
   replaying the same `inspection_id` returns the existing Loopgate result
-- if Loopgate is unavailable during inspection, Morph keeps the thread sealed
+- if Loopgate is unavailable during inspection, The operator client keeps the thread sealed
   and auditable; it does not silently drop or rewrite continuity
 
 ## Current limitations
@@ -228,7 +228,7 @@ Implemented now:
 - startup wake-state rebuild from authoritative Loopgate memory state
 - deterministic goal-family normalization from `config/goal_aliases.yaml` with fallback family IDs
 - centralized scoring weights and explicit memory correction config from `config/runtime.yaml`
-- no Morph-local durable wake-state, key, or distillate writes on the active
+- no client-local durable wake-state, key, or distillate writes on the active
   path
 
 Not implemented yet:
@@ -240,7 +240,7 @@ Not implemented yet:
 ## Next slices
 
 1. add broader operator projection/UX for pending continuity review without
-   moving authority into Morph
+   moving authority into the operator client
 2. tighten restart tests around sealed-but-uninspected and inspected-but-not-yet
    acknowledged threads
 3. add thread-scoped wake-state selection on top of the existing authoritative

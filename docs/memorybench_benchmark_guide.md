@@ -20,7 +20,7 @@ go test ./internal/loopgate/... -count=1
 go test ./internal/memorybench/... -count=1
 ```
 
-Product context: [Haven_Memory_Candidates_and_Loopgate_Plan.md](./HavenOS/Haven_Memory_Candidates_and_Loopgate_Plan.md) §5 Phase D. Fair comparisons and scoreboard updates still follow the sections below.
+Product context: memory continuity and Phase D goals align with [RFC 0011](./rfcs/0011-swappable-memory-backends-and-benchmark-harness.md) and `docs/roadmap/roadmap.md`. Fair comparisons and scoreboard updates still follow the sections below.
 
 If you are new to memorybench, start here first:
 
@@ -51,7 +51,7 @@ Current promoted running scoreboard:
   [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
 - the older `46`-fixture snapshot is historical only
 - maintainer-only internal notes still live in
-  `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`,
+  `maintainer documentation checkout (memorybench internal report; outside this repository)`,
   but the timezone/locale preview-slot skepticism is now part of the promoted
   running-results headline
 
@@ -71,7 +71,7 @@ The live scoreboard lives in:
 
 The internal methodology report lives in (maintainer checkout, not in clone):
 
-- `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`
+- `maintainer documentation checkout (memorybench internal report; outside this repository)`
 
 ## Invariants
 
@@ -404,7 +404,7 @@ Current policy-matched read:
 
 - see [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
   for the current promoted `61`-fixture policy-matched numbers
-- see `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`
+- see `maintainer documentation checkout (memorybench internal report; outside this repository)`
   for the historical chronology, intermediate ablations, and tuned versus
   untuned continuity-control notes that are not part of the promoted scoreboard
 
@@ -574,7 +574,7 @@ Important poisoning caveat:
 7. Run fresh live comparisons.
 8. Update:
    - [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
-   - `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`
+   - `maintainer documentation checkout (memorybench internal report; outside this repository)`
 9. Record the family in the running-results or internal-report tables with:
    - mechanism under test
    - intended failure mode

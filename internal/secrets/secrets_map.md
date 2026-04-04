@@ -37,7 +37,7 @@ Use it when changing:
 
 - Model runtime loading keys: `internal/modelruntime/runtime.go`
 - Loopgate model connections: `internal/loopgate/model_connections.go`
-- Haven setup: `cmd/haven/setup.go`
+- Reference Wails setup: `cmd/haven/setup.go`
 
 ## Important Watchouts
 

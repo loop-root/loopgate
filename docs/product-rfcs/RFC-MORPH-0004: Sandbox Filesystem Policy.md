@@ -10,9 +10,9 @@
 
 # Summary
 
-This RFC defines the **sandbox filesystem model** used by **Haven** (operator UI) and **Morphlings**. The sandbox is a controlled workspace that prevents agents from roaming the host system while still allowing useful work to occur.
+This RFC defines the **sandbox filesystem model** used by **operator clients** (local UI) and **morphlings**. The sandbox is a controlled workspace that prevents agents from roaming the host system while still allowing useful work to occur.
 
-All Morph and Morphling filesystem activity must occur inside a designated sandbox root:
+All operator-client and morphling filesystem activity must occur inside a designated sandbox root:
 
 ```
 /morph/home
@@ -54,13 +54,13 @@ The sandbox must never allow:
 
 # Filesystem Root
 
-Loopgate owns the top-level Morph directory:
+Loopgate owns the top-level governed workspace directory (conceptually `/morph` in these RFCs):
 
 ```
 /morph
 ```
 
-Morph and Morphlings may only operate inside:
+Operator clients and morphlings may only operate inside:
 
 ```
 /morph/home
@@ -81,7 +81,7 @@ Example structure:
 
 Everything above `/morph/home` is considered **Loopgate control-plane territory**.
 
-Morph must not mutate files outside `/morph/home`.
+The operator client must not mutate files outside `/morph/home`.
 
 ---
 
@@ -247,8 +247,8 @@ Example:
 
 Export process:
 
-1. Morph stages artifact
-2. Morph summarizes change
+1. Operator client stages artifact
+2. Operator client summarizes change
 3. User approves export
 4. Loopgate applies change
 
@@ -349,4 +349,4 @@ These features are **out of scope for v1**.
 
 # Conclusion
 
-The sandbox filesystem ensures that Morph and Morphlings operate within a controlled environment. By enforcing strict import/export rules and isolating execution within `/morph/home`, the system prevents unintended modification of the host filesystem while maintaining a safe and auditable workspace.
+The sandbox filesystem ensures that operator clients and morphlings operate within a controlled environment. By enforcing strict import/export rules and isolating execution within `/morph/home`, the system prevents unintended modification of the host filesystem while maintaining a safe and auditable workspace.

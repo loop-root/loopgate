@@ -1,8 +1,8 @@
 **Last updated:** 2026-03-24
 
-# Downloads clutter sample (dev / Haven testing)
+# Downloads clutter sample (dev / local client testing)
 
-**Recorded:** 2026-03-23 (session: Morph/Haven organize flows)
+**Recorded:** 2026-03-23 (session: reference organize flows)
 
 ## What was added
 

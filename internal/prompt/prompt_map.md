@@ -30,8 +30,8 @@ This is where product truth and model truth either align or drift.
 
 ## Relationship Notes
 
-Haven-specific behavior does not start here.
-It is injected from `cmd/haven/chat.go` as runtime facts and available tools.
+Reference-shell behavior does not start here.
+For the Wails path, runtime facts and available tools are injected from `cmd/haven/chat.go`; other operator clients should inject equivalent facts through their own assembly layer.
 
 That means prompt fixes often require coordinated edits across:
 
@@ -43,15 +43,15 @@ That means prompt fixes often require coordinated edits across:
 
 The current prompt risk is simple:
 
-- if Haven-native tools grow faster than runtime facts, Morph falls back to thinking in files plus shell again
+- if registry-backed native tools grow faster than runtime facts, the client prompt falls back to thinking in files plus shell again
 
 The next prompt pass should:
 
 - stop hardcoding the old file-plus-shell self-description
-- describe the actual Haven-native tools that are available, including Todo as a carry-over surface
+- describe the actual native-schema tools that are available, including Todo as a carry-over surface
 - explain the explicit remember path honestly
 - stop overstating memory reliability
-- keep CLI-specific slash-command language out of Haven
+- keep CLI-specific slash-command language out of operator-facing system prompts for this shell
 
 ## Important Watchouts
 

@@ -7,7 +7,7 @@ Current implementation alignment: n/a (meta-RFC)
 
 ## 1. Purpose
 
-This document records **known gaps**, **edge cases**, and **assumptions worth challenging** across AMP RFCs 0001-0009 and the current Haven + Loopgate implementation. It exists so spec work can proceed deliberately: either tighten RFCs, add test vectors, or narrow claimed scope.
+This document records **known gaps**, **edge cases**, and **assumptions worth challenging** across AMP RFCs 0001-0009 and the current Loopgate implementation (with local operator clients). It exists so spec work can proceed deliberately: either tighten RFCs, add test vectors, or narrow claimed scope.
 
 **Normative precedence:** RFCs 0001-0009 remain authoritative where they are explicit. This RFC does not override them.
 
@@ -64,7 +64,7 @@ This document records **known gaps**, **edge cases**, and **assumptions worth ch
 - **Gap:** RFC 0009 defines request-response execution but does not cover streaming or long-running capabilities (e.g. model inference that streams tokens).
 - **Risk:** Implementers will need product-specific streaming semantics until a future RFC addresses this.
 
-## 3. Implementation gaps relative to AMP (Loopgate / Haven)
+## 3. Implementation gaps relative to AMP (Loopgate + operator clients)
 
 From [implementation mapping](../design_overview/amp_implementation_mapping.md), still open:
 
@@ -119,6 +119,6 @@ Items in Section 2 without a "Normative" or "Partially addressed" bullet remain 
 
 ## 7. Document history
 
-- 2026-03-24 -- Initial gap register and assumption review in Morph `docs/AMP/`.
+- 2026-03-24 -- Initial gap register and assumption review in `docs/AMP/`.
 - 2026-03-25 -- Cross-linked closed follow-ups to RFC 0004 (Section 6.5, 11.4-11.5); RFC 0005 `approval_not_pending`; RFC 0007 Section 5.1; RFC 0006 Section 4.5; `conformance/test-vectors-v1.md`.
 - 2026-03-25 -- Added: `none` sentinel (RFC 0002 Section 6), registries (RFC 0002 Section 13-14), session establishment (RFC 0001 Section 7), client recovery (RFC 0001 Section 14), response binding (RFC 0001 Section 9.1), identifier policy (RFC 0001 Section 12), capability execution (RFC 0009), `created_at_ms` in manifest (RFC 0005 Section 6.2), divergence notes (RFC 0004 Section 18). Added gap items for capability registry format and streaming results.

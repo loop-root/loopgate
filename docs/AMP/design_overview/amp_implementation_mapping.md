@@ -9,7 +9,7 @@ North star: [AMP RFCs](../AMP-RFCs/0001-local-transport-profile.md) — if this 
 
 ## Purpose
 
-This document maps the current **Haven + Loopgate** implementation onto the
+This document maps the current **Loopgate** implementation (with **local HTTP operator clients** as the typical attachment pattern) onto the
 Authority Mediation Protocol (AMP) RFC track.
 
 The AMP RFCs describe the intended neutral protocol and object model.
@@ -57,8 +57,8 @@ Current product layers:
 - **Loopgate**
   - privileged control-plane implementation (primary product in this repo)
   - policy, approvals, execution, secrets, audit, morphlings
-- **Haven** (canonical: native Swift app, separate checkout; in-repo `cmd/haven/` is Wails **reference** only)
-  - operator shell for the consumer demo path
+- **Operator client** (IDE MCP host, proxy, native UI, or in-repo **`cmd/haven/`** Wails **reference** only)
+  - unprivileged shell for planning and presentation (**MCP/proxy IDEs are the primary integration direction**)
   - planning and presentation
   - bounded continuity projection
   - user interaction
@@ -159,7 +159,7 @@ Notes:
 
 - approvals are Loopgate-owned
 - approval decisions are bound to approval token + decision nonce
-- Haven renders but does not authorize
+- the client renders but does not authorize
 
 ### Artifact
 
@@ -451,7 +451,7 @@ The following drifts are intentional for now:
 
 ### Product-specific package names
 
-The implementation still uses product-oriented names (`morph` module, `Haven`, `Loopgate`) rather than neutral `amp` package names.
+The implementation still uses historical names (`morph` Go module path, `haven` route prefix, `Loopgate`) rather than neutral `amp` package names.
 
 Reason:
 
@@ -461,7 +461,7 @@ Reason:
 
 ### Memory boundary placement
 
-Wake-state build/load and exact-key recall remain **client-local** (Haven-side packages) in parts of the codebase.
+Wake-state build/load and exact-key recall remain **client-local** (unprivileged client packages) in parts of the codebase.
 
 Reason:
 
@@ -489,7 +489,7 @@ Reason:
 1. No shared neutral AMP package in code
 2. No unified artifact envelope type
 3. No unified reference type
-4. Memory authority still partly local to the Haven client packages
+4. Memory authority still partly local to unprivileged client packages
 5. Capability arguments are still narrower than a future generalized AMP
    object model likely needs
 

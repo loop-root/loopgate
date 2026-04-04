@@ -8,7 +8,7 @@
 
 **Architecture:** Add a shared Loopgate-side TCL service that accepts `MemoryCandidate` inputs, produces validated TCL nodes plus semantic signatures and dispositions, and then lets Loopgate choose the authoritative downstream action. Phase 1 wires this only to explicit memory writes (`memory.remember` and `RememberMemoryFact`), while later phases expand to task/goal/todo transitions, selected structured assistant/tool outputs, TCL-informed distillates, and compact resonate-key compression.
 
-**Tech Stack:** Go 1.24, Loopgate control-plane handlers, Haven Wails backend, append-only audit and continuity memory state, markdown RFCs under `docs/TCL-RFCs/`, Go tests with `go test`.
+**Tech Stack:** Go 1.24, Loopgate control-plane handlers, in-repo Wails reference (`cmd/haven/`), append-only audit and continuity memory state, markdown RFCs under `docs/TCL-RFCs/`, Go tests with `go test`.
 
 ---
 
@@ -58,7 +58,7 @@
 - `internal/loopgate/types.go`
   - add optional request metadata fields needed to preserve raw source context for TCL analysis
 - `cmd/haven/memory_intent.go`
-  - pass original user utterance and candidate-source context when Haven performs deterministic memory writes
+  - pass original user utterance and candidate-source context when the Wails reference client (`cmd/haven/`) performs deterministic memory writes
 - `internal/shell/commands.go`
   - keep shell `/memory remember` aligned with TCL-aware explicit memory handling
 - `docs/TCL-RFCs/Thought Compression Language.md`
@@ -295,7 +295,7 @@ Note:
 - preserve append-only audit and redaction rules
 - wire the TCL decision at the real mutation choke point inside `rememberMemoryFact`, before new artifacts are persisted
 
-- [x] **Step 4: Pass original user utterance from Haven deterministic memory writes**
+- [x] **Step 4: Pass original user utterance from the Wails reference client (`cmd/haven/`) deterministic memory writes**
 
 `cmd/haven/memory_intent.go` currently derives a `MemoryRememberRequest` from user text. Extend that path so Loopgate receives the original utterance for TCL analysis, not just the normalized fact fields.
 
@@ -333,7 +333,7 @@ The same redaction rule applies to:
 
 - capability denial responses
 - HTTP/API error responses
-- Haven runtime facts built from error text
+- the Wails reference client (`cmd/haven/`) runtime facts built from error text
 - shell command error output
 
 - [x] **Step 2: Add denial-code coverage**
@@ -356,7 +356,7 @@ Run targeted tests that submit hostile memory-write candidates and assert that a
 
 Also verify:
 
-- Haven deterministic-memory runtime facts do not echo raw denied payload text
+- the Wails reference client (`cmd/haven/`) deterministic-memory runtime facts do not echo raw denied payload text
 - shell `/memory remember` output does not echo raw denied payload text
 
 ## Task 6: Phase 1 verification and documentation handoff
@@ -377,7 +377,7 @@ Expected:
 
 - TCL unit tests pass
 - explicit memory flow tests pass
-- no regressions in Haven memory-intent tests
+- no regressions in the Wails reference client (`cmd/haven/`) memory-intent tests
 
 - [ ] **Step 2: Update roadmap**
 
@@ -387,7 +387,7 @@ Add a short note in `docs/roadmap/roadmap.md` that TCL phase 1 exists or is in p
 
 Document clearly that phase 1 does **not** yet:
 
-- feed generic Haven thread events into TCL
+- feed generic the Wails reference client (`cmd/haven/`) thread events into TCL
 - replace continuity distillation
 - widen durable memory candidacy to raw assistant prose
 - make resonate keys reconstruct arbitrary text
@@ -415,7 +415,7 @@ Document clearly that phase 1 does **not** yet:
 - [ ] Introduce additional `MemoryCandidate` producers for:
   - task/goal/todo transitions
   - selected structured assistant/tool outputs
-- [ ] Replace generic Haven thread-event mapping with structured candidate emission
+- [ ] Replace generic the Wails reference client (`cmd/haven/`) thread-event mapping with structured candidate emission
 - [ ] Keep raw prose out of durable memory candidacy by default
 - [ ] Route kept candidates into continuity/distillate lane, not explicit fact lane
 

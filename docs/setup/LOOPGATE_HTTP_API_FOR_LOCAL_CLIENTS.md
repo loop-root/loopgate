@@ -1,11 +1,15 @@
 **Last updated:** 2026-03-28
 
-# Loopgate local HTTP API — guide for native clients (e.g. Swift)
+# Loopgate local HTTP API — guide for HTTP-native clients
 
-This document explains how a **local macOS app** (Swift or other) talks to **Loopgate** over **HTTP on a Unix domain socket**. It is the supported **v1 transport** for privileged control-plane calls; it replaces older “use Haven only” narratives for integrators.
+This document explains how a **local process** (native app, test harness, or bridge) talks to **Loopgate** over **HTTP on a Unix domain socket**. It is the supported **v1 transport** for privileged control-plane calls alongside MCP.
 
 **Normative details:** [RFC 0001: Loopgate Token and Request Integrity Policy](../rfcs/0001-loopgate-token-policy.md).  
 **Reference implementation:** `internal/loopgate/client.go` (Go) — match its wire behavior byte-for-byte when in doubt.
+
+### Legacy `/v1/haven/...` routes and the `haven` actor
+
+Several endpoints still use the **`/v1/haven/...`** path prefix and the session **actor label `haven`**. These are **stable compatibility identifiers** on the wire—they do not imply a specific desktop product. Prefer **MCP** for new IDE integrations; when implementing HTTP clients, use the exact paths, bodies, and types in this document.
 
 ---
 
@@ -24,7 +28,7 @@ There is **no** public HTTP listener for the control plane in v1. Apple XPC is o
 
 ### 1.1 macOS App Sandbox and `homeDirectoryForCurrentUser`
 
-If your Swift app is **sandboxed** (typical for a signed `.app` in `/Applications`), `FileManager.default.homeDirectoryForCurrentUser` is **not** `/Users/<you>` — it is the app’s **container**, e.g. `~/Library/Containers/<bundle-id>/Data/`. Building paths like `\(home)/Dev/morph/runtime/state/loopgate.sock` therefore becomes `…/Containers/…/Data/Dev/morph/…`, which will not match a Loopgate process you started from a normal shell in the real repo.
+If your macOS app is **sandboxed** (typical for a signed `.app` in `/Applications`), `FileManager.default.homeDirectoryForCurrentUser` is **not** `/Users/<you>` — it is the app’s **container**, e.g. `~/Library/Containers/<bundle-id>/Data/`. Building paths like `\(home)/Dev/<checkout>/runtime/state/loopgate.sock` therefore becomes `…/Containers/…/Data/Dev/<checkout>/…`, which will not match a Loopgate process you started from a normal shell in the real repo.
 
 **Do not use a hard-coded “home + Dev/…” checkout path as the only resolver inside a sandboxed app.**
 
@@ -36,7 +40,7 @@ Practical approaches:
 
 **`$PATH` does not apply** to Unix socket locations. Use an explicit **`LOOPGATE_SOCKET`** (or app-specific equivalent, e.g. `MORPH_LOOPGATE_SOCKET`) passed by the launcher, plist `LSEnvironment`, or Xcode scheme environment for debug builds.
 
-**Connecting, not just path resolution:** Even with the correct absolute path, a **sandboxed** GUI app may still fail `connect()` to a socket under an arbitrary `~/Dev/…` checkout because the sandbox treats that as access to a file **outside the container**. `com.apple.security.network.client` does **not** grant that. For local development, use a **Debug** build **without** App Sandbox (the separate Haven repo uses `Haven-Debug.entitlements` + `ENABLE_APP_SANDBOX = NO` for Debug), or ship an **unsandboxed helper** / agreed socket location both processes can access. Wrong-path fixes alone will not unblock sandboxed `connect()`.
+**Connecting, not just path resolution:** Even with the correct absolute path, a **sandboxed** GUI app may still fail `connect()` to a socket under an arbitrary `~/Dev/…` checkout because the sandbox treats that as access to a file **outside the container**. `com.apple.security.network.client` does **not** grant that. For local development, use a **Debug** build **without** App Sandbox, or ship an **unsandboxed helper** / agreed socket location both processes can access. Wrong-path fixes alone will not unblock sandboxed `connect()`.
 
 ---
 
@@ -198,13 +202,13 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft |
 | `POST /v1/sandbox/*` | import, stage, metadata, export, list |
 | `POST /v1/continuity/inspect` | Continuity thread inspection (caller supplies `events` JSON) |
-| `POST /v1/haven/continuity/inspect-thread` | **Haven actor only** — signed POST; body `{ "thread_id": "…" }`; Loopgate loads the thread from its Haven threadstore and proposes continuity (client does **not** send transcript payloads) |
+| `POST /v1/haven/continuity/inspect-thread` | **Actor `haven` only** — signed POST; body `{ "thread_id": "…" }`; Loopgate loads the thread from `internal/haven/threadstore` and proposes continuity (client does **not** send transcript payloads) |
 | `GET /v1/memory/wake-state` | Wake state projection |
 | `GET` / `PUT /v1/tasks` … | Task board sync |
 | `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
 | `POST /v1/memory/discover` / `recall` / `remember` | Memory surfaces |
 | `POST /v1/memory/inspections/…` | Inspection governance |
-| `POST /v1/morphlings/*` | Morphling lifecycle + worker IPC |
+| `POST /v1/morphlings/*` | Bounded worker (**morphling**) lifecycle + worker IPC |
 | `POST /v1/quarantine/*` | Quarantine metadata / view / prune |
 | `POST /v1/task/plan` / `lease` / `execute` / `complete` / `result` | Task-plan vertical slice |
 | `GET` / `PUT /v1/config/…` | Policy, runtime, connections, etc. (capability-gated) |
@@ -215,24 +219,24 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `GET` / `POST /v1/ui/folder-access*` | Folder access UI helpers |
 | `GET /v1/ui/desk-notes` | Active desk (sticky) notes from `runtime/state/haven_desk_notes.json` (signed GET) |
 | `POST /v1/ui/desk-notes/dismiss` | Archive a desk note by id (signed POST) |
-| `GET /v1/ui/memory` | Display-safe memory inventory for Haven operator controls (signed GET; manageable objects, counts, redacted summaries) |
+| `GET /v1/ui/memory` | Display-safe memory inventory for operator UI controls (signed GET; manageable objects, counts, redacted summaries) |
 | `POST /v1/ui/memory/reset` | Archive current memory state and start fresh for demo/operator reset (signed POST; body `operation_id`, `reason`) |
 | `GET /v1/ui/journal/entries` | Journal entry summaries (signed GET; lists sandbox `scratch/journal`) |
 | `GET /v1/ui/journal/entry` | Single journal file (signed GET; query selects entry) |
 | `GET /v1/ui/working-notes` | Working-note summaries (signed GET; `scratch/notes`) |
 | `GET /v1/ui/working-notes/entry` | Single working note (signed GET) |
 | `POST /v1/ui/working-notes/save` | Save working note content (signed POST; uses `notes.write` capability) |
-| `POST /v1/ui/workspace/list` | Haven-facing workspace listing (signed POST; body `path`; root lists `projects`, `imports`, `artifacts`, `research`, `agents`, and optional `shared`) |
-| `POST /v1/ui/workspace/preview` | Read workspace file preview (signed POST; body `path`, using the same Haven-facing path mapping as the list route) |
-| `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET); **Haven** writes this file when presence changes |
+| `POST /v1/ui/workspace/list` | Workspace listing for sandbox virtual paths (signed POST; body `path`; root lists `projects`, `imports`, `artifacts`, `research`, `agents`, and optional `shared`) |
+| `POST /v1/ui/workspace/preview` | Read workspace file preview (signed POST; body `path`, using the same virtual path mapping as the list route) |
+| `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET); written by clients that implement presence |
 | `GET /v1/ui/morph-sleep` | Same snapshot as presence plus `is_sleeping` / `is_resting` (signed GET) |
-| `POST /v1/haven/agent/work-item/ensure` | **Haven actor only** — signed POST; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
-| `POST /v1/haven/agent/work-item/complete` | **Haven actor only** — signed POST; runs **`todo.complete`** for a task-board item id |
+| `POST /v1/haven/agent/work-item/ensure` | **Actor `haven` only** — signed POST; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
+| `POST /v1/haven/agent/work-item/complete` | **Actor `haven` only** — signed POST; runs **`todo.complete`** for a task-board item id |
 | … | Other `/v1/ui/*` task standing grants, shared folder — see `server.go` |
 
 For **request/response JSON shapes**, use `internal/loopgate/types.go` as the source of truth (field names are `json` tagged).
 
-### 7.1 Haven memory operator routes
+### 7.1 Memory operator routes (UI-safe)
 
 These routes exist so native clients can manage memory through Loopgate's typed
 surface instead of direct runtime-state reads or writes.
@@ -254,16 +258,16 @@ surface instead of direct runtime-state reads or writes.
 This reset path is intentionally fail-closed and auditable. It does **not**
 silently delete memory in place.
 
-### 7.2 Haven agent work-item helpers (bounded task board)
+### 7.2 Agent work-item helpers (bounded task board; actor `haven`)
 
-These routes let **Haven** (actor label `haven`) create or complete **Task Board** items through the **same** capability execution path as `POST /v1/capabilities/execute` for `todo.add` / `todo.complete` — policy, audit, and continuity hooks apply unchanged. They do **not** grant new authority; the session token must already include **`todo.add`** (ensure) or **`todo.complete`** (complete).
+These routes let a client using **actor label `haven`** create or complete **Task Board** items through the **same** capability execution path as `POST /v1/capabilities/execute` for `todo.add` / `todo.complete` — policy, audit, and continuity hooks apply unchanged. They do **not** grant new authority; the session token must already include **`todo.add`** (ensure) or **`todo.complete`** (complete).
 
 **`POST /v1/haven/agent/work-item/ensure`**
 
-- **Auth:** `Authorization: Bearer` + **signed body** (same rules as other Haven signed POSTs; see §6).
+- **Auth:** `Authorization: Bearer` + **signed body** (same rules as other signed POSTs for this actor; see §6).
 - **Body:** `{ "text": "<required>", "next_step": "<optional>" }` — `text` is the human-visible task line (trimmed server-side).
 - **Behavior:** Executes `todo.add` with `task_kind` carry-over, `source_kind: haven_agent`, and optional `next_step`. If an equivalent item already exists, the structured result sets `already_present: true` and returns the same `item_id`.
-- **Success (200):** `{ "item_id": "…", "text": "…", "already_present": bool }` — see `HavenAgentWorkItemResponse` in `internal/loopgate/types.go`.
+- **Success (200):** `{ "item_id": "…", "text": "…", "already_present": bool }` — see `HavenAgentWorkItemResponse` in `internal/loopgate/types.go` (Go identifier retained for compatibility).
 
 **`POST /v1/haven/agent/work-item/complete`**
 
@@ -271,17 +275,17 @@ These routes let **Haven** (actor label `haven`) create or complete **Task Board
 - **Body:** `{ "item_id": "<required>", "reason": "<optional>" }` — default reason if omitted: `haven_agent_work_completed`.
 - **Success (200):** same JSON shape as ensure (`already_present` is always false on this path).
 
-**Product note:** Classification of user messages (answer-only vs task vs tool vs approval-gated), UI phase (`planning`, `waiting_for_approval`, etc.), and “take me there” links are **Haven operator client** responsibilities. Loopgate only exposes these narrow, auditable capability wrappers. **Swift Messenger** does **not** call ensure for simple host-folder organize asks — those go through **`/v1/haven/chat`** and Loopgate approvals; use ensure/complete only when the product wants an explicit Task Board row. See [Haven bounded agent work loop](../haven_agent_work_loop.md).
+**Product note:** Classification of user messages (answer-only vs task vs tool vs approval-gated), UI phase (`planning`, `waiting_for_approval`, etc.), and deep-link behavior are **unprivileged client** responsibilities. Loopgate only exposes narrow, auditable capability wrappers. Simple host-folder work typically flows through the **legacy chat route** **`/v1/haven/chat`** and normal approvals; use ensure/complete when the client wants an explicit Task Board row.
 
-### 7.3 Haven continuity inspection (threadstore-loaded)
+### 7.3 Continuity inspection (threadstore-loaded; actor `haven`)
 
 **`POST /v1/haven/continuity/inspect-thread`**
 
-- **Auth:** **Haven** actor label (`haven`) + **signed body** (same pattern as `POST /v1/haven/chat`).
-- **Body:** `{ "thread_id": "<required>" }` — must match a thread in Loopgate’s Haven threadstore for the session workspace (under the resolved user home `~/.haven/threads/…` layout; see `internal/haven/threadstore` and `server_haven_continuity.go`).
+- **Auth:** Actor label **`haven`** + **signed body** (same pattern as `POST /v1/haven/chat`).
+- **Body:** `{ "thread_id": "<required>" }` — must match a thread in Loopgate’s threadstore for the session workspace (on-disk layout under `internal/haven/threadstore`; default paths may use a **`.haven`** segment as a historical directory name—treat as an implementation detail, not a product name).
 - **Behavior:** Maps persisted thread events to continuity inspection input server-side and runs the same inspection pipeline as other continuity proposals. If the thread has no mappable continuity rows, returns **200** with `submit_status: "skipped_no_continuity_events"`.
-- **Success (200):** `HavenContinuityInspectThreadResponse` in `internal/loopgate/types.go` (`submit_status`, optional `inspection_id`, derivation/review fields).
-- **Product:** Swift Haven calls this **best-effort after a completed Messenger turn** when the turn did **not** stop for `approval_required`, so operators get continuity proposals without shipping raw transcripts over HTTP.
+- **Success (200):** `HavenContinuityInspectThreadResponse` in `internal/loopgate/types.go` (`submit_status`, optional `inspection_id`, derivation/review fields; Go identifier retained for compatibility).
+- **Product:** Clients may call this **best-effort after a completed chat turn** when the turn did **not** stop for `approval_required`, so operators get continuity proposals without shipping raw transcripts over HTTP.
 
 ### 7.4 Operator diagnostics (“doctor” / troubleshooting)
 
@@ -322,7 +326,7 @@ If a parent process opens Loopgate and passes tokens to a child via a **launch-b
 
 ## 11. Related docs
 
-- [SETUP.md](./SETUP.md) — repo setup, runtime paths, Haven-centric launcher notes (optional if you only use Swift + Loopgate).
+- [SETUP.md](./SETUP.md) — minimal repo setup and pointers to MCP/HTTP docs.
 - [SECRETS.md](./SECRETS.md) — how secrets are supposed to flow (Loopgate-owned).
 - [loopgate.md](../design_overview/loopgate.md) — product/system overview.
 - [RFC 0001](../rfcs/0001-loopgate-token-policy.md) — token and signing rules.

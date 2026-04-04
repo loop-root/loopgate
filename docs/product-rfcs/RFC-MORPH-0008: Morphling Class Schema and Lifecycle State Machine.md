@@ -4,7 +4,7 @@
 
 - **Status:** Draft — implementation target (substantial portions implemented in Loopgate)
 - **Primary authority:** **Loopgate**
-- **Depends on:** RFC-MORPH-0001, RFC-MORPH-0009, RFC-MORPH-0002, RFC-MORPH-0003, RFC-MORPH-0004, RFC 0001 (`docs/rfcs/0001`)
+- **Depends on:** RFC-MORPH-0009, RFC-MORPH-0002, RFC-MORPH-0003, RFC-MORPH-0004, RFC 0001 (`docs/rfcs/0001`)
 - **Normative revision:** 2026-03-11
 
 ---

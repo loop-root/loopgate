@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-01
+**Last updated:** 2026-04-03
 
 # Loopgate roadmap
 
@@ -7,16 +7,16 @@
 **Snapshot from:** 2026-03-12 (feature list). **Doc reviewed:** 2026-03-24.
 
 The repo ships the **Loopgate** control plane with a real security boundary.
-The **Swift Haven** app (separate repo) is the canonical consumer operator UI; this repo’s **`cmd/haven/`** Wails tree is **reference-only**.
+**Primary integration targets** are **MCP- and proxy-capable IDEs** (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, …). The in-repo **`cmd/haven/`** Wails tree is **reference-only** (contracts/tests).
 
 Implemented:
 
-- **Haven** (native Swift app, separate repo) is the **only** shipped desktop UI; `cmd/haven/` Wails in **this** repo is **reference-only**; it handles model interaction, continuity stream, and session runtime on the unprivileged client side
+- **Reference Wails shell** (`cmd/haven/`) handles model interaction, continuity stream, and session runtime on the unprivileged client side for parity testing — **not** a ship target
 - Loopgate runs as a local Unix-socket control plane and remains the authority boundary
 - capability and approval tokens are bound to the authenticated local session
 - privileged Loopgate requests use a server-issued session MAC key, signed requests, and replay protection
 - approval decisions require single-use decision nonces and explicit approval state transitions
-- Loopgate and the Haven client each maintain append-only hash-linked audit/ledger chains where that path is active
+- Loopgate and unprivileged clients that use the client-ledger path each maintain append-only hash-linked audit/ledger chains where that path is active
 - sandbox crossing is mediated through the mini-filesystem rooted at `/morph/home`
 - quarantine metadata, blob view, and prune lifecycle are implemented with append-only audit
 - model/provider connections and secret refs are handled through Loopgate with secure-backend resolution
@@ -85,7 +85,7 @@ Implemented:
 - Loopgate evaluates explicit memory writes through TCL before any inspection, distillate, or resonate-key artifacts are persisted
 - explicit-memory governance now has stable denial codes for dangerous, invalid, dropped, review-required, and quarantine-required outcomes
 - Loopgate audit events now store audit-safe TCL summaries for explicit-memory keep and deny paths
-- Haven deterministic-memory runtime facts and shell `/memory remember` output now use safe denial text instead of reflecting raw denied payloads
+- deterministic-memory runtime facts and shell `/memory remember` output now use safe denial text instead of reflecting raw denied payloads (reference client path)
 - contradiction handling now uses persisted TCL conflict anchor tuples (`version + canonical_key`) so memories only compete when they target the same semantic slot
 - continuity-derived provider facts now reuse the same TCL analysis service for conservative anchor derivation and semantic signature persistence
 - new distillate facts now persist an internal semantic projection with anchor tuple, exact signature, family signature, and risk motifs when analysis succeeds
@@ -99,7 +99,7 @@ Implemented:
 
 Phase 1 boundary:
 
-- generic Haven thread events do not yet flow into TCL
+- generic client thread events do not yet flow into TCL
 - continuity distillation is only partially informed by TCL; conservative provider-fact candidates may carry persisted semantic projections, but TCL does not replace distillation
 - durable memory candidacy is not widened to raw assistant prose
 - resonate keys do not reconstruct arbitrary text; they remain bounded recall handles
@@ -112,7 +112,7 @@ Next lift:
 - replace the current conservative attribute-anchor heuristics with richer TCL-derived conflict anchors for more preference and intent families
 - simplify the memory/TCL implementation before widening it further; a dated
   engineering sketch is archived for maintainers at
-  `~/Dev/projectDocs/morph/roadmap-drafts/2026-03-25-tcl-memory-simplification-plan.md`
+  maintainer documentation checkout: `roadmap-drafts/2026-03-25-tcl-memory-simplification-plan.md` (outside this repository)
 - define a swappable memory backend boundary and benchmark harness so
   `continuity_tcl` can be compared fairly against a `rag_baseline`; see
   `docs/rfcs/0011-swappable-memory-backends-and-benchmark-harness.md`
@@ -122,16 +122,15 @@ Next lift:
 - freeze canonical TCL conformance and conservative anchor expansion rules
   before widening memory semantics further; see
   `docs/rfcs/0014-tcl-conformance-and-anchor-freeze.md`
-- define a Haven-owned scheduler/background execution model so the operator client can carry
+- define an operator-client-owned scheduler/background execution model so the operator client can carry
   multi-step work forward without moving authority out of Loopgate; see
-  `docs/rfcs/0012-haven-scheduler-and-background-agent-execution.md`
+  `docs/rfcs/0012-scheduler-and-background-agent-execution.md`
 
 ## Current architecture
 
-### Haven (desktop)
+### Reference operator shell (`cmd/haven/`)
 
-- **Canonical:** native Swift/macOS app (separate checkout)
-- **In-repo reference:** Wails/React under `cmd/haven/` (not the shipped product UI)
+- **In-repo reference:** Wails/React under `cmd/haven/` (not a ship target)
 - persona and prompt compilation (via Loopgate-backed model paths where used)
 - local session state and approval rendering
 - local ledger and continuity thread projection on the client side
@@ -188,7 +187,7 @@ Lift: medium-large
 ## Phase 2: Capability provisioning DX
 
 - first-run setup path that drafts config instead of exposing raw schema
-- `/capability draft ...` style workflow in Haven
+- `/capability draft ...` style workflow in operator clients
 - Loopgate validation/provision/reject cycle with explicit audit
 - draft files remain reviewable and diffable
 - no natural-language authority; model output remains draft content only
@@ -207,8 +206,7 @@ Lift: medium-large
 
 ## Phase 4: Operational hardening
 
-- `morph init`
-- `morph doctor`
+- CLI packaging / `loopgate` or legacy `morph` entrypoints (naming as shipped)
 - packaging/install path
 - Loopgate supervised launch
 - richer secret rotation workflows
@@ -242,7 +240,7 @@ Why it is tractable:
 
 Why it is still large:
 
-- continuity governance now has explicit review, tombstone, and purge state, but Haven-side projection/UX is still narrow
+- continuity governance now has explicit review, tombstone, and purge state, but client-side projection/UX is still narrow
 - auth, secrets, and restart safety remain cross-cutting concerns
 - developer UX must improve without weakening authority boundaries
 - integrations need typed contracts and quarantine discipline

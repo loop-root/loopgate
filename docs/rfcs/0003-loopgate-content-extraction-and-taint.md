@@ -9,7 +9,7 @@
 
 This RFC defines the normative rules for how Loopgate classifies content,
 extracts structured fields, records provenance, and applies taint/default
-classification before any result is relayed to Morph or future UI surfaces.
+classification before any result is relayed to operator clients or future UI surfaces.
 
 The goal is to keep untrusted content from becoming prompt-eligible,
 memory-eligible, or authority-bearing by accident.
@@ -53,7 +53,7 @@ This RFC covers:
 This RFC does not cover:
 
 - provider token handling
-- Morph prompt compilation internals
+- operator client prompt compilation internals
 - browser rendering policy beyond the metadata contract
 
 ## 4. Content classes
@@ -192,7 +192,7 @@ If extraction fails or no extractor is defined:
 
 ## 8. Provenance metadata
 
-Every extracted result MUST carry metadata sufficient for Morph and future UI
+Every extracted result MUST carry metadata sufficient for operator clients and future UI
 surfaces to make deterministic decisions.
 
 Required metadata fields:
@@ -217,7 +217,7 @@ Recommended additional metadata fields:
 - `sensitivity`
 - `size_bytes`
 
-Morph and future UI surfaces MUST obey this metadata.
+Operator clients and future UI surfaces MUST obey this metadata.
 
 ## 9. Taint rule
 

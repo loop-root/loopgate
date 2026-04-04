@@ -11,6 +11,53 @@ import (
 	"testing"
 )
 
+func TestAppendWithRotation_ReturnsErrorWhenSyncFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	activePath := filepath.Join(tmpDir, "loopgate_events.jsonl")
+	rotationSettings := RotationSettings{
+		MaxEventBytes: 8 * 1024,
+	}
+
+	syncFailure := errors.New("sync failed for test")
+	restoreFileSync := useLedgerFileSyncForTest(func(fileHandle *os.File) error {
+		return syncFailure
+	})
+	defer restoreFileSync()
+
+	err := AppendWithRotation(activePath, Event{
+		TS:      "2026-03-13T06:59:00Z",
+		Type:    "audit.test",
+		Session: "session-a",
+		Data: map[string]interface{}{
+			"payload": "first event",
+		},
+	}, rotationSettings)
+	if !errors.Is(err, syncFailure) {
+		t.Fatalf("expected sync failure, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "sync ledger") {
+		t.Fatalf("expected sync ledger context, got %v", err)
+	}
+
+	activeHandle, openErr := os.Open(activePath)
+	if openErr != nil {
+		t.Fatalf("open active ledger after sync failure: %v", openErr)
+	}
+	defer activeHandle.Close()
+
+	activeFileInfo, statErr := activeHandle.Stat()
+	if statErr != nil {
+		t.Fatalf("stat active ledger after sync failure: %v", statErr)
+	}
+	activeFileState, fileStateErr := ledgerFileStateFromFileInfo(activeFileInfo)
+	if fileStateErr != nil {
+		t.Fatalf("load active ledger file state after sync failure: %v", fileStateErr)
+	}
+	if _, found := loadCachedChainState(normalizeLedgerPath(activePath), "ledger_sequence", activeFileState); found {
+		t.Fatal("expected sync failure to clear cached chain state")
+	}
+}
+
 func TestAppendWithRotation_RotatesAndContinuesChainAcrossSegments(t *testing.T) {
 	tmpDir := t.TempDir()
 	activePath := filepath.Join(tmpDir, "loopgate_events.jsonl")

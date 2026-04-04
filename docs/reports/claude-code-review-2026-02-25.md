@@ -3,7 +3,7 @@
 # Loopgate code review & architecture discussion (historical)
 **Date**: 2026-02-25
 **Reviewer**: Claude (Opus 4.5)
-**Project**: Loopgate — capability-governed AI control plane (body below may still say “Morph” for the historical client name)
+**Project**: Loopgate — capability-governed AI control plane (historical review; some paths and line numbers refer to an earlier tree layout)
 
 ---
 
@@ -22,8 +22,8 @@
 
 ## Initial Assessment
 
-### What Morph Is
-A **capability-governed AI orchestrator** focused on safety and auditability. Core philosophy:
+### What Loopgate is (with operator client)
+A **capability-governed control plane** (with an unprivileged operator client for UI/CLI) focused on safety and auditability. Core philosophy:
 - Consent-first operations
 - Append-only audit logs
 - Policy-driven capability restrictions
@@ -85,7 +85,7 @@ os.WriteFile(tmp, b, 0644)
 os.Rename(tmp, path)  // Atomic on POSIX
 ```
 
-**No file locking** — Two Morph instances would create duplicate distillates.
+**No file locking** — Two concurrent client instances would create duplicate distillates.
 
 ### Distillation: Skip/Double-Processing Risks
 
@@ -439,7 +439,7 @@ The architecture is sound. The vision is coherent. The bet is that governed, aud
 
 ### Use Case
 
-Morph safely integrates with internal systems to synthesize and compile accurate documentation with full auditability.
+Loopgate (with governed integrations) can safely connect to internal systems to synthesize and compile accurate documentation with full auditability.
 
 ### Deployment: Docker vs Local
 
@@ -533,7 +533,7 @@ Obsidian is **not open source** (proprietary freeware). The vault format is open
 
 **The concept is valid. The architecture is appropriate. The market need is real and growing.**
 
-The core insight — that AI agents need governance, auditability, and consent-based operation — is sound and increasingly important. Most agent frameworks treat these as afterthoughts. Morph makes them foundational.
+The core insight — that AI agents need governance, auditability, and consent-based operation — is sound and increasingly important. Most agent frameworks treat these as afterthoughts. Loopgate makes them foundational.
 
 The question isn't "is this a good idea" — it is. The question is execution: build the integrations, find the customers, survive long enough for the market to catch up.
 

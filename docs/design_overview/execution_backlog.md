@@ -62,7 +62,7 @@ Exit criteria:
 
 Goal:
 
-- prove the real Morph -> Loopgate Unix-socket boundary under live request flow
+- prove the real operator-client → Loopgate Unix-socket boundary under live request flow
 
 First tests:
 
@@ -127,7 +127,7 @@ Goal:
 
 Operator flow:
 
-1. first-run Morph wizard produces a draft local config
+1. first-run operator-client wizard produces a draft local config
 2. `/capability draft ...` creates an untrusted draft capability definition
 3. Loopgate validates the draft against selector, extraction, and policy rules
 4. operator explicitly approves provisioning
@@ -154,7 +154,7 @@ Goal:
 v1 shape:
 
 - landed baseline:
-  - Morph-local three-thread continuity substrate
+  - client-local three-thread continuity substrate
   - sealed-thread handoff to Loopgate
   - Loopgate-owned distillates, resonate keys, wake-state projection, discovery,
     and recall
@@ -199,7 +199,7 @@ Required behavior:
 
 Exit criteria:
 
-- Morph can render a live pool of morphlings with status and memory strings
+- The operator client can render a live pool of morphlings with status and memory strings
 - no public API surface is introduced
 - worker authority remains narrower than operator authority
 
@@ -228,7 +228,7 @@ Exit criteria:
 
 Goal:
 
-- converge Morph and Loopgate toward the AMP protocol track without forcing a
+- converge operator clients and Loopgate toward the AMP protocol track without forcing a
   cosmetic rename of product terms
 
 Deferred rule:

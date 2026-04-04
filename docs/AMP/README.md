@@ -116,7 +116,7 @@ Before tagging a release or claiming **"aligned with AMP local-uds-v1"**, comple
 ## Scope boundary
 
 - **Here (`docs/AMP/`):** neutral names, transport profile, object model, integrity, approvals, memory authority, capability execution (protocol intent).
-- **Elsewhere in this repository:** Haven operator UX, Loopgate routes, product RFCs, threat model, setup.
+- **Elsewhere in this repository:** Loopgate routes, MCP/proxy setup, product RFCs, threat model, and the in-repo Wails reference under `cmd/haven/` (contract shell only).
 
 ## Contributing
 

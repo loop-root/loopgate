@@ -10,7 +10,7 @@
 
 # Summary
 
-This RFC defines how **artifacts created inside the sandbox become real changes**. The approval and promotion system ensures that **Haven** (presenting operator intent) and **Morphlings** cannot silently modify the host system or long‑term memory without **Loopgate** authorization.
+This RFC defines how **artifacts created inside the sandbox become real changes**. The approval and promotion system ensures that the **operator client** (presenting operator intent) and **morphlings** (bounded workers) cannot silently modify the host system or long‑term memory without **Loopgate** authorization.
 
 All work produced by Morphlings must follow the flow:
 
@@ -109,7 +109,7 @@ Each stage must be recorded in the audit ledger.
 
 # Operator / client review
 
-The unprivileged client (e.g. Haven) is responsible for presenting artifact summaries to the user.
+The unprivileged client (IDE, native UI, or reference shell) is responsible for presenting artifact summaries to the user.
 
 The client must:
 

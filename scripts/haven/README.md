@@ -1,6 +1,6 @@
-# Haven macOS build and release helpers
+# macOS build and release helpers (Wails reference shell)
 
-v1 ships **HTTP** over the local Loopgate Unix socket; these scripts only package the **Haven** desktop app.
+v1 control plane ships **HTTP** over the local Loopgate Unix socket. These scripts package the in-repo **Wails** desktop under `cmd/haven/` (**reference / contracts only**—not the primary MCP/proxy integration path).
 
 ## Production frontend + Wails binary
 
@@ -25,4 +25,4 @@ Track exact commands in your internal runbook; do not commit signing identities 
 
 ## Homebrew Cask
 
-After a public `.dmg` URL exists, add or update a Cask formula pointing at that artifact and run `brew install --cask haven` in CI or locally to verify.
+After a public `.dmg` URL exists, add or update a Cask formula pointing at that artifact and verify install locally or in CI (pick a **cask token** consistent with your distribution brand).

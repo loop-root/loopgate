@@ -170,12 +170,12 @@ safety:
 
 func TestLoadPersona_StrictRejectsUnknownField(t *testing.T) {
 	repoRoot := t.TempDir()
-	personaPath := filepath.Join(repoRoot, "persona", "morph.yaml")
+	personaPath := filepath.Join(repoRoot, "persona", "default.yaml")
 	if err := os.MkdirAll(filepath.Dir(personaPath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	rawPersona := `name: Morph
+	rawPersona := `name: Operator
 version: 0.1.0
 defaults:
   tone: helpful

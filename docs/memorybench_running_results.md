@@ -274,7 +274,7 @@ Ablation read:
 
 For the benchmark-history narrative and fairness-fix chronology, also see:
 
-- Internal methodology narrative (maintainer copy): `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`
+- Internal methodology narrative (maintainer copy outside this repository; filename `memorybench_internal_report.md`)
 
 ## Exact fixture families
 

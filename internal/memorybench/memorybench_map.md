@@ -146,7 +146,7 @@ authority or invent hidden memory behavior. Its job is to:
 - Glossary: `docs/memorybench_glossary.md`
 - Operator/agent guide: `docs/memorybench_benchmark_guide.md`
 - Running scoreboard: `docs/memorybench_running_results.md`
-- Internal methodology report (maintainer checkout): `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md`
+- Internal methodology report (maintainer checkout outside this repository; filename `memorybench_internal_report.md`)
 
 Loopgate’s benchmark bridge now exposes two benchmark-local surfaces:
 - projected discovery over continuity-backed stores

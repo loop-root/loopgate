@@ -1,4 +1,4 @@
-# Haven React hooks
+# React hooks (reference Wails shell)
 
 Hooks used by `App.tsx` to keep the shell readable. Naming: `useHaven*` for shell/runtime integration, `useDesktop*` for desktop icon/file drag.
 

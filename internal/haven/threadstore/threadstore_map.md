@@ -1,6 +1,6 @@
 # Threadstore Map
 
-This file maps `internal/haven/threadstore/`, Haven’s append-only Messenger thread persistence.
+This file maps `internal/haven/threadstore/`, append-only thread persistence for **legacy HTTP chat** clients (`internal/haven/` package name is historical).
 
 Use it when changing:
 
@@ -11,9 +11,9 @@ Use it when changing:
 
 ## Core Role
 
-`internal/haven/threadstore/` is the **local thread/event store** for Haven Messenger: per-thread append-only JSONL, a rebuildable index, and **centralized redaction** on append so raw secrets and raw tool output are not written to disk.
+`internal/haven/threadstore/` is the **local thread/event store** for chat-style operator clients: per-thread append-only JSONL, a rebuildable index, and **centralized redaction** on append so raw secrets and raw tool output are not written to disk.
 
-It is Morph/Haven-side durability, not Loopgate’s authoritative audit ledger (see `internal/ledger/` for that boundary).
+It is **client-side** durability, not Loopgate’s authoritative audit ledger (see `internal/ledger/` for that boundary).
 
 ## Key Files
 
@@ -32,7 +32,7 @@ It is Morph/Haven-side durability, not Loopgate’s authoritative audit ledger (
 
 ## Relationship Notes
 
-- Haven backend callers: `cmd/haven/threads.go`, `cmd/haven/chat.go` (and related)
+- Reference Wails callers: `cmd/haven/threads.go`, `cmd/haven/chat.go` (and related)
 - Loopgate audit: separate system; do not confuse thread JSONL with control-plane audit
 
 ## Important Watchouts

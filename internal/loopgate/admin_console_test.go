@@ -147,8 +147,48 @@ func TestAdminConsole_LoginAndPolicy(t *testing.T) {
 		t.Fatalf("policy status %d body %s", policyResponse.StatusCode, string(body))
 	}
 	page := string(body)
-	if !strings.Contains(page, "Active policy") || !strings.Contains(page, "Morphling classes") {
+	if !strings.Contains(page, "Filesystem tools") || !strings.Contains(page, "Subordinate class policy") {
 		t.Fatalf("unexpected policy page: %s", page)
+	}
+}
+
+func TestAdminConsole_Dashboard(t *testing.T) {
+	repoRoot := t.TempDir()
+	server := newServerWithAdminTCP(t, repoRoot, "")
+	auditDir := filepath.Dir(server.auditPath)
+	if err := os.MkdirAll(auditDir, 0o700); err != nil {
+		t.Fatalf("mkdir audit: %v", err)
+	}
+	line := `{"v":1,"ts":"2026-04-01T12:00:00Z","type":"haven.chat","session":"s1","data":{"tenant_id":"","user_id":"u1","input_tokens":100,"output_tokens":40}}` + "\n"
+	if err := os.WriteFile(server.auditPath, []byte(line), 0o600); err != nil {
+		t.Fatalf("write audit: %v", err)
+	}
+
+	ts := httptest.NewServer(server.adminHTTPServer.Handler)
+	t.Cleanup(ts.Close)
+
+	jar, _ := cookiejar.New(nil)
+	client := ts.Client()
+	client.Jar = jar
+	postValues := url.Values{}
+	postValues.Set("token", testAdminToken)
+	_, _ = client.PostForm(ts.URL+"/admin/login", postValues)
+
+	home, err := client.Get(ts.URL + "/admin/")
+	if err != nil {
+		t.Fatalf("GET /admin/: %v", err)
+	}
+	body, _ := io.ReadAll(home.Body)
+	_ = home.Body.Close()
+	page := string(body)
+	if home.StatusCode != http.StatusOK {
+		t.Fatalf("status %d: %s", home.StatusCode, page)
+	}
+	if !strings.Contains(page, "Dashboard") || !strings.Contains(page, "What is running") {
+		t.Fatalf("expected dashboard shell: %s", page)
+	}
+	if !strings.Contains(page, "140") {
+		t.Fatalf("expected token total 100+40=140 in page: %s", page)
 	}
 }
 
@@ -232,7 +272,7 @@ func TestAdminConsole_AuditTenantFilter(t *testing.T) {
 	if !strings.Contains(page, "keep") {
 		t.Fatalf("expected matching event: %s", page)
 	}
-	if strings.Contains(page, "drop") {
+	if strings.Contains(page, "tenant-b") {
 		t.Fatalf("tenant-b event should be filtered: %s", page)
 	}
 }

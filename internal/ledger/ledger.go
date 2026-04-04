@@ -37,6 +37,12 @@ var appendChainStateCache = struct {
 	states: make(map[cachedChainStateKey]cachedChainState),
 }
 
+// Keep ledger fsync as an injectable seam so durability failures can be tested
+// deterministically without depending on flaky OS behavior.
+var syncLedgerFileHandle = func(fileHandle *os.File) error {
+	return fileHandle.Sync()
+}
+
 // Event represents a ledger entry.
 // The ledger is append-only and serves as the canonical source of truth.
 type Event struct {
@@ -135,7 +141,7 @@ func Append(path string, e Event) error {
 		clearCachedChainState(normalizedPath, "ledger_sequence")
 		return err
 	}
-	if err := f.Sync(); err != nil {
+	if err := syncLedgerFileHandle(f); err != nil {
 		clearCachedChainState(normalizedPath, "ledger_sequence")
 		return fmt.Errorf("sync ledger: %w", err)
 	}
@@ -317,4 +323,12 @@ func PrimeAppendChainState(path string, fileHandle *os.File, lastSequence int64,
 		fileState:    fileState,
 	})
 	return nil
+}
+
+func useLedgerFileSyncForTest(syncOverride func(fileHandle *os.File) error) func() {
+	previousSync := syncLedgerFileHandle
+	syncLedgerFileHandle = syncOverride
+	return func() {
+		syncLedgerFileHandle = previousSync
+	}
 }

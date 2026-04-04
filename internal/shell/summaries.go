@@ -180,7 +180,7 @@ func summarizeConfigPaths(commandContext CommandContext) string {
 	}
 
 	configPaths := []configPathRecord{
-		{label: "persona", path: filepath.Join(commandContext.RepoRoot, "persona", "morph.yaml")},
+		{label: "persona", path: filepath.Join(commandContext.RepoRoot, "persona", "default.yaml")},
 		{label: "policy", path: filepath.Join(commandContext.RepoRoot, "core", "policy", "policy.yaml")},
 		{label: "loopgate_connections", path: filepath.Join(commandContext.RepoRoot, "loopgate", "connections")},
 		{label: "state", path: filepath.Join(commandContext.RepoRoot, "runtime", "state", "working_state.json")},

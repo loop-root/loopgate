@@ -11,7 +11,7 @@ Use it when changing:
 
 ## Core Role
 
-`internal/memory/` holds **lower-level memory logic** that Morph-side and Loopgate-side code both build on: candidates, continuity events, distillates, recall, and wake snapshots.
+`internal/memory/` holds **lower-level memory logic** that unprivileged client code and Loopgate-side code both build on: candidates, continuity events, distillates, recall, and wake snapshots.
 
 Authoritative “what is remembered” and wake reconstruction for production paths is still coordinated with `internal/loopgate/continuity_memory.go` and related handlers.
 
@@ -56,7 +56,7 @@ Authoritative “what is remembered” and wake reconstruction for production pa
 ## Relationship Notes
 
 - Loopgate wake-state and diagnostics: `internal/loopgate/continuity_memory.go`, `server_memory_handlers.go`
-- Haven projection: `cmd/haven/memory.go`
+- Reference client projection: `cmd/haven/memory.go`
 - TCL normalization (explicit facts, anchors): `internal/tcl/`
 
 ## Important Watchouts

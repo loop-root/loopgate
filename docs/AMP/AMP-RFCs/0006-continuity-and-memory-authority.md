@@ -521,12 +521,12 @@ A recall bundle:
 - MUST preserve lineage to contributing derived forms
 - MUST NOT be treated as truth, permission, or self-authorizing memory
 
-## 12. Morph-Local Versus AMP-Governed Memory
+## 12. Client-local versus AMP-governed memory
 
 This RFC uses neutral terms, but the current product split can be stated
 directly:
 
-- Morph-local continuity views are allowed as UX projections
+- Client-local continuity views are allowed as UX projections
 - Loopgate-governed memory use is required for privileged authority
 
 Normative split:

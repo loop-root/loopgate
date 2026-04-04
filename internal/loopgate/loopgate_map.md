@@ -1,6 +1,6 @@
 # Loopgate Map
 
-This file maps the main Loopgate package files. **Loopgate** is the primary product in this repository. **Swift Haven** (out of tree) is an **example** native consumer; a future **SDK** targets third-party “Haven-shaped” clients. **`cmd/haven/`** is reference-only.
+This file maps the main Loopgate package files. **Loopgate** is the authority and enforcement runtime in this repository. **Operator clients** attach over **MCP**, **proxy**, or **HTTP on the local control-plane socket**; the in-repo **`cmd/haven/`** Wails tree is a **reference shell** for contracts and tests only—not a ship target.
 
 Use it when changing:
 
@@ -8,11 +8,11 @@ Use it when changing:
 - explicit memory persistence
 - wake-state and memory diagnostics
 - capability-specific execution paths
-- Haven-facing client methods
+- **local HTTP client** surfaces (`internal/loopgate/client.go`, legacy `/v1/haven/...` routes where present)
 - task execution classes and standing approvals
 - mirrored host-folder grants and sync behavior
 - the next permissioned host plan/apply model for real user-folder actions
-- the dashboard-first OS model where tasks, plans, notes, approvals, and tool state become the primary agent substrate
+- continuity-backed task and approval substrates (Loopgate-owned, not UI-owned)
 
 ## Core Role
 
@@ -20,13 +20,13 @@ Use it when changing:
 
 **Planning:** phased roadmap in repo-root `sprints/` (latest dated `*.md`); durable decisions in `docs/adr/`. Update this map when you add or rename primary files here.
 
-For this sprint it matters in four ways:
+For integrators it matters in four ways:
 
 - it defines which capabilities actually exist
-- it exposes the memory APIs Haven should use
-- it produces the status data Haven renders in Security and Activity
-- it owns the authoritative bridge between explicit host-folder grants and Haven-visible mirrored folders
-- it will become even more central as Haven shifts toward a dashboard-first agent OS backed by Loopgate-owned tasks, plans, approvals, memory, and host-action state
+- it exposes the memory APIs **local clients** must call (not optional side channels)
+- it produces the status data **Security / Activity / continuity UIs** render from projections
+- it owns the authoritative bridge between explicit host-folder grants and **client-visible** mirrored folders
+- it centralizes tasks, approvals, memory, and host-action state so **every client** (IDE, CLI, reference shell) shares one auditable substrate
 
 ## Key Files
 
@@ -36,7 +36,7 @@ For this sprint it matters in four ways:
 
 ### Admin console (v0)
 
-- `admin_console.go` — optional **loopback TCP** server (requires `config/runtime.yaml` → `admin_console.enabled` **and** `loopgate --admin` **and** `LOOPGATE_ADMIN_TOKEN`). Routes under `/admin/`: login, policy (active JSON + morphling YAML seed), audit (redacted HTML/CSV), control-session list. Tenant-filtered when `tenancy.deployment_tenant_id` is set. See `docs/setup/ADMIN_CONSOLE.md`, ADR 0016.
+- `admin_console.go` / `admin_console_ui.go` — optional **loopback TCP** server (requires `config/runtime.yaml` → `admin_console.enabled` **and** `loopgate --admin` **and** `LOOPGATE_ADMIN_TOKEN`). Routes under `/admin/`: login, dashboard (live metrics), structured capability policy + subordinate-class YAML, **runtime configuration** (read-only), audit with filter form + redacted CSV, sessions. Tenant-filtered when `tenancy.deployment_tenant_id` is set. See `docs/setup/ADMIN_CONSOLE.md`, ADR 0016.
 
 ### Authority and Capability Inventory
 
@@ -45,12 +45,12 @@ For this sprint it matters in four ways:
   - tool registry wiring
   - capability summaries derived from the registry
   - dispatch point for capability-specific execution paths such as `memory.remember`
-  - now also scopes trusted sandbox-local low-friction behavior to the `haven` actor instead of weakening generic policy evaluation
+  - now also scopes trusted sandbox-local low-friction behavior to the **`haven` actor** (legacy session label) instead of weakening generic policy evaluation
   - handler panics and operator-relevant errors should log via the diagnostic **`slog`** loggers (`internal/loopdiag`, levels from `config/runtime.yaml` → `logging.diagnostic`) with **`tenant_id` / `user_id`** on the log record when a control session is bound, so admins can troubleshoot without a debugger and filter by tenant in multi-tenant deployments
 - `folder_access.go`
   - authoritative folder-grant storage
   - compare-before-sync mirror logic
-  - current place where host-folder changes become audited Haven-visible updates
+  - current place where host-folder changes become **audited, client-visible** updates
   - likely starting point for the future granted-folder resource model that separates read, plan, and apply scopes
 - `memory_capability.go`
   - authoritative execution for `memory.remember`
@@ -61,8 +61,8 @@ For this sprint it matters in four ways:
   - now persists task metadata into continuity distillates so wake-state can reconstruct a real task substrate
   - now also persists task execution classes so approval posture survives restart and wake-state rebuild
 - `task_standing_grants.go`
-  - Loopgate-owned standing-approval catalog for safe Haven-local task execution classes
-  - persists the user-visible “always allowed in Haven” set and audits changes
+  - Loopgate-owned standing-approval catalog for safe **actor-scoped** task execution classes (e.g. low-friction paths gated to the `haven` actor)
+  - persists operator-visible “always allowed” class sets and audits changes
 - `server_connection_handlers.go`
   - `/v1/status`
   - current global capability inventory surface
@@ -85,7 +85,7 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_sandbox_handlers.go` — sandbox import/export/list/stage; `redactSandboxError` returns stable sentinel strings only (no wrapped host paths in client-visible errors)
 - `server_sandbox_handlers_test.go` — `TestRedactSandboxError_DoesNotExposeAbsolutePaths`
 - `server_memory_handlers.go` — memory endpoints (see Memory section below)
-- `server_haven_memory_handlers.go` — Haven memory inventory/reset handlers; projects redacted manageable objects and owns the demo reset path
+- `server_haven_memory_handlers.go` — **UI memory** inventory/reset handlers (legacy `haven` route family); projects redacted manageable objects and owns demo reset paths
 - `server_capability_handlers.go` — capability execution
 - `morphlings.go` / `morphling_workers.go` — lifecycle, worker IPC; `morphlingSummaryFromRecord` + `morphlingProjectionStatusText` project operator-facing summaries without raw model memory strings or termination prose
 - `server_morphling_handlers.go` / `server_morphling_worker_handlers.go` — morphling lifecycle and workers
@@ -96,26 +96,26 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_quarantine_handlers.go` — quarantine flows
 - `server_host_access_handlers.go` — explicit host-access / folder-grant operations beyond simple mirror
 
-### Haven-Facing Status and UI
+### Local client status and UI projection
 
 - `ui_server.go`
   - UI status and approvals
 - `server_haven_memory_handlers.go`
   - `GET /v1/ui/memory`
   - `POST /v1/ui/memory/reset`
-  - display-safe memory inventory for Haven operator controls
+  - display-safe memory inventory for **operator-facing** memory controls
   - auditable archive-and-fresh-start reset for demo prep
 - `ui_types.go`
-  - Haven-facing UI summaries and event envelopes
-  - includes folder-access sync/status response types used by Haven
+  - **Client-facing** UI summaries and event envelopes (legacy `haven` routes)
+  - includes folder-access sync/status response types used by **local HTTP clients**
   - now also includes standing task grant summaries for the Security room
 - `client.go`
   - local HTTP client over the Unix socket (`NewClient`, `doJSON`, `attachRequestSignature`, `computeRequestSignature`) — **wire reference** for non-Go integrators; see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`
-  - local client methods Haven calls
-  - includes explicit diagnostic-wake loading for Haven continuity status
-  - includes granted-folder sync for the resident Haven folder bridge
+  - methods used by **reference and native local clients** (not authority)
+  - includes explicit diagnostic-wake loading for continuity status
+  - includes granted-folder sync for the **resident folder bridge**
   - now includes standing task grant read/update methods for the Security room
-  - now also includes Haven memory inventory/reset client calls for the real Swift Haven app
+  - includes memory inventory/reset client calls for **HTTP-native** operator UIs
 
 ### Memory and Continuity
 
@@ -132,7 +132,7 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 
 - `memory_conflict_anchor_test.go`
   - Phase 1 anchor persistence and fail-closed TCL failures: `TestRememberMemoryFact_SupersedesOnlyWhenAnchorTupleMatches`, `TestRememberMemoryFact_CoexistsWhenTCLReturnsNoAnchor`, `TestRememberMemoryFact_FailsClosedWhenTCLValidationFails`
-  - additional wake/replay coverage for anchor tuples lives in `continuity_memory_test.go` (see master plan Task 4 test names)
+  - additional wake/replay coverage for anchor tuples lives in `continuity_memory_test.go` (see implementation plan Task 4 test names)
 
 - `server_memory_handlers.go`
   - memory endpoints, including explicit remember and diagnostic wake
@@ -151,7 +151,7 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - now rehydrates task metadata for unresolved items from continuity facts
   - durable mutation ordering: audit before continuity JSONL append; `saveContinuityMemoryState(..., nowUTC)` for testable / consistent artifact timestamps
 - `continuity_mutation_ordering_test.go`
-  - `TestMutateContinuityMemory_*`, `TestContinuityInspectRequest_*`, corrupt-replay coverage per master plan Phase 1 Tasks 1 and 5
+  - `TestMutateContinuityMemory_*`, `TestContinuityInspectRequest_*`, corrupt-replay coverage per Phase 1 Tasks 1 and 5
 - `continuity_runtime.go`
   - event-log replay and wake reconstruction
   - important when new continuity event types are introduced
@@ -187,20 +187,20 @@ The current working set in this directory is:
 
 These files matter because:
 
-- Haven needs to stop depending on vague memory claims
+- **Clients** must not depend on vague memory claims; Loopgate exposes explicit APIs and diagnostics
 - explicit "remember this" should route through `RememberMemoryFact`
-- explicit Todo mutations should route through the same continuity authority model instead of a separate Haven store
+- explicit Todo mutations should route through the same continuity authority model instead of a **client-local** parallel store
 - open tasks should be durable operational objects, not only UI strings
 - native `memory.remember` tool calls should not bypass the explicit remember pipeline
-- the capability inventory should stay authoritative even if Haven renders friendlier names
-- Haven-native low-friction execution should stay actor-scoped inside Loopgate, not leak into generic policy behavior for other clients
+- the capability inventory should stay authoritative even if a **UI** renders friendlier names
+- **Actor-scoped** low-friction execution (e.g. `haven`) must stay inside Loopgate policy, not leak into generic evaluation for other actors
 - standing approvals are still Loopgate authority, not UI preference state
 - host-folder mirroring should stay explicit, audited, and compare-before-sync instead of becoming a noisy or implicit watcher path
 - the next host-help slice should build as a plan/apply system on top of Loopgate, not as raw writable host filesystem authority
 
 ## Existing Strengths To Reuse
 
-The memory system already has more structure than Haven currently shows.
+The memory system already has more structure than some **client summaries** currently surface.
 
 Notable existing pieces:
 
@@ -215,8 +215,8 @@ That means the first diagnostics pass should expose existing truth before invent
 
 - Do not weaken Loopgate's internal identifiers just to get friendlier UI.
 - Keep explicit memory writes deterministic and auditable.
-- If a capability appears in Haven, it should still come from Loopgate's registered tool inventory.
-- Keep explicit memory denials and diagnostic state visible. Silent success-looking memory failures will make Haven feel fake very quickly.
+- If a capability appears in a **client**, it should still come from Loopgate's registered tool inventory.
+- Keep explicit memory denials and diagnostic state visible. Silent success-looking memory failures will make the **operator experience** feel unreliable very quickly.
 - Compare-before-sync exists to preserve observability without flooding the audit trail. Do not turn routine folder polling into fake security activity.
 - Keep retrieval tuning bounded and inspectable. Do not turn discover-memory ranking into a hidden heuristic stack that can bypass current eligibility rules.
 - Benchmark bridges must stay read-only and internal. Do not turn them into a public convenience API.

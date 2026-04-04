@@ -1,21 +1,23 @@
 **Last updated:** 2026-03-24
 
-# Master Implementation Plan — Morph / Loopgate
+# Master implementation plan (historical) — Loopgate
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Each task is self-contained with files, steps, test commands, and expected outcomes.
+> **Archive / context:** This document captured a **desktop-first ship** slice (Wails bundle + `.dmg`) from an earlier product framing. **This repository’s focus is Loopgate** as the control plane; MCP and proxy are the primary integration surfaces. Keep the **engineering tasks and file references**; treat **distribution and demo** steps as optional or superseded unless you are explicitly maintaining the in-repo **`cmd/haven/`** reference shell.
 
-**Date:** 2026-03-25 (revised)
-**Status:** Active — this is the single source of truth for implementation work.
+> **For agentic workers:** If executing tasks from this plan, use superpowers:subagent-driven-development or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship Haven as a signed macOS .dmg within 6–8 weeks. Every task in this plan is ordered by its impact on the first user's experience, not by architectural completeness. The system is already well-architected; the remaining work is: fix the bugs that would bite during dogfooding, make the first product loop feel magical, and cut everything else.
+**Date:** 2026-03-25 (revised)  
+**Status:** Historical — use `docs/roadmap/roadmap.md` and current `sprints/*.md` for active direction.
 
-**Guiding principle:** If a task doesn't make the Downloads-organizer loop better, safer, or shippable, it moves to Post-Launch.
+**Goal (original):** tighten the **reference desktop loop** (organizer + memory + approvals) and packaging, in support of a governed local assistant experience. Tasks were ordered by **dogfood impact**, not architectural completeness.
 
-**Tech Stack:** Go 1.24, Loopgate (control plane), Haven (Wails/React desktop shell), `internal/tcl`, `internal/loopgate`, `internal/sandbox`, `internal/secrets`, `internal/safety`, append-only JSONL + state snapshots, Go tests via `go test`.
+**Guiding principle:** If a task doesn't make the **reference organizer loop** better, safer, or easier to demo, it moves to Post-Launch.
+
+**Tech stack:** Go 1.24, Loopgate (control plane), in-repo **Wails/React reference** under `cmd/haven/`, `internal/tcl`, `internal/loopgate`, `internal/sandbox`, `internal/secrets`, `internal/safety`, append-only JSONL + state snapshots, Go tests via `go test`.
 
 ### v1 transport (explicit product decision)
 
-**Haven ↔ Loopgate v1 uses HTTP** on the **local control-plane binding** (Unix domain socket in normal desktop layouts; see RFC 0001 local transport profile). **Apple XPC is not on the v1 critical path**—it was deferred to reduce engineering cost and ship time. Optional XPC or other Mach-bound hardening remains a **post-launch** exploration, documented in `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`, not a prerequisite for the signed `.dmg`.
+**Local clients ↔ Loopgate v1 use HTTP** on the **local control-plane binding** (Unix domain socket; see RFC 0001 local transport profile). **Apple XPC is not on the v1 critical path**—it was deferred to reduce engineering cost and ship time. Optional XPC or other Mach-bound hardening remains a **post-launch** exploration, documented in `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`, not a prerequisite for packaged installs.
 
 ---
 
@@ -29,7 +31,7 @@ This plan consolidates and replaces:
 - `docs/superpowers/plans/gemini_feedback-2026-03-24.md`
 - `docs/superpowers/plans/gemini_enterprise_and_tcl_strategy.md`
 
-The Haven Capability MVP plan (`2026-03-22-haven-capability-mvp.md`) is **completed**. The TCL conflict anchor design spec (`specs/2026-03-23-tcl-conflict-anchor-design.md`) remains the design reference for TCL work. The security checklist (`docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`) captures **optional future** transport hardening (e.g. XPC); **v1 stays on HTTP** over the local socket per above.
+A legacy desktop capability MVP plan (removed from this repo; archived upstream) is **completed**. The TCL conflict anchor design spec (`specs/2026-03-23-tcl-conflict-anchor-design.md`) remains the design reference for TCL work. **v1 stays on HTTP** over the local socket per above; optional XPC hardening is backlog only (`docs/loopgate-threat-model.md`).
 
 ## Scope and constraints
 
@@ -180,7 +182,7 @@ Expected: PASS.
 ### Task 4: Stop leaking resolved filesystem paths in sandbox error responses
 
 **Source:** MR S12.
-**Why ship-blocking:** A sandbox denial currently returns the real absolute path (`/Users/adalaide/Dev/morph/runtime/sandbox/...`) in the API response. A demo where someone triggers a denied path would expose the developer's filesystem layout.
+**Why ship-blocking:** A sandbox denial currently returns the real absolute path (e.g. `{checkout}/runtime/sandbox/...`) in the API response. A demo where someone triggers a denied path would expose the developer's filesystem layout.
 
 **Files:**
 - Modify: `internal/loopgate/server_sandbox_handlers.go`
@@ -248,7 +250,7 @@ Expected: PASS.
 
 ## Phase 2: Memory That Works
 
-The first user will say "My name is Ada" and expect Morph to remember it next session. If this doesn't work reliably, the product feels broken. These two tasks fix the upstream key normalization gap that all reviewers identified as the reason memory "feels lackluster."
+End users expect **durable explicit memory** (“My name is Ada”) to round-trip across sessions. If this doesn't work reliably, continuity feels broken. These two tasks fix the upstream key normalization gap that reviewers flagged as the reason memory “feels lackluster.”
 
 ### Task 6: Add explicit key normalization before anchor derivation
 
@@ -341,7 +343,7 @@ Expected: PASS.
 **Why pre-ship:** The persona.yaml produces an assistant that feels like a compliance officer. The northstar says "quirky and warm, like Weebo." These conflict. The first user's emotional impression is set in the first 30 seconds.
 
 **Files:**
-- Modify: `persona/morph.yaml`
+- Modify: `persona/default.yaml`
 - Modify: `internal/prompt/` (if system prompt references persona values)
 
 - [x] **Step 1: Update persona values**
@@ -356,11 +358,11 @@ Keep `honesty: strict`, `safety_mindset: high`, `security_mindset: high` unchang
 
 - [x] **Step 2: Review system prompt compilation**
 
-Read `internal/prompt/` to verify persona values flow into the system prompt. Adjust any prompt text that produces overly hedging or bureaucratic language. The model should say "Done! Moved 23 files into 4 folders." not "I have completed the requested file organization operation." (Haven: added native `VOICE (USER-FACING)` block in `internal/prompt/compiler.go`.)
+Read `internal/prompt/` to verify persona values flow into the system prompt. Adjust any prompt text that produces overly hedging or bureaucratic language. The model should say "Done! Moved 23 files into 4 folders." not "I have completed the requested file organization operation." (A `VOICE (USER-FACING)` block exists in `internal/prompt/compiler.go`.)
 
 - [ ] **Step 3: Test with 5 sample conversations**
 
-Run Haven, have 5 different conversations (greeting, remember name, organize downloads, ask about security, ask something Morph can't do). Verify the tone feels warm and capable, not robotic.
+Run the **reference Wails shell** (`cmd/haven/`) or another local client, and have five different conversations (greeting, remember name, organize downloads, ask about security, ask for something policy denies). Verify the tone feels warm and capable, not robotic.
 
 ---
 
@@ -380,8 +382,8 @@ Walk through setup as a new user. Time it. Note every point of confusion or fric
 
 The setup should ask exactly three things:
 1. How do you connect to an AI model? (Ollama detected / API key / skip)
-2. Can Morph see your Downloads folder? (Grant / Skip)
-3. That's it — Morph says hello and immediately offers to look at Downloads.
+2. Can the assistant access your Downloads folder? (Grant / Skip)
+3. That's it — the shell greets the user and immediately offers to look at Downloads.
 
 Wallpaper, presence mode, and other preferences should be discoverable in Settings, not part of first-run. **Implemented:** `cmd/haven/frontend/src/components/SetupWizard.tsx` (welcome → model → folders → finish); defaults in `CompleteSetup` via `setup.go`.
 
@@ -399,7 +401,7 @@ Cold install → setup → first useful action in under 3 minutes.
 - Create or modify: build scripts, `Makefile`, or CI config
 - `cmd/haven/main.go` (ensure embedded frontend is current)
 
-- [x] **Step 1: Build the production Haven binary**
+- [x] **Step 1: Build the production Wails bundle (reference shell)**
 
 ```bash
 ./scripts/haven/build-macos-app.sh
@@ -417,7 +419,7 @@ Create a drag-to-Applications .dmg with a background image. Test the full instal
 
 - [ ] **Step 4: Test Homebrew Cask formula**
 
-Write a Cask formula pointing at the .dmg download URL. Test `brew install --cask haven`.
+Write a Homebrew Cask formula pointing at the `.dmg` download URL (example formula name was `haven` in the original plan—pick a name consistent with your distribution brand).
 
 ---
 
@@ -427,16 +429,16 @@ Write a Cask formula pointing at the .dmg download URL. Test `brew install --cas
 
 - [x] **Step 1: Write the demo script (90 seconds)**
 
-Script: `docs/superpowers/demos/2026-03-25-haven-90s-demo-script.md`.
+Demo script materials lived under `docs/superpowers/demos/` in the upstream monorepo; **this clone may not include them**. Outline for a ~90s recording:
 
-1. Install Haven (5s — show .dmg drag)
+1. Install the desktop bundle (5s — show `.dmg` drag)
 2. First-run setup — grant Downloads (15s)
-3. Morph greets user, offers to organize Downloads (10s)
-4. Morph scans and proposes a plan (15s)
+3. Assistant greets user, offers to organize Downloads (10s)
+4. Assistant scans and proposes a plan (15s)
 5. User reviews the plan in the approval card (10s)
 6. User approves, files move (10s)
 7. Show the Security panel — audit trail, permissions, what was allowed (15s)
-8. Close Haven, reopen — Morph remembers the user's name and the task (10s)
+8. Quit and reopen — continuity: name + task still present (10s)
 
 - [ ] **Step 2: Record with clean desktop, good resolution**
 
@@ -450,16 +452,16 @@ No voiceover needed for v1 — text annotations are fine. Show, don't explain.
 
 ## Phase 4: Dogfood & Fix
 
-### Task 12: Use Haven every day for one week
+### Task 12: Dogfood the reference loop for one week
 
 **Why:** The best test plan is daily use by the person who built it. No plan document will find the bugs that real usage will.
 
-- [ ] **Step 1: Use Haven as your primary file organizer for 7 days**
+- [ ] **Step 1: Use the reference shell (or your primary local client) as the daily driver for 7 days**
 
 Every day:
-- Open Haven
-- Let Morph organize something in Downloads
-- Ask Morph to remember something
+- Open the client
+- Run a **Downloads** (or similar) organize flow end-to-end
+- Exercise **explicit memory** and verify persistence
 - Check that memory persists across restarts
 - Try to break the approval flow
 - Note every friction point, crash, or "that felt wrong" moment
@@ -509,7 +511,7 @@ These tasks are all architecturally correct and well-designed. They move to post
 
 | Task | Source | Description |
 |------|--------|-------------|
-| **Optional macOS XPC (or similar) transport hardening** | Security checklist | **Not v1.** If pursued after ship, use `Haven_Loopgate_Security_and_Transport_Checklist.md` as the working note; v1 remains HTTP on the local socket. |
+| **Optional macOS XPC (or similar) transport hardening** | Threat model / RFCs | **Not v1.** If pursued after ship, see `docs/loopgate-threat-model.md` and `docs/rfcs/0001-loopgate-token-policy.md`; v1 remains HTTP on the local socket. |
 | **Morphling spawn as model-callable tool** | CR §3.2 | Separate security review required |
 | **Entropy-based unknown-secret scanner** | GR | Requires Policy Alert UX design |
 | **Fleet management / central policy** | GR enterprise | Enterprise-tier — needs product validation first |
@@ -523,7 +525,7 @@ These tasks are all architecturally correct and well-designed. They move to post
 |---------------|-----------|-----------|
 | Phase 1: TCL anchors (4 tasks, highest priority) | Post-Launch Tier 2 | The anchor system was partially landed per the roadmap. The key normalization fix (now Task 6) is the only piece that affects first users. Full anchor foundation can wait. |
 | Phase 2: Hardening (3 tasks, highest priority) | Phase 1: Ship Blockers (5 tasks) | Reframed around "would this embarrass us in a demo" instead of "is this architecturally ideal." Audit ordering stays. Input bounds stay. Secret marshal guard and path leakage added. |
-| Phase 3: Projection hygiene (4 tasks) | Split: morphling projection → Post-Launch; nonce → Post-Launch; tool path → Post-Launch | Morphlings aren't part of the MVP loop. invoke_capability asymmetry won't be hit in the Downloads organizer flow. |
+| Phase 3: Projection hygiene (4 tasks) | Split: morphling projection → Post-Launch; nonce → Post-Launch; tool path → Post-Launch | Bounded **morphling** workers aren't part of the reference organizer MVP loop. `invoke_capability` asymmetry won't be hit in the Downloads organizer flow. |
 | Phase 4: Defense-in-depth (6 tasks) | Post-Launch Tier 1 | Important but won't affect first users. The Openat defense layer mitigates the EvalSymlinks issue. The deny-list asymmetry requires a specific attack. |
 | Phase 5: XPC migration | Post-Launch Tier 3 (optional) | **v1 = HTTP** on local UDS to save cost; XPC is optional future hardening, not a migration requirement for ship. |
 | No ship prep phase | Phase 3: Ship Prep (4 tasks) | Added persona tuning, first-run polish, .dmg build, demo recording. These are the actual ship blockers. |

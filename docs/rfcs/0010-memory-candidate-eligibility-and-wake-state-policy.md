@@ -6,7 +6,7 @@ Status: draft
 
 ## 1. Summary
 
-This RFC defines the first policy layer for Morph persistent memory after
+This RFC defines the first policy layer for operator-visible persistent memory after
 [RFC 0009](./0009-memory-continuity-and-recall.md).
 
 It answers five questions:
@@ -215,7 +215,7 @@ Startup assembly must stay bounded and predictable.
 
 ### 5.1 Default load rule
 
-On startup, Morph should assemble continuity from:
+On startup, the operator client should assemble continuity from:
 
 - one global wake state
 - optionally one active-thread wake state when a thread/task scope is known
@@ -232,7 +232,7 @@ A thread wake state should load only when at least one of the following is true:
 - a local planning step identifies one dominant active scope with high
   confidence
 
-If scope selection is ambiguous, Morph should prefer the global wake state only
+If scope selection is ambiguous, the operator client should prefer the global wake state only
 rather than loading multiple thread lanes implicitly.
 
 Thread activation must not be inferred from weak textual similarity alone.

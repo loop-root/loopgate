@@ -4,9 +4,9 @@ This file maps the typed tool layer under `internal/tools/`.
 
 Use it when changing:
 
-- the real capability surface available to Morph
+- the real capability surface available to operator clients (via Loopgate)
 - native structured tool definitions
-- Haven-native tool registration
+- `haven`-actor-scoped tool registration (legacy actor label; see policy)
 - explicit remembered-fact tools
 - sandbox-local execution behavior
 
@@ -32,16 +32,16 @@ This layer is important because:
 - `defaults.go`
   - default registry builders
   - currently the place where sandbox and default tool bundles are assembled
-  - sandbox tools now carry an explicit trusted-sandbox-local wrapper so Loopgate can treat Haven-native in-world actions differently from host-rooted/default registries
+  - sandbox tools now carry an explicit trusted-sandbox-local wrapper so Loopgate can treat **actor-scoped** in-world actions differently from host-rooted/default registries
 - `trusted_sandbox_tool.go`
-  - marker wrapper for Haven-native sandbox tools
+  - marker wrapper for trusted sandbox-local tools (typically `haven` actor)
   - used so Loopgate can reduce approval friction for the `haven` actor without trusting the same tool names globally
 - `journal_tools.go`
   - journal list/read/write tools
 - `paint_tools.go`
   - flat prompt-oriented paint save/list tools
 - `note_create.go`
-  - sticky-note creation tool that writes Haven desk-note state
+  - sticky-note creation tool that writes desk-note state (`haven_desk_notes.json`)
 - `memory_tools.go`
   - explicit remembered-fact tool definition
   - capability contract only; real execution is routed through Loopgate's dedicated memory path
@@ -50,7 +50,7 @@ This layer is important because:
   - contract only; real execution is routed through Loopgate's dedicated continuity path
   - add now carries task-board metadata such as task kind, source, next step, scheduled time, and execution class
 - `notes_tools.go`
-  - working-notes list/read/write tools for Morph's private notebook-style scratch space under `scratch/notes`
+  - working-notes list/read/write tools for private notebook-style scratch space under `scratch/notes`
   - intentionally separate from Journal because this is operational working memory, not reflective writing
 - `fs_read.go`
 - `fs_list.go`
@@ -70,7 +70,7 @@ The current native tool schema path only supports scalar arguments:
 - `int`
 - `bool`
 
-That means new Haven-native tools should initially use flat APIs like:
+That means new **trusted sandbox-local** tools should initially use flat APIs like:
 
 - `journal.write(title, body)`
 - `note.create(kind, title, body)`

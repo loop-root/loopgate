@@ -5,7 +5,7 @@
 The current repo has two different secret stories, and they should not be
 confused:
 
-- current Morph-side model/runtime secret resolution
+- current client-side model/runtime secret resolution (non-integration config)
 - future Loopgate-owned third-party integration and OAuth secret handling
 
 The current implementation is conservative by design: explicit trust
@@ -98,8 +98,8 @@ This is intentionally strict:
 
 Current reality:
 
-- Morph may still store non-secret model runtime config locally, but live model
-  provider credentials are now resolved by Loopgate during inference
+- A local client may still store non-secret model runtime config locally, but live model
+  provider credentials are resolved by Loopgate during inference
 - OS-backed secret storage
 - macOS Keychain backend
 - `SecretRef` configuration references
@@ -119,7 +119,7 @@ Target direction:
 
 - third-party integration secrets live in Loopgate-owned secure storage
 - Loopgate performs OAuth token exchange and refresh itself
-- Morph does not receive provider access tokens, refresh tokens, or client
+- Connected clients do not receive provider access tokens, refresh tokens, or client
   secrets
 
 Current operator pattern for Loopgate-managed client credentials:
@@ -139,7 +139,7 @@ Current operator pattern for Loopgate-managed client credentials:
 3. Register or validate the connection record in Loopgate.
 4. Let Loopgate exchange the client secret for an access token internally.
 
-The raw access token remains in Loopgate memory only. Morph receives only the
+The raw access token remains in Loopgate memory only. Clients receive only the
 structured capability result and any `quarantine_ref`.
 
 Current operator pattern for Loopgate-managed PKCE:
@@ -154,11 +154,11 @@ Current operator pattern for Loopgate-managed PKCE:
    - allowed_hosts
    - typed capability definitions
    - a `SecretRef` that will store the refresh token
-2. Start the flow from Morph:
+2. Start the flow from the operator shell (e.g. Loopgate CLI):
    - `/connections pkce-start <provider> <subject>`
 3. Open the returned authorization URL in a browser and capture the returned
    `code` and `state`.
-4. Complete the flow from Morph:
+4. Complete the flow from the operator shell:
    - `/connections pkce-complete <provider> <subject> <state> <code>`
 
 Loopgate stores the refresh token in the secure backend and keeps the access
@@ -175,7 +175,7 @@ token in memory only.
 
 Loopgate needs the same **pluggability** for organizational secret systems as for **identity**: customers will expect to bring **HashiCorp Vault**, **cloud KMS** (and envelope-encrypted blobs), **HSM**-backed enterprise stores, and sometimes **TPM** / platform keys for **machine identity** or bootstrap — not only macOS Keychain on a laptop.
 
-**Intended shape:** extend the existing **`SecretStore`** / `SecretRef.Backend` model (`internal/secrets/types.go`) with explicit backends or adapters, operator runbooks (paths, IAM, least privilege, rotation), and ADRs for ordering (e.g. Vault before niche HSM profiles). Resolution stays **inside Loopgate**; Morph and IDEs do not receive raw long-lived secrets.
+**Intended shape:** extend the existing **`SecretStore`** / `SecretRef.Backend` model (`internal/secrets/types.go`) with explicit backends or adapters, operator runbooks (paths, IAM, least privilege, rotation), and ADRs for ordering (e.g. Vault before niche HSM profiles). Resolution stays **inside Loopgate**; IDEs and other clients do not receive raw long-lived secrets.
 
 **Sequencing:** documented in `sprints/2026-04-01-loopgate-enterprise-phased-plan.md` § *Future enterprise integration layers*. Single-org local nodes can keep OS keyrings; **tenant-scoped secret keys** become necessary when multiple orgs share one runtime (e.g. hosted multi-tenant).
 
@@ -210,7 +210,7 @@ These are used by orchestrator ledger logging for tool args/output/reasons.
 - Exact backend matching (case-sensitive)
 - Treat model/tool/config input as untrusted
 - Fail closed when a secret cannot be resolved securely
-- Do not move future integration-secret authority back into Morph for
+- Do not move future integration-secret authority back into thin clients for
   convenience
 
 ## 6) Minimal usage example

@@ -4,7 +4,7 @@ Status: checklist
 Authority: conformance aid  
 Scope: AMP RFC 0001 through RFC 0007 (see also RFC 0008 for known gaps)
 
-**Release gate:** For any Loopgate/Haven release that claims **AMP `local-uds-v1` alignment**, either complete every applicable item below or record an explicit waiver (issue + RFC update). Partial alignment is fine only if marketing and docs say so honestly.
+**Release gate:** For any Loopgate release that claims **AMP `local-uds-v1` alignment**, either complete every applicable item below or record an explicit waiver (issue + RFC update). Partial alignment is fine only if marketing and docs say so honestly.
 
 Use this as a blunt implementation checklist for the `local-uds-v1`
 transport profile.

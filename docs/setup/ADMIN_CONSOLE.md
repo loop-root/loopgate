@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-01
 
-The admin console is a **loopback-only** HTTP surface for operators: read-only **policy** view (active policy JSON + morphling class YAML seed), **audit** export (HTML + redacted CSV), and **control session** listing. It shares the same Loopgate process and state as the Unix socket control plane.
+The admin console is a **loopback-only** HTTP surface for operators: **Dashboard** (live sessions, connections, subordinate-runtime load, rolling model-chat token sums from the audit tail, ledger size, policy gate counts), structured **capability policy** (field-level, with hover “?” help), **configuration** (read-only view of `config/runtime.yaml` + memory backend selector), **audit** (filter form, table, redacted CSV export), and **control sessions**. It shares the same Loopgate process and state as the Unix socket control plane. Operator copy is product-agnostic; ledger wire types and config keys may still use historical identifiers. Editing config/policy still happens in YAML on disk and requires restart — the UI is inspect-first, not a silent write path.
 
 ## Security model (v0)
 

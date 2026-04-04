@@ -27,7 +27,7 @@ It keeps API key material off disk where possible by referencing env vars and `S
 
 - Providers: `internal/model/anthropic/`, `internal/model/openai/`
 - Secrets: `internal/secrets/`
-- Haven setup may influence runtime state: `cmd/haven/setup.go`, `cmd/haven/model_settings.go`
+- Reference Wails setup may influence runtime state: `cmd/haven/setup.go`, `cmd/haven/model_settings.go`
 
 ## Important Watchouts
 

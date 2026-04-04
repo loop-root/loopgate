@@ -335,6 +335,10 @@ func appendPreparedEventToFile(fileHandle *os.File, path string, baseSequence in
 		clearCachedChainState(normalizedPath, "ledger_sequence")
 		return fmt.Errorf("write ledger event: %w", err)
 	}
+	if err := syncLedgerFileHandle(fileHandle); err != nil {
+		clearCachedChainState(normalizedPath, "ledger_sequence")
+		return fmt.Errorf("sync ledger: %w", err)
+	}
 
 	updatedFileInfo, err := fileHandle.Stat()
 	if err != nil {

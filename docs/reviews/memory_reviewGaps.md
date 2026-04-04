@@ -10,7 +10,7 @@ There are two write paths and one read path. Understanding which path handles wh
 
 ### Write Path 1 — Explicit memory (`memory.remember`)
 
-1. **Deterministic pre-run detection** (`memory_intent.go`): Haven scans the user's raw message for a small set of regex patterns before the model runs. Matches like "call me X", "remember my name is X", "remember I prefer X" bypass the model entirely and call `memory.remember` directly.
+1. **Deterministic pre-run detection** (`memory_intent.go`): the in-repo reference client (`cmd/haven/`) scans the user's raw message for a small set of regex patterns before the model runs. Matches like "call me X", "remember my name is X", "remember I prefer X" bypass the model entirely and call `memory.remember` directly.
 
 2. **Model-proposed memory**: The model can also call `memory.remember` mid-conversation when the capability hint suggests it. The model proposes a `fact_key` and `fact_value`.
 
@@ -26,7 +26,7 @@ There are two write paths and one read path. Understanding which path handles wh
 
 ### Write Path 2 — Continuity inspection
 
-After a conversation, Haven calls `DistillThread()` which sends conversation events to `InspectContinuityThread`. If the conversation meets a threshold, Loopgate derives distillates from the thread content — inferred facts, not explicitly requested ones. This path uses trust level `TIF` (inferred, confidence 6) vs explicit's `TUS` (user-originated, confidence 8).
+After a conversation, the in-repo reference client (`cmd/haven/`) calls `DistillThread()` which sends conversation events to `InspectContinuityThread`. If the conversation meets a threshold, Loopgate derives distillates from the thread content — inferred facts, not explicitly requested ones. This path uses trust level `TIF` (inferred, confidence 6) vs explicit's `TUS` (user-originated, confidence 8).
 
 ### Read Path — Wake state assembly
 
@@ -36,7 +36,7 @@ At session start, the wake state is assembled from all eligible (non-tombstoned)
 Remembered continuity follows...
 remembered_fact: name = Ada
 remembered_fact: preference.favorite_coffee = oat latte
-active_goal: finish Haven MVP
+active_goal: finish Loopgate MVP
 unresolved_item: investigate attachments crash
 ```
 
@@ -187,4 +187,4 @@ The benchmark is more honest than most comparable internal AI benchmarks:
 | Preview-label confusion | `internal/loopgate/continuity_memory.go` | Boost anchor-owning nodes in retrieval rank for known profile slots |
 | Hint quality for slot-only | `internal/loopgate/continuity_memory.go` | Enrich hints for known anchor slots with domain+entity context |
 | Inspection threshold opaque | `internal/loopgate/server_haven_settings.go` | Surface threshold as a configurable setting |
-| Inspection threshold opaque | `Haven/Windows/Settings/SettingsView.swift` | Add threshold control in Developer tab |
+| Inspection threshold opaque | Native settings UI (if any) that binds the same Loopgate endpoints | Add threshold control in a developer/diagnostics surface |

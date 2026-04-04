@@ -38,7 +38,7 @@ The key registry silently rejects `goal.*` and `work.*` keys. Preference facet c
 
 ### 4. Chat regression fixes
 
-Panic recovery in `handleHavenChat`, audit log coverage for error paths, typing indicator in Haven Messenger. These are blocking Haven use as a demo.
+Panic recovery in `handleHavenChat`, audit log coverage for error paths, and UX polish for **legacy HTTP chat** consumers. These block reliable **local demos** that still use `/v1/haven/chat` (handler and route names are historical).
 
 ### 5. Admin console v0
 
@@ -135,13 +135,7 @@ Ensure other chat error paths (timeout, provider failure) also log at **WARN**/*
 
 Optional: lower `modelCtx` timeout in the tool loop from 120s to 60s so the fallback text appears sooner on slow local models.
 
-**File: `Haven/Windows/Messenger/MessengerViewModel.swift`**
-
-Add `@Published var isThinking: Bool = false`. Set to `true` before beginning the HTTP request, `false` in the completion/error path.
-
-**File: `Haven/Windows/Messenger/MessengerView.swift`**
-
-Show a typing indicator bubble when `isThinking == true`, anchored to the Morph side. Match `MessageRow.swift` bubble style.
+**Native client (out of tree):** If you maintain a separate macOS chat UI, mirror the same behavior there: expose a **thinking / typing** state tied to the in-flight HTTP request, and show a typing indicator in the conversation surface. (Historical notes referred to Swift sources under a `Haven/` tree; this repository does not vendor that app.)
 
 ---
 
@@ -176,7 +170,7 @@ These may matter later. They do not define the current slice.
 - Zero-code canvas agent builder
 - Multi-node admin ↔ local sync protocol
 - Proxy mode implementation (MCP is higher priority)
-- Haven UI new features (paint animation, uninstaller, man page) — defer
+- Non-Loopgate desktop UI features (paint animation, uninstaller, man page) — defer
 - Full production installer / distribution improvements
 - Distributed morphling execution across nodes
 - Webhook/event streaming API

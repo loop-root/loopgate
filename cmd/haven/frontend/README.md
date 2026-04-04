@@ -1,8 +1,8 @@
-# Haven frontend (Wails + React) — **reference / deprecated**
+# Wails + React frontend — **reference shell only**
 
-> **Not the product UI.** The maintained Haven desktop app is **native Swift** in a separate repository (typical dev path: `~/Dev/Haven`). This TypeScript tree exists in the Morph repo as a **reference implementation** for Loopgate contracts, Wails bindings, and automated tests—not for operator-facing ship.
+> **Not a product UI.** This TypeScript tree exists in the Loopgate repo as a **reference implementation** for Loopgate contracts, Wails bindings, and automated tests — not for operator-facing ship. Prefer **MCP**-connected IDEs for real workflows (`docs/setup/LOOPGATE_MCP.md`).
 
-TypeScript/React UI for the legacy in-repo Haven shell. The Go backend lives in `cmd/haven/`; bindings are generated into `src/wailsjs/`.
+TypeScript/React UI for the in-repo Wails shell. The Go backend lives in `cmd/haven/`; bindings are generated into `src/wailsjs/`.
 
 ## Commands
 
@@ -17,18 +17,15 @@ npm run dev      # Vite dev (typically used together with Wails)
 | Directory | Purpose |
 |-----------|---------|
 | `src/App.tsx` | Composes hooks, handlers, and shell layout (boot → setup → desktop) |
-| `src/app/` | Shared app-level types/constants (e.g. `havenTypes.ts`) |
-| `src/hooks/` | `useHaven*` and desktop drag hooks — see `hooks/README.md` |
-| `src/components/` | Shell UI, `HavenFloatingWindows`, `windows/*` feature panes |
+| `src/app/` | Shared app-level types/constants |
+| `src/hooks/` | Desktop hooks — see `hooks/README.md` |
+| `src/components/` | Shell UI, floating windows, feature panes |
 | `src/lib/haven.tsx` | IDs, wallpapers, window defaults, shared TS types |
-
-**Agent-oriented map:** `docs/HavenOS/Haven_Frontend_Source_Map.md` in the repo root.
 
 ## Shell layout
 
-- **Default:** `workstation` — center **Workspace**, right **Morph** rail; Loopgate/Notes/Journal/etc. stay as floating windows.
-- **Classic:** `localStorage.setItem("haven-shell-layout", "classic")` or **View → Classic desktop layout** for the old full desktop + floating Morph/Workspace.
-- Roadmap: `docs/HavenOS/plans/2026-03-22-workspace-first-haven-ui.md`.
+- **Default:** `workstation` — center workspace + right assistant rail; other tools as floating windows.
+- **Classic:** `localStorage.setItem("haven-shell-layout", "classic")` or **View → Classic desktop layout** for the older full-desktop arrangement.
 
 ## Conventions
 

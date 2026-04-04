@@ -1,6 +1,6 @@
 # Cmd Map
 
-This file maps **`cmd/`** Go **main** entrypoints. The **canonical** Haven UI is the **Swift** app (separate repo); **`cmd/haven/`** here is a **Wails reference** shell — see `haven_map.md` and `frontend_map.md` when working on that tree.
+This file maps **`cmd/`** Go **main** entrypoints. **`cmd/loopgate/`** is the primary server binary. **`cmd/haven/`** is a **Wails reference** shell (contracts/tests only)—see `haven_map.md` and `frontend_map.md` when working on that tree.
 
 Use it when changing:
 

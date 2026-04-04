@@ -1,6 +1,6 @@
 # Sandbox Map
 
-This file maps `internal/sandbox/`, the filesystem boundary between the repo’s sandbox home and virtual paths Haven exposes.
+This file maps `internal/sandbox/`, the filesystem boundary between the repo’s sandbox home and virtual paths **local clients** expose.
 
 Use it when changing:
 
@@ -11,7 +11,7 @@ Use it when changing:
 
 ## Core Role
 
-`internal/sandbox/` implements **canonical sandbox paths**, **root enforcement**, and **safe copy** primitives used by Loopgate and Haven when moving data between host and the sandbox.
+`internal/sandbox/` implements **canonical sandbox paths**, **root enforcement**, and **safe copy** primitives used by Loopgate and **local clients** when moving data between host and the sandbox.
 
 It is not the control plane: policy and approvals live in Loopgate; this package enforces **where** sandbox-relative operations may land once authorized.
 
@@ -28,7 +28,7 @@ It is not the control plane: policy and approvals live in Loopgate; this package
 ## Relationship Notes
 
 - Host-visible granted folders and compare-before-sync logic: `internal/loopgate/folder_access.go`
-- Haven workspace UI: `cmd/haven/workspace.go`
+- Reference workspace UI: `cmd/haven/workspace.go`
 - Default policy roots: `core/policy/policy.yaml`
 
 ## Important Watchouts

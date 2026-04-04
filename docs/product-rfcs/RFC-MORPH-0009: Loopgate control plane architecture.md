@@ -1,24 +1,23 @@
-**Last updated:** 2026-03-25
+**Last updated:** 2026-04-03
 
 # RFC-MORPH-0009: Loopgate control plane architecture
 
 - **Status:** Draft — target / north-star for the **Loopgate** daemon (`cmd/loopgate/`)
 - **Primary authority:** **Loopgate** (policy, tokens, sandbox mediation, morphlings, audit)
-- **Normative revision:** 2026-03-24 (split from former RFC-MORPH-0001 operator doc)
-- **Pairs with:** [RFC-MORPH-0001 — Haven operator client](./RFC-MORPH-0001:%20Haven%20operator%20client%20architecture.md)
+- **Normative revision:** 2026-03-24
 
 ---
 
 # Summary
 
-**Loopgate** is the **kernel** of the governed system: the local control plane that enforces policy, issues capability and approval tokens, mediates the sandbox, owns morphling lifecycle, resolves secrets, and appends authoritative control-plane audit. **Haven** is an unprivileged client; Loopgate is the **authority boundary**.
+**Loopgate** is the **kernel** of the governed system: the local control plane that enforces policy, issues capability and approval tokens, mediates the sandbox, owns morphling lifecycle, resolves secrets, and appends authoritative control-plane audit. **Unprivileged operator clients** (IDE, MCP host, reference shell) attach over the local socket; Loopgate is the **authority boundary**.
 
 This RFC is a **future-state design target**. Much of the token, approval, morphling, and memory path is implemented; the full `/morph/home` product layout and every invariant below may still be partially mapped to repo-local paths—see RFC-MORPH-0004 and implementation code.
 
 ## Local transport (v1 vs future)
 
-- **v1 (current product standard):** privileged clients (including Haven) use **HTTP** on a **Unix domain socket** control-plane binding, with session binding, signed requests, and replay protection as described in `docs/rfcs/0001-loopgate-token-policy.md` and AMP local-transport docs.
-- **Future (TBD):** **Apple XPC** (or similar Mach-bound IPC) is **optional hardening** on macOS with **no committed ship date**. It does not replace Loopgate as the authority boundary; it would only change how the desktop invokes the control plane. See `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`.
+- **v1 (current product standard):** privileged **local clients** use **HTTP** on a **Unix domain socket** control-plane binding, with session binding, signed requests, and replay protection as described in `docs/rfcs/0001-loopgate-token-policy.md` and AMP local-transport docs.
+- **Future (TBD):** **Apple XPC** (or similar Mach-bound IPC) is **optional hardening** on macOS with **no committed ship date**. It does not replace Loopgate as the authority boundary; it would only change how a desktop process invokes the control plane. See `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`.
 
 ---
 
@@ -32,7 +31,7 @@ This RFC is a **future-state design target**. Much of the token, approval, morph
                                      │
                                      ▼
                     ┌────────────────────────────────┐
-                    │             Haven              │
+                    │        Operator client         │
                     │   operator client (RFC-0001)     │
                     └───────────────┬────────────────┘
                                     │ structured requests
@@ -141,7 +140,7 @@ High-level state flow (detail in RFC-MORPH-0008):
 
 ```
 Plan → Authorize → Spawn → Execute → Produce artifacts
-→ Stage changes → Operator review (via Haven) → Promote / export → Terminate
+→ Stage changes → Operator review (via client UI) → Promote / export → Terminate
 ```
 
 Morphlings terminate when the task completes or Loopgate ends the lifecycle. Only **staged** artifacts persist subject to promotion rules.
@@ -152,11 +151,11 @@ Morphlings terminate when the task completes or Loopgate ends the lifecycle. Onl
 
 ```
 User request
-→ Haven forwards plan / capability request
+→ Operator client forwards plan / capability request
 → Loopgate authorization
 → Spawn / execute under Loopgate
 → Morphling executes
-→ Haven summarizes **projected** status for operator
+→ Operator client summarizes **projected** status for operator
 → User approval decision via Loopgate
 → Loopgate promotion / export
 ```

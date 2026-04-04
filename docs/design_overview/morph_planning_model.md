@@ -2,7 +2,7 @@
 
 # Operator planning model
 
-This document describes the intended **operator client** (e.g. Haven) planning and response model for
+This document describes the intended **operator client** planning and response model for
 Milestone 1 workflows. Filename `morph_planning_model.md` is historical.
 
 Loopgate remains the sole privileged control plane.

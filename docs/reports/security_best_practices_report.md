@@ -6,7 +6,7 @@ Date: 2026-03-07
 
 ## Executive Summary
 
-Morph and Loopgate already implement several strong secure-by-default controls for a local control-plane architecture: strict JSON/YAML decoding, deny-by-default policy checks, peer-bound and signed Loopgate requests, OS-backed secure secret storage on macOS, quarantined remote payloads, explicit result classification, fail-closed filesystem-root validation, fail-closed ledger distillation integrity checks, private runtime directories, and tighter PKCE redirect validation. The remaining best-practice gaps are now narrower and mostly centered on launch-bound local identity, audit tamper evidence, and provider-specific output minimization.
+This codebase already implements several strong secure-by-default controls for a local control-plane architecture: strict JSON/YAML decoding, deny-by-default policy checks, peer-bound and signed Loopgate requests, OS-backed secure secret storage on macOS, quarantined remote payloads, explicit result classification, fail-closed filesystem-root validation, fail-closed ledger distillation integrity checks, private runtime directories, and tighter PKCE redirect validation. The remaining best-practice gaps are now narrower and mostly centered on launch-bound local identity, audit tamper evidence, and provider-specific output minimization.
 
 ## Recently Addressed Findings
 
@@ -91,7 +91,7 @@ if parsedURL.Scheme != "" {
 - [internal/loopgate/server.go](../../internal/loopgate/server.go#L1721): control-plane JSON bodies are size-limited with `http.MaxBytesReader` and strict decoding.
 - [internal/secrets/macos_keychain.go](../../internal/secrets/macos_keychain.go#L44): macOS Keychain-backed secret storage is implemented, with secret material passed via stdin rather than CLI args.
 - [internal/loopgate/quarantine.go](../../internal/loopgate/quarantine.go#L19): remote payload quarantine is real, private, and stored outside prompt-eligible paths.
-- [internal/loopgateresult/render.go](../../internal/loopgateresult/render.go#L32): Morph obeys Loopgate result classification instead of inferring prompt/display behavior from content shape.
+- [internal/loopgateresult/render.go](../../internal/loopgateresult/render.go#L32): The operator client obeys Loopgate result classification instead of inferring prompt/display behavior from content shape.
 
 ## Suggested Improvement Order
 

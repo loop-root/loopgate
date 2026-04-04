@@ -1,10 +1,10 @@
 # State Map
 
-This file maps `internal/state/`, **small persistent Morph runtime state** (session counters, distill cursor, activity timestamps).
+This file maps `internal/state/`, **small persistent operator-runtime state** (session counters, distill cursor, activity timestamps).
 
 Use it when changing:
 
-- what gets stored in Morph’s compact runtime state file vs the ledger
+- what gets stored in the compact runtime state file vs the ledger
 - corruption recovery behavior (rename to `.corrupt.*`, reinit)
 
 ## Core Role

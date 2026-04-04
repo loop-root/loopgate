@@ -5,7 +5,7 @@
 ## Product goals
 
 - **Governed AI execution** — Use models on real work without treating prompt text or completions as authority.
-- **Explicit boundary** — **Loopgate** is the primary product and authority for policy, capabilities, secrets, sandbox, audit, and morphlings; **Swift Haven** is the canonical consumer operator UI (Wails in-repo is reference-only).
+- **Explicit boundary** — **Loopgate** is the primary product and authority for policy, capabilities, secrets, sandbox, audit, and morphlings; **operator clients** attach via MCP, proxy, or local HTTP (in-repo Wails under `cmd/haven/` is reference-only).
 - **Auditable workflow** — Approvals, denials, lifecycle transitions, and memory governance are recorded in structured, reviewable ways.
 - **Bounded agents** — **Morphlings** run as Loopgate-scoped workers, not self-authorizing background processes.
 

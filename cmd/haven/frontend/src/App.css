@@ -116,7 +116,7 @@ body { font-family: var(--font-body); color: var(--text-1); font-size: 13px; -we
   flex-direction: column;
 }
 
-/* ── Workstation shell (workspace-first; see docs/HavenOS/plans/2026-03-22-workspace-first-haven-ui.md) ── */
+/* ── Workstation shell (workspace-first layout) ── */
 .workstation-stage {
   flex: 1;
   display: flex;

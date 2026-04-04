@@ -8,7 +8,7 @@
 
 **Architecture:** Keep the work split into two explicit tracks under one plan. Track A finishes the TCL-owned memory-anchor direction and fixes the upstream key-normalization gap so explicit memory writes become deterministic and deduplicated. Track B hardens the control plane around continuity durability, worker lifecycle concurrency, projection hygiene, and tool-path consistency, while preserving Loopgate as the sole authority boundary.
 
-**Tech Stack:** Go 1.24, Loopgate, Haven, `internal/tcl`, `internal/loopgate`, append-only JSONL + state snapshots, Wails/React frontend, Go tests via `go test`.
+**Tech Stack:** Go 1.24, Loopgate, `internal/tcl`, `internal/loopgate`, append-only JSONL + state snapshots, in-repo Wails/React reference shell under `cmd/haven/`, Go tests via `go test`.
 
 ---
 
@@ -24,7 +24,7 @@ It also incorporates the confirmed near-term findings from the 2026-03-24 review
 - continuity mutation audit ordering remains the top correctness and auditability risk
 - morphling worker session open still has a concurrency-sensitive split
 - morphling public status projection still returns raw model-originated strings
-- Haven tool-calling still has an XML fallback asymmetry around `invoke_capability`
+- the reference Wails client’s tool-calling path still has an XML fallback asymmetry around `invoke_capability`
 - nonce replay persistence and secret-export classification still need hardening
 
 The result should be one plan with two tracks, one priority order, and one handoff for future implementation work.
@@ -100,7 +100,7 @@ Rationale:
 - `internal/orchestrator/parser.go`
 - `internal/orchestrator/structured.go`
 - `internal/model/toolschema.go`
-- `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`
+- `docs/loopgate-threat-model.md`
 - `docs/roadmap/roadmap.md`
 
 ---
@@ -480,7 +480,7 @@ Expected: PASS.
 **Files:**
 - Modify: `internal/loopgate/server.go`
 - Modify: `internal/loopgate/server_test.go`
-- Modify: `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`
+- Modify: `docs/rfcs/0001-loopgate-token-policy.md`
 
 - [ ] **Step 1: Write the failing hardening tests**
 
@@ -516,7 +516,7 @@ Expected: PASS.
 **Files:**
 - Modify: `docs/rfcs/0009-memory-continuity-and-recall.md`
 - Modify: `docs/roadmap/roadmap.md`
-- Modify: `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`
+- Modify: `docs/rfcs/0001-loopgate-token-policy.md`
 - Modify: `docs/superpowers/plans/2026-03-24-memory-and-hardening-consolidated-plan.md` if implementation drift requires plan notes
 
 - [ ] **Step 1: Update the docs to reflect landed behavior**
@@ -568,7 +568,7 @@ Expected: PASS, or a clearly documented list of known unrelated failures if the 
 - vector or semantic memory retrieval improvements
 - replacing the compact `invoke_capability` pattern with fully explicit native tool definitions everywhere
 - making morphling spawn model-callable as a separate product/security review
-- the larger Haven-to-Loopgate XPC transport migration
+- optional macOS XPC (or similar) transport hardening for the local control plane (`docs/loopgate-threat-model.md`)
 
 These are important, but they should stay out of this implementation pass unless a task above proves impossible without touching them.
 

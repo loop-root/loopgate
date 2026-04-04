@@ -1,17 +1,44 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-  <!-- Loopgate mark: gate arch + control loop -->
+  <!-- Loopgate mark: engineered padlock + monoline ∞ (same visual language, optical balance). -->
+  <defs>
+    <linearGradient id="lg-shackle" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#44403c" />
+      <stop offset="100%" stop-color="#1c1917" />
+    </linearGradient>
+    <linearGradient id="lg-loop" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#fb923c" />
+      <stop offset="55%" stop-color="#ea580c" />
+      <stop offset="100%" stop-color="#c2410c" />
+    </linearGradient>
+  </defs>
+
+  <!-- Padlock: symmetric shackle + body, single closed path -->
   <path
-    stroke="#1a1816"
-    stroke-width="2.25"
-    stroke-linecap="round"
+    fill="#faf8f3"
+    stroke="url(#lg-shackle)"
+    stroke-width="1.65"
     stroke-linejoin="round"
-    d="M7.5 27V13.5c0-4.7 3.8-8.5 8.5-8.5s8.5 3.8 8.5 8.5V27"
-  />
-  <path
-    stroke="#c24e1a"
-    stroke-width="2"
     stroke-linecap="round"
-    d="M11.5 19.5c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5-2 4.5-4.5 4.5c-1.4 0-2.7-.65-3.55-1.65"
+    d="M8.65 17.55
+       C8.65 9.85 11.95 6.35 16 6.35
+       C20.05 6.35 23.35 9.85 23.35 17.55
+       V27.05
+       Q23.35 28.4 22.05 28.4
+       H9.95
+       Q8.65 28.4 8.65 27.05
+       V17.55
+       Z"
   />
-  <circle cx="16" cy="19.5" r="1.35" fill="#1a1816" />
+
+  <!-- Infinity: open stroke (no filled blob), weight matched to lock after scale -->
+  <g transform="translate(16 22.72) scale(0.825) translate(-12 -12)">
+    <path
+      fill="none"
+      stroke="url(#lg-loop)"
+      stroke-width="2.1"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      d="M6 12a6 6 0 0 1 10.5-3.75M18 12a6 6 0 0 1-10.5 3.75"
+    />
+  </g>
 </svg>

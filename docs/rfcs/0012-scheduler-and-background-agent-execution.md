@@ -1,16 +1,16 @@
-**Last updated:** 2026-03-26
+**Last updated:** 2026-04-03
 
-# RFC 0012: Haven Scheduler and Background Agent Execution
+# RFC 0012: Operator-client scheduling and background agent execution
 
 Status: draft
 
 ## 1. Summary
 
-Morph should become more agentic without moving authority out of Loopgate.
+The **operator experience** (IDE, MCP host, or other unprivileged client) should become more capable of multi-step work without moving authority out of Loopgate.
 
 This RFC proposes:
 
-- Haven owns job scheduling, retries, checkpoints, and background progress
+- the **operator client** owns job scheduling, retries, checkpoints, and background progress UX
 - Loopgate remains the authority for approvals, leases, capabilities, secrets,
   sandbox mediation, and audit
 - worker processes execute only through Loopgate-issued scoped authority
@@ -23,9 +23,9 @@ This is the intended path from “interactive assistant with bounded loops” to
 
 Today the system is mostly foreground and request-driven:
 
-- Haven runs a bounded tool loop during a chat turn
+- the operator client runs a bounded tool loop during a chat turn
 - Loopgate remains synchronous and request-driven
-- `run_in_background` is only a stored Haven preference today
+- `run_in_background` is only a stored client preference today
 - morphlings and task plans prove mediated worker execution, but not yet a
   durable background scheduler
 
@@ -55,24 +55,24 @@ This RFC does not:
 The correct split is:
 
 - model proposes
-- Haven schedules
+- operator client schedules
 - Loopgate authorizes
 - workers execute through Loopgate
-- Haven renders progress and manages resumption
+- operator client renders progress and manages resumption
 
-The trusted scheduler is Haven, not the model.
+The trusted scheduler is the **operator client**, not the model.
 
-## 6. Why Haven should own scheduling
+## 6. Why the operator client should own scheduling
 
 This fits the existing architecture:
 
-- Haven already owns operator UX, goals, and local session continuity
+- the operator client already owns UX, goals, and local session continuity
 - Loopgate is explicitly the control plane, not the planner of all user work
 - background orchestration needs retries, inboxing, and checkpoint UX
 - those are client concerns, not kernel concerns
 
 Loopgate should issue narrow authority for a step.
-Haven should decide when to request that authority, when to pause, and when to
+The operator client should decide when to request that authority, when to pause, and when to
 ask the user for more input.
 
 ## 7. Authority model
@@ -82,24 +82,24 @@ The model never receives authority-bearing material directly.
 Correct flow:
 
 1. the model proposes a plan or next step
-2. Haven converts that into structured requests
+2. the operator client converts that into structured requests
 3. Loopgate validates policy, approval state, and scope
 4. Loopgate issues one of:
    - approval requirement
    - task lease
    - morphling worker launch/session
    - scoped capability token where appropriate
-5. Haven passes the scoped authority only to trusted local worker code
+5. the operator client passes the scoped authority only to trusted local worker code
 6. workers call back into Loopgate for actual execution
 
 Important rule:
 
-- the token/lease/session is for Haven and worker processes
+- the token/lease/session is for the operator client and worker processes
 - it is not a model-owned key
 
 ## 8. Proposed runtime objects
 
-### 8.1 Haven-owned scheduler objects
+### 8.1 Client-owned scheduler objects
 
 Suggested shapes:
 
@@ -138,7 +138,7 @@ type StepAttempt struct {
 }
 ```
 
-These are Haven-owned orchestration records.
+These are **operator-client** orchestration records.
 They are not authority records.
 
 ### 8.2 Loopgate-owned authority objects
@@ -157,8 +157,8 @@ Loopgate continues to own:
 ### 9.1 Planning
 
 1. user creates or accepts a goal
-2. Haven asks the model for a structured plan or next step
-3. Haven submits the structured plan to Loopgate
+2. the operator client asks the model for a structured plan or next step
+3. the operator client submits the structured plan to Loopgate
 4. Loopgate validates allowed capability set and approval requirements
 
 ### 9.2 Authorization
@@ -166,17 +166,17 @@ Loopgate continues to own:
 If approval is required:
 
 1. Loopgate creates the approval
-2. Haven marks the job `awaiting_approval`
+2. the operator client marks the job `awaiting_approval`
 3. background execution stops cleanly until the user approves
 
 If approval is not required:
 
 1. Loopgate issues a task lease or worker session
-2. Haven marks the step `ready`
+2. the operator client marks the step `ready`
 
 ### 9.3 Execution
 
-1. Haven spawns a trusted local worker or morphling process
+1. the operator client spawns a trusted local worker or morphling process
 2. worker receives only:
    - lease/session material
    - scoped input
@@ -184,13 +184,13 @@ If approval is not required:
 3. worker executes through Loopgate only
 4. Loopgate mediates capabilities, secrets, and sandbox
 5. worker reports status/progress back through Loopgate
-6. Haven records checkpoints and updates UI
+6. the operator client records checkpoints and updates UI
 
 ### 9.4 Completion
 
 1. worker completes the step
 2. Loopgate finalizes the lease/session state
-3. Haven advances the job
+3. the operator client advances the job
 4. if more steps remain, repeat planning/authorization/execution
 5. otherwise mark completed and surface the result
 
@@ -201,12 +201,12 @@ The scheduler should support three modes:
 ### 10.1 Foreground assisted
 
 - user is present
-- Haven drives the loop actively in the current thread
+- the operator client drives the loop actively in the current thread
 
 ### 10.2 Background allowed
 
 - standing approval or safe class permits execution
-- Haven may continue work without a fresh user tap for each step
+- the operator client may continue work without a fresh user tap for each step
 
 ### 10.3 Background paused
 
@@ -214,12 +214,12 @@ The scheduler should support three modes:
 - ambiguity is too high
 - worker failed and needs human input
 
-This is the state that makes Morph feel agentic without pretending it has
+This is the state that makes the experience feel agentic without pretending the client has
 infinite autonomy.
 
 ## 11. Checkpoints and restart recovery
 
-Haven should persist scheduler state so it can recover after restart.
+The operator client should persist scheduler state so it can recover after restart.
 
 Required checkpoint content:
 
@@ -232,7 +232,7 @@ Required checkpoint content:
 
 On restart:
 
-- Haven reloads scheduler jobs
+- the operator client reloads scheduler jobs
 - queries Loopgate for active authority state
 - reconciles incomplete runs
 - either resumes, re-plans, or marks blocked
@@ -267,7 +267,7 @@ It gives them a home.
 
 Suggested role split:
 
-- Haven scheduler owns job/run lifecycle
+- the operator client’s scheduler owns job/run lifecycle
 - task plans are Loopgate-validated structured execution envelopes
 - morphlings/workers are the bounded execution substrate for a step
 
@@ -292,13 +292,13 @@ This design must preserve:
 
 ## 15. UX consequences
 
-If this is implemented correctly, Morph should feel more agentic because it can:
+If this is implemented correctly, operators should see:
 
-- keep carrying a job forward
-- resume interrupted work
-- pause cleanly for approval
-- tell the user what it is waiting on
-- finish multi-step tasks without restarting from zero each turn
+- jobs carried forward across steps
+- interrupted work resumed
+- clean pauses for approval
+- clear “waiting on …” states
+- multi-step tasks without restarting from zero each turn
 
 But it should still feel governable because:
 
@@ -309,8 +309,8 @@ But it should still feel governable because:
 
 ## 16. Rollout order
 
-1. define Haven scheduler records and persistence
-2. wire scheduler state into desk notes / UI status
+1. define client scheduler records and persistence
+2. wire scheduler state into status surfaces
 3. route one narrow class of jobs through task plans and leased workers
 4. add checkpoint/resume after restart
 5. add standing-approval-aware background continuation

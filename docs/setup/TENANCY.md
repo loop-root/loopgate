@@ -35,7 +35,7 @@ If **`memory/partitions/`** does not exist yet but there are files or directorie
 
 If **`memory/partitions/`** already exists as a directory, migration is a **no-op** (safe to call repeatedly). Operators who still have legacy files at the root after a partial upgrade should move them into `partitions/default/` manually or restore from backup; Loopgate does not merge two layouts automatically.
 
-### Haven memory reset
+### Tenant-scoped memory reset (reference clients)
 
 **`POST /v1/ui/memory/reset`** archives and clears **only the caller’s tenant partition** (the session’s `TenantID`), not every tenant on the node.
 

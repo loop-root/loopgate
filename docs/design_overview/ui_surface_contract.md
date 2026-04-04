@@ -2,7 +2,7 @@
 
 # UI Surface Contract
 
-This document defines the source-of-truth rules for any Morph or Loopgate UI.
+This document defines the source-of-truth rules for any **operator-client** UI that renders Loopgate state.
 
 It exists so browser, desktop, and terminal work do not quietly invent a
 second control plane.
@@ -11,7 +11,7 @@ second control plane.
 
 Loopgate remains the sole control plane.
 
-Morph-owned or UI-owned surfaces may:
+Unprivileged UI surfaces may:
 
 - render status
 - render approved display-safe events
@@ -42,16 +42,16 @@ The UI must not use any of the following as its primary source of truth:
 
 Required pattern:
 
-`Loopgate typed UI API -> presentation adapter or Morph UI client -> rendering`
+`Loopgate typed UI API -> presentation adapter or local UI client -> rendering`
 
-Current implemented UI API in the `morph` repo:
+Current implemented UI API in this repository:
 
 - `GET /v1/ui/status`
 - `GET /v1/ui/events`
 - `GET /v1/ui/approvals` using `X-Loopgate-Approval-Token` for the current control session
 - `POST /v1/ui/approvals/{id}/decision` using `X-Loopgate-Approval-Token` and body `{ "approved": bool }`
-- `POST /v1/ui/workspace/list` for Haven-facing workspace roots and mapped sandbox paths
-- `POST /v1/ui/workspace/preview` for Haven-facing file preview
+- `POST /v1/ui/workspace/list` for local-client workspace roots and mapped sandbox paths
+- `POST /v1/ui/workspace/preview` for local-client file preview
 - `GET /v1/ui/working-notes`, `GET /v1/ui/working-notes/entry`, `POST /v1/ui/working-notes/save`
 - `GET /v1/ui/journal/entries`, `GET /v1/ui/journal/entry`
 - `GET /v1/ui/desk-notes`, `POST /v1/ui/desk-notes/dismiss`
@@ -125,7 +125,7 @@ The bridge bootstrap path must also preserve the control-plane boundary:
 
 - a bridge MUST NOT open its own independent Loopgate session as a parallel
   authority
-- a bridge should receive delegated transport credentials from Morph over a
+- a bridge should receive delegated transport credentials from the operator client over a
   launch-bound local channel
 - delegated bridge clients should use the existing Loopgate delegated-session
   client path rather than `/v1/session/open`
@@ -201,7 +201,7 @@ The UI must not expose:
 
 If a bridge server is implemented, it should write a separate append-only event
 stream for bridge-local auth, proxy, and browser-session events. That log must
-remain separate from both Morph's user ledger and Loopgate's control-plane
+remain separate from both the operator client's user ledger and Loopgate's control-plane
 telemetry.
 
 ## 10) Design principle

@@ -6,7 +6,7 @@ This guide documents how tools are invoked, where policy is enforced, and what i
 
 ## 1) Command paths
 
-The operator client (e.g. Haven) has two execution paths:
+The operator client (terminal CLI, IDE-hosted agent, or local HTTP UI) has two execution paths:
 
 1. Slash commands (`/ls`, `/cat`, `/write`, etc.) handled by `internal/shell`.
 2. Model-driven tool calls parsed from `<tool_call>...</tool_call>` blocks and executed by `internal/orchestrator`.

@@ -10,7 +10,7 @@
 
 # Summary
 
-This RFC defines the **continuity and memory model** for **Haven** (client-side threads and ledger) in concert with **Loopgate**. Continuity allows the product to feel like the same assistant across sessions while preserving strict boundaries around memory growth, provenance, and trust.
+This RFC defines the **continuity and memory model** for **operator clients** (client-side threads and ledger) in concert with **Loopgate**. Continuity allows the product to feel like the same assistant across sessions while preserving strict boundaries around memory growth, provenance, and trust.
 
 Persistence follows a **sleep / wake model**, not a raw archive of every conversation. Only curated continuity artifacts survive across sessions.
 
@@ -25,7 +25,7 @@ Continuity must always be **bounded, auditable, and purgeable**.
 
 This RFC describes the target continuity model. Current code already has
 append-only continuity inputs, bounded wake state, and exact-key recall, but
-some wake-state build/load and recall behavior still lives in Morph-local code
+some wake-state build/load and recall behavior still lives in unprivileged client-local code
 rather than a fully Loopgate-mediated memory control plane.
 
 ---
@@ -46,11 +46,11 @@ Continuity must never behave like a hidden mutable knowledge base.
 
 # Continuity Layers
 
-Morph memory is divided into three layers.
+Client-side memory is divided into three layers.
 
 ## 1. Wake State
 
-Wake state is the small set of information loaded when Morph starts.
+Wake state is the small set of information loaded when the client starts.
 
 Purpose:
 
@@ -131,7 +131,7 @@ Not all information should become durable continuity.
 Promotion rules:
 
 - morphlings produce artifacts
-- Morph summarizes results
+- The client summarizes results
 - user approves promotion
 - Loopgate commits artifact to continuity
 
@@ -159,7 +159,7 @@ Loopgate must record purge events in the audit ledger.
 
 # Memory Classification
 
-Morph must distinguish between types of information when answering questions.
+The client must distinguish between types of information when answering questions.
 
 Categories:
 
@@ -175,7 +175,7 @@ Fresh
 
 Information newly obtained during the current task.
 
-Morph responses should reflect these distinctions when relevant.
+Client responses should reflect these distinctions when relevant.
 
 Remembered information is not fresh truth.
 Derived information is not the same as observed fact.
@@ -194,10 +194,10 @@ Example:
 /morph/state/continuity
 ```
 
-Morph should only access these artifacts through Loopgate APIs in the target
+The client should only access these artifacts through Loopgate APIs in the target
 architecture.
 
-Morph must not modify continuity files directly.
+The client must not modify continuity files directly.
 
 ---
 
@@ -232,7 +232,7 @@ These events must be appended to the audit ledger.
 
 The continuity model must guarantee:
 
-1. Morph cannot silently rewrite memory.
+1. The client cannot silently rewrite memory.
 2. Durable knowledge must be promoted intentionally.
 3. All artifacts include provenance metadata.
 4. Users can purge memory at any time.
@@ -255,4 +255,4 @@ These features are **out of scope for v1**.
 
 # Conclusion
 
-The continuity model allows Morph to maintain useful memory across sessions without turning persistence into an uncontrolled knowledge base. By structuring memory as curated artifacts with explicit promotion and purge controls, Morph preserves both usefulness and user trust.
+The continuity model allows clients to maintain useful memory across sessions without turning persistence into an uncontrolled knowledge base. By structuring memory as curated artifacts with explicit promotion and purge controls, the design preserves both usefulness and user trust.

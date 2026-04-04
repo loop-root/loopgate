@@ -3,12 +3,12 @@
 # RFC 0002: Delegated Session Refresh and Pipe Contract
 
 - Status: Draft
-- Applies to: Morph -> bridge delegated Loopgate credentials
+- Applies to: operator client → bridge delegated Loopgate credentials
 
 ## 1. Purpose
 
 This RFC defines the typed message format and refresh timing rules for
-delegated Loopgate session credentials shared from Morph to a presentation
+delegated Loopgate session credentials shared from the operator client to a presentation
 adapter such as `morphui`.
 
 The goal is to make bridge bootstrap and refresh behavior deterministic,
@@ -32,7 +32,7 @@ This RFC does not cover:
 ## 3. Core rules
 
 - A bridge MUST NOT open its own independent `/v1/session/open`.
-- Morph MUST provide delegated Loopgate transport credentials over a
+- The operator client MUST provide delegated Loopgate transport credentials over a
   launch-bound local channel.
 - Delegated credentials MUST be treated as high-sensitivity material and
   MUST NOT be written to repo state, user-visible audit, or browser-visible
@@ -90,7 +90,7 @@ Credential health states:
 Rules:
 
 - `healthy`: expiry is more than 2 minutes away
-- `refresh_soon`: expiry is within 2 minutes; Morph should push a refreshed
+- `refresh_soon`: expiry is within 2 minutes; the operator client should push a refreshed
   credential set before the current one expires
 - `refresh_required`: expiry is at or before now; delegated clients MUST deny
   privileged requests and MUST NOT fall back to `/v1/session/open`
@@ -100,7 +100,7 @@ Rules:
 Delegated Loopgate clients:
 
 - MAY be constructed from a delegated credential set
-- MAY be updated in-process when Morph sends a fresh credential set
+- MAY be updated in-process when the operator client sends a fresh credential set
 - MUST continue using the normal signed-request path with fresh request nonces
 - MUST fail closed if the delegated credential set expires before a refresh
   arrives

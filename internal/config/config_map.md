@@ -6,7 +6,7 @@ Use it when changing:
 
 - policy struct shape vs `core/policy/policy.yaml`
 - morphling class loading vs `core/policy/morphling_classes.yaml`
-- persona loading vs `persona/morph.yaml`
+- persona loading vs `persona/default.yaml`
 - goal aliases vs `config/goal_aliases.yaml`
 - atomic JSON read/write helpers for `runtime/state/*.json`
 

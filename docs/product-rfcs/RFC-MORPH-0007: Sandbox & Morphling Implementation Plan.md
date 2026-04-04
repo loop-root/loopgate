@@ -3,14 +3,14 @@
 # RFC-MORPH-0007: Sandbox & morphling implementation plan
 
 - **Status:** Draft — staged roadmap from current repo toward north-star architecture
-- **Primary authority:** **Loopgate** (sandbox + morphlings); **Haven** for UX projection
+- **Primary authority:** **Loopgate** (sandbox + morphlings); **operator client** for UX projection
 - **Normative revision:** 2026-03-09
 
 ---
 
 # Summary
 
-This RFC turns the **Loopgate-centered** north-star architecture (Haven + Loopgate + morphlings) into a concrete implementation sequence.
+This RFC turns the **Loopgate-centered** north-star architecture (operator clients + Loopgate + morphlings) into a concrete implementation sequence.
 
 It answers:
 
@@ -21,7 +21,7 @@ It answers:
 This is not a current-state description. It is a staged roadmap from the
 current repo-root, single-shell model toward:
 
-User → Haven → Loopgate → Morphlings → Sandbox
+User → operator client → Loopgate → Morphlings → Sandbox
 
 ---
 
@@ -56,7 +56,7 @@ The codebase does **not** yet have:
 
 The target product model is:
 
-- **Haven** is the persistent operator shell (desktop)
+- The **operator client** is the persistent operator shell (desktop or IDE)
 - Loopgate is the kernel/control plane
 - Morphlings are disposable workers
 - all agent work happens inside a dedicated sandbox
@@ -262,7 +262,7 @@ plan
 ## Invariants
 
 - morphlings are workers, not peers
-- they do not inherit full Haven / session authority
+- they do not inherit full operator-client / session authority
 - only staged artifacts survive
 
 ---
@@ -323,9 +323,9 @@ It is the thing that makes morphlings safe enough to exist.
 
 This roadmap is successful when:
 
-- Haven no longer needs repo-root access as its default workspace model
+- The operator client no longer needs repo-root access as its default workspace model
 - a user can explicitly import work into a sandbox
-- Haven and morphlings operate only inside the sandbox
+- Operator clients and morphlings operate only inside the sandbox
 - exports are staged, reviewed, approved, and auditable
 - morphlings can complete bounded one-shot tasks without broad host authority
 

@@ -1,4 +1,4 @@
-**Last updated:** 2026-03-25
+**Last updated:** 2026-04-03
 
 # Loopgate
 
@@ -7,11 +7,13 @@ Loopgate is the policy-governed control plane and enforcement runtime in this re
 It is not just a reverse proxy.
 It is the enforcement point for capabilities, approvals, integration auth, and outbound execution.
 
-**v1 transport:** **Haven** uses **HTTP** on the **Unix domain socket** control plane. That is the deliberate v1 architecture (engineering cost and ship speed). **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`, `docs/rfcs/0001-loopgate-token-policy.md`, and `docs/product-rfcs/RFC-MORPH-0009`.
+**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — MCP subprocesses, proxy adapters, IDE bridges, and custom integrators attach this way. That is the deliberate v1 architecture (engineering cost and ship speed). **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md`, `docs/loopgate-threat-model.md`, and `docs/product-rfcs/RFC-MORPH-0009`.
 
-**Integrator guide:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list, Swift-oriented notes).
+**Primary integrators:** [Loopgate MCP](../setup/LOOPGATE_MCP.md) for Claude Code, Cursor, VS Code, Anti‑Gravity, OpenAI Codex, and other MCP hosts.
 
-**Security posture (honest v1 vs future work):** [Haven ↔ Loopgate: local control plane security posture](../HavenOS/Haven_Loopgate_Local_Control_Plane_Posture.md) — same-user threat scope, **`GET /v1/health`** as the only unauthenticated inventory-free probe, signed **`GET /v1/status`** / **`GET /v1/connections/status`**, peer binding, and v2 backlog (codesign / XPC).
+**HTTP integrator guide:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list).
+
+**Security posture (honest v1 vs future work):** [Threat model](../loopgate-threat-model.md) and [RFC 0001](../rfcs/0001-loopgate-token-policy.md) — same-user threat scope, **`GET /v1/health`** as the only unauthenticated inventory-free probe, signed **`GET /v1/status`** / **`GET /v1/connections/status`**, peer binding, and v2 backlog (codesign / XPC).
 
 ## Current state
 
@@ -19,7 +21,7 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
 
 - Unix-socket service at `runtime/state/loopgate.sock`
 - authoritative policy loaded inside Loopgate
-- server-issued control sessions for local operator clients (e.g. Haven, future MCP/proxy callers)
+- server-issued control sessions for local operator clients (IDE/MCP bridges, reference shell, tests)
 - client-supplied `actor` / `session_id` treated as labels, not approval authority
 - capability and approval tokens bound to the Unix-socket peer identity that opened the session
 - subsequent privileged requests signed with a server-issued session MAC key and single-use request nonces
@@ -164,8 +166,7 @@ Implemented endpoints:
 - `POST /v1/memory/inspections/{id}/tombstone`
 - `POST /v1/memory/inspections/{id}/purge`
 
-The Haven-facing memory UI routes are intentionally display-safe and
-operator-oriented:
+The display-safe memory UI routes are intentionally operator-oriented:
 
 - `GET /v1/ui/memory` returns a redacted inventory of manageable memory objects
   and wake-state counts
@@ -230,12 +231,12 @@ Not yet implemented:
 
 ## Boundary split
 
-### Operator client (e.g. Haven) owns
+### Unprivileged operator client owns
 
-- terminal UI and operator UX
-- model interaction and prompt compilation
+- operator UX (IDE, MCP host, or reference shell)
+- model interaction and prompt compilation (where applicable)
 - local session state
-- local append-only continuity ledger and explicit `current / next / previous` role state
+- local append-only continuity ledger and explicit `current / next / previous` role state (where used)
 - rendering Loopgate decisions and approval prompts
 
 ### Loopgate owns

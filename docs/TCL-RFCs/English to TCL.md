@@ -84,7 +84,7 @@ If object resolution is ambiguous and no better inference exists, use `UNK`.
 | concise / brief | `CON` |
 | private / secret / personal | `PRI` |
 | external / internet / outside | `EXT` |
-| internal / local / inside Haven | `INT` |
+| internal / local / inside client shell | `INT` |
 | speculative / maybe / probably | `SPC` |
 | confirmed / definitely / exact | `CNF` |
 

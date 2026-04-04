@@ -1,15 +1,15 @@
 # Persona Map
 
-This file maps **`persona/`** — Morph **persona copy** and **values** loaded into prompts and product tone.
+This file maps **`persona/`** — default **operator persona** copy and **values** loaded into prompts and product tone.
 
 Use it when changing:
 
 - self-description, voice, or checked-in persona YAML
-- alignment between `morph.yaml` and prompt compiler expectations
+- alignment between `default.yaml` and prompt compiler expectations
 
 ## Files
 
-- `morph.yaml`
+- `default.yaml`
   - structured persona fields consumed by `internal/config` persona loading and `internal/prompt`
 
 - `values.md`

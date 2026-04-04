@@ -122,8 +122,69 @@ func TestContinuityReplay_RejectsOrRepairsOrphanedMutationSequence(t *testing.T)
 		t.Fatalf("close continuity events: %v", err)
 	}
 
-	if _, err := loadContinuityMemoryState(testDefaultPartitionRoot(t, server), server.memoryLegacyPath); err == nil {
+	_, err = loadContinuityMemoryState(testDefaultPartitionRoot(t, server), server.memoryLegacyPath)
+	if err == nil {
 		t.Fatal("expected continuity replay to reject corrupted jsonl")
+	}
+	if !strings.Contains(err.Error(), paths.ContinuityEventsPath) {
+		t.Fatalf("expected replay error to include continuity path, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "line 2") {
+		t.Fatalf("expected replay error to include corrupt line number, got %v", err)
+	}
+}
+
+func TestEnsureMemoryPartitionLocked_CorruptReplayFailureIsExplicit(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	if _, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_partition_replay_corrupt", "thread_partition_replay_corrupt", "seed continuity jsonl")); err != nil {
+		t.Fatalf("seed inspect: %v", err)
+	}
+
+	defaultPartitionRoot := testDefaultPartitionRoot(t, server)
+	paths := newContinuityMemoryPaths(defaultPartitionRoot, server.memoryLegacyPath)
+	fileHandle, err := os.OpenFile(paths.ContinuityEventsPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatalf("open continuity events: %v", err)
+	}
+	if _, err := fileHandle.WriteString("not-a-valid-continuity-json-line\n"); err != nil {
+		t.Fatalf("append corrupt line: %v", err)
+	}
+	if err := fileHandle.Close(); err != nil {
+		t.Fatalf("close continuity events: %v", err)
+	}
+
+	var warningEventCode string
+	var warningCause error
+	server.reportSecurityWarning = func(eventCode string, cause error) {
+		warningEventCode = eventCode
+		warningCause = cause
+	}
+
+	server.memoryMu.Lock()
+	delete(server.memoryPartitions, memoryPartitionKey(""))
+	_, err = server.ensureMemoryPartitionLocked("")
+	server.memoryMu.Unlock()
+	if err == nil {
+		t.Fatal("expected corrupt continuity replay to deny partition load")
+	}
+	if !strings.Contains(err.Error(), "load continuity memory partition") {
+		t.Fatalf("expected partition load context, got %v", err)
+	}
+	if !strings.Contains(err.Error(), memoryPartitionKey("")) {
+		t.Fatalf("expected partition key in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), paths.ContinuityEventsPath) || !strings.Contains(err.Error(), "line 2") {
+		t.Fatalf("expected replay location in error, got %v", err)
+	}
+	if warningEventCode != "continuity_partition_load_failed" {
+		t.Fatalf("expected continuity_partition_load_failed warning, got %q", warningEventCode)
+	}
+	if warningCause == nil {
+		t.Fatal("expected warning cause for corrupt replay")
+	}
+	if !strings.Contains(warningCause.Error(), paths.ContinuityEventsPath) || !strings.Contains(warningCause.Error(), "line 2") {
+		t.Fatalf("expected warning cause to retain replay location, got %v", warningCause)
 	}
 }
 

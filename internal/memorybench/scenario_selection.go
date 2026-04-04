@@ -25,6 +25,14 @@ var builtInScenarioSets = map[string][]string{
 		"contradiction.profile_timezone_preview_only_control.v1",
 		"contradiction.profile_locale_preview_only_control.v1",
 	},
+	"demo_task_resumption": {
+		"task_resumption.blocker_changes_over_time.v1",
+		"task_resumption.long_history_cost_pressure.v1",
+	},
+	"demo_slot_truth": {
+		"contradiction.profile_timezone_same_entity_wrong_current_probe.v1",
+		"contradiction.profile_locale_preview_bias_far_match_slot_probe.v1",
+	},
 }
 
 func NormalizeScenarioFilter(rawScenarioFilter ScenarioFilter) (ScenarioFilter, error) {

@@ -37,7 +37,7 @@ Use it when changing:
 
 - Policy: `internal/policy/`
 - Tools: `internal/tools/`
-- Haven chat loop: `cmd/haven/chat.go`
+- Reference Wails chat loop: `cmd/haven/chat.go`
 
 ## Important Watchouts
 

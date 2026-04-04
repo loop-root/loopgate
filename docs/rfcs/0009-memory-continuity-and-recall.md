@@ -6,7 +6,7 @@ Status: draft
 
 ## 1. Summary
 
-Morph persistent memory should behave like a continuity stream with controlled
+Operator-visible persistent memory should behave like a continuity stream with controlled
 compaction, not a mutable database of model-owned facts.
 
 The system should:
@@ -34,7 +34,7 @@ history replay.
 - keep durable memory append-only and auditable
 - make durable memory artifacts derived, explicit, and reviewable
 - distinguish remembered information from freshly checked information
-- let Morph start from a compact wake state instead of a blank session
+- let the operator client start from a compact wake state instead of a blank session
 - allow deeper recall only through explicit Loopgate-governed requests
 
 ## 2.1 Design bias
@@ -141,7 +141,7 @@ Loopgate governs:
 - which derived artifacts are eligible for distillation
 - which memory artifacts may be recalled for a given use
 
-Morph governs:
+The operator client governs:
 
 - active context assembly
 - local memory ownership and session continuity
@@ -591,12 +591,12 @@ This keeps startup continuity comprehensible and bounded.
 
 ## 12. Remembered vs fresh truth boundary
 
-Morph must distinguish:
+The operator client must distinguish:
 
 - remembered historical continuity
 - newly checked provider or system state
 
-Morph should also avoid collapsing these different kinds of memory claims into
+The operator client should also avoid collapsing these different kinds of memory claims into
 one undifferentiated truth bucket:
 
 - what was observed

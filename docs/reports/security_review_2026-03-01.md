@@ -15,7 +15,7 @@ docs/design_overview/architecture.md
 
 # Loopgate security review – March 2026 (historical)
 
-**Terminology:** Body text below sometimes says *Morph* for the unprivileged client. Current docs use **operator client** / **Haven** for that role and treat **Loopgate** as the primary product name.
+**Terminology:** **Operator client** = unprivileged UI/CLI/runtime that talks to Loopgate; **Loopgate** = privileged control plane.
 
 This document summarizes the current security posture of the operator-client + Loopgate architecture and highlights areas that have improved as well as areas that still require hardening. It is intended to guide further work by human contributors and automated coding agents (Codex).
 
@@ -27,7 +27,7 @@ The system has undergone meaningful security hardening compared to earlier revis
 
 Key improvements include:
 
-- A clearer control‑plane split between Morph and Loopgate
+- A clearer control‑plane split between the operator client and Loopgate
 - Unix domain socket transport with strict permissions
 - Peer credential verification for client identity
 - Signed privileged requests with nonce and timestamp
@@ -44,9 +44,9 @@ The architecture is now credible as a **local-first control‑plane security mod
 
 The core architectural model remains sound:
 
-Model → Morph → Loopgate → Integrations
+Model → operator client → Loopgate → Integrations
 
-Morph acts as an **unprivileged client runtime**, while Loopgate operates as the **privileged control plane**.
+The operator client acts as an **unprivileged client runtime**, while Loopgate operates as the **privileged control plane**.
 
 This boundary is now implemented in code rather than existing only in documentation, which is a major improvement.
 
@@ -59,7 +59,7 @@ Loopgate is responsible for:
 - Capability token issuance
 - Integration execution
 
-Morph is responsible for:
+The operator client is responsible for:
 
 - CLI and UI rendering
 - Model interaction
@@ -110,7 +110,7 @@ Enhancements include:
 - Replay protection
 - Actor/session binding
 
-Approval flows now correctly prevent Morph from self‑authorizing privileged actions.
+Approval flows now correctly prevent the operator client from self‑authorizing privileged actions.
 
 Loopgate remains the single source of truth for approval state.
 
@@ -170,7 +170,7 @@ Loopgate denies attempts to retrieve:
 - Refresh tokens
 - Client secrets
 
-Secret material remains stored behind secure store interfaces and is not exposed to Morph.
+Secret material remains stored behind secure store interfaces and is not exposed to the operator client.
 
 Tests exist verifying that secret export requests are rejected.
 
@@ -236,7 +236,7 @@ The following areas should be prioritized for future hardening.
 
 ## Duplicate Logging Implementations
 
-Legacy logging paths in some Morph adapters still swallow errors and duplicate functionality already implemented in the orchestrator logger.
+Legacy logging paths in some client adapters still swallow errors and duplicate functionality already implemented in the orchestrator logger.
 
 These paths should be removed or redirected to the canonical logger.
 
@@ -309,7 +309,7 @@ Priority order:
 
 # Conclusion
 
-The Morph project has transitioned from an experimental architecture into a credible security‑aware control plane.
+Loopgate has transitioned from an experimental architecture into a credible security‑aware control plane.
 
 The most important progress is that **security boundaries are now enforced in code rather than merely described in documentation**.
 

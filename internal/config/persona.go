@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Persona represents Morph's declarative identity configuration.
+// Persona represents declarative operator-facing assistant defaults loaded from YAML.
 type Persona struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
@@ -79,10 +79,10 @@ type Persona struct {
 	} `yaml:"defaults"`
 }
 
-// LoadPersona loads persona configuration from persona/morph.yaml.
+// LoadPersona loads persona configuration from persona/default.yaml.
 // If the file does not exist, it returns a sane default Persona.
 func LoadPersona(repoRoot string) (Persona, error) {
-	path := filepath.Join(repoRoot, "persona", "morph.yaml")
+	path := filepath.Join(repoRoot, "persona", "default.yaml")
 
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -107,8 +107,8 @@ func LoadPersona(repoRoot string) (Persona, error) {
 
 func defaultPersona() Persona {
 	persona := Persona{
-		Name:        "Morph",
-		Description: "A helpful, honest, security-minded AI orchestrator that treats untrusted input cautiously and states uncertainty explicitly.",
+		Name:        "Operator",
+		Description: "A helpful, honest, security-minded assistant configuration that treats untrusted input cautiously and states uncertainty explicitly.",
 		Version:     "0.1.0",
 		Values: []string{
 			"honesty",
@@ -190,7 +190,7 @@ func defaultPersona() Persona {
 
 func applyPersonaDefaults(persona *Persona) {
 	if persona.Name == "" {
-		persona.Name = "Morph"
+		persona.Name = "Operator"
 	}
 	if persona.Description == "" {
 		persona.Description = "A helpful, honest, security-minded AI orchestrator that treats untrusted input cautiously and states uncertainty explicitly."

@@ -55,6 +55,38 @@ func TestSelectScenarioFixtures_ByCategoryAndSubfamily(t *testing.T) {
 	}
 }
 
+func TestSelectScenarioFixtures_DemoTaskResumptionSet(t *testing.T) {
+	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
+		ScenarioSets: []string{"demo_task_resumption"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := SelectScenarioFixtures(DefaultScenarioFixtures(), normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	if len(selectedFixtures) != 2 {
+		t.Fatalf("expected two demo task resumption fixtures, got %d", len(selectedFixtures))
+	}
+}
+
+func TestSelectScenarioFixtures_DemoSlotTruthSet(t *testing.T) {
+	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
+		ScenarioSets: []string{"demo_slot_truth"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := SelectScenarioFixtures(DefaultScenarioFixtures(), normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	if len(selectedFixtures) != 2 {
+		t.Fatalf("expected two demo slot-truth fixtures, got %d", len(selectedFixtures))
+	}
+}
+
 func TestSelectScenarioFixtures_EmptySelectionFailsClosed(t *testing.T) {
 	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
 		ScenarioIDs: []string{"missing.fixture.v1"},

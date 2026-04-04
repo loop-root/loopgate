@@ -5,16 +5,17 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"morph/internal/config"
 	"morph/internal/ledger"
 	"morph/internal/secrets"
 
@@ -23,10 +24,14 @@ import (
 
 // See docs/adr/0016-admin-console-v0-auth.md.
 const (
-	adminSessionCookieName = "lg_admin_session"
-	minAdminTokenRunes     = 24
-	adminSessionTTL        = 8 * time.Hour
-	adminAuditExportLimit  = 5000
+	adminSessionCookieName    = "lg_admin_session"
+	minAdminTokenRunes        = 24
+	adminSessionTTL           = 8 * time.Hour
+	adminAuditExportLimit     = 5000
+	adminDashboardAuditRetain = 5000
+	// adminAuditLedgerTypeModelChatDone is the stable audit ledger type for completed governed model chat turns
+	// (carries input_tokens / output_tokens). Wire id is historical; admin UI surfaces a product-agnostic label.
+	adminAuditLedgerTypeModelChatDone = "haven.chat"
 )
 
 // ConfiguredAdminListenAddr returns the TCP address from config when this process started the admin
@@ -144,6 +149,8 @@ func (server *Server) handleAdminProtectedSubtree(response http.ResponseWriter, 
 		server.handleAdminRoot(response, request)
 	case "/admin/policy":
 		server.handleAdminPolicy(response, request)
+	case "/admin/config":
+		server.handleAdminRuntimeConfig(response, request)
 	case "/admin/audit":
 		server.handleAdminAudit(response, request)
 	case "/admin/users":
@@ -162,7 +169,7 @@ func (server *Server) handleAdminLogin(response http.ResponseWriter, request *ht
 		}
 		response.Header().Set("Content-Type", "text/html; charset=utf-8")
 		response.WriteHeader(http.StatusOK)
-		_ = adminLoginPageTemplate.Execute(response, nil)
+		_ = adminLoginStyled.Execute(response, nil)
 	case http.MethodPost:
 		if err := request.ParseForm(); err != nil {
 			http.Error(response, "bad form", http.StatusBadRequest)
@@ -173,7 +180,7 @@ func (server *Server) handleAdminLogin(response http.ResponseWriter, request *ht
 			server.adminDiagWarn("admin_console_login_denied", "reason", "token_mismatch")
 			response.Header().Set("Content-Type", "text/html; charset=utf-8")
 			response.WriteHeader(http.StatusUnauthorized)
-			_ = adminLoginPageTemplate.Execute(response, map[string]any{"Error": "Invalid token."})
+			_ = adminLoginStyled.Execute(response, map[string]any{"Error": "Invalid token."})
 			return
 		}
 		sessionToken, err := randomHex(32)
@@ -231,12 +238,191 @@ func (server *Server) handleAdminRoot(response http.ResponseWriter, request *htt
 		http.NotFound(response, request)
 		return
 	}
-	response.Header().Set("Content-Type", "text/html; charset=utf-8")
-	response.WriteHeader(http.StatusOK)
-	_ = adminShellTemplate.Execute(response, map[string]any{
-		"Title":   "Loopgate admin",
-		"Content": template.HTML(`<p class="nav"><a href="/admin/policy">Policy</a> · <a href="/admin/audit">Audit</a> · <a href="/admin/users">Sessions</a></p><p>Deployment tenant filter: <code>` + template.HTMLEscapeString(adminTenantLabel(server.adminDeploymentTenantID())) + `</code></p><form method="post" action="/admin/logout"><button type="submit">Sign out</button></form>`),
-	})
+	dash, err := server.buildAdminDashboardPageData()
+	if err != nil {
+		http.Error(response, "build dashboard", http.StatusInternalServerError)
+		return
+	}
+	server.adminDiagInfo("admin_console_dashboard_view",
+		"active_sessions", dash.ActiveSessions,
+		"model_chat_turns_window", dash.ModelChatTurns,
+	)
+	body, err := executeAdminTemplate(adminHomeContent, dash)
+	if err != nil {
+		http.Error(response, "render page", http.StatusInternalServerError)
+		return
+	}
+	server.renderAdminLayout(response, "Dashboard", "home", body)
+}
+
+func adminCoerceInt64(v interface{}) int64 {
+	switch x := v.(type) {
+	case float64:
+		return int64(x)
+	case int:
+		return int64(x)
+	case int64:
+		return x
+	case uint64:
+		return int64(x)
+	case json.Number:
+		n, err := x.Int64()
+		if err != nil {
+			return 0
+		}
+		return n
+	default:
+		return 0
+	}
+}
+
+func adminFormatByteSize(n int64) string {
+	if n < 0 {
+		return "—"
+	}
+	const kb = 1024
+	switch {
+	case n < kb:
+		return fmt.Sprintf("%d B", n)
+	case n < kb*kb:
+		return fmt.Sprintf("%.1f KiB", float64(n)/kb)
+	case n < kb*kb*kb:
+		return fmt.Sprintf("%.1f MiB", float64(n)/(kb*kb))
+	default:
+		return fmt.Sprintf("%.2f GiB", float64(n)/(kb*kb*kb))
+	}
+}
+
+// scanAuditTailForDashboard retains the last retainCap events (tenant-filtered) and aggregates token fields
+// from completed model chat audit rows (see adminAuditLedgerTypeModelChatDone).
+func (server *Server) scanAuditTailForDashboard(retainCap int) (modelChatTurns int, inputSum, outputSum int64, retained int, err error) {
+	deploymentTenant := server.adminDeploymentTenantID()
+	file, err := os.Open(server.auditPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, 0, 0, 0, nil
+		}
+		return 0, 0, 0, 0, err
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	const maxAuditLineBytes = 4 * 1024 * 1024
+	scanner.Buffer(make([]byte, 64*1024), maxAuditLineBytes)
+
+	var ring []ledger.Event
+	for scanner.Scan() {
+		line := bytesTrimSpaceCopy(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var event ledger.Event
+		if err := json.Unmarshal(line, &event); err != nil {
+			continue
+		}
+		if deploymentTenant != "" {
+			if event.Data == nil {
+				continue
+			}
+			tid, _ := event.Data["tenant_id"].(string)
+			if strings.TrimSpace(tid) != deploymentTenant {
+				continue
+			}
+		}
+		ring = append(ring, event)
+		if len(ring) > retainCap {
+			ring = ring[1:]
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, 0, 0, 0, err
+	}
+	retained = len(ring)
+	for _, e := range ring {
+		if e.Type != adminAuditLedgerTypeModelChatDone || e.Data == nil {
+			continue
+		}
+		modelChatTurns++
+		inputSum += adminCoerceInt64(e.Data["input_tokens"])
+		outputSum += adminCoerceInt64(e.Data["output_tokens"])
+	}
+	return modelChatTurns, inputSum, outputSum, retained, nil
+}
+
+func (server *Server) buildAdminDashboardPageData() (adminDashboardPageData, error) {
+	modelChatTurns, inTok, outTok, retained, err := server.scanAuditTailForDashboard(adminDashboardAuditRetain)
+	if err != nil {
+		return adminDashboardPageData{}, err
+	}
+
+	gatesOn, gatesTotal := countPolicyGatesEnabled(server.policy)
+	subordinateActive := server.activeMorphlingCount(server.now().UTC())
+	subordinateMax := server.policy.Tools.Morphlings.MaxActive
+
+	listen := strings.TrimSpace(server.adminListenAddr)
+	if listen == "" {
+		listen = "—"
+	}
+
+	var ledgerBytes int64 = -1
+	if fi, statErr := os.Stat(server.auditPath); statErr == nil {
+		ledgerBytes = fi.Size()
+	}
+
+	server.connectionsMu.Lock()
+	liveConn := len(server.connections)
+	server.connectionsMu.Unlock()
+
+	server.modelConnectionsMu.Lock()
+	modelConn := len(server.modelConnections)
+	server.modelConnectionsMu.Unlock()
+
+	deploymentTenant := server.adminDeploymentTenantID()
+	server.mu.Lock()
+	pending := 0
+	for _, approvalRecord := range server.approvals {
+		if approvalRecord.State == "pending" {
+			pending++
+		}
+	}
+	tokensHeld := len(server.tokens)
+	userSeen := make(map[string]struct{})
+	activeSessions := 0
+	for _, session := range server.sessions {
+		if deploymentTenant != "" && strings.TrimSpace(session.TenantID) != deploymentTenant {
+			continue
+		}
+		activeSessions++
+		uid := strings.TrimSpace(session.UserID)
+		if uid != "" {
+			userSeen[uid] = struct{}{}
+		}
+	}
+	server.mu.Unlock()
+
+	return adminDashboardPageData{
+		AdminListenAddr:    listen,
+		PolicyVersion:      server.policy.Version,
+		ActiveSessions:     activeSessions,
+		DistinctUsers:      len(userSeen),
+		PendingApprovals:   pending,
+		ActiveSubordinates: subordinateActive,
+		SubordinateMax:     subordinateMax,
+		LiveConnections:    liveConn,
+		ModelConnections:   modelConn,
+		CapabilityTokens:   tokensHeld,
+		AuditLedgerBytes:   adminFormatByteSize(ledgerBytes),
+		AuditLedgerNote:    fmt.Sprintf("Trailing window: %d events retained for token math (cap %d).", retained, adminDashboardAuditRetain),
+		Goroutines:         runtime.NumGoroutine(),
+		PolicyGatesOn:      gatesOn,
+		PolicyGatesTotal:   gatesTotal,
+		ModelChatTurns:     modelChatTurns,
+		InputTokensWindow:  inTok,
+		OutputTokensWindow: outTok,
+		TotalTokensWindow:  inTok + outTok,
+		AuditWindowEvents:  retained,
+		AuditScanCap:       adminDashboardAuditRetain,
+	}, nil
 }
 
 func adminTenantLabel(tenantID string) string {
@@ -253,26 +439,44 @@ func (server *Server) handleAdminPolicy(response http.ResponseWriter, request *h
 		return
 	}
 	server.adminDiagInfo("admin_console_policy_view")
-	policyJSON, err := config.PolicyToJSON(server.policy)
+	classPolicyPath := filepath.Join(server.repoRoot, "core", "policy", "morphling_classes.yaml")
+	classPolicyYAML, err := os.ReadFile(classPolicyPath)
 	if err != nil {
-		http.Error(response, "serialize policy", http.StatusInternalServerError)
+		http.Error(response, "read subordinate class policy", http.StatusInternalServerError)
 		return
 	}
-	morphPath := filepath.Join(server.repoRoot, "core", "policy", "morphling_classes.yaml")
-	morphYAML, err := os.ReadFile(morphPath)
+	pageData := adminPolicyPageData{
+		Sections:                   buildAdminPolicySections(server.policy),
+		SubordinateClassPolicyPath: classPolicyPath,
+		SubordinateClassPolicyYAML: string(classPolicyYAML),
+	}
+	body, err := executeAdminTemplate(adminPolicyContent, pageData)
 	if err != nil {
-		http.Error(response, "read morphling class policy", http.StatusInternalServerError)
+		http.Error(response, "render policy page", http.StatusInternalServerError)
 		return
 	}
-	response.Header().Set("Content-Type", "text/html; charset=utf-8")
-	response.WriteHeader(http.StatusOK)
-	_ = adminShellTemplate.Execute(response, map[string]any{
-		"Title": "Policy",
-		"Content": template.HTML(
-			`<h2>Active policy (JSON)</h2><pre>` + template.HTMLEscapeString(string(policyJSON)) + `</pre>` +
-				`<h2>Morphling classes (YAML seed)</h2><pre>` + template.HTMLEscapeString(string(morphYAML)) + `</pre>`,
-		),
-	})
+	server.renderAdminLayout(response, "Capability policy", "policy", body)
+}
+
+func (server *Server) handleAdminRuntimeConfig(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		response.Header().Set("Allow", http.MethodGet)
+		http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	server.adminDiagInfo("admin_console_runtime_config_view")
+	cfg := server.runtimeConfig
+	pageData := adminRuntimePageData{
+		Sections:       buildAdminRuntimeSections(cfg),
+		BackendOptions: adminMemoryBackendOptions(cfg.Memory.Backend),
+		CurrentBackend: cfg.Memory.Backend,
+	}
+	body, err := executeAdminTemplate(adminRuntimeContent, pageData)
+	if err != nil {
+		http.Error(response, "render configuration page", http.StatusInternalServerError)
+		return
+	}
+	server.renderAdminLayout(response, "Configuration", "config", body)
 }
 
 func (server *Server) handleAdminUsers(response http.ResponseWriter, request *http.Request) {
@@ -301,36 +505,13 @@ func (server *Server) handleAdminUsers(response http.ResponseWriter, request *ht
 	}
 	server.mu.Unlock()
 
-	var tableHTML strings.Builder
-	tableHTML.WriteString(`<table class="grid"><thead><tr><th>Session</th><th>Actor</th><th>Client</th><th>Tenant</th><th>User</th><th>Peer UID</th><th>Created</th><th>Expires</th></tr></thead><tbody>`)
-	for _, row := range rows {
-		tableHTML.WriteString("<tr><td>")
-		tableHTML.WriteString(template.HTMLEscapeString(row.SessionID))
-		tableHTML.WriteString("</td><td>")
-		tableHTML.WriteString(template.HTMLEscapeString(row.ActorLabel))
-		tableHTML.WriteString("</td><td>")
-		tableHTML.WriteString(template.HTMLEscapeString(row.ClientSession))
-		tableHTML.WriteString("</td><td>")
-		tableHTML.WriteString(template.HTMLEscapeString(row.TenantID))
-		tableHTML.WriteString("</td><td>")
-		tableHTML.WriteString(template.HTMLEscapeString(row.UserID))
-		tableHTML.WriteString("</td><td>")
-		tableHTML.WriteString(strconv.FormatUint(uint64(row.PeerUID), 10))
-		tableHTML.WriteString("</td><td>")
-		tableHTML.WriteString(template.HTMLEscapeString(row.CreatedAtRFC3339))
-		tableHTML.WriteString("</td><td>")
-		tableHTML.WriteString(template.HTMLEscapeString(row.ExpiresAtRFC3339))
-		tableHTML.WriteString("</td></tr>")
-	}
-	tableHTML.WriteString("</tbody></table>")
-
 	server.adminDiagInfo("admin_console_users_view", "row_count", len(rows))
-	response.Header().Set("Content-Type", "text/html; charset=utf-8")
-	response.WriteHeader(http.StatusOK)
-	_ = adminShellTemplate.Execute(response, map[string]any{
-		"Title":   "Control sessions",
-		"Content": template.HTML(tableHTML.String()),
-	})
+	body, err := executeAdminTemplate(adminUsersContent, adminUsersPageData{Rows: rows})
+	if err != nil {
+		http.Error(response, "render sessions page", http.StatusInternalServerError)
+		return
+	}
+	server.renderAdminLayout(response, "Sessions", "users", body)
 }
 
 type adminUserRow struct {
@@ -351,7 +532,18 @@ func (server *Server) handleAdminAudit(response http.ResponseWriter, request *ht
 		return
 	}
 	query := request.URL.Query()
-	typeFilter := strings.TrimSpace(query.Get("type"))
+	typeCustom := strings.TrimSpace(query.Get("type_custom"))
+	typePreset := strings.TrimSpace(query.Get("type_preset"))
+	legacyType := strings.TrimSpace(query.Get("type"))
+	typeFilter := ""
+	switch {
+	case typeCustom != "":
+		typeFilter = typeCustom
+	case legacyType != "":
+		typeFilter = legacyType
+	default:
+		typeFilter = typePreset
+	}
 	userFilter := strings.TrimSpace(query.Get("user_id"))
 	limit := 200
 	if rawLimit := strings.TrimSpace(query.Get("limit")); rawLimit != "" {
@@ -389,29 +581,109 @@ func (server *Server) handleAdminAudit(response http.ResponseWriter, request *ht
 		return
 	}
 
-	response.Header().Set("Content-Type", "text/html; charset=utf-8")
-	response.WriteHeader(http.StatusOK)
-	var b strings.Builder
-	b.WriteString(`<p><a href="/admin/audit?format=csv">Download CSV</a> (redacted)</p>`)
-	b.WriteString(`<table class="grid"><thead><tr><th>Time</th><th>Type</th><th>Session</th><th>Data (redacted JSON)</th></tr></thead><tbody>`)
+	discoveredTypes, err := server.collectAuditEventTypesForAdmin(100000)
+	if err != nil {
+		http.Error(response, "scan audit types", http.StatusInternalServerError)
+		return
+	}
+	typeCustomInput := typeCustom
+	if typeCustomInput == "" && legacyType != "" && legacyType == typeFilter {
+		typeCustomInput = legacyType
+	}
+	csvParams := url.Values{}
+	csvParams.Set("format", "csv")
+	csvParams.Set("limit", strconv.Itoa(limit))
+	if userFilter != "" {
+		csvParams.Set("user_id", userFilter)
+	}
+	if typeFilter != "" {
+		csvParams.Set("type", typeFilter)
+	}
+	auditRows := make([]adminAuditRow, 0, len(events))
 	for _, event := range events {
 		redactedData := secrets.RedactStructuredFields(event.Data)
-		dataBytes, _ := json.Marshal(redactedData)
-		b.WriteString("<tr><td>")
-		b.WriteString(template.HTMLEscapeString(event.TS))
-		b.WriteString("</td><td>")
-		b.WriteString(template.HTMLEscapeString(event.Type))
-		b.WriteString("</td><td>")
-		b.WriteString(template.HTMLEscapeString(event.Session))
-		b.WriteString("</td><td><pre>")
-		b.WriteString(template.HTMLEscapeString(string(dataBytes)))
-		b.WriteString("</pre></td></tr>")
+		dataBytes, err := json.Marshal(redactedData)
+		if err != nil {
+			http.Error(response, "encode row", http.StatusInternalServerError)
+			return
+		}
+		auditRows = append(auditRows, adminAuditRow{
+			TS:          event.TS,
+			TypeDisplay: adminFriendlyAuditTypeLabel(event.Type),
+			Session:     event.Session,
+			DataJSON:    string(dataBytes),
+		})
 	}
-	b.WriteString("</tbody></table>")
-	_ = adminShellTemplate.Execute(response, map[string]any{
-		"Title":   "Audit",
-		"Content": template.HTML(b.String()),
-	})
+	pageData := adminAuditPageData{
+		TypeOptions:   buildAdminAuditTypeOptions(typeFilter, discoveredTypes),
+		TypeCustom:    typeCustomInput,
+		UserID:        userFilter,
+		SelectedLimit: limit,
+		LimitOptions:  []int{50, 100, 200, 500, 1000, adminAuditExportLimit},
+		CSVLink:       "/admin/audit?" + csvParams.Encode(),
+		RowCount:      len(auditRows),
+		EventRows:     auditRows,
+	}
+	body, err := executeAdminTemplate(adminAuditContent, pageData)
+	if err != nil {
+		http.Error(response, "render audit page", http.StatusInternalServerError)
+		return
+	}
+	server.renderAdminLayout(response, "Audit log", "audit", body)
+}
+
+func (server *Server) collectAuditEventTypesForAdmin(maxLines int) ([]string, error) {
+	deploymentTenant := server.adminDeploymentTenantID()
+	file, err := os.Open(server.auditPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	const maxAuditLineBytes = 4 * 1024 * 1024
+	scanner.Buffer(make([]byte, 64*1024), maxAuditLineBytes)
+
+	seen := make(map[string]struct{})
+	linesRead := 0
+	for scanner.Scan() {
+		linesRead++
+		if linesRead > maxLines {
+			break
+		}
+		line := bytesTrimSpaceCopy(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var event ledger.Event
+		if err := json.Unmarshal(line, &event); err != nil {
+			continue
+		}
+		if deploymentTenant != "" {
+			if event.Data == nil {
+				continue
+			}
+			tid, _ := event.Data["tenant_id"].(string)
+			if strings.TrimSpace(tid) != deploymentTenant {
+				continue
+			}
+		}
+		if event.Type != "" {
+			seen[event.Type] = struct{}{}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(seen))
+	for eventType := range seen {
+		out = append(out, eventType)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func (server *Server) scanAuditEventsForAdmin(typeFilter, userFilter string, limit int) ([]ledger.Event, error) {
@@ -487,23 +759,3 @@ func bytesTrimSpaceCopy(b []byte) []byte {
 	copy(out, b[start:end])
 	return out
 }
-
-var adminLoginPageTemplate = template.Must(template.New("adminLogin").Parse(`<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Loopgate admin login</title>
-<style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:2rem auto}label{display:block;margin:.5rem 0 .25rem}input{width:100%;padding:.4rem}.err{color:#b00020;margin-top:1rem}</style>
-</head><body>
-<h1>Loopgate admin</h1>
-{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-<form method="post" action="/admin/login"><label for="token">Admin token</label>
-<input id="token" name="token" type="password" autocomplete="current-password" required>
-<button type="submit">Sign in</button></form>
-</body></html>`))
-
-var adminShellTemplate = template.Must(template.New("adminShell").Parse(`<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>{{.Title}} — Loopgate admin</title>
-<style>body{font-family:system-ui,sans-serif;max-width:60rem;margin:2rem auto}pre{white-space:pre-wrap;word-break:break-word;background:#f6f8fa;padding:1rem;border-radius:6px}table.grid{border-collapse:collapse;width:100%}table.grid th,table.grid td{border:1px solid #ccc;padding:.35rem .5rem;vertical-align:top;font-size:.9rem}a{color:#0366d6}.nav{margin-bottom:1rem}</style>
-</head><body>
-<p class="nav"><a href="/admin/">Home</a> · <a href="/admin/policy">Policy</a> · <a href="/admin/audit">Audit</a> · <a href="/admin/users">Sessions</a></p>
-<h1>{{.Title}}</h1>
-{{.Content}}
-</body></html>`))

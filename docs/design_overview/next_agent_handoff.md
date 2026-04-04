@@ -17,7 +17,7 @@ For target-state design, prefer the RFC tracks:
 Protocol note:
 
 - AMP is vendor-neutral
-- Morph and Loopgate may keep product-specific names where the RFC does not
+- Operator clients and Loopgate may keep historical names in code where the RFC does not
   require exact wire/object names
 - RFC `MUST` and `MUST NOT` requirements are still binding even when local
   naming differs
@@ -26,7 +26,7 @@ Protocol note:
 
 The project now has three clear layers:
 
-1. `Morph`
+1. Operator client (unprivileged runtime)
    - persistent operator shell
    - planning/orchestration
    - answer shaping
@@ -64,7 +64,7 @@ Implemented and working:
   - split memory runtime artifacts under `runtime/state/memory/`
   - deterministic goal-family normalization from `config/goal_aliases.yaml`
   - centralized memory scoring/configuration from `config/runtime.yaml`
-  - Morph-local prompt projection of live thread context
+  - Client-local prompt projection of live thread context
 - narrow extractor contracts:
   - JSON allowlists
   - markdown frontmatter
@@ -132,7 +132,7 @@ Recommended order:
    become durable memory by default
 2. extend restart and replay tests around sealed-but-uninspected and
    inspected-but-not-yet-acknowledged threads
-3. add Morph-side projection for Loopgate continuity review and lineage status
+3. add client-side projection for Loopgate continuity review and lineage status
    without moving durable-memory authority out of Loopgate
 4. avoid widening public surface area while continuity semantics are still
    converging

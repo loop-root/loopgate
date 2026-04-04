@@ -4,7 +4,7 @@
 
 **Date:** 2026-03-24
 **Reviewer:** Gemini (Independent Deep-Dive Analysis)
-**Target:** Morph / Loopgate Core Packages (`internal/loopgate`, `internal/sandbox`, `internal/secrets`)
+**Target:** Loopgate core packages (`internal/loopgate`, `internal/sandbox`, `internal/secrets`)
 
 ## Overview
 

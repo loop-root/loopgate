@@ -119,6 +119,48 @@ func TestClientExecuteCapability_ReadAndWrite(t *testing.T) {
 	}
 }
 
+func TestNewServer_FailsClosedAndSurfacesContinuityReplayFailure(t *testing.T) {
+	repoRoot := t.TempDir()
+
+	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
+	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(policyPath, []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+	writeTestMorphlingClassPolicy(t, repoRoot)
+
+	partitionRoot := filepath.Join(repoRoot, "runtime", "state", "memory", memoryPartitionsDirName, memoryPartitionKey(""))
+	paths := newContinuityMemoryPaths(partitionRoot, filepath.Join(repoRoot, "runtime", "state", "loopgate_memory.json"))
+	if err := os.MkdirAll(paths.RootDir, 0o700); err != nil {
+		t.Fatalf("mkdir continuity root: %v", err)
+	}
+	if err := os.WriteFile(paths.ContinuityEventsPath, []byte("not-a-valid-continuity-json-line\n"), 0o600); err != nil {
+		t.Fatalf("write corrupt continuity events: %v", err)
+	}
+
+	socketFile, err := os.CreateTemp("", "loopgate-*.sock")
+	if err != nil {
+		t.Fatalf("create temp socket file: %v", err)
+	}
+	socketPath := socketFile.Name()
+	_ = socketFile.Close()
+	_ = os.Remove(socketPath)
+	t.Cleanup(func() { _ = os.Remove(socketPath) })
+
+	_, err = NewServer(repoRoot, socketPath)
+	if err == nil {
+		t.Fatal("expected NewServer to fail on corrupt continuity replay")
+	}
+	if !strings.Contains(err.Error(), "init default memory partition") {
+		t.Fatalf("expected init default memory partition context, got %v", err)
+	}
+	if !strings.Contains(err.Error(), paths.ContinuityEventsPath) || !strings.Contains(err.Error(), "line 1") {
+		t.Fatalf("expected replay path and line in startup error, got %v", err)
+	}
+}
+
 func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 	repoRoot := t.TempDir()
 	memoryDir := filepath.Join(repoRoot, ".morph", "memory")

@@ -20,9 +20,9 @@ surface area.
 
 | Workflow | Current fit | What is already real | Main remaining gap |
 | --- | --- | --- | --- |
-| Service Status Check | supported narrowly | `public_read` connections, site inspection + trust drafts, JSON nested extraction, HTML metadata extraction, direct Morph status planning, partial-success summaries, display-safe details | broader real-world source coverage and final answer polish under mixed outcomes |
-| Repository / Issue Summary | supported narrowly | authenticated connections (`client_credentials`, `pkce`), `public_read`, typed provider-backed read capabilities, bounded JSON issue-list extraction, quarantine/provenance, direct Morph issues planning, partial-success summaries | one concrete end-user workflow validation pass plus richer answer shaping over real issue lists |
-| Multi-Step Board / Work Queue Triage | partially supported | model prompt compilation, typed capability execution, explicit denials, multi-result summaries | stronger Morph-side orchestration and aggregation across multiple capability calls |
+| Service Status Check | supported narrowly | `public_read` connections, site inspection + trust drafts, JSON nested extraction, HTML metadata extraction, direct operator client status planning, partial-success summaries, display-safe details | broader real-world source coverage and final answer polish under mixed outcomes |
+| Repository / Issue Summary | supported narrowly | authenticated connections (`client_credentials`, `pkce`), `public_read`, typed provider-backed read capabilities, bounded JSON issue-list extraction, quarantine/provenance, direct operator client issues planning, partial-success summaries | one concrete end-user workflow validation pass plus richer answer shaping over real issue lists |
+| Multi-Step Board / Work Queue Triage | partially supported | model prompt compilation, typed capability execution, explicit denials, multi-result summaries | stronger operator client-side orchestration and aggregation across multiple capability calls |
 | Memory Continuity | partially supported | append-only ledger, explicit `memory_candidate` tagging, typed continuity events, bounded global wake state, startup wake-state loading, exact-key recall | clearer user-facing remembered-vs-fresh answer behavior inside real workflows |
 | Safe Denial | supported in principle | policy denials, secret-export denial, fail-closed extraction, quarantine, display-safe CLI output | more end-to-end validation inside mixed workflows, not new kernel surface |
 
@@ -42,9 +42,9 @@ What already exists:
   - `/site trust-draft <url>`
 - deterministic JSON nested extraction for status fields
 - narrow HTML metadata extraction when JSON is unavailable
-- Morph-side capability-selection guidance for status requests
-- direct narrow Morph status workflow planning for clear status-like requests
-- Morph-side operator summary plus display-safe details
+- operator client-side capability-selection guidance for status requests
+- direct narrow operator client status workflow planning for clear status-like requests
+- operator client-side operator summary plus display-safe details
 
 What is still missing:
 
@@ -65,8 +65,8 @@ What already exists:
 - `public_read` and authenticated provider-backed repo paths
 - bounded JSON issue-list extraction
 - quarantine/provenance and display-safe list rendering
-- direct Morph issues workflow planning for clear repo/issues requests
-- Morph partial-success/denial summaries
+- direct operator client issues workflow planning for clear repo/issues requests
+- operator client partial-success/denial summaries
 
 What is still missing:
 
@@ -91,7 +91,7 @@ What already exists:
 
 What is still missing:
 
-- better Morph planning quality across multiple related capabilities
+- better operator client planning quality across multiple related capabilities
 - workflow-aware aggregation over several successful/denied sub-steps
 - one concrete board-style provider path
 
@@ -132,7 +132,7 @@ What already exists:
 
 - deny-by-default capability boundary
 - explicit denial codes and reasons
-- Morph partial-success summaries now keep denied sub-steps visible
+- operator client partial-success summaries now keep denied sub-steps visible
 
 What is still missing:
 
@@ -157,7 +157,7 @@ The current system is strongest where the architecture is most explicit:
   - markdown frontmatter
   - markdown section text
   - narrow HTML metadata
-- Morph operator summaries for:
+- operator client operator summaries for:
   - success
   - denial
   - partial success
@@ -167,7 +167,7 @@ The current system is strongest where the architecture is most explicit:
 The main product gaps are no longer “missing security model.”
 They are mostly shell- and workflow-level:
 
-- Morph still needs stronger orchestration over several related capability calls
+- operator client still needs stronger orchestration over several related capability calls
 - final answer shaping still needs more "what I checked / what I could not
   verify / whether this is partial" behavior
 - repo/board workflows need real workflow validation, not broader extractor
@@ -185,7 +185,7 @@ Priority order:
    configured sources.
 2. Validate the repository/issues workflow end-to-end against the checked-in
    example path.
-3. Improve Morph answer behavior so remembered vs fresh facts stay explicit
+3. Improve operator client answer behavior so remembered vs fresh facts stay explicit
    inside real workflows.
 4. Revisit board/work-queue orchestration only after 1–3 are behaving well.
 

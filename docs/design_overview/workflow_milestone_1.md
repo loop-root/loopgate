@@ -2,7 +2,7 @@
 
 # Workflow Milestone 1
 
-This document defines the first end-to-end product workflows Morph + Loopgate
+This document defines the first end-to-end product workflows the **operator client** and **Loopgate**
 should support as a coherent operator system.
 
 The goal is to validate the current architecture through real jobs, not to
@@ -41,12 +41,12 @@ Operator request example:
 
 Target outcome:
 
-- Morph interprets the request
-- Morph selects one or more Loopgate capabilities
+- The operator client interprets the request
+- The operator client selects one or more Loopgate capabilities
 - Loopgate fetches configured status data
 - Loopgate extracts only configured fields
 - raw remote content remains quarantined
-- Morph returns a useful summary or an explicit denial
+- The operator client returns a useful summary or an explicit denial
 
 Current implementation fit:
 
@@ -65,7 +65,7 @@ What already exists:
 What is still needed:
 
 - one or more real status-provider configs/capabilities
-- Morph prompt/tool guidance that reliably maps natural-language status requests
+- The operator client prompt/tool guidance that reliably maps natural-language status requests
   to those capabilities
 - summary behavior that handles partial success and explicit extraction denials
 
@@ -78,7 +78,7 @@ Current narrow path for this workflow:
 
 Partial success rule:
 
-- Morph SHOULD report successful sub-steps and failed/denied sub-steps together
+- The operator client SHOULD report successful sub-steps and failed/denied sub-steps together
   in one operator-facing answer instead of collapsing the whole workflow into a
   generic failure.
 
@@ -92,7 +92,7 @@ Target outcome:
 
 - Loopgate calls a typed provider-backed read capability
 - returned data is structured and bounded
-- Morph summarizes recent issue state without seeing provider tokens
+- The operator client summarizes recent issue state without seeing provider tokens
 
 Current implementation fit:
 
@@ -109,7 +109,7 @@ What is still needed:
 
 - a concrete GitHub-style provider config/adapter contract
 - end-user setup guidance for the connection
-- Morph-side task patterns for list/summarize workflows
+- Client-side task patterns for list/summarize workflows
 
 ### Workflow C: Multi-Step Board / Work Queue Triage
 
@@ -119,7 +119,7 @@ Operator request example:
 
 Target outcome:
 
-- Morph performs a small multi-step plan
+- The operator client performs a small multi-step plan
 - multiple Loopgate capability calls are issued
 - results are aggregated into one summary
 - denials or missing capabilities remain explainable
@@ -137,13 +137,13 @@ What already exists:
 
 What is still needed:
 
-- stronger Morph-side capability selection/orchestration quality
+- stronger client-side capability selection/orchestration quality
 - better aggregation behavior over multiple safe structured results
 - clearer operator-visible explanation when one sub-step is denied or missing
 
 Partial success rule:
 
-- Morph SHOULD explain which board or queue checks succeeded, which failed, and
+- The operator client SHOULD explain which board or queue checks succeeded, which failed, and
   whether the final summary is complete or partial.
 
 ### Workflow D: Memory Continuity
@@ -154,9 +154,9 @@ Operator request example:
 
 Target outcome:
 
-- Morph recalls prior local memory/distillates
-- Morph performs one or more fresh capability checks if needed
-- Morph distinguishes historical memory from new provider data
+- The operator client recalls prior local memory/distillates
+- The operator client performs one or more fresh capability checks if needed
+- The operator client distinguishes historical memory from new provider data
 
 Current implementation fit:
 
@@ -164,7 +164,7 @@ Current implementation fit:
 
 What already exists:
 
-- Morph ledger
+- The operator client ledger
 - distillation and local memory ownership
 - append-only audit with explicit control-plane outcomes
 
@@ -175,7 +175,7 @@ What is still needed:
 
 Required truth split:
 
-- Morph MUST distinguish remembered historical information from newly checked
+- The operator client MUST distinguish remembered historical information from newly checked
   provider data in the final answer.
 
 ### Workflow E: Safe Denial
@@ -187,7 +187,7 @@ Operator request example:
 Target outcome:
 
 - Loopgate denies the operation explicitly
-- Morph explains the denial clearly
+- The operator client explains the denial clearly
 - no fallback path broadens extraction or capability authority
 
 Current implementation fit:
@@ -203,7 +203,7 @@ What already exists:
 
 What still needs validation:
 
-- Morph responses should remain operator-helpful without weakening policy
+- The operator client responses should remain operator-helpful without weakening policy
 - denial explanations should be clear enough for UI surfaces as well as the CLI
 
 Cross-cutting rule:
@@ -237,12 +237,12 @@ Milestone 1 should avoid:
 
 ## 4. Product gaps to close next
 
-The next product-oriented work should focus on Morph behavior rather than wider
+The next product-oriented work should focus on The operator client behavior rather than wider
 Loopgate extraction.
 
 Priority order:
 
-1. Improve Morph capability selection for real user requests.
+1. Improve The operator client capability selection for real user requests.
 2. Improve multi-step aggregation and summary behavior over safe structured
    results.
 3. Improve memory recall ergonomics and explicit separation of old vs newly
@@ -255,10 +255,10 @@ Priority order:
 
 Milestone 1 is complete when:
 
-- an operator can complete each workflow end-to-end through Morph
+- an operator can complete each workflow end-to-end through the operator client
 - a single natural-language prompt can trigger the workflow without manual CLI
   choreography
-- Morph selects the intended capability path for the workflow
+- The operator client selects the intended capability path for the workflow
 - the final output is understandable without raw data inspection
 - partial failures and denials remain clear in the final answer
 - Loopgate remains the sole privileged control plane

@@ -10,7 +10,7 @@
 
 # Summary
 
-Morphlings are disposable execution workers spawned under **Loopgate** authority (requested via **Haven**) to perform a **single bounded task**. They operate within strict capability and filesystem constraints issued by Loopgate.
+Morphlings are disposable execution workers spawned under **Loopgate** authority (requested via an **operator client**) to perform a **single bounded task**. They operate within strict capability and filesystem constraints issued by Loopgate.
 
 Morphlings do not possess persistent authority, secrets, or unrestricted system access. They exist only long enough to complete their assigned task and return artifacts for review.
 
@@ -278,7 +278,7 @@ Example staging output:
 /morph/home/outputs/patch.diff
 ```
 
-Morph summarizes staged outputs for user review.
+The operator client summarizes staged outputs for user review.
 
 ---
 
@@ -358,6 +358,6 @@ These are explicitly **out of scope for v1**.
 
 # Conclusion
 
-Morphlings provide a safe execution model by separating **planning (Morph)** from **execution (Morphlings)** and **authority (Loopgate)**.
+Morphlings provide a safe execution model by separating **planning (operator client)** from **execution (Morphlings)** and **authority (Loopgate)**.
 
 This architecture allows complex tasks to be executed while maintaining strict control over capabilities, filesystem scope, and side effects.

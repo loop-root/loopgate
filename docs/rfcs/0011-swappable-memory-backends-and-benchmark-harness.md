@@ -11,7 +11,7 @@ against a conventional RAG baseline without changing the rest of the product.
 
 This RFC proposes:
 
-- one stable Loopgate memory API for Haven and workers
+- one stable Loopgate memory API for operator clients and workers
 - one internal backend boundary for memory retrieval/consolidation engines
 - at least two interchangeable backends:
   - `continuity_tcl`
@@ -47,7 +47,7 @@ They should be compared on product behavior, not taste.
 
 ## 3. Goals
 
-- keep Haven and worker-facing memory calls stable while backend choice changes
+- keep operator clients and worker-facing memory calls stable while backend choice changes
 - compare continuity/TCL against RAG under the same workloads
 - preserve Loopgate as the authority boundary regardless of backend
 - measure not only retrieval relevance, but end-to-end agent usefulness
@@ -60,7 +60,7 @@ This RFC does not:
 - replace current Loopgate memory governance with direct backend access
 - declare a winner in advance
 - require a separate repository for the first comparison
-- expose raw vector stores or backend internals to Haven
+- expose raw vector stores or backend internals to operator clients
 - allow the model to choose the active backend at runtime
 
 ## 5. Design principle
@@ -72,12 +72,12 @@ That keeps:
 
 - approval and memory candidacy policy unchanged
 - durable-memory authority in Loopgate
-- Haven contract stable
+- operator client contract stable
 - benchmark results attributable to the memory engine, not to unrelated API drift
 
 ## 6. Proposed backend boundary
 
-Haven should continue to talk to the existing Loopgate memory surfaces:
+Operator clients should continue to talk to the existing Loopgate memory surfaces:
 
 - `memory.remember`
 - continuity inspection
@@ -432,7 +432,7 @@ Minimum files:
 Tracked headline comparisons may also be summarized in:
 
 - `docs/memorybench_running_results.md`
-- `~/Dev/projectDocs/morph/memorybench-internal/memorybench_internal_report.md` (maintainer archive; not in clone)
+- Maintainer-only memorybench report path (outside this repository; not in clone)
 - `docs/memorybench_benchmark_guide.md`
 
 Benchmark-local backend ablations are allowed when they remain:
@@ -518,7 +518,7 @@ This allows:
 
 - CLI summaries
 - file reporters
-- Haven benchmark views
+- operator-client benchmark views
 - later charts or white-paper tables
 
 without rewriting the runner.
@@ -547,7 +547,7 @@ Requirements:
 - no raw secret persistence
 - no bypass around quarantine/memory-candidate policy
 - no public API exposure
-- no direct backend access from Haven
+- no direct backend access from operator clients
 - append-only or explicitly derived artifacts where the current design expects them
 
 The RAG baseline may use embeddings or indexes, but benchmark-local helper

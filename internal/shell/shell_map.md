@@ -1,6 +1,6 @@
 # Shell Map
 
-This file maps `internal/shell/`, **slash-commands**, autosuggest, and terminal UX for the historical Morph CLI surface.
+This file maps `internal/shell/`, **slash-commands**, autosuggest, and terminal UX for the **Loopgate operator CLI** surface.
 
 Use it when changing:
 
@@ -9,7 +9,7 @@ Use it when changing:
 
 ## Core Role
 
-`internal/shell/` implements `HandleCommand` and a large catalog of **operator commands** (runtime config, tools, morphlings, etc.). The primary product today is **Haven + Loopgate**; this package remains important for terminal-based workflows and integration tests that drive the same backends.
+`internal/shell/` implements `HandleCommand` and a large catalog of **operator commands** (runtime config, tools, morphlings, etc.). This package supports terminal-based workflows and integration tests that drive the same Loopgate backends as MCP and HTTP clients.
 
 ## Key Files
 

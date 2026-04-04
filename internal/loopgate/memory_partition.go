@@ -88,7 +88,13 @@ func (server *Server) ensureMemoryPartitionLocked(rawTenantID string) (*memoryPa
 	}
 	loadedState, err := loadContinuityMemoryState(rootPath, legacyContinuityPathForPartitionFromKey(server, key))
 	if err != nil {
-		return nil, err
+		wrappedLoadErr := fmt.Errorf("load continuity memory partition %q at %q: %w", key, rootPath, err)
+		// Partition replay/load failures are security-relevant because Loopgate must
+		// fail closed instead of silently continuing from ambiguous authoritative state.
+		if server.reportSecurityWarning != nil {
+			server.reportSecurityWarning("continuity_partition_load_failed", wrappedLoadErr)
+		}
+		return nil, wrappedLoadErr
 	}
 	partition := &memoryPartition{
 		partitionKey: key,

@@ -185,8 +185,6 @@
   },
   "active": "0d51e0e78c3216f3",
   "lastOpenFiles": [
-    "HavenOS/Haven_Memory_Candidates_and_Loopgate_Plan.md",
-    "haven_agent_work_loop.md",
     "docs_map.md",
     "memorybench_running_results.md",
     "memorybench_internal_report.md",
@@ -196,7 +194,6 @@
     "DOCUMENTATION_SCOPE.md",
     "superpowers/plans/2026-03-25-master-implementation-plan.md",
     "roadmap/2026-03-25-tcl-memory-simplification-plan.md",
-    "superpowers/demos/2026-03-25-haven-90s-demo-script.md",
     "AMP/AMP-RFCs/0001-local-transport-profile.md",
     "AMP/conformance/test-vectors-v1.md",
     "AMP/conformance/local-uds-v1-checklist.md",

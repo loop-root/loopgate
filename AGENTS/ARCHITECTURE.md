@@ -32,7 +32,7 @@ The system prioritizes:
 - developer-invisible governance via MCP and proxy integration
 - transparent enforcement that fails closed
 
-**Haven** is the consumer demo product built on Loopgate — a personal AI workstation that demonstrates what governed AI looks like in a personal context. It is not the primary enterprise target.
+**Operator clients** (IDEs via MCP/proxy, optional local HTTP clients) connect to Loopgate; they are not authority sources. Enterprise workflows standardize on MCP and transparent proxy without requiring a dedicated desktop product in this repository.
 
 ---
 
@@ -40,11 +40,11 @@ The system prioritizes:
 
 ## Single-node (personal / developer)
 
-One Loopgate node per machine. The user interacts via the Haven desktop app or a connected IDE. Loopgate mediates all capability execution locally.
+One Loopgate node per machine. The operator uses a connected IDE (MCP/proxy) and/or other local clients documented in `docs/setup/`. Loopgate mediates all capability execution locally.
 
 ```
 User
-  → Haven Desktop (Swift, ~/Dev/Haven)  OR  Developer IDE (Claude Code / Cursor)
+  → Developer IDE (e.g. Claude Code, Cursor, Codex) or other local client
   → Loopgate (local enforcement node)
   → Sandbox, capabilities, secrets, audit
 ```
@@ -72,7 +72,7 @@ The mental model is corporate MDM or VPN: a local agent enforces policy from a c
 
 ## Loopgate Node (enforcement runtime)
 
-The authority boundary. Every capability request — whether from a developer IDE via MCP, from the Haven desktop via HTTP over Unix socket, or from a morphling worker — passes through the Loopgate node.
+The authority boundary. Every capability request — whether from a developer IDE via MCP, from a local client over HTTP on the control-plane binding, or from a morphling worker — passes through the Loopgate node.
 
 Responsibilities:
 
@@ -137,13 +137,11 @@ Loopgate intercepts every request: injects memory context into the system prompt
 
 ---
 
-## Haven (consumer demo)
+## Reference desktop shell (`cmd/haven/`)
 
-The native macOS Swift app (`~/Dev/Haven`). Demonstrates Loopgate's capabilities in a personal assistant context: governed workspace, memory continuity, task resumption, journaling, ambient presence.
+In-repo **Wails + React** prototype only: contract tests, bindings, and parity experiments. **Not** a committed product surface; do not evolve it for new operator features.
 
-Haven is the consumer product surface. It is not the primary enterprise integration target. Enterprise developers interact with Loopgate via MCP or proxy from their existing tools.
-
-`cmd/haven/` in this repo is the legacy Wails/React prototype — frozen, not a product surface.
+Primary integrations: **MCP** and **proxy** (`docs/setup/LOOPGATE_MCP.md`). Local HTTP API details: `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`.
 
 ---
 
@@ -168,7 +166,7 @@ Morphlings are internal runtime objects. They must not be exposed as public inte
 
 ## Who decides
 
-Loopgate is the only authority boundary. Not the model. Not the client IDE. Not the Haven UI. Not the morphling worker.
+Loopgate is the only authority boundary. Not the model. Not the client IDE. Not any operator UI. Not the morphling worker.
 
 ```
 Client proposes action
@@ -223,7 +221,7 @@ Org-level memory and user-level memory are separate namespaces within the same t
 
 ## Local client ↔ Loopgate (v1 standard)
 
-HTTP over a Unix domain socket (local control-plane binding). Haven, MCP subprocess, proxy mode, and any local tooling connect this way.
+HTTP over a Unix domain socket (local control-plane binding). Local HTTP clients, MCP subprocess, proxy mode, and any local tooling connect this way.
 
 Layered auth:
 1. local transport binding
@@ -239,7 +237,7 @@ mTLS over TCP. Admin node authority must be cryptographically verified.
 
 ## Apple XPC hardening
 
-Optional post-launch backlog. No committed date. See `docs/HavenOS/Haven_Loopgate_Security_and_Transport_Checklist.md`.
+Optional post-launch backlog. No committed date. See `docs/loopgate-threat-model.md` and `docs/rfcs/0001-loopgate-token-policy.md`.
 
 ---
 
@@ -269,7 +267,7 @@ Shared facts available to all users in a tenant. Namespace-isolated by `tenant_i
 
 Normal AI capability execution:
 
-- model calls (via connected IDE or Haven)
+- model calls (via connected IDE or other local clients)
 - file operations inside sandbox
 - tool execution (sandboxed, policy-mediated)
 - morphling task execution

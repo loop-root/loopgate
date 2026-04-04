@@ -10,7 +10,7 @@ Authority: implementation-facing
 The current test suite is strong at the package and handler level. The next gap is
 boundary coverage across the real local control-plane path:
 
-- Morph-side request construction
+- Client-side request construction
 - Unix-socket transport
 - Loopgate auth and policy enforcement
 - filesystem side effects
@@ -51,7 +51,7 @@ server and client.
 - dependencies:
   - use `httptest.Server` for any provider-facing HTTP behavior
   - do not use real providers or real public network calls
-- Morph side:
+- Operator client side:
   - first wave can drive parser/tool-call and command flows directly while using
     the real Loopgate socket
   - full PTY/process tests come later if needed
@@ -120,7 +120,7 @@ Flow:
 1. start a real session
 2. perform one allowed read-like action
 3. perform one denied action
-4. emit one malformed tool call or parse error path from the Morph side
+4. emit one malformed tool call or parse error path from the operator client side
 5. shutdown cleanly
 6. read the ledger back and verify:
    - contiguous sequence
@@ -184,7 +184,7 @@ Keep the suite deterministic and conservative.
 - no real external network
 - no background cleanup goroutines added just for tests
 - no public TCP transport
-- no shelling out to Morph or Loopgate binaries for the first wave
+- no shelling out to separate client or Loopgate binaries for the first wave
 - prefer injected clocks and temp dirs over sleeps where possible
 
 ## Recommended Implementation Order
