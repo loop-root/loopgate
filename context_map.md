@@ -20,16 +20,13 @@ This repo implements the enforcement runtime (`cmd/loopgate`, `internal/loopgate
 Product surfaces:
 
 - **Enterprise integration (primary target):** MCP server and transparent proxy so developers keep using **Claude Code**, **Cursor**, **VS Code**, **Google Anti‑Gravity**, **OpenAI Codex**, and other MCP- or proxy-capable tools.
-- **Admin console (enterprise):** minimal web UI for IT admins — policy, provisioning, audit. Served by an admin-mode Loopgate node.
-- **In-repo Wails reference (`cmd/haven/`):** frozen shell for contracts and tests — **not** a product surface.
 
 This repository centers on **Loopgate** as the governance engine.
 
 ## Current Product Shape
 
 - `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, memory continuity, morphling lifecycle.
-- The **enterprise integration surface** (current development priority): MCP server + proxy mode lets developers use Loopgate from existing IDEs. Admin console provides IT admin governance surface.
-- **Reference Wails client** under `cmd/haven/` exists for parity tests only; prefer MCP/proxy for real operator workflows.
+- The **enterprise integration surface** (current development priority): MCP server + proxy mode lets developers use Loopgate from existing IDEs.
 - **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile). Admin node connects via mTLS over TCP. Apple XPC is optional post-launch hardening (no committed date).
 - `Morphlings` are bounded subordinate workers governed by Loopgate, not free agents.
 - **Multi-tenancy:** `tenant_id` namespace isolation is the foundation for enterprise deployment — being added now. Every resource, audit event, and capability grant will carry a `tenant_id`.
@@ -50,7 +47,7 @@ These are the rules to keep in your head before editing anything:
 - Loopgate is the authority boundary.
 - Natural language never creates authority.
 - Model output is untrusted input.
-- Unprivileged clients (IDE, MCP host, reference shell) are not privileged just because they initiated a request.
+- Unprivileged clients (IDE, MCP host, proxy-integrated editor) are not privileged just because they initiated a request.
 - Local privileged transport stays local-only by default.
 - The sandbox boundary matters. Governed workspace lives under `/morph/home`, not arbitrary host paths.
 - Host access must stay explicit, mediated, and reviewable.
@@ -79,7 +76,7 @@ If you are new to the repo, read in this order:
 Notes:
 
 - `AGENTS.md` at the repo root is the tracked security constitution; `AGENTS/` is a local-only directory (gitignored). It may not exist on every clone.
-- The enterprise pivot (MCP server, multi-tenancy, admin console) is the current primary direction.
+- The enterprise pivot (MCP server, proxy, multi-tenancy) is the current primary direction.
 
 ## Top-Level Map
 
@@ -93,10 +90,8 @@ Notes:
 ├── internal/              Real implementation packages
 ├── persona/               Default operator persona (`default.yaml`) and values
 ├── runtime/               Local runtime state, socket, logs, sandbox, caches
-├── start.sh               Legacy launcher (Loopgate + old prototype shell); see Entrypoints
 ├── README.md              Top-level project summary
 ├── go.mod / go.sum        Go module definition
-├── haven                  Local build output binary
 ├── morph                  Local build output binary
 └── loopgate-admin         Stale leftover binary from a removed admin-UI path; should not be present
 ```
@@ -106,7 +101,7 @@ Important interpretation:
 - `cmd/` and `internal/` are the main source trees.
 - `docs/` is authoritative for design intent and product shape.
 - `runtime/` is local machine state, not source.
-- top-level binaries like `haven` and `morph` are local build outputs and usually not meaningful source artifacts.
+- top-level binaries like `morph` are local build outputs and usually not meaningful source artifacts.
 - `loopgate-admin` comes from a removed admin-UI path and should be treated as stale local output if it appears at all.
 
 ## Where the Agent Files Live
@@ -129,10 +124,6 @@ They are local/ignored rather than core product docs, so do not assume every clo
 ### Primary: MCP / IDE
 
 - **Docs:** `docs/setup/LOOPGATE_MCP.md`, `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`.
-
-### `start.sh`
-
-Legacy helper: verifies Go, starts Loopgate if needed, then builds and runs the **Wails reference** under `cmd/haven/` for tests/contracts only — see root `AGENTS.md`. **Default:** `go run ./cmd/loopgate` plus your IDE’s MCP config.
 
 ### `cmd/loopgate/`
 
@@ -162,7 +153,7 @@ What lives here:
 - model connection storage and validation
 - morphling lifecycle and worker governance
 - site trust and outbound integration hooks
-- UI status queries used by unprivileged clients (e.g. reference shell)
+- UI status queries used by unprivileged clients (e.g. IDE integrations)
 - shared-folder mediation
 - folder-grant mirroring and compare-before-sync refresh
 
@@ -243,9 +234,9 @@ Memory and continuity primitives.
 
 This is lower-level memory logic shared by unprivileged clients and Loopgate.
 
-### `internal/haven/threadstore/`
+### `internal/threadstore/`
 
-Append-only thread/event storage (`internal/haven/threadstore`).
+Append-only thread/event storage (`internal/threadstore`).
 
 Use this when working on Messenger persistence or rebuilding UI state from thread history.
 
@@ -327,7 +318,7 @@ These `*_map.md` files (gitignored like this file) are the **navigation layer**:
 
 **Entrypoints and top-level trees**
 
-- `cmd/cmd_map.md` — `cmd/loopgate/`, `cmd/morphling-runner/`, `cmd/haven/` (reference), other binaries
+- `cmd/cmd_map.md` — `cmd/loopgate/`, `cmd/morphling-runner/`, other binaries
 - `core/core_map.md` — checked-in policy YAML and `core/memory/` interpretation
 - `config/config_map.md` — tracked `config/*.yaml` (not the Go package)
 - `persona/persona_map.md` — `default.yaml` and values
@@ -337,7 +328,7 @@ These `*_map.md` files (gitignored like this file) are the **navigation layer**:
 
 - `internal/audit/audit_map.md` — audit severity over ledger append
 - `internal/config/config_map.md` — Go loaders for policy, persona, JSON state (`Policy` struct, store helpers)
-- `internal/haven/threadstore/threadstore_map.md` — thread JSONL persistence
+- `internal/threadstore/threadstore_map.md` — thread JSONL persistence
 - `internal/identifiers/identifiers_map.md` — safe identifier validation
 - `internal/integration/integration_map.md` — Loopgate integration tests (`*_test.go` only)
 - `internal/ledger/ledger_map.md` — append-only hash-chained ledger
@@ -362,7 +353,7 @@ These `*_map.md` files (gitignored like this file) are the **navigation layer**:
 
 **When to update maps**
 
-- Reference Wails client (`cmd/haven/`) and Loopgate: control-plane surfaces, HTTP-on-UDS transport (v1), future XPC TBD — see `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`
+- Loopgate and its client/integration surfaces: control-plane surfaces, HTTP-on-UDS transport (v1), future XPC TBD — see `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`
 - Tools, prompt, model, modelruntime: capability or prompt/model/runtime contracts
 - Sandbox, policy, secrets, safety, memory, TCL, audit, ledger, threadstore: boundaries or persistence semantics
 - Config (Go), core/policy, checked-in `config/`: governance YAML or loader shape
@@ -387,7 +378,6 @@ These paths are easy to misread if you are new to the repo.
 
 ### Treat as local build outputs
 
-- `haven`
 - `morph`
 - `loopgate-admin`
 
@@ -404,20 +394,12 @@ The repo currently contains memory-related files under `core/memory/`. Many of t
 
 ## If You Are Changing X, Start Here
 
-### Reference Wails shell (`cmd/haven/`)
-
-Start in:
-
-- `cmd/haven/` and `cmd/haven/frontend/README.md`
-- `internal/loopgate/` when changing control-plane APIs the shell calls
-
 ### Messenger / chat behavior (HTTP API + threadstore)
 
 Start in:
 
-- `internal/haven/threadstore/` (append-only thread/event storage)
+- `internal/threadstore/` (append-only thread/event storage)
 - `internal/loopgate/server_haven_chat.go` and related handlers (legacy route prefix `/v1/haven/...`)
-- `cmd/haven/` for the in-repo client that exercises those paths
 
 ### Sandbox / file import / export / shared-space behavior
 
@@ -455,7 +437,6 @@ Start in:
 - `internal/secrets/`
 - `internal/loopgate/model_connections.go`
 - `internal/modelruntime/`
-- `cmd/haven/` for reference first-run flows that touch model setup (not normative for MCP-only users)
 
 ### Morphlings
 
@@ -490,17 +471,11 @@ go test ./...
 go run ./cmd/loopgate
 ```
 
-Legacy all-in-one script (Wails reference + Loopgate):
-
-```bash
-./start.sh
-```
-
 ## Current Direction
 
 Loopgate is pivoting from a personal AI workstation backend to an enterprise AI governance engine.
 
-The enforcement runtime, policy evaluation, audit system, memory continuity, and morphling lifecycle are solid — that work is done. The current mission is adding the integration surface and administrative interface that make Loopgate viable as enterprise infrastructure.
+The enforcement runtime, policy evaluation, audit system, memory continuity, and morphling lifecycle are solid — that work is done. The current mission is adding the integration surface and proxy path that make Loopgate viable as enterprise infrastructure.
 
 **Primary work right now:**
 
@@ -508,7 +483,7 @@ The enforcement runtime, policy evaluation, audit system, memory continuity, and
 2. **Multi-tenancy foundation** — `tenant_id` isolation across all resources. Prerequisite for everything multi-tenant.
 3. **Memory system fixes** — key registry expansion (`goal.*`, `work.*`), preference facet coverage. Silent data-loss bugs that must be fixed before memory is relied on.
 4. **Chat path hardening** — panic recovery, audit log coverage, typing indicator for legacy HTTP chat handlers (`handleHavenChat` and related; `haven` prefix is a wire/handler name, not a product).
-5. **Admin console v0** — policy viewer, audit log, user list. First enterprise customer-facing surface.
+5. **Proxy v0** — automatic memory injection/capture path with strict auditability and bounded latency.
 
 **Engineering invariants that don't change:** HTTP on local Unix socket for local client transport. mTLS over TCP for admin node. XPC optional post-launch. Policy-aligned routes over ad-hoc sprawl.
 
@@ -518,9 +493,9 @@ These are the known gaps to fix before the next milestone. See `docs/reviews/mem
 
 **Blocking enterprise readiness:**
 
-- No MCP server. The primary developer integration surface does not exist yet.
+- No proxy v0. The seamless default developer experience does not exist yet.
 - No `tenant_id` on resources. Multi-tenancy is not implementable without this foundation.
-- No admin console. No enterprise customer-facing surface for policy or audit.
+- Legacy `/v1/haven/...` route and threadstore dependency still need Loopgate-agnostic cleanup.
 
 **Memory system (silent data-loss bugs):**
 

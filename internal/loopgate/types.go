@@ -558,14 +558,16 @@ type ContinuityInspectResponse struct {
 	DerivedResonateKeyIDs []string `json:"derived_resonate_key_ids,omitempty"`
 }
 
-// HavenContinuityInspectThreadRequest is the JSON body for POST /v1/haven/continuity/inspect-thread.
-// Loopgate loads the thread from its Haven threadstore and proposes continuity for inspection;
-// the client does not supply raw events (unlike POST /v1/continuity/inspect).
+// HavenContinuityInspectThreadRequest is the JSON body for POST /v1/continuity/inspect-thread.
+// The legacy /v1/haven/continuity/inspect-thread alias uses the same payload.
+// Loopgate loads the thread from its threadstore and proposes continuity for
+// inspection; the client does not supply raw events (unlike POST /v1/continuity/inspect).
 type HavenContinuityInspectThreadRequest struct {
 	ThreadID string `json:"thread_id"`
 }
 
-// HavenContinuityInspectThreadResponse is returned by POST /v1/haven/continuity/inspect-thread.
+// HavenContinuityInspectThreadResponse is returned by POST /v1/continuity/inspect-thread.
+// The legacy /v1/haven/continuity/inspect-thread alias returns the same shape.
 // SubmitStatus is "submitted" when an inspection ran, or "skipped_no_continuity_events" when
 // the thread had no user_message / assistant_response / tool_executed mappable rows.
 type HavenContinuityInspectThreadResponse struct {
@@ -619,7 +621,8 @@ type MemoryWakeStateOpenItem struct {
 	Status string `json:"status,omitempty"`
 }
 
-// UITasksResponse is the Haven-facing task board projection (control session auth; not a capability execute surface).
+// UITasksResponse is the task board projection for local operator clients
+// (control session auth; not a capability execute surface).
 type UITasksResponse struct {
 	Goals []string           `json:"goals"`
 	Items []UITasksItemEntry `json:"items"`
@@ -641,7 +644,8 @@ type UITasksStatusUpdateRequest struct {
 	Status string `json:"status"`
 }
 
-// --- Haven shell UI (GET/POST /v1/ui/*) — JSON aligned with cmd/haven Wails bindings ---
+// --- Local operator UI payloads (GET/POST /v1/ui/*).
+// Type names are retained for compatibility with existing clients.
 
 // HavenMemoryInventoryResponse is the operator-facing memory inventory projection for GET /v1/ui/memory.
 type HavenMemoryInventoryResponse struct {
@@ -700,26 +704,30 @@ type HavenMemoryResetResponse struct {
 	WakeStateID              string `json:"wake_state_id,omitempty"`
 }
 
-// HavenAgentWorkEnsureRequest is the JSON body for POST /v1/haven/agent/work-item/ensure.
+// HavenAgentWorkEnsureRequest is the JSON body for POST /v1/agent/work-item/ensure.
+// The legacy /v1/haven/agent/work-item/ensure alias uses the same payload.
 type HavenAgentWorkEnsureRequest struct {
 	Text     string `json:"text"`
 	NextStep string `json:"next_step,omitempty"`
 }
 
 // HavenAgentWorkItemResponse is returned by work-item ensure and complete routes.
+// The type name is retained for compatibility with existing clients.
 type HavenAgentWorkItemResponse struct {
 	ItemID         string `json:"item_id"`
 	Text           string `json:"text"`
 	AlreadyPresent bool   `json:"already_present"`
 }
 
-// HavenAgentWorkCompleteRequest is the JSON body for POST /v1/haven/agent/work-item/complete.
+// HavenAgentWorkCompleteRequest is the JSON body for POST /v1/agent/work-item/complete.
+// The legacy /v1/haven/agent/work-item/complete alias uses the same payload.
 type HavenAgentWorkCompleteRequest struct {
 	ItemID string `json:"item_id"`
 	Reason string `json:"reason,omitempty"`
 }
 
-// HavenDeskNote matches cmd/haven DeskNote for runtime/state/haven_desk_notes.json.
+// HavenDeskNote is the runtime/state/haven_desk_notes.json entry shape.
+// The type name is retained for compatibility with existing clients.
 type HavenDeskNote struct {
 	ID                  string               `json:"id"`
 	Kind                string               `json:"kind"`
@@ -732,7 +740,7 @@ type HavenDeskNote struct {
 	ArchivedAtUTC       string               `json:"archived_at_utc,omitempty"`
 }
 
-// HavenDeskNoteAction matches cmd/haven DeskNoteAction.
+// HavenDeskNoteAction is the desk-note action shape for UI consumers.
 type HavenDeskNoteAction struct {
 	Kind    string `json:"kind"`
 	Label   string `json:"label,omitempty"`
@@ -749,7 +757,7 @@ type HavenDeskNoteDismissRequest struct {
 	NoteID string `json:"note_id"`
 }
 
-// HavenJournalEntrySummary matches cmd/haven JournalEntrySummary.
+// HavenJournalEntrySummary is one journal entry row for local UI consumers.
 type HavenJournalEntrySummary struct {
 	Path         string `json:"path"`
 	Title        string `json:"title"`
@@ -773,7 +781,7 @@ type HavenJournalEntryResponse struct {
 	Error        string `json:"error,omitempty"`
 }
 
-// HavenWorkingNoteSummary matches cmd/haven WorkingNoteSummary.
+// HavenWorkingNoteSummary is one working-note row for local UI consumers.
 type HavenWorkingNoteSummary struct {
 	Path         string `json:"path"`
 	Title        string `json:"title"`
@@ -801,7 +809,7 @@ type HavenWorkingNoteSaveRequest struct {
 	Content string `json:"content"`
 }
 
-// HavenWorkingNoteSaveResponse matches cmd/haven WorkingNoteSaveResponse.
+// HavenWorkingNoteSaveResponse is the save response for local UI consumers.
 type HavenWorkingNoteSaveResponse struct {
 	Saved bool   `json:"saved"`
 	Path  string `json:"path,omitempty"`
@@ -814,7 +822,7 @@ type HavenWorkspaceListRequest struct {
 	Path string `json:"path"`
 }
 
-// HavenWorkspaceListEntry is one Haven-facing workspace row.
+// HavenWorkspaceListEntry is one workspace row for local UI consumers.
 type HavenWorkspaceListEntry struct {
 	Name       string `json:"name"`
 	Path       string `json:"path"`
@@ -823,7 +831,7 @@ type HavenWorkspaceListEntry struct {
 	ModTimeUTC string `json:"mod_time_utc,omitempty"`
 }
 
-// HavenWorkspaceListResponse matches Haven workspace list expectations.
+// HavenWorkspaceListResponse is the workspace listing response for local UI consumers.
 type HavenWorkspaceListResponse struct {
 	Path    string                    `json:"path"`
 	Entries []HavenWorkspaceListEntry `json:"entries"`
@@ -835,7 +843,7 @@ type HavenWorkspacePreviewRequest struct {
 	Path string `json:"path"`
 }
 
-// HavenWorkspacePreviewResponse matches cmd/haven WorkspacePreviewResponse.
+// HavenWorkspacePreviewResponse is the workspace preview response for local UI consumers.
 type HavenWorkspacePreviewResponse struct {
 	Content   string `json:"content"`
 	Truncated bool   `json:"truncated"`
@@ -843,7 +851,7 @@ type HavenWorkspacePreviewResponse struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// HavenPresenceResponse matches cmd/haven PresenceResponse (GET /v1/ui/presence).
+// HavenPresenceResponse is the presence projection for GET /v1/ui/presence.
 type HavenPresenceResponse struct {
 	State      string `json:"state"`
 	StatusText string `json:"status_text"`

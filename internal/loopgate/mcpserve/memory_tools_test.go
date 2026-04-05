@@ -56,6 +56,52 @@ func TestRegisterLoopgateTools_IncludesTypedMemoryTools(t *testing.T) {
 	}
 }
 
+func TestRegisterLoopgateTools_TypedMemoryToolDescriptionsGuideNaturalMemoryFlow(t *testing.T) {
+	socketPath, delegatedClient := newDelegatedMCPMemoryTestClient(t, func(mux *http.ServeMux) {
+		mux.HandleFunc("/v1/status", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(loopgate.StatusResponse{
+				Capabilities: []loopgate.CapabilitySummary{
+					{Name: "memory.remember", Description: "Remember fact"},
+				},
+			})
+		})
+	})
+	defer os.Remove(socketPath)
+
+	registeredTools, err := registeredLoopgateTools(context.Background(), delegatedClient, slog.Default())
+	if err != nil {
+		t.Fatalf("register loopgate tools: %v", err)
+	}
+
+	var rememberTool mcp.Tool
+	var discoverTool mcp.Tool
+	var wakeTool mcp.Tool
+	for _, registeredTool := range registeredTools {
+		switch registeredTool.Tool.Name {
+		case "loopgate.memory_remember":
+			rememberTool = registeredTool.Tool
+		case "loopgate.memory_discover":
+			discoverTool = registeredTool.Tool
+		case "loopgate.memory_wake_state":
+			wakeTool = registeredTool.Tool
+		}
+	}
+
+	if !strings.Contains(rememberTool.Description, "When the user asks to remember a stable fact") {
+		t.Fatalf("expected remember tool description to guide natural memory use, got %q", rememberTool.Description)
+	}
+	if !strings.Contains(rememberTool.Description, "ask one brief clarifying question") {
+		t.Fatalf("expected remember tool description to mention brief clarification, got %q", rememberTool.Description)
+	}
+	if !strings.Contains(discoverTool.Description, "fresh session") {
+		t.Fatalf("expected discover tool description to mention fresh-session continuity use, got %q", discoverTool.Description)
+	}
+	if !strings.Contains(wakeTool.Description, "Before you continue") {
+		t.Fatalf("expected wake-state tool description to mention session-start recall, got %q", wakeTool.Description)
+	}
+}
+
 func TestHandleMemoryWakeStateTool_LoadsWakeState(t *testing.T) {
 	socketPath, delegatedClient := newDelegatedMCPMemoryTestClient(t, func(mux *http.ServeMux) {
 		mux.HandleFunc("/v1/memory/wake-state", func(w http.ResponseWriter, r *http.Request) {

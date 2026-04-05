@@ -79,12 +79,6 @@ type Server struct {
 	expectedClientPath                    string
 	newModelClientFromConfig              func(modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error)
 	server                                *http.Server
-	// adminHTTPServer is an optional loopback TCP server for the admin console (v0). Nil when disabled.
-	adminHTTPServer   *http.Server
-	adminListenAddr   string
-	adminPasswordHash []byte
-	adminSessionMu    sync.Mutex
-	adminSessions     map[string]time.Time
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
 	diagnostic *loopdiag.Manager
 
@@ -284,12 +278,11 @@ const (
 )
 
 func NewServer(repoRoot string, socketPath string) (*Server, error) {
-	return NewServerWithOptions(repoRoot, socketPath, false, false)
+	return NewServerWithOptions(repoRoot, socketPath, false)
 }
 
-// NewServerWithOptions constructs the Loopgate server. When enableAdminTCP is true, config must have
-// admin_console.enabled and LOOPGATE_ADMIN_TOKEN must be set; see docs/setup/ADMIN_CONSOLE.md.
-func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool, enableAdminTCP bool) (*Server, error) {
+// NewServerWithOptions constructs the Loopgate server for the local Unix-socket control plane.
+func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool) (*Server, error) {
 	configStateDir := filepath.Join(repoRoot, "runtime", "state", "config")
 
 	// Load policy: JSON state → YAML seed → fail.
@@ -509,6 +502,16 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool,
 	mux.HandleFunc("/v1/model/ollama/tags", server.handleOllamaTags)
 	mux.HandleFunc("/v1/model/openai/models", server.handleOpenAICompatibleModels)
 	mux.HandleFunc("/v1/model/connections/store", server.handleModelConnectionStore)
+	mux.HandleFunc("/v1/chat", server.handleHavenChat)
+	mux.HandleFunc("/v1/settings/shell-dev", server.handleHavenSettingsShellDev)
+	mux.HandleFunc("/v1/settings/idle", server.handleHavenSettingsIdle)
+	mux.HandleFunc("/v1/model/settings", server.handleHavenModelSettings)
+	mux.HandleFunc("/v1/resident/journal-tick", server.handleHavenJournalResidentTick)
+	mux.HandleFunc("/v1/agent/work-item/ensure", server.handleHavenAgentWorkItemEnsure)
+	mux.HandleFunc("/v1/agent/work-item/complete", server.handleHavenAgentWorkItemComplete)
+	mux.HandleFunc("/v1/continuity/inspect-thread", server.handleHavenContinuityInspectThread)
+	// Deprecated compatibility aliases. Keep these until all local HTTP clients
+	// have migrated off the historical /v1/haven/... prefix.
 	mux.HandleFunc("/v1/haven/chat", server.handleHavenChat)
 	mux.HandleFunc("/v1/haven/settings/shell-dev", server.handleHavenSettingsShellDev)
 	mux.HandleFunc("/v1/haven/settings/idle", server.handleHavenSettingsIdle)
@@ -583,15 +586,6 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool,
 				"event_code", eventCode,
 				"operator_error_class", secrets.LoopgateOperatorErrorClass(cause),
 			)
-		}
-	}
-
-	if enableAdminTCP {
-		if !runtimeConfig.AdminConsole.Enabled {
-			return nil, fmt.Errorf("loopgate: --admin requires admin_console.enabled in config/runtime.yaml")
-		}
-		if err := server.initAdminConsole(); err != nil {
-			return nil, err
 		}
 	}
 
@@ -702,34 +696,11 @@ func (server *Server) Serve(ctx context.Context) error {
 		}
 	}
 
-	var adminListener net.Listener
-	if server.adminHTTPServer != nil {
-		adminListener, err = net.Listen("tcp", server.adminListenAddr)
-		if err != nil {
-			_ = listener.Close()
-			return fmt.Errorf("listen admin console tcp: %w", err)
-		}
-		if server.diagnostic != nil && server.diagnostic.Server != nil {
-			server.diagnostic.Server.Info("admin_console_listen",
-				"addr", adminListener.Addr().String(),
-				"deployment_tenant_id", strings.TrimSpace(server.runtimeConfig.Tenancy.DeploymentTenantID),
-			)
-		}
-		go func() {
-			if serveErr := server.adminHTTPServer.Serve(adminListener); serveErr != nil && serveErr != http.ErrServerClosed {
-				fmt.Fprintf(os.Stderr, "ERROR: admin console serve: %v\n", serveErr)
-			}
-		}()
-	}
-
 	go func() {
 		<-ctx.Done()
 		shutdownContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = server.server.Shutdown(shutdownContext)
-		if server.adminHTTPServer != nil {
-			_ = server.adminHTTPServer.Shutdown(shutdownContext)
-		}
 	}()
 
 	serveErr := server.server.Serve(listener)

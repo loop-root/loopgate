@@ -26,7 +26,7 @@ type HavenPaintEntry struct {
 	SVG          string `json:"svg"`
 }
 
-// HavenPaintGalleryResponse is the payload for GET /v1/haven/paint/gallery.
+// HavenPaintGalleryResponse is the payload for GET /v1/ui/paint/gallery.
 type HavenPaintGalleryResponse struct {
 	Entries []HavenPaintEntry `json:"entries"`
 }

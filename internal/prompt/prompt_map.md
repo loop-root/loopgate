@@ -30,12 +30,11 @@ This is where product truth and model truth either align or drift.
 
 ## Relationship Notes
 
-Reference-shell behavior does not start here.
-For the Wails path, runtime facts and available tools are injected from `cmd/haven/chat.go`; other operator clients should inject equivalent facts through their own assembly layer.
+Legacy shell behavior does not define the active product path.
+Operator clients should inject runtime facts and available tools through their own assembly layer; prompt behavior here should stay Loopgate-agnostic.
 
 That means prompt fixes often require coordinated edits across:
 
-- `cmd/haven/chat.go`
 - `internal/prompt/compiler.go`
 - `internal/model/toolschema.go`
 
@@ -51,7 +50,7 @@ The next prompt pass should:
 - describe the actual native-schema tools that are available, including Todo as a carry-over surface
 - explain the explicit remember path honestly
 - stop overstating memory reliability
-- keep CLI-specific slash-command language out of operator-facing system prompts for this shell
+- keep legacy shell- or slash-command language out of the active generic system prompt
 
 ## Important Watchouts
 

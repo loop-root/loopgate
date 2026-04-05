@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+// LoadHavenMemoryInventory returns the UI-safe memory inventory projection.
+// The method name is retained for compatibility with existing local clients.
 func (client *Client) LoadHavenMemoryInventory(ctx context.Context) (HavenMemoryInventoryResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
@@ -20,6 +22,8 @@ func (client *Client) LoadHavenMemoryInventory(ctx context.Context) (HavenMemory
 	return response, nil
 }
 
+// ResetHavenMemory performs the auditable fresh-start memory reset path.
+// The method name is retained for compatibility with existing local clients.
 func (client *Client) ResetHavenMemory(ctx context.Context, request HavenMemoryResetRequest) (HavenMemoryResetResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
@@ -173,22 +177,22 @@ func (client *Client) UpdateTaskStandingGrant(ctx context.Context, request TaskS
 	return response, nil
 }
 
-// HavenAgentWorkItemEnsure creates or dedupes a Task Board item via the Haven-only signed route
-// (same execution path as todo.add).
+// HavenAgentWorkItemEnsure creates or dedupes a Task Board item via the signed
+// agent work-item route. The method name is retained for compatibility.
 func (client *Client) HavenAgentWorkItemEnsure(ctx context.Context, request HavenAgentWorkEnsureRequest) (HavenAgentWorkItemResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
 		return HavenAgentWorkItemResponse{}, err
 	}
 	var response HavenAgentWorkItemResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/haven/agent/work-item/ensure", token, request, &response, nil); err != nil {
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/agent/work-item/ensure", token, request, &response, nil); err != nil {
 		return HavenAgentWorkItemResponse{}, err
 	}
 	return response, nil
 }
 
-// HavenAgentWorkItemComplete marks a Task Board item done via the Haven-only signed route
-// (same execution path as todo.complete).
+// HavenAgentWorkItemComplete marks a Task Board item done via the signed
+// agent work-item route. The method name is retained for compatibility.
 func (client *Client) HavenAgentWorkItemComplete(ctx context.Context, itemID string, reason string) (HavenAgentWorkItemResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
@@ -196,7 +200,7 @@ func (client *Client) HavenAgentWorkItemComplete(ctx context.Context, itemID str
 	}
 	body := HavenAgentWorkCompleteRequest{ItemID: strings.TrimSpace(itemID), Reason: strings.TrimSpace(reason)}
 	var response HavenAgentWorkItemResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/haven/agent/work-item/complete", token, body, &response, nil); err != nil {
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/agent/work-item/complete", token, body, &response, nil); err != nil {
 		return HavenAgentWorkItemResponse{}, err
 	}
 	return response, nil

@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"morph/internal/config"
-	"morph/internal/haven/threadstore"
 	modelpkg "morph/internal/model"
 	modelruntime "morph/internal/modelruntime"
 	"morph/internal/orchestrator"
 	"morph/internal/secrets"
+	"morph/internal/threadstore"
 )
 
 const (
@@ -127,7 +127,8 @@ type havenChatAttachment struct {
 	Data     string `json:"data"`
 }
 
-// HavenChatResponse is the JSON body for POST /v1/haven/chat.
+// HavenChatResponse is the JSON body for POST /v1/chat.
+// The legacy /v1/haven/chat alias returns the same payload.
 type HavenChatResponse struct {
 	ThreadID           string   `json:"thread_id"`
 	AssistantText      string   `json:"assistant_text"`

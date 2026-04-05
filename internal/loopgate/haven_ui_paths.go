@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Haven-facing path mapping matches cmd/haven/workspace.go (sandboxToHaven / havenToSandbox).
+// Historical UI path mapping used by local workspace-facing routes.
 
 const havenSharedPath = "shared"
 
@@ -25,7 +25,7 @@ var havenHavenToSandbox = map[string]string{
 	"agents":    "agents",
 }
 
-// mapHavenPathToSandbox converts a Haven-facing path to a sandbox-relative path.
+// mapHavenPathToSandbox converts a UI-facing path to a sandbox-relative path.
 func mapHavenPathToSandbox(havenPath string) string {
 	cleaned := strings.TrimSpace(havenPath)
 	if cleaned == "" || cleaned == "." {
@@ -48,7 +48,7 @@ func mapHavenPathToSandbox(havenPath string) string {
 	return cleaned
 }
 
-// mapSandboxPathToHaven converts a sandbox-relative path to a Haven-facing path.
+// mapSandboxPathToHaven converts a sandbox-relative path to a UI-facing path.
 func mapSandboxPathToHaven(sandboxPath string) string {
 	cleaned := strings.TrimSpace(sandboxPath)
 	if cleaned == "" || cleaned == "." {

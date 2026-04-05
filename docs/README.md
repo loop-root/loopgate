@@ -13,7 +13,7 @@
 - [**Loopgate HTTP API (local clients)**](./setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) — Unix-socket HTTP, session open, signing, route inventory
 - [Tool Usage](./setup/TOOL_USAGE.md)
 - [Secrets](./setup/SECRETS.md)
-- **Priorities:** enterprise integration (MCP, proxy, `tenant_id`, admin console) — root `AGENTS.md` and [Roadmap](./roadmap/roadmap.md)
+- **Priorities:** enterprise integration (MCP, proxy, `tenant_id`) — root `AGENTS.md` and [Roadmap](./roadmap/roadmap.md)
 
 ## Architecture
 
@@ -21,7 +21,7 @@
 - [Philosophy](./design_overview/philosophy.md)
 - [Architecture](./design_overview/architecture.md)
 - [Continuity Stream Architecture](./design_overview/continuity_stream_architecture.md)
-- [How It Works](./design_overview/how_it_works.md) — reference **Wails** path under `cmd/haven/` (contract shell only)
+- [How It Works](./design_overview/how_it_works.md) — Loopgate control-plane flow for IDE and local client integrations
 - [**AMP (protocol)**](./AMP/README.md) — vendored RFCs, mapping, conformance
 - [Integration Test Plan](./design_overview/integration_test_plan.md)
 - [Operator planning model](./design_overview/morph_planning_model.md) *(file name historical)*

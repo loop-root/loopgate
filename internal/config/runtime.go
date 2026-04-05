@@ -3,7 +3,6 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,12 +120,6 @@ type RuntimeConfig struct {
 		DeploymentTenantID string `yaml:"deployment_tenant_id" json:"deployment_tenant_id"`
 		DeploymentUserID   string `yaml:"deployment_user_id" json:"deployment_user_id"`
 	} `yaml:"tenancy" json:"tenancy"`
-	// AdminConsole enables the optional loopback TCP admin UI when combined with `loopgate --admin`
-	// and LOOPGATE_ADMIN_TOKEN at process start. See docs/adr/0016-admin-console-v0-auth.md.
-	AdminConsole struct {
-		Enabled    bool   `yaml:"enabled" json:"enabled"`
-		ListenAddr string `yaml:"listen_addr" json:"listen_addr"`
-	} `yaml:"admin_console" json:"admin_console"`
 }
 
 type RuntimeMemoryCorrection struct {
@@ -325,9 +318,6 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	if runtimeConfig.Memory.Scoring.PromotionThresholdActive == 0 {
 		runtimeConfig.Memory.Scoring.PromotionThresholdActive = 3
 	}
-	if runtimeConfig.AdminConsole.Enabled && strings.TrimSpace(runtimeConfig.AdminConsole.ListenAddr) == "" {
-		runtimeConfig.AdminConsole.ListenAddr = "127.0.0.1:9847"
-	}
 }
 
 func validateRuntimeConfig(runtimeConfig RuntimeConfig) error {
@@ -387,33 +377,6 @@ func validateRuntimeConfig(runtimeConfig RuntimeConfig) error {
 	}
 	if err := validateOptionalDeploymentIdentity("tenancy.deployment_user_id", runtimeConfig.Tenancy.DeploymentUserID); err != nil {
 		return err
-	}
-	if runtimeConfig.AdminConsole.Enabled {
-		if err := validateAdminConsoleListenAddr(runtimeConfig.AdminConsole.ListenAddr); err != nil {
-			return fmt.Errorf("admin_console.listen_addr: %w", err)
-		}
-	}
-	return nil
-}
-
-func validateAdminConsoleListenAddr(raw string) error {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return fmt.Errorf("listen_addr is required when admin_console.enabled is true")
-	}
-	host, _, err := net.SplitHostPort(trimmed)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(host) == "" {
-		return fmt.Errorf("listen address must include an explicit loopback host (not :port only)")
-	}
-	tcpAddr, err := net.ResolveTCPAddr("tcp", trimmed)
-	if err != nil {
-		return err
-	}
-	if tcpAddr.IP == nil || !tcpAddr.IP.IsLoopback() {
-		return fmt.Errorf("must bind to a loopback address (127.0.0.1, ::1, or localhost resolving to loopback)")
 	}
 	return nil
 }

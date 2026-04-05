@@ -70,6 +70,53 @@ The script runs:
 - `rag_stronger` for `demo_task_resumption`
 - `rag_stronger` for `demo_slot_truth`
 
+## IDE dry-run notes
+
+The 2026-04-03 acceptance dry-run used the main **Cursor IDE**, not the newer Cursor app surface.
+
+Observed friction and operator guidance:
+
+- The Cursor IDE successfully connected to Loopgate MCP through the local/dev `mcp-serve -local-open-session ...` path.
+- The newer Cursor app surface did not expose the same tool inventory reliably, so the demo should use the main Cursor IDE for now.
+- Cursor IDE surfaced the built-in Loopgate tools with **underscore names** instead of dotted names:
+  - `loopgate_status`
+  - `loopgate_memory_wake_state`
+  - `loopgate_memory_discover`
+  - `loopgate_memory_remember`
+- The generic capability dispatcher may appear under a host-prefixed name such as `user-loopgate-invoke_capability`.
+- If `invoke_capability` is not in the session capability scope, that tool is expected to deny with `capability_token_scope_denied`. For the demo path, prefer the typed memory tools and direct typed capability tools instead of the generic dispatcher.
+
+Acceptance evidence from the dry-run:
+
+- `loopgate_status` returned the live daemon inventory and policy summary.
+- `loopgate_memory_wake_state` returned a bounded global wake pack with a small token footprint.
+- `loopgate_memory_remember` successfully stored `profile.timezone=America/Denver`.
+- `loopgate_memory_discover` returned that timezone fact as the top result for the slot-seeking query.
+- `todo_add` succeeded directly even when the generic dispatcher was not in scope.
+
+## Preferred live demo shape
+
+Do not center the live demo on schema-shaped memory writes such as `fact_key=...`.
+
+Prefer a cross-session continuity story:
+
+1. **Session A**
+   - say something naturally, for example:
+     - `Remember that I'm in Denver now.`
+     - `Remember that I'm focused on trimming the Loopgate memory demo this week.`
+     - `Remember that I prefer direct, concise communication.`
+2. The agent should either:
+   - call the typed memory tool directly when the mapping is clear, or
+   - ask one brief clarifying question if the durable fact mapping is ambiguous
+3. **Session B**
+   - start a fresh agent/session
+   - ask for the carried-over fact naturally, for example:
+     - `What timezone should you assume for me?`
+     - `What am I focused on this week?`
+     - `Before we continue, what should you remember about me?`
+
+This is the real product story: continuity across agent/session boundaries, not manual schema entry.
+
 ## Interpretation order
 
 For each run:
@@ -87,6 +134,10 @@ Do not narrate from summary CSVs first.
 - Do not claim that RAG always retrieves the right answer plus stale baggage.
 - Do claim that RAG tends to overfetch or mis-rank stale/current-looking context, increasing prompt burden and blurring current state.
 - Do present continuity parity as the product-faithful benchmark and synthetic continuity as retrieval-only evidence.
+
+## Follow-up issues to watch
+
+- The wake-state dry-run surfaced `preference.timezone=MDT` while the explicit remember demo wrote `profile.timezone=America/Denver`. That is not a demo blocker, but it is a real product-level consistency question for wake-pack composition and should be treated as follow-up investigation rather than hand-waved away in the demo.
 
 ## Source of truth
 

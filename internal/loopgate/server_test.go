@@ -161,6 +161,37 @@ func TestNewServer_FailsClosedAndSurfacesContinuityReplayFailure(t *testing.T) {
 	}
 }
 
+func TestNewServerWithOptions_InitializesWithoutAdminSurface(t *testing.T) {
+	repoRoot := t.TempDir()
+
+	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
+	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(policyPath, []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+	writeTestMorphlingClassPolicy(t, repoRoot)
+
+	socketFile, err := os.CreateTemp("", "loopgate-*.sock")
+	if err != nil {
+		t.Fatalf("create temp socket file: %v", err)
+	}
+	socketPath := socketFile.Name()
+	_ = socketFile.Close()
+	_ = os.Remove(socketPath)
+	t.Cleanup(func() { _ = os.Remove(socketPath) })
+
+	server, err := NewServerWithOptions(repoRoot, socketPath, false)
+	if err != nil {
+		t.Fatalf("NewServerWithOptions: %v", err)
+	}
+	if server == nil {
+		t.Fatal("expected initialized server")
+	}
+	server.CloseDiagnosticLogs()
+}
+
 func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 	repoRoot := t.TempDir()
 	memoryDir := filepath.Join(repoRoot, ".morph", "memory")

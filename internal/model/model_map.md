@@ -51,7 +51,7 @@ The newest examples are `memory.remember` and `todo.*`:
 
 - they must exist in `internal/tools`
 - they must be allowed here
-- they must be described honestly in the injected runtime facts (e.g. `cmd/haven/chat.go` for the Wails reference path)
+- they must be described honestly in the injected runtime facts used by local chat surfaces
 - and Loopgate still remains the authority for execution
 
 ## Important Watchouts

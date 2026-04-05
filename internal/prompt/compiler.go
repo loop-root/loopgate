@@ -46,7 +46,7 @@ type Request struct {
 	AvailableCommands []CommandDefinition
 	RuntimeFacts      []string
 	HasNativeTools    bool // When true, suppress XML tool call protocol in favor of native structured tool use
-	// HavenConstrainedToolUse narrows native TOOL USE guidance for Haven OS (see buildSystemInstruction).
+	// HavenConstrainedToolUse is a legacy narrow-tool-use branch that should continue shrinking rather than define the generic Loopgate prompt path.
 	HavenConstrainedToolUse bool
 }
 
@@ -200,7 +200,8 @@ func buildSystemInstruction(request Request) (string, error) {
 		writeSection(&builder, "CAPABILITY SELECTION GUIDANCE", formatCapabilitySelectionGuidance(request.AvailableTools))
 	}
 	if request.HasNativeTools {
-		// Haven runtime: simplified self-description without CLI-specific language.
+		// Generic native-tool runtime: keep this product-agnostic so IDE and proxy clients
+		// do not inherit legacy shell branding or command metaphors.
 		writeSection(&builder, "SELF-DESCRIPTION RULES", []string{
 			"When the user asks what you can do, describe the tools and product surfaces the runtime actually gave you.",
 			"Prefer product-language descriptions over raw tool IDs when that is clearer.",
@@ -209,14 +210,15 @@ func buildSystemInstruction(request Request) (string, error) {
 			"If a matching capability is not listed in those places, say it is unavailable.",
 		})
 	} else {
-		// Haven desktop runtime: full self-description; slash commands are not exposed to the model in this path.
+		// Generic text-protocol runtime: local commands may exist, but the prompt should not
+		// teach any legacy product name or shell branding here.
 		writeSection(&builder, "SELF-DESCRIPTION RULES", []string{
 			"When the user asks what you can do, answer from both AVAILABLE COMMANDS and AVAILABLE TOOLS.",
-			"Commands are local Morph operator actions. Tools are Loopgate-governed capabilities. Do not confuse them.",
+			"Commands are local product actions. Tools are Loopgate-governed capabilities. Do not confuse them.",
 			"Do not deny built-in product features that are listed in RUNTIME CONTRACT or AVAILABLE COMMANDS.",
 			"If a matching capability is not listed, say it is unavailable. Do not substitute an unrelated capability just because it is available.",
 			"Only mention slash commands that are explicitly listed in AVAILABLE COMMANDS. Do not invent slash namespaces or subcommands such as /memory/remembered-events.",
-			"Do not treat raw filesystem paths like .morph/memory or runtime/state/memory as the memory product surface. Memory is Loopgate-governed and exposed through the listed memory commands only.",
+			"Do not treat raw filesystem paths like runtime/state/memory as the memory product surface. Memory is Loopgate-governed and exposed through the listed memory commands only.",
 		})
 	}
 
@@ -252,9 +254,9 @@ func buildSystemInstruction(request Request) (string, error) {
 			"If you are unsure whether a listed tool matches, do not emit a tool call for it.",
 			"Do not claim a tool succeeded unless you received a tool result.",
 			"Never emit <tool_result>. Tool results are generated only by the runtime after actual execution.",
-			"Never emit <tool_call> for local Morph slash commands such as /goal, /memory, /morphling, /site, or /setup.",
-			"Never use filesystem tools to inspect or modify raw memory stores such as .morph/memory or runtime/state/memory. Use only the listed memory commands or explain that the memory write surface is not exposed.",
-			"If the user asks how to use a local Morph command, answer in plain text instead of emitting a tool call.",
+			"Never emit <tool_call> for local product commands such as /goal, /memory, /morphling, /site, or /setup.",
+			"Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory. Use only the listed memory commands or explain that the memory write surface is not exposed.",
+			"If the user asks how to use a local product command, answer in plain text instead of emitting a tool call.",
 		})
 	}
 
@@ -384,7 +386,7 @@ func formatRuntimeFacts(runtimeFacts []string) []string {
 
 func formatAvailableCommands(availableCommands []CommandDefinition) []string {
 	if len(availableCommands) == 0 {
-		return []string{"No Morph commands are available."}
+		return []string{"No local product commands are available."}
 	}
 
 	sortedCommands := append([]CommandDefinition(nil), availableCommands...)

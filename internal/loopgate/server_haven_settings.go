@@ -12,7 +12,8 @@ import (
 	modelruntime "morph/internal/modelruntime"
 )
 
-// havenShellDevResponse is the JSON body for GET and POST /v1/haven/settings/shell-dev.
+// havenShellDevResponse is the JSON body for GET and POST /v1/settings/shell-dev.
+// The legacy /v1/haven/settings/shell-dev alias uses the same payload.
 type havenShellDevResponse struct {
 	Enabled bool   `json:"enabled"`
 	Warning string `json:"warning,omitempty"`
@@ -26,9 +27,9 @@ const havenShellDevWarningText = "Terminal access lets Morph run arbitrary shell
 	"Enable only for development tasks that genuinely require the command line. " +
 	"Disable again when not needed."
 
-// handleHavenSettingsShellDev serves GET and POST /v1/haven/settings/shell-dev.
+// handleHavenSettingsShellDev serves GET and POST /v1/settings/shell-dev.
 //
-// GET  — returns whether shell_exec is currently visible to Haven chat.
+// GET  — returns whether shell_exec is currently visible to the local chat surface.
 // POST — enables or disables it by writing (or removing) the override file.
 //
 // Gating is applied at request time in handleHavenChat, so changes take effect
@@ -109,10 +110,11 @@ func shellDevResponseFor(enabled bool) havenShellDevResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Idle settings — GET and POST /v1/haven/settings/idle
+// Idle settings — GET and POST /v1/settings/idle
 // ---------------------------------------------------------------------------
 
-// havenIdleSettingsResponse is the JSON body for GET and POST /v1/haven/settings/idle.
+// havenIdleSettingsResponse is the JSON body for GET and POST /v1/settings/idle.
+// The legacy /v1/haven/settings/idle alias uses the same payload.
 type havenIdleSettingsResponse struct {
 	IdleEnabled    bool `json:"idle_enabled"`
 	AmbientEnabled bool `json:"ambient_enabled"`
@@ -123,7 +125,7 @@ type havenIdleSettingsUpdateRequest struct {
 	AmbientEnabled bool `json:"ambient_enabled"`
 }
 
-// handleHavenSettingsIdle serves GET and POST /v1/haven/settings/idle.
+// handleHavenSettingsIdle serves GET and POST /v1/settings/idle.
 //
 // GET  — returns current idle_enabled and ambient_enabled from haven_preferences.json.
 // POST — updates them; changes are picked up by the idle manager within one tick (~30 s).
@@ -229,7 +231,7 @@ func (server *Server) havenPrefsPath() string {
 	return filepath.Join(server.repoRoot, "runtime", "state", "haven_preferences.json")
 }
 
-// havenDefaultAmbientEnabled mirrors the logic in cmd/haven settings.go:
+// havenDefaultAmbientEnabled preserves the historical default for ambient mode:
 // ambient is off by default for Anthropic and non-loopback OpenAI-compatible.
 func (server *Server) havenDefaultAmbientEnabled() bool {
 	cfg, err := modelruntime.LoadPersistedConfig(modelruntime.ConfigPath(server.repoRoot))

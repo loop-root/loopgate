@@ -7,9 +7,9 @@ This document explains how a **local process** (native app, test harness, or bri
 **Normative details:** [RFC 0001: Loopgate Token and Request Integrity Policy](../rfcs/0001-loopgate-token-policy.md).  
 **Reference implementation:** `internal/loopgate/client.go` (Go) — match its wire behavior byte-for-byte when in doubt.
 
-### Legacy `/v1/haven/...` routes and the `haven` actor
+### Neutral routes, legacy aliases, and the `haven` actor
 
-Several endpoints still use the **`/v1/haven/...`** path prefix and the session **actor label `haven`**. These are **stable compatibility identifiers** on the wire—they do not imply a specific desktop product. Prefer **MCP** for new IDE integrations; when implementing HTTP clients, use the exact paths, bodies, and types in this document.
+Prefer the neutral routes in this document, such as **`/v1/chat`** and **`/v1/continuity/inspect-thread`**. Loopgate still keeps the historical **`/v1/haven/...`** routes as compatibility aliases for existing local HTTP clients. The session **actor label `haven`** is also still used by a few compatibility paths; it is a stable identifier, not a product boundary. Prefer **MCP** for new IDE integrations.
 
 ---
 
@@ -202,7 +202,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft |
 | `POST /v1/sandbox/*` | import, stage, metadata, export, list |
 | `POST /v1/continuity/inspect` | Continuity thread inspection (caller supplies `events` JSON) |
-| `POST /v1/haven/continuity/inspect-thread` | **Actor `haven` only** — signed POST; body `{ "thread_id": "…" }`; Loopgate loads the thread from `internal/haven/threadstore` and proposes continuity (client does **not** send transcript payloads) |
+| `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
 | `GET /v1/memory/wake-state` | Wake state projection |
 | `GET` / `PUT /v1/tasks` … | Task board sync |
 | `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
@@ -230,8 +230,8 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/ui/workspace/preview` | Read workspace file preview (signed POST; body `path`, using the same virtual path mapping as the list route) |
 | `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET); written by clients that implement presence |
 | `GET /v1/ui/morph-sleep` | Same snapshot as presence plus `is_sleeping` / `is_resting` (signed GET) |
-| `POST /v1/haven/agent/work-item/ensure` | **Actor `haven` only** — signed POST; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
-| `POST /v1/haven/agent/work-item/complete` | **Actor `haven` only** — signed POST; runs **`todo.complete`** for a task-board item id |
+| `POST /v1/agent/work-item/ensure` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
+| `POST /v1/agent/work-item/complete` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.complete`** for a task-board item id |
 | … | Other `/v1/ui/*` task standing grants, shared folder — see `server.go` |
 
 For **request/response JSON shapes**, use `internal/loopgate/types.go` as the source of truth (field names are `json` tagged).
@@ -262,27 +262,27 @@ silently delete memory in place.
 
 These routes let a client using **actor label `haven`** create or complete **Task Board** items through the **same** capability execution path as `POST /v1/capabilities/execute` for `todo.add` / `todo.complete` — policy, audit, and continuity hooks apply unchanged. They do **not** grant new authority; the session token must already include **`todo.add`** (ensure) or **`todo.complete`** (complete).
 
-**`POST /v1/haven/agent/work-item/ensure`**
+**`POST /v1/agent/work-item/ensure`**
 
 - **Auth:** `Authorization: Bearer` + **signed body** (same rules as other signed POSTs for this actor; see §6).
 - **Body:** `{ "text": "<required>", "next_step": "<optional>" }` — `text` is the human-visible task line (trimmed server-side).
 - **Behavior:** Executes `todo.add` with `task_kind` carry-over, `source_kind: haven_agent`, and optional `next_step`. If an equivalent item already exists, the structured result sets `already_present: true` and returns the same `item_id`.
 - **Success (200):** `{ "item_id": "…", "text": "…", "already_present": bool }` — see `HavenAgentWorkItemResponse` in `internal/loopgate/types.go` (Go identifier retained for compatibility).
 
-**`POST /v1/haven/agent/work-item/complete`**
+**`POST /v1/agent/work-item/complete`**
 
 - **Auth:** same as ensure; requires **`todo.complete`** on the token.
 - **Body:** `{ "item_id": "<required>", "reason": "<optional>" }` — default reason if omitted: `haven_agent_work_completed`.
 - **Success (200):** same JSON shape as ensure (`already_present` is always false on this path).
 
-**Product note:** Classification of user messages (answer-only vs task vs tool vs approval-gated), UI phase (`planning`, `waiting_for_approval`, etc.), and deep-link behavior are **unprivileged client** responsibilities. Loopgate only exposes narrow, auditable capability wrappers. Simple host-folder work typically flows through the **legacy chat route** **`/v1/haven/chat`** and normal approvals; use ensure/complete when the client wants an explicit Task Board row.
+**Product note:** Classification of user messages (answer-only vs task vs tool vs approval-gated), UI phase (`planning`, `waiting_for_approval`, etc.), and deep-link behavior are **unprivileged client** responsibilities. Loopgate only exposes narrow, auditable capability wrappers. Simple host-folder work typically flows through **`/v1/chat`** and normal approvals; use ensure/complete when the client wants an explicit Task Board row.
 
 ### 7.3 Continuity inspection (threadstore-loaded; actor `haven`)
 
-**`POST /v1/haven/continuity/inspect-thread`**
+**`POST /v1/continuity/inspect-thread`**
 
-- **Auth:** Actor label **`haven`** + **signed body** (same pattern as `POST /v1/haven/chat`).
-- **Body:** `{ "thread_id": "<required>" }` — must match a thread in Loopgate’s threadstore for the session workspace (on-disk layout under `internal/haven/threadstore`; default paths may use a **`.haven`** segment as a historical directory name—treat as an implementation detail, not a product name).
+- **Auth:** Actor label **`haven`** + **signed body** (same pattern as `POST /v1/chat` for the current compatibility gate).
+- **Body:** `{ "thread_id": "<required>" }` — must match a thread in Loopgate’s threadstore for the session workspace (on-disk implementation under `internal/threadstore`; default paths may use a **`.haven`** segment as a historical directory name—treat as an implementation detail, not a product name).
 - **Behavior:** Maps persisted thread events to continuity inspection input server-side and runs the same inspection pipeline as other continuity proposals. If the thread has no mappable continuity rows, returns **200** with `submit_status: "skipped_no_continuity_events"`.
 - **Success (200):** `HavenContinuityInspectThreadResponse` in `internal/loopgate/types.go` (`submit_status`, optional `inspection_id`, derivation/review fields; Go identifier retained for compatibility).
 - **Product:** Clients may call this **best-effort after a completed chat turn** when the turn did **not** stop for `approval_required`, so operators get continuity proposals without shipping raw transcripts over HTTP.

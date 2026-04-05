@@ -314,9 +314,9 @@ func (client *Client) InspectContinuityThread(ctx context.Context, request Conti
 	return response, nil
 }
 
-// SubmitHavenContinuityInspectionForThread loads a Haven chat thread from Loopgate's threadstore
+// SubmitHavenContinuityInspectionForThread loads a stored chat thread from Loopgate's threadstore
 // and runs continuity inspection (proposal path). Prefer this over InspectContinuityThread for
-// Swift / haven/chat threads so the client does not ship raw transcript payloads.
+// local chat clients so the client does not ship raw transcript payloads.
 func (client *Client) SubmitHavenContinuityInspectionForThread(ctx context.Context, threadID string) (HavenContinuityInspectThreadResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
@@ -324,7 +324,7 @@ func (client *Client) SubmitHavenContinuityInspectionForThread(ctx context.Conte
 	}
 	var response HavenContinuityInspectThreadResponse
 	req := HavenContinuityInspectThreadRequest{ThreadID: strings.TrimSpace(threadID)}
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/haven/continuity/inspect-thread", capabilityToken, req, &response, nil); err != nil {
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/continuity/inspect-thread", capabilityToken, req, &response, nil); err != nil {
 		return HavenContinuityInspectThreadResponse{}, err
 	}
 	return response, nil
@@ -342,7 +342,8 @@ func (client *Client) LoadMemoryWakeState(ctx context.Context) (MemoryWakeStateR
 	return response, nil
 }
 
-// LoadTasks returns Task Board items for Haven UI (control session auth; not capability execution).
+// LoadTasks returns Task Board items for local operator clients
+// (control session auth; not capability execution).
 func (client *Client) LoadTasks(ctx context.Context) (UITasksResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
@@ -789,7 +790,7 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, ca
 	return client.doJSONWithTimeout(ctx, client.defaultRequestTimeout, method, path, capabilityToken, requestBody, responseBody, extraHeaders)
 }
 
-// doHavenChatSSE sends POST /v1/haven/chat and reads the SSE response stream,
+// doHavenChatSSE sends POST /v1/chat and reads the SSE response stream,
 // assembling all events into a HavenChatResponse. Used in tests to exercise
 // the SSE endpoint with the same request-signing path as the Swift client.
 func (client *Client) doHavenChatSSE(ctx context.Context, capabilityToken string, requestBody havenChatRequest) (HavenChatResponse, error) {
@@ -798,7 +799,7 @@ func (client *Client) doHavenChatSSE(ctx context.Context, capabilityToken string
 		return HavenChatResponse{}, fmt.Errorf("marshal request body: %w", err)
 	}
 
-	httpRequest, err := http.NewRequestWithContext(ctx, "POST", client.baseURL+"/v1/haven/chat", bytes.NewReader(bodyBytes))
+	httpRequest, err := http.NewRequestWithContext(ctx, "POST", client.baseURL+"/v1/chat", bytes.NewReader(bodyBytes))
 	if err != nil {
 		return HavenChatResponse{}, fmt.Errorf("build request: %w", err)
 	}
@@ -806,7 +807,7 @@ func (client *Client) doHavenChatSSE(ctx context.Context, capabilityToken string
 	if strings.TrimSpace(capabilityToken) != "" {
 		httpRequest.Header.Set("Authorization", "Bearer "+capabilityToken)
 	}
-	if err := client.attachRequestSignature(httpRequest, "/v1/haven/chat", bodyBytes); err != nil {
+	if err := client.attachRequestSignature(httpRequest, "/v1/chat", bodyBytes); err != nil {
 		return HavenChatResponse{}, err
 	}
 

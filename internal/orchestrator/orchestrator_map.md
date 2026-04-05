@@ -37,7 +37,7 @@ Use it when changing:
 
 - Policy: `internal/policy/`
 - Tools: `internal/tools/`
-- Reference Wails chat loop: `cmd/haven/chat.go`
+- Local chat/tool loop lives under `internal/loopgate/server_haven_chat.go`
 
 ## Important Watchouts
 

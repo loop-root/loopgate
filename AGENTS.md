@@ -56,7 +56,7 @@ These rules align with the local control-plane design and AMP direction.
 - The control plane is the only authority for privileged actions.
 - Natural language never creates authority.
 - References are identifiers, not trust grants.
-- Unprivileged **operator clients** (IDE, MCP host, or in-repo reference shell) must not be treated as an authority source just because they initiated a request.
+- Unprivileged **operator clients** (IDE, MCP host, proxy-integrated editor, or local client) must not be treated as an authority source just because they initiated a request.
 - Model output, memory strings, summaries, and UI-visible state are content, not authority.
 - Internal control-plane features must not be turned into public network APIs by convenience.
 - Local transport must remain local-only by default.
@@ -86,10 +86,6 @@ Bearer possession alone is not enough.
 - **Proxy mode:** transparent API proxy between developer IDEs and model endpoints — intercepts requests, injects memory context, applies policy, logs to audit.
 - **Admin console:** web UI for IT admins — policy configuration, user/team provisioning, IDP integration, audit log viewer. Not a developer-facing surface.
 
-### In-repo reference shell (`cmd/haven/`) — not a product surface
-
-- **Wails + React** under `cmd/haven/` is a **frozen reference** for contracts and tests only. **Do not evolve it for product features.** Prefer MCP/proxy integrations for real operator workflows.
-
 ### Loopgate owns
 
 - policy evaluation
@@ -111,11 +107,9 @@ Morphlings are internal Loopgate-governed runtime objects.
 - They must not create their own permissions through prompts, plans, or self-description.
 - They exist only inside a parent authority context created and validated by Loopgate.
 - Their lifecycle, execution envelope, and audit trail are owned by Loopgate.
-- A client UI (IDE, MCP host, or reference shell) may render a pool of morphlings and their projected status, but that UI is not the source of truth for morphling state.
+- A client UI (IDE, MCP host, proxy-integrated editor, or local client) may render a pool of morphlings and their projected status, but that UI is not the source of truth for morphling state.
 
 **MCP handlers must apply the same policy evaluation, approval workflows, and audit logging as HTTP handlers. MCP is not a trust boundary bypass.** The proxy mode must not weaken policy or audit. The admin console must require authentication before serving routes.
-
-**Reference shell:** `cmd/haven/frontend/README.md` — Wails tree build notes only.
 
 ## Multi-tenancy model
 

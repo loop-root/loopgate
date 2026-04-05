@@ -27,7 +27,7 @@ It keeps API key material off disk where possible by referencing env vars and `S
 
 - Providers: `internal/model/anthropic/`, `internal/model/openai/`
 - Secrets: `internal/secrets/`
-- Reference Wails setup may influence runtime state: `cmd/haven/setup.go`, `cmd/haven/model_settings.go`
+- Local setup and model-settings routes may influence runtime state through Loopgate-managed configuration.
 
 ## Important Watchouts
 

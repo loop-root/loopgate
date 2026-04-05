@@ -4,7 +4,7 @@
 
 This document defines what must remain true in the **operator client + Loopgate** split.
 
-**Terminology:** The **operator client** is whatever local process attaches to Loopgate (IDE-hosted agent, CLI, native UI, or the in-repo **`cmd/haven/`** Wails **reference** shell). This contract uses **operator client** / **client** for the unprivileged runtime. **`cmd/haven/`** is **not** a committed product surface—prefer **MCP/proxy** for real workflows (`docs/setup/LOOPGATE_MCP.md`).
+**Terminology:** The **operator client** is whatever local process attaches to Loopgate (IDE-hosted agent, CLI, native UI, or proxy-integrated editor). This contract uses **operator client** / **client** for the unprivileged runtime. Prefer **MCP/proxy** for real workflows (`docs/setup/LOOPGATE_MCP.md`).
 
 ## 1) Purpose
 

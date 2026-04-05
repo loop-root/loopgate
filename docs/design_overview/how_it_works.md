@@ -4,13 +4,11 @@
 
 **Primary operator experience:** developer tools via **MCP** or **proxy** (see `docs/setup/LOOPGATE_MCP.md` and root `AGENTS.md`).
 
-This document walks the **in-repo reference** path: **Wails** under **`cmd/haven/`** — same Loopgate contracts used in integration tests, **not** a ship target.
-
 There is **no separate product CLI** in the supported path for new integrations. Privileged work goes through **Loopgate** on a local Unix socket.
 
-## 1) Startup — reference shell (`cmd/haven/`)
+## 1) Startup — IDE client or local integration
 
-On launch, the Wails backend + local state:
+On launch, the IDE host, MCP subprocess, or local client:
 
 1. resolves the active **project root** (or workspace binding)
 2. loads persona and effective model runtime configuration
@@ -22,7 +20,7 @@ On launch, the Wails backend + local state:
 8. opens a Loopgate **control session** for the current session identity
 9. loads or recovers **continuity thread-role** state (`current` / `next` / `previous`)
 10. loads Loopgate-owned **durable wake state** for governed recall
-11. starts the interactive UI (chat, workspace, slash commands)
+11. starts the interactive client surface
 12. appends `session.started` to the client ledger when that path is active
 
 If Loopgate is unavailable, the client fails explicitly rather than running “offline privileged” mode.
@@ -33,7 +31,7 @@ Other HTTP-native clients follow the same control-plane pattern; see [`LOOPGATE_
 
 ### Slash commands and shell-backed actions
 
-Handled through `internal/shell` from the reference backend. Read-only commands summarize local and Loopgate-visible state. Capability commands are **forwarded to Loopgate** as typed requests.
+Handled through `internal/shell` or the IDE host integration layer. Read-only commands summarize local and Loopgate-visible state. Capability commands are **forwarded to Loopgate** as typed requests.
 
 ### Natural language input
 

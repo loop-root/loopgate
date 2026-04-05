@@ -32,8 +32,9 @@ type havenJournalResidentState struct {
 	LastSuccessUTC string `json:"last_success_utc,omitempty"`
 }
 
-// HavenJournalResidentTickResponse is the JSON body for POST /v1/haven/resident/journal-tick.
-// Status is one of: wrote, skipped, error. This route is advisory for native Haven; it does not
+// HavenJournalResidentTickResponse is the JSON body for POST /v1/resident/journal-tick.
+// The legacy /v1/haven/resident/journal-tick alias returns the same payload.
+// Status is one of: wrote, skipped, error. This route is advisory for native clients; it does not
 // replace user-initiated journal.write or chat. Loopgate remains sole authority for fs_write.
 type HavenJournalResidentTickResponse struct {
 	Status       string `json:"status"`

@@ -12,7 +12,8 @@ import (
 
 const maxHavenModelSettingsBodyBytes = 32 * 1024
 
-// HavenModelSettingsResponse is the JSON for GET/POST /v1/haven/model-settings (native Haven parity with legacy Wails settings).
+// HavenModelSettingsResponse is the JSON for GET/POST /v1/model/settings.
+// The legacy /v1/haven/model-settings alias returns the same payload.
 type HavenModelSettingsResponse struct {
 	CurrentModel       string           `json:"current_model"`
 	ProviderName       string           `json:"provider_name"`

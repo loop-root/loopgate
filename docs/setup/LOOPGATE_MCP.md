@@ -29,8 +29,13 @@ loopgate mcp-serve \
   -local-open-session \
   -actor claude_code \
   -client-session cursor_demo \
-  -requested-capabilities loopgate.status,memory.remember,memory.discover
+  -requested-capabilities memory.remember,todo.add,todo.complete,todo.list,fs_list
 ```
+
+`-requested-capabilities` must contain **Loopgate capability ids**, not MCP built-in tool names. For example:
+
+- valid: `memory.remember`, `todo.add`, `fs_list`
+- invalid: `loopgate.status`, `loopgate.memory_discover`
 
 ## Environment variables
 
@@ -69,3 +74,17 @@ Exact schema depends on the IDE. The **command** is the `loopgate` binary with f
 - Requires a **separate** long-running `loopgate` process; MCP does not start the control plane.
 - Stdout is reserved for MCP; errors use stderr.
 - `-local-open-session` is for **local/dev IDE integration only**, not a general auth surface.
+
+## Cursor dry-run notes
+
+The 2026-04-03 local dry-run showed these host-specific behaviors:
+
+- **Cursor IDE** successfully loaded the Loopgate MCP server from `~/.cursor/mcp.json`.
+- The newer Cursor app surface did **not** expose the same tool set reliably; use the main Cursor IDE for now.
+- Cursor IDE surfaced the built-in Loopgate MCP tools with **underscore names**, for example:
+  - `loopgate_status`
+  - `loopgate_memory_wake_state`
+  - `loopgate_memory_discover`
+  - `loopgate_memory_remember`
+- The fallback capability tools may appear under a host-prefixed name such as `user-loopgate-...`.
+- If you need the generic dispatcher tool, include `invoke_capability` in `-requested-capabilities`; otherwise direct typed MCP tools are the preferred path.

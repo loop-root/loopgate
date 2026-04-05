@@ -4,7 +4,7 @@
 
 This repository is centered on **Loopgate**: the policy-governed **AI governance engine** and local control plane (`cmd/loopgate`, `internal/loopgate`).
 
-**Operator clients** connect over **HTTP on a Unix domain socket** (v1). **Primary direction:** MCP hosts and proxy clients (**Claude Code**, **Cursor**, **VS Code**, **Anti‑Gravity**, **OpenAI Codex**, …) — see `docs/setup/LOOPGATE_MCP.md`. The in-repo **Wails** application under **`cmd/haven/`** is a **reference-only** shell for contracts and tests — not a ship target.
+**Operator clients** connect over **HTTP on a Unix domain socket** (v1). **Primary direction:** MCP hosts and proxy clients (**Claude Code**, **Cursor**, **VS Code**, **Anti‑Gravity**, **OpenAI Codex**, …) — see `docs/setup/LOOPGATE_MCP.md`. Any remaining in-repo UI shells are legacy code, not current product surfaces.
 
 **Morphlings** are Loopgate-governed bounded workers (naming unchanged).
 
@@ -18,17 +18,13 @@ As of **2026-04-03**, the implemented deployment is:
 - append-only audit logging
 - deny-by-default capability execution
 
-**Enterprise surfaces** (MCP server, proxy mode, admin console, mTLS admin transport) are **in progress** — not fully described by this “local single-node” snapshot alone.
+**Enterprise surfaces** (MCP server, proxy mode, mTLS admin transport) are **in progress** — not fully described by this “local single-node” snapshot alone.
 
 ## 2) High-level execution model
 
 Typical **IDE / MCP** flow (target primary):
 
 `developer tool → Loopgate (MCP or proxy) → validation / policy / approval / tool execution → structured result → Loopgate durable memory / audit`
-
-Typical **reference Wails** flow (in-repo tests only):
-
-`input → reference client (`cmd/haven/`) → Loopgate (model/capability request) → validation / policy / approval / tool execution → structured result → client continuity → Loopgate durable memory projection`
 
 Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/model`, `internal/modelruntime`, `internal/memory`, `internal/loopgate`, `internal/shell`, `internal/setup`, and policy/tools/safety packages.
 
@@ -37,7 +33,6 @@ Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/mo
 ### Unprivileged operator clients
 
 - **Shipped integrations:** MCP- and proxy-capable IDEs (see `docs/setup/LOOPGATE_MCP.md`).
-- **In-repo reference:** Wails/React + Go under `cmd/haven/` — frozen per `AGENTS.md`.
 - Persona loading, prompt compilation, model runtime configuration (non-secret), local session state, continuity thread projection, local ledger, approval UX — on the **unprivileged** side of the boundary (same pattern any client must follow).
 
 ### Loopgate
@@ -48,7 +43,7 @@ Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/mo
 
 ## 4) Trust boundaries
 
-**Trusted:** Loopgate binary, policy enforcement inside Loopgate, any local client **binary** (IDE bridge, MCP host, Wails reference) as a transport — but **not** model output routed through it.
+**Trusted:** Loopgate binary, policy enforcement inside Loopgate, any local client **binary** (IDE bridge, MCP host, proxy client) as a transport — but **not** model output routed through it.
 
 **Untrusted:** model output, user input, tool arguments/output, config until validated, external integration responses.
 
@@ -70,13 +65,13 @@ Loopgate supports provider-auth paths (`client_credentials`, `pkce`), YAML conne
 
 See `docs/design_overview/loopgate.md` and `docs/roadmap/roadmap.md` for a feature-level list.
 
-**Remaining gaps** (non-exhaustive): authorization code without PKCE, full refresh-token rotation story, generic external HTTP capability, externally anchored audit signatures, explicit MCP/proxy/admin-node implementation as product priorities land.
+**Remaining gaps** (non-exhaustive): authorization code without PKCE, full refresh-token rotation story, generic external HTTP capability, externally anchored audit signatures, and explicit proxy/admin-node implementation as product priorities land.
 
 ## 7) Planned expansion
 
 ### Loopgate (product)
 
-- Enterprise: **MCP server**, **transparent proxy**, **`tenant_id` isolation**, **admin console**, **mTLS** to governance authority — with the same policy and audit invariants as today’s HTTP handlers.
+- Enterprise: **MCP server**, **transparent proxy**, **`tenant_id` isolation**, **mTLS** to governance authority — with the same policy and audit invariants as today’s HTTP handlers.
 - OAuth and integration expansion, additional secret backends, typed integrations, deny-by-default secret export.
 
 ### Skills / manifests
@@ -85,4 +80,4 @@ See `docs/design_overview/loopgate.md` and `docs/roadmap/roadmap.md` for a featu
 
 ### APIs
 
-- Loopgate APIs for capability execution, connection flows, denial introspection; admin-authenticated routes for IT operations.
+- Loopgate APIs for capability execution, connection flows, denial introspection, and future proxy mediation.

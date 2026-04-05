@@ -1,6 +1,6 @@
 # Loopgate Map
 
-This file maps the main Loopgate package files. **Loopgate** is the authority and enforcement runtime in this repository. **Operator clients** attach over **MCP**, **proxy**, or **HTTP on the local control-plane socket**; the in-repo **`cmd/haven/`** Wails tree is a **reference shell** for contracts and tests only—not a ship target.
+This file maps the main Loopgate package files. **Loopgate** is the authority and enforcement runtime in this repository. **Operator clients** attach over **MCP**, **proxy**, or **HTTP on the local control-plane socket**. Any remaining legacy client shells in the repo are deletion candidates, not active product surfaces.
 
 Use it when changing:
 
@@ -26,17 +26,13 @@ For integrators it matters in four ways:
 - it exposes the memory APIs **local clients** must call (not optional side channels)
 - it produces the status data **Security / Activity / continuity UIs** render from projections
 - it owns the authoritative bridge between explicit host-folder grants and **client-visible** mirrored folders
-- it centralizes tasks, approvals, memory, and host-action state so **every client** (IDE, CLI, reference shell) shares one auditable substrate
+- it centralizes tasks, approvals, memory, and host-action state so **every client** (IDE, CLI, proxy-integrated client) shares one auditable substrate
 
 ## Key Files
 
 ### MCP (enterprise IDE integration)
 
 - `mcpserve/` — **`loopgate mcp-serve`**: stdio MCP (`mcp-go`), tools forward to **`loopgate.Client`** + delegated `LOOPGATE_MCP_*` env against the Unix socket (no second control-plane writer). See `docs/setup/LOOPGATE_MCP.md`, ADR 0005.
-
-### Admin console (v0)
-
-- `admin_console.go` / `admin_console_ui.go` — optional **loopback TCP** server (requires `config/runtime.yaml` → `admin_console.enabled` **and** `loopgate --admin` **and** `LOOPGATE_ADMIN_TOKEN`). Routes under `/admin/`: login, dashboard (live metrics), structured capability policy + subordinate-class YAML, **runtime configuration** (read-only), audit with filter form + redacted CSV, sessions. Tenant-filtered when `tenancy.deployment_tenant_id` is set. See `docs/setup/ADMIN_CONSOLE.md`, ADR 0016.
 
 ### Authority and Capability Inventory
 
@@ -45,7 +41,7 @@ For integrators it matters in four ways:
   - tool registry wiring
   - capability summaries derived from the registry
   - dispatch point for capability-specific execution paths such as `memory.remember`
-  - now also scopes trusted sandbox-local low-friction behavior to the **`haven` actor** (legacy session label) instead of weakening generic policy evaluation
+  - now also contains some legacy actor-scoped branches that should continue shrinking rather than becoming product surface
   - handler panics and operator-relevant errors should log via the diagnostic **`slog`** loggers (`internal/loopdiag`, levels from `config/runtime.yaml` → `logging.diagnostic`) with **`tenant_id` / `user_id`** on the log record when a control session is bound, so admins can troubleshoot without a debugger and filter by tenant in multi-tenant deployments
 - `folder_access.go`
   - authoritative folder-grant storage
@@ -85,7 +81,7 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_sandbox_handlers.go` — sandbox import/export/list/stage; `redactSandboxError` returns stable sentinel strings only (no wrapped host paths in client-visible errors)
 - `server_sandbox_handlers_test.go` — `TestRedactSandboxError_DoesNotExposeAbsolutePaths`
 - `server_memory_handlers.go` — memory endpoints (see Memory section below)
-- `server_haven_memory_handlers.go` — **UI memory** inventory/reset handlers (legacy `haven` route family); projects redacted manageable objects and owns demo reset paths
+- `server_haven_memory_handlers.go` — UI memory inventory/reset handlers; projects redacted manageable objects and owns demo reset paths
 - `server_capability_handlers.go` — capability execution
 - `morphlings.go` / `morphling_workers.go` — lifecycle, worker IPC; `morphlingSummaryFromRecord` + `morphlingProjectionStatusText` project operator-facing summaries without raw model memory strings or termination prose
 - `server_morphling_handlers.go` / `server_morphling_worker_handlers.go` — morphling lifecycle and workers
@@ -106,12 +102,12 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - display-safe memory inventory for **operator-facing** memory controls
   - auditable archive-and-fresh-start reset for demo prep
 - `ui_types.go`
-  - **Client-facing** UI summaries and event envelopes (legacy `haven` routes)
+  - client-facing UI summaries and event envelopes
   - includes folder-access sync/status response types used by **local HTTP clients**
   - now also includes standing task grant summaries for the Security room
 - `client.go`
   - local HTTP client over the Unix socket (`NewClient`, `doJSON`, `attachRequestSignature`, `computeRequestSignature`) — **wire reference** for non-Go integrators; see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`
-  - methods used by **reference and native local clients** (not authority)
+  - methods used by local clients and test harnesses (not authority)
   - includes explicit diagnostic-wake loading for continuity status
   - includes granted-folder sync for the **resident folder bridge**
   - now includes standing task grant read/update methods for the Security room
@@ -193,7 +189,7 @@ These files matter because:
 - open tasks should be durable operational objects, not only UI strings
 - native `memory.remember` tool calls should not bypass the explicit remember pipeline
 - the capability inventory should stay authoritative even if a **UI** renders friendlier names
-- **Actor-scoped** low-friction execution (e.g. `haven`) must stay inside Loopgate policy, not leak into generic evaluation for other actors
+  - actor-scoped low-friction execution (including the current `haven` compatibility actor) must stay inside Loopgate policy, not leak into generic evaluation for other actors
 - standing approvals are still Loopgate authority, not UI preference state
 - host-folder mirroring should stay explicit, audited, and compare-before-sync instead of becoming a noisy or implicit watcher path
 - the next host-help slice should build as a plan/apply system on top of Loopgate, not as raw writable host filesystem authority

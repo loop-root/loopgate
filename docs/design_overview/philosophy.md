@@ -9,7 +9,7 @@
 ## Three roles
 
 1. **Operator (human)** — intent, review, and explicit approval.
-2. **Client (IDE, CLI, native UI, or reference shell)** — conversation, planning, rendering, and **unprivileged** session state.
+2. **Client (IDE, CLI, native UI, or proxy-integrated editor)** — conversation, planning, rendering, and **unprivileged** session state.
 3. **Loopgate** — policy, tokens, secrets, sandbox mediation, morphling lifecycle, and **authoritative** audit for those actions.
 
 Morphlings are **not** a fourth public tier; they are **Loopgate-governed** workers with derived envelopes.

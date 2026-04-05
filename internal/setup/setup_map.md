@@ -9,7 +9,7 @@ Use it when changing:
 
 ## Core Role
 
-`internal/setup/` provides `RunModelWizard` and related helpers: prompt interfaces (`Prompter`, `Selector`), validation hooks, and persistence via injected `ConnectionStorer`. Native clients may reuse similar patterns; the in-repo reference onboarding lives primarily in `cmd/haven/setup.go`.
+`internal/setup/` provides `RunModelWizard` and related helpers: prompt interfaces (`Prompter`, `Selector`), validation hooks, and persistence via injected `ConnectionStorer`. Native clients may reuse similar patterns for Loopgate-backed onboarding flows.
 
 ## Key Files
 

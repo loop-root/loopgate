@@ -437,35 +437,6 @@ memory:
 	}
 }
 
-func TestLoadRuntimeConfig_RejectsAdminConsoleNonLoopbackListen(t *testing.T) {
-	repoRoot := t.TempDir()
-	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
-	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	raw := `version: "1"
-admin_console:
-  enabled: true
-  listen_addr: "0.0.0.0:9847"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
-	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
-		t.Fatalf("write runtime config: %v", err)
-	}
-	_, err := LoadRuntimeConfig(repoRoot)
-	if err == nil {
-		t.Fatal("expected non-loopback admin listen to fail closed")
-	}
-	if !strings.Contains(err.Error(), "admin_console.listen_addr") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestLoadRuntimeConfig_RejectsUnknownMemoryBackend(t *testing.T) {
 	repoRoot := t.TempDir()
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")

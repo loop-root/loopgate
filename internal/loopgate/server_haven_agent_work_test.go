@@ -18,7 +18,7 @@ func TestHavenAgentWorkItemEnsureAndComplete(t *testing.T) {
 	}
 
 	var first HavenAgentWorkItemResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/haven/agent/work-item/ensure", token, map[string]string{
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/agent/work-item/ensure", token, map[string]string{
 		"text": "Organize granted Downloads (agent test)",
 	}, &first, nil); err != nil {
 		t.Fatalf("ensure: %v", err)
@@ -31,7 +31,7 @@ func TestHavenAgentWorkItemEnsureAndComplete(t *testing.T) {
 	}
 
 	var second HavenAgentWorkItemResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/haven/agent/work-item/ensure", token, map[string]string{
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/agent/work-item/ensure", token, map[string]string{
 		"text": "Organize granted Downloads (agent test)",
 	}, &second, nil); err != nil {
 		t.Fatalf("ensure duplicate: %v", err)
@@ -44,7 +44,7 @@ func TestHavenAgentWorkItemEnsureAndComplete(t *testing.T) {
 	}
 
 	var done HavenAgentWorkItemResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/haven/agent/work-item/complete", token, map[string]string{
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/agent/work-item/complete", token, map[string]string{
 		"item_id": first.ItemID,
 		"reason":  "test_complete",
 	}, &done, nil); err != nil {

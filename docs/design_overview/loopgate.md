@@ -21,7 +21,7 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
 
 - Unix-socket service at `runtime/state/loopgate.sock`
 - authoritative policy loaded inside Loopgate
-- server-issued control sessions for local operator clients (IDE/MCP bridges, reference shell, tests)
+- server-issued control sessions for local operator clients (IDE/MCP bridges, proxy clients, tests)
 - client-supplied `actor` / `session_id` treated as labels, not approval authority
 - capability and approval tokens bound to the Unix-socket peer identity that opened the session
 - subsequent privileged requests signed with a server-issued session MAC key and single-use request nonces
@@ -233,7 +233,7 @@ Not yet implemented:
 
 ### Unprivileged operator client owns
 
-- operator UX (IDE, MCP host, or reference shell)
+- operator UX (IDE, MCP host, or proxy-integrated client)
 - model interaction and prompt compilation (where applicable)
 - local session state
 - local append-only continuity ledger and explicit `current / next / previous` role state (where used)

@@ -155,7 +155,6 @@ Not yet implemented (non-exhaustive):
 
 - **MCP server** and **transparent proxy** as primary developer integration surfaces
 - **`tenant_id` namespace** across remaining resources (memory partitions and core audit paths are in progress; grants and other state may still be global per instance)
-- **Admin console** (IT-facing) on an admin-mode node
 - **Enterprise identity layer:** customer **IdP** via **OIDC/OAuth** (and SAML where required) for admin and/or node identity — RFC-first; config-sourced tenancy until then (`docs/setup/TENANCY.md`)
 - **Enterprise secrets layer:** pluggable backends for **Vault**, **cloud KMS**, **HSM**-backed stores, **TPM**/platform identity for bootstrap — RFC-first; see `docs/setup/SECRETS.md` § *Enterprise integration layer*
 - Loopgate-side memory inspector / distillate review pipeline

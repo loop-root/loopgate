@@ -9,7 +9,7 @@ Use it when changing:
 
 ## Core Role
 
-`internal/ui/` is **not** the Wails desktop UI (that is `cmd/haven/frontend/`). It provides string builders for terminal output: `Banner`, styled lines, panels, readline-friendly components, and safe truncation helpers.
+`internal/ui/` is for terminal UI primitives, not a desktop application shell. It provides string builders for terminal output: `Banner`, styled lines, panels, readline-friendly components, and safe truncation helpers.
 
 ## Key Files
 

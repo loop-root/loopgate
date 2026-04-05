@@ -7,9 +7,7 @@
 
 **Loopgate** is the enforcement and control plane for governed AI agent activity: capabilities, approvals, policy, sandboxing, secrets, audit, continuity memory, and **morphling** lifecycle. This repository implements the Loopgate server (`cmd/loopgate`, `internal/loopgate`) and shared libraries.
 
-**Enterprise direction (primary engineering focus):** MCP server, transparent proxy mode, multi-tenant **`tenant_id`** isolation, and an admin console for IT governance — without weakening the same policy and audit rules as local HTTP handlers. Integrations target **existing developer tools** (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, and other MCP- or proxy-capable clients).
-
-The in-repo **`cmd/haven/`** Wails shell is **reference-only** (contracts, tests); it is not a ship target.
+**Enterprise direction (primary engineering focus):** MCP server, transparent proxy mode, and multi-tenant **`tenant_id`** isolation — without weakening the same policy and audit rules as local HTTP handlers. Integrations target **existing developer tools** (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, and other MCP- or proxy-capable clients).
 
 ## What Loopgate is for
 
@@ -29,14 +27,9 @@ go run ./cmd/loopgate
 
 Configure your IDE via the MCP server: `docs/setup/LOOPGATE_MCP.md`.
 
-### Legacy all-in-one script
-
-`./start.sh` builds the in-repo Wails reference shell and launches it with Loopgate. Use only when you intentionally need that prototype.
-
 ## Repository layout
 
 - `cmd/loopgate/` — Loopgate control-plane service
-- `cmd/haven/` — **Reference** Wails desktop (not a product surface)
 - `cmd/morphling-runner/` — lease-bound runner subprocess
 - `internal/` — implementation packages
 - `core/policy/` — checked-in policy and morphling class definitions

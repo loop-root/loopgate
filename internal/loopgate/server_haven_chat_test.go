@@ -118,7 +118,7 @@ func TestHavenChat_EnablesToolsAndExecutesMemoryRemember(t *testing.T) {
 		Message: "Remember my name is Ada.",
 	})
 	if err != nil {
-		t.Fatalf("POST /v1/haven/chat: %v", err)
+		t.Fatalf("POST /v1/chat: %v", err)
 	}
 
 	if chatResponse.AssistantText != "I'll remember that." {
@@ -164,7 +164,7 @@ func TestHavenChat_KeepsApprovalRequiredToolPending(t *testing.T) {
 		name:        "external_write",
 		category:    "filesystem",
 		operation:   toolspkg.OpWrite,
-		description: "test-only write that should still require approval for Haven chat",
+		description: "test-only write that should still require approval for the local chat route",
 		output:      "pending",
 	})
 
@@ -192,7 +192,7 @@ func TestHavenChat_KeepsApprovalRequiredToolPending(t *testing.T) {
 		Message: "Write a file called pending.txt in my workspace.",
 	})
 	if err != nil {
-		t.Fatalf("POST /v1/haven/chat: %v", err)
+		t.Fatalf("POST /v1/chat: %v", err)
 	}
 
 	if chatResponse.Status != "approval_required" {
@@ -314,7 +314,7 @@ func TestHavenChat_HostFolderProseNudgeTriggersToolRound(t *testing.T) {
 		Message: "Can you help me cleanup my downloads folder?",
 	})
 	if err != nil {
-		t.Fatalf("POST /v1/haven/chat: %v", err)
+		t.Fatalf("POST /v1/chat: %v", err)
 	}
 	if !strings.Contains(chatResponse.AssistantText, "Here is what I found") {
 		t.Fatalf("expected final assistant text after tool round, got %#v", chatResponse.AssistantText)
@@ -390,7 +390,7 @@ func TestHavenChat_OrganizePlanProseNudgesHostPlanApply(t *testing.T) {
 		Message: "yes — go ahead and apply the plan to my shared folder",
 	})
 	if err != nil {
-		t.Fatalf("POST /v1/haven/chat: %v", err)
+		t.Fatalf("POST /v1/chat: %v", err)
 	}
 
 	// Auto-apply fires host.plan.apply immediately after organize.plan succeeds.
@@ -453,7 +453,7 @@ func TestHavenChat_PlaceholderAssistantTextBecomesFriendlyReply(t *testing.T) {
 		Message: "yes that's fine",
 	})
 	if err != nil {
-		t.Fatalf("POST /v1/haven/chat: %v", err)
+		t.Fatalf("POST /v1/chat: %v", err)
 	}
 
 	if strings.Contains(strings.ToLower(chatResponse.AssistantText), "no text in model response") {

@@ -9,7 +9,7 @@ import (
 
 func TestCompiler_IncludesPersonaTrustAndHallucinationRules(t *testing.T) {
 	persona := config.Persona{}
-	persona.Name = "Morph"
+	persona.Name = "Loopgate"
 	persona.Description = "A helpful and honest assistant."
 	persona.Values = []string{"honesty", "safety"}
 	persona.Personality.Honesty = "strict"
@@ -74,7 +74,7 @@ func TestCompiler_IncludesPersonaTrustAndHallucinationRules(t *testing.T) {
 
 func TestCompiler_IncludesStatusSelectionGuidanceWhenStatusCapabilityExists(t *testing.T) {
 	persona := config.Persona{}
-	persona.Name = "Morph"
+	persona.Name = "Loopgate"
 	persona.Description = "A helpful and honest assistant."
 
 	compiler := NewCompiler()
@@ -103,7 +103,7 @@ func TestCompiler_IncludesStatusSelectionGuidanceWhenStatusCapabilityExists(t *t
 
 func TestCompiler_IncludesIssueSelectionGuidanceWhenIssueCapabilityExists(t *testing.T) {
 	persona := config.Persona{}
-	persona.Name = "Morph"
+	persona.Name = "Loopgate"
 	persona.Description = "A helpful and honest assistant."
 
 	compiler := NewCompiler()
@@ -128,7 +128,7 @@ func TestCompiler_IncludesIssueSelectionGuidanceWhenIssueCapabilityExists(t *tes
 
 func TestCompiler_IncludesRememberedContinuityAsHistoricalContext(t *testing.T) {
 	persona := config.Persona{}
-	persona.Name = "Morph"
+	persona.Name = "Loopgate"
 	persona.Description = "A helpful and honest assistant."
 
 	compiler := NewCompiler()
@@ -156,7 +156,7 @@ func TestCompiler_IncludesRememberedContinuityAsHistoricalContext(t *testing.T) 
 
 func TestCompiler_IncludesRuntimeContractAndCommands(t *testing.T) {
 	persona := config.Persona{}
-	persona.Name = "Morph"
+	persona.Name = "Loopgate"
 	persona.Description = "A helpful and honest assistant."
 
 	compiler := NewCompiler()
@@ -187,7 +187,7 @@ func TestCompiler_IncludesRuntimeContractAndCommands(t *testing.T) {
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Do not deny built-in product features") {
 		t.Fatalf("compiled prompt missing self-description rule: %s", compiledPrompt.SystemInstruction)
 	}
-	if !strings.Contains(compiledPrompt.SystemInstruction, "Never emit <tool_call> for local Morph slash commands") {
+	if !strings.Contains(compiledPrompt.SystemInstruction, "Never emit <tool_call> for local product commands") {
 		t.Fatalf("compiled prompt missing command-vs-tool rule: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Do not invent slash namespaces or subcommands such as /memory/remembered-events") {
@@ -196,14 +196,14 @@ func TestCompiler_IncludesRuntimeContractAndCommands(t *testing.T) {
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Never emit <tool_result>. Tool results are generated only by the runtime after actual execution.") {
 		t.Fatalf("compiled prompt missing no-tool-result rule: %s", compiledPrompt.SystemInstruction)
 	}
-	if !strings.Contains(compiledPrompt.SystemInstruction, "Never use filesystem tools to inspect or modify raw memory stores such as .morph/memory or runtime/state/memory.") {
+	if !strings.Contains(compiledPrompt.SystemInstruction, "Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory.") {
 		t.Fatalf("compiled prompt missing raw-memory filesystem rule: %s", compiledPrompt.SystemInstruction)
 	}
 }
 
 func TestCompiler_NativeToolsUseGenericSelfDescriptionRules(t *testing.T) {
 	persona := config.Persona{}
-	persona.Name = "Morph"
+	persona.Name = "Loopgate"
 	persona.Description = "A helpful and honest assistant."
 
 	compiler := NewCompiler()
@@ -213,7 +213,7 @@ func TestCompiler_NativeToolsUseGenericSelfDescriptionRules(t *testing.T) {
 		SessionID:      "s-native",
 		TurnCount:      1,
 		UserMessage:    "What can you do here?",
-		RuntimeFacts:   []string{"You are inside Haven OS."},
+		RuntimeFacts:   []string{"You are inside the Loopgate-controlled workspace."},
 		HasNativeTools: true,
 	})
 	if err != nil {
@@ -231,5 +231,42 @@ func TestCompiler_NativeToolsUseGenericSelfDescriptionRules(t *testing.T) {
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Warmth does not relax trust rules") {
 		t.Fatalf("compiled prompt missing voice trust reminder: %s", compiledPrompt.SystemInstruction)
+	}
+	if strings.Contains(compiledPrompt.SystemInstruction, "Haven") {
+		t.Fatalf("compiled prompt should not mention Haven in generic native path: %s", compiledPrompt.SystemInstruction)
+	}
+	if strings.Contains(compiledPrompt.SystemInstruction, "Morph") {
+		t.Fatalf("compiled prompt should not mention Morph in generic native path: %s", compiledPrompt.SystemInstruction)
+	}
+}
+
+func TestCompiler_GenericToolCallProtocol_UsesLoopgateAgnosticLanguage(t *testing.T) {
+	persona := config.Persona{}
+	persona.Name = "Loopgate"
+	persona.Description = "A helpful and honest assistant."
+
+	compiler := NewCompiler()
+	compiledPrompt, err := compiler.Compile(Request{
+		Persona:     persona,
+		Policy:      config.Policy{},
+		SessionID:   "s-generic-tools",
+		TurnCount:   1,
+		UserMessage: "What can you do?",
+	})
+	if err != nil {
+		t.Fatalf("compile prompt: %v", err)
+	}
+
+	if strings.Contains(compiledPrompt.SystemInstruction, "Morph") {
+		t.Fatalf("generic tool-call path should not mention Morph: %s", compiledPrompt.SystemInstruction)
+	}
+	if strings.Contains(compiledPrompt.SystemInstruction, ".morph/memory") {
+		t.Fatalf("generic tool-call path should not mention .morph memory path: %s", compiledPrompt.SystemInstruction)
+	}
+	if !strings.Contains(compiledPrompt.SystemInstruction, "Never emit <tool_call> for local product commands") {
+		t.Fatalf("generic tool-call path missing local command boundary rule: %s", compiledPrompt.SystemInstruction)
+	}
+	if !strings.Contains(compiledPrompt.SystemInstruction, "Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory") {
+		t.Fatalf("generic tool-call path missing raw memory store warning: %s", compiledPrompt.SystemInstruction)
 	}
 }
