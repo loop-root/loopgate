@@ -179,7 +179,6 @@ Each class should eventually define:
 
 The initial v0 worker class set is:
 
-- `mapper`
 - `planner`
 - `inspector`
 - `editor`
@@ -197,6 +196,9 @@ Deferred beyond v0:
 
 These are valuable, but they pressure the design toward broader probe and
 execution powers and should not be the first worker classes shipped.
+
+Because maps are out-of-band governance artifacts, LoopRoot should not include
+any worker role whose job is to mutate or publish maps.
 
 ## Hook and capability distinction
 
@@ -477,6 +479,56 @@ Loopgate should verify that a map:
 - has not been tampered with in transit
 - is valid for the current repo or slice context
 
+Every map should also carry:
+
+- a cryptographic signature
+- a signing key or certificate identifier that Loopgate can verify
+
+## Maps are out of band from agent execution
+
+Maps should not be managed through ordinary agentic runtime flows.
+
+LoopRoot should assume:
+
+- workers do not edit maps
+- managers do not propose live map mutation during execution
+- maps are read-only runtime inputs
+- map publication remains a human-owned process outside the agentic loop
+
+AI may still assist with map analysis or drafting in a non-agentic setting, but
+that is a separate governance workflow rather than part of LoopRoot execution.
+
+This keeps map changes out of the ordinary bounded-worker path and reduces the
+risk of rubber-stamped drift in the artifacts that define onboarding,
+boundaries, sensitivity, and engineering discipline.
+
+## Maps as the new source layer
+
+Maps should be treated more like human-authored source artifacts than casual
+documentation.
+
+If code generation becomes cheaper, the more valuable human work moves upward
+into:
+
+- writing constitutions
+- defining boundaries
+- defining topology and architecture
+- defining sensitivity and supply-chain constraints
+- defining engineering discipline
+
+In that model, maps become part of the source layer that shapes what code may
+be safely generated.
+
+Bad code increasingly traces back to:
+
+- bad instructions
+- bad maps
+- bad constitutions
+- bad sensitivity rules
+
+This means maps should be handled with the same seriousness as code or policy,
+but through a non-agentic human workflow.
+
 ## Constitution map model
 
 The current repository already contains a proof-of-concept constitution system:
@@ -495,6 +547,483 @@ The current repository already contains a proof-of-concept constitution system:
 LoopRoot should not treat these as one giant prompt blob.
 
 Instead, the constitution map should be decomposed into explicit components.
+
+## Map class model
+
+Not all maps should have the same structure or the same review burden.
+
+LoopRoot should assume multiple map classes:
+
+- `constitution`
+- `sensitivity`
+- `topology`
+- `architecture`
+- `supply_chain`
+- `engineering_discipline`
+- `component`
+
+These classes describe different concerns:
+
+- `constitution`
+  - authority rules, hard invariants, and behavioral limits
+- `sensitivity`
+  - dangerous paths, secrets, policy-critical areas, and high-risk operations
+- `topology`
+  - file tree, module layout, build targets, and test ownership
+- `architecture`
+  - trust boundaries, subsystem responsibilities, and intended system shape
+- `supply_chain`
+  - dependencies, package sources, update channels, provenance, and risk
+- `engineering_discipline`
+  - naming rules, allowed or forbidden patterns, error handling, concurrency,
+    testing, and structural conventions
+- `component`
+  - subsystem-local implementation guidance
+
+## Map criticality model
+
+Map class and map criticality should be separate concepts.
+
+Map class says what kind of map something is.
+Map criticality says how dangerous it is to change.
+
+Suggested criticality levels:
+
+- `constitutional`
+- `security_critical`
+- `architectural`
+- `discipline`
+- `local`
+- `ephemeral`
+
+Examples:
+
+- a constitution map is typically `constitutional`
+- a sensitivity or supply-chain map is typically `security_critical`
+- a topology or architecture map is typically `architectural`
+- an engineering discipline map is typically `discipline`
+- a component map is typically `local`
+
+Criticality should later drive:
+
+- who may publish the map
+- how many reviewers are required
+- whether signatures are required
+- whether the map may enter the active registry
+
+## Map format model
+
+Different map classes likely need different structure requirements.
+
+LoopRoot should not assume one universal map syntax for every class.
+
+Likely direction:
+
+- highly structured maps
+  - constitution
+  - sensitivity
+  - supply_chain
+  - likely use a machine-validated format such as YAML or another typed schema
+- mixed-structure maps
+  - architecture
+  - engineering_discipline
+  - may use structured metadata plus explanatory Markdown
+- looser human-readable maps
+  - topology
+  - component
+  - may be mostly Markdown, diagrams, or lightly structured documents
+
+The rule should be:
+
+- stricter maps are closer to policy and should have stricter schemas
+- looser maps are closer to onboarding and navigation and may remain more
+  human-readable
+
+Task-local execution planning should likely move out of the map family and into
+the manager-request and worker-session protocol. It is better modeled as an
+execution manifest than as a durable governance map.
+
+## Shared base map fields
+
+Every map should carry a common base metadata envelope.
+
+Required base fields:
+
+- `id`
+- `class`
+- `scope`
+- `criticality`
+- `version`
+- `status`
+- `digest`
+- `signature`
+- `signing_key_id`
+- `created_at`
+- `updated_at`
+- `authors`
+- `reviewers`
+- `summary`
+
+Optional relationship fields:
+
+- `repo_id`
+- `project_id`
+- `applies_to`
+- `depends_on`
+- `relates_to`
+
+Important rule:
+
+- maps should not use a `supersedes` relationship
+- material changes should create a new version rather than semantic override
+  chains
+
+## Strict schema direction for the highest-risk maps
+
+The highest-risk maps should use stricter, machine-validated schemas.
+
+The current expected candidates are:
+
+- `constitution`
+- `sensitivity`
+- `supply_chain`
+- likely `engineering_discipline`
+
+YAML or another strongly structured schema is the likely starting point for
+these classes.
+
+## Constitution map required fields
+
+Required fields beyond the shared base:
+
+- `mission`
+- `authority_rules`
+- `hard_invariants`
+- `forbidden_behaviors`
+- `approval_rules`
+- `escalation_rules`
+- `trust_model`
+- `boundary_rules`
+
+These maps are the closest thing to runtime constitutional law and should be
+the strictest class.
+
+## Sensitivity map required fields
+
+Required fields beyond the shared base:
+
+- `sensitive_areas`
+- `risk_categories`
+- `restricted_operations`
+- `approval_required_rules`
+- `quarantine_rules`
+- `secret_boundaries`
+- `policy_boundaries`
+- `audit_requirements`
+
+These maps tell the runtime which areas and actions are dangerous enough to
+require stricter review, approvals, or quarantine behavior.
+
+## Supply-chain map required fields
+
+Required fields beyond the shared base:
+
+- `dependency_sources`
+- `allowed_registries`
+- `dependency_groups`
+- `allowed_versions`
+- `update_policy`
+- `pinning_rules`
+- `provenance_requirements`
+- `license_or_compliance_rules`
+- `high_risk_dependencies`
+- `last_reviewed_at`
+- `review_due_at`
+- `expires_at`
+
+Supply-chain trust should not last forever by default. These maps should behave
+more like expiring attestations or certificates than like static notes.
+
+## Engineering-discipline map direction
+
+Engineering-discipline maps likely need stronger structure than ordinary
+topology or component maps.
+
+They should eventually cover:
+
+- `naming_rules`
+- `allowed_patterns`
+- `disallowed_patterns`
+- `error_handling_rules`
+- `concurrency_rules`
+- `testing_rules`
+- `documentation_rules`
+- `logging_rules`
+- `auditability_rules`
+- `language_specific_rules`
+
+By default, engineering-discipline maps should depend on the architecture map
+for the system they govern.
+
+## Component map direction
+
+Component maps remain more local than constitutional or sensitivity maps, but
+they still need a typed minimum shape.
+
+Likely required fields beyond the shared base:
+
+- `component_name`
+- `component_version`
+- `purpose`
+- `owned_paths`
+- `entrypoints`
+- `local_invariants`
+- `dependencies`
+- `relevant_tests`
+- `sensitive_touchpoints`
+
+## Constitution schema skeleton
+
+The current working direction for a constitution schema is:
+
+```yaml
+id: string
+class: constitution
+scope_type: global | organization | product | repository
+scope_id: string
+criticality: constitutional
+version: semver
+status: draft | reviewed | signed | published | revoked
+digest: string
+signature: string
+signing_key_id: string
+created_at: timestamp
+updated_at: timestamp
+expires_at: timestamp | null
+authors: []
+reviewers: []
+summary: string
+is_root: true | false
+follows: string | null
+
+charter:
+  purpose: string
+  priorities: []
+
+authority_model:
+  authority_sources: []
+  non_authority_sources: []
+  untrusted_input_classes: []
+
+actor_model:
+  actor_classes: []
+
+boundary_model:
+  boundary_definitions: []
+
+law_model:
+  authority_laws: []
+  invariant_laws: []
+  prohibition_laws: []
+  approval_laws: []
+  escalation_laws: []
+  boundary_laws: []
+
+terms: []
+```
+
+Interpretation:
+
+- `global` is the broadest constitutional scope
+- `organization` follows the global constitution
+- `product` follows the organization constitution
+- `repository` follows the product constitution
+- `is_root: true` means the constitution has no parent
+- `follows` is used only for subordinate constitutions
+- constitutions below the global scope should expire by default unless renewed
+
+Default expiration policy:
+
+- `global`
+  - may omit expiration when explicitly treated as the root constitution
+- `organization`
+  - expires after two years by default
+- `product`
+  - expires after two years by default
+- `repository`
+  - expires after two years by default
+
+## Example constitution instance for this repository
+
+The following is not the generic schema. It is an example instance showing how
+the schema could be filled out for this repository.
+
+```yaml
+id: loopgate.repository.constitution
+class: constitution
+scope_type: repository
+scope_id: loopgate
+criticality: constitutional
+version: "1.0.0"
+status: draft
+digest: sha256:REPLACE_ME
+signature: REPLACE_ME
+signing_key_id: REPLACE_ME
+created_at: 2026-04-05T00:00:00Z
+updated_at: 2026-04-05T00:00:00Z
+expires_at: 2028-04-05T00:00:00Z
+authors:
+  - adalaide
+reviewers:
+  - security
+summary: Root repository constitution for Loopgate engineering and governance.
+is_root: false
+follows: loopgate.product.constitution
+
+charter:
+  purpose: >
+    Define the parent constitutional law for the Loopgate repository so that
+    all subordinate maps, runtime protocols, and generated code remain aligned
+    with the system's security, authority, audit, and boundary invariants.
+  priorities:
+    - correctness
+    - security
+    - determinism
+    - observability
+    - simplicity
+    - convenience
+
+authority_model:
+  authority_sources:
+    - human approval where policy allows it
+    - Loopgate-issued authority objects
+    - higher-scope constitutional and policy artifacts
+  non_authority_sources:
+    - natural language
+    - model output
+    - memory content
+    - map content
+    - projected UI state
+    - references and summaries
+  untrusted_input_classes:
+    - user prompts
+    - model responses
+    - tool output
+    - filesystem content
+    - environment variables
+    - configuration loaded from disk
+
+actor_model:
+  actor_classes:
+    - human operator
+    - IT or security administrator
+    - manager model
+    - bounded worker
+    - unprivileged client
+    - Loopgate authority kernel
+
+boundary_model:
+  boundary_definitions:
+    - authority boundary
+    - workspace boundary
+    - network boundary
+    - secret boundary
+    - promotion boundary
+    - audit boundary
+
+law_model:
+  authority_laws:
+    - id: authority.loopgate_is_authority
+      statement: Loopgate is the authority boundary for privileged actions.
+      rationale: Prevent authority from drifting into prompts, clients, or workers.
+      severity: critical
+      enforcement: hard
+    - id: authority.natural_language_not_authority
+      statement: Natural language never creates authority.
+      rationale: Human intent and model text must not directly mint permissions.
+      severity: critical
+      enforcement: hard
+    - id: authority.memory_not_authority
+      statement: Memory never creates authority.
+      rationale: Recalled content may guide work but must never expand permissions.
+      severity: critical
+      enforcement: hard
+  invariant_laws:
+    - id: invariant.audit_append_hard_failure
+      statement: Audit append failure on security-relevant actions is a hard failure.
+      rationale: Security-relevant actions must remain observable and tamper-evident.
+      severity: critical
+      enforcement: hard
+    - id: invariant.deny_by_default
+      statement: Absence of permission is denial.
+      rationale: The system must fail closed rather than infer authority.
+      severity: critical
+      enforcement: hard
+    - id: invariant.maps_read_only_at_runtime
+      statement: Maps are read-only inputs during agentic runtime execution.
+      rationale: Governance artifacts must stay outside ordinary worker mutation paths.
+      severity: high
+      enforcement: hard
+  prohibition_laws:
+    - id: prohibition.worker_self_escalation
+      statement: Workers must not request broader scope, hooks, or new workers.
+      rationale: Bounded executors must not self-authorize.
+      severity: critical
+      enforcement: hard
+    - id: prohibition.ambient_shell
+      statement: Arbitrary shell access is denied by default.
+      rationale: Ambient shell collapses too many powers into one escape hatch.
+      severity: critical
+      enforcement: hard
+    - id: prohibition.ambient_network
+      statement: Ambient outbound network access is denied by default.
+      rationale: Raw network freedom undermines mediation and audit.
+      severity: critical
+      enforcement: hard
+  approval_laws:
+    - id: approval.exact_action_binding
+      statement: Approvals must bind the exact reviewed action shape.
+      rationale: Local approval should not silently authorize broader actions.
+      severity: critical
+      enforcement: hard
+    - id: approval.separate_surface
+      statement: Approval UX must remain visually separate from model output.
+      rationale: Rubber stamping is more likely when approvals look like ordinary chat.
+      severity: high
+      enforcement: policy
+  escalation_laws:
+    - id: escalation.quarantine_preserves_evidence
+      statement: Quarantined actions must preserve evidence for review.
+      rationale: Suspicious behavior should remain inspectable after denial.
+      severity: high
+      enforcement: hard
+    - id: escalation.enterprise_denial_not_locally_overridable
+      statement: Enterprise-denied actions must not be locally overridable.
+      rationale: Higher-order governance must survive local pressure to proceed.
+      severity: critical
+      enforcement: hard
+  boundary_laws:
+    - id: boundary.host_tree_not_default_workspace
+      statement: The host working tree is not the default AI workspace.
+      rationale: AI work should happen in governed workspace boundaries.
+      severity: high
+      enforcement: policy
+    - id: boundary.secrets_remain_in_loopgate
+      statement: Secrets must remain in Loopgate-managed boundaries.
+      rationale: Secret-bearing material must not be exported into the AI runtime.
+      severity: critical
+      enforcement: hard
+
+terms:
+  - term: authority
+    definition: The legitimate power to authorize a privileged action.
+  - term: approval
+    definition: A human or policy-sanctioned decision bound to an exact reviewed action.
+  - term: escalation
+    definition: A higher-order security or governance response triggered by denial, risk, or suspicion.
+  - term: boundary
+    definition: A governed separation between worlds, surfaces, or powers in the system.
+```
 
 ### 1. Identity and mission component
 
@@ -613,11 +1142,13 @@ Contents:
 - file entrypoints
 - "if changing X, start here" guidance
 
-### 8. Task-slice component
+### 8. Task-slice manifest
 
-The current assignment-specific subset of the constitution and topology.
+The current assignment-specific subset of the constitution and topology should
+likely be represented as an execution-manifest concept rather than as a durable
+map.
 
-This component is not static. It should be assembled per task from:
+This manifest is not static. It should be assembled per task from:
 
 - the topology map
 - the sensitivity map
@@ -669,7 +1200,6 @@ This keeps:
 The current v0 deliverable set is:
 
 - `patch_bundle`
-- `map_update`
 - `promotion_request`
 
 Hard rule:
@@ -684,6 +1214,7 @@ the primary conceptual output unless a concrete use case requires it.
 
 Excluded from the primary v0 deliverable set:
 
+- map update
 - research summary
 - test report
 - review packet

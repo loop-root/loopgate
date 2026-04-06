@@ -560,6 +560,7 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	mux.HandleFunc("/v1/task/result", server.handleTaskPlanResult)
 	mux.HandleFunc("/v1/config/", server.handleConfig)
 	mux.HandleFunc("/v1/approvals/", server.handleApprovalDecision)
+	mux.HandleFunc("/v1/hook/pre-validate", server.handleHookPreValidate)
 
 	handler := http.Handler(mux)
 	diagnostic, diagErr := loopdiag.Open(repoRoot, server.runtimeConfig.Logging.Diagnostic)

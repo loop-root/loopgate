@@ -119,6 +119,10 @@ const (
 	DenialCodeTaskLeaseMorphlingMismatch = "task_lease_morphling_mismatch"
 	DenialCodeProcessBindingRejected     = "process_binding_rejected"
 	DenialCodeFsReadSizeLimitExceeded    = "fs_read_size_limit_exceeded"
+
+	// Hook denial codes.
+	DenialCodeHookPeerBindingRejected = "hook_peer_binding_rejected"
+	DenialCodeHookUnknownTool         = "hook_unknown_tool"
 )
 
 type ControlPlaneClient interface {
@@ -1921,4 +1925,27 @@ func (capabilityResponse CapabilityResponse) ValidateStructuredResultFields() er
 		}
 	}
 	return nil
+}
+
+// HookPreValidateRequest is the request body for POST /v1/hook/pre-validate.
+// It is sent by the Claude Code PreToolUse hook script over the local Unix socket.
+// Auth: Unix socket peer UID binding only — no session or MAC required.
+type HookPreValidateRequest struct {
+	// ToolName is the Claude Code tool name (e.g. "Bash", "Write", "Edit").
+	ToolName string `json:"tool_name"`
+	// ToolInput is the raw tool input payload, forwarded as-is for audit.
+	ToolInput map[string]interface{} `json:"tool_input,omitempty"`
+	// SessionID is an optional hint for correlating audit events.
+	SessionID string `json:"session_id,omitempty"`
+}
+
+// HookPreValidateResponse is the response body for POST /v1/hook/pre-validate.
+// The hook script inspects Decision to determine whether to allow or block the tool call.
+type HookPreValidateResponse struct {
+	// Decision is "allow", "block", or "pending_approval".
+	Decision string `json:"decision"`
+	// Reason is a human-readable explanation. Present when Decision != "allow".
+	Reason string `json:"reason,omitempty"`
+	// DenialCode is a machine-readable denial code. Present when Decision == "block".
+	DenialCode string `json:"denial_code,omitempty"`
 }
