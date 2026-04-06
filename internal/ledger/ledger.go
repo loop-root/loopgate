@@ -188,8 +188,22 @@ func ReadVerifiedChainState(fileHandle *os.File, sequenceField string) (int64, s
 func chainSequenceValue(event Event, sequenceField string) (int64, error) {
 	rawSequence, found := event.Data[sequenceField]
 	if !found {
+		// Legacy audit events written before hook pre-validation used the shared
+		// ledger append path directly, which populated ledger_sequence but omitted
+		// audit_sequence. Accept only that exact compatibility case so startup can
+		// resume from the append-only audit log without weakening other chain checks.
+		if sequenceField == "audit_sequence" {
+			rawLedgerSequence, hasLedgerSequence := event.Data["ledger_sequence"]
+			if hasLedgerSequence {
+				return sequenceValueFromRaw(rawLedgerSequence, sequenceField)
+			}
+		}
 		return 0, fmt.Errorf("%w: missing %s", ErrLedgerIntegrity, sequenceField)
 	}
+	return sequenceValueFromRaw(rawSequence, sequenceField)
+}
+
+func sequenceValueFromRaw(rawSequence interface{}, sequenceField string) (int64, error) {
 	switch typedSequence := rawSequence.(type) {
 	case float64:
 		return int64(typedSequence), nil

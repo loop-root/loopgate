@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 
-	"morph/internal/ledger"
 	policypkg "morph/internal/policy"
 )
 
@@ -33,8 +32,8 @@ type hookToolInfo struct {
 	op       string
 }
 
-func (h hookToolInfo) Name() string                    { return h.name }
-func (h hookToolInfo) Category() string                { return h.category }
+func (h hookToolInfo) Name() string                       { return h.name }
+func (h hookToolInfo) Category() string                   { return h.category }
 func (h hookToolInfo) Operation() policypkg.OperationType { return h.op }
 
 // handleHookPreValidate handles POST /v1/hook/pre-validate.
@@ -46,8 +45,9 @@ func (h hookToolInfo) Operation() policypkg.OperationType { return h.op }
 //
 // On policy allow: returns {"decision": "allow"} with HTTP 200.
 // On policy block: returns {"decision": "block", ...} with HTTP 200.
-//   The hook script must inspect the JSON body, not the HTTP status, to decide
-//   whether to block. HTTP errors (4xx/5xx) indicate infrastructure problems.
+//
+//	The hook script must inspect the JSON body, not the HTTP status, to decide
+//	whether to block. HTTP errors (4xx/5xx) indicate infrastructure problems.
 func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -91,19 +91,16 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	if !known {
 		// Unknown tools are allowed through — they may be internal Claude Code
 		// tools (Agent, TodoWrite, etc.) that have no policy surface.
-		_ = server.appendAuditEvent(server.auditPath, ledger.Event{
-			V:    1,
-			TS:   server.now().UTC().Format("2006-01-02T15:04:05.999999999Z07:00"),
-			Type: "hook.pre_validate",
-			Data: map[string]interface{}{
-				"decision":  "allow",
-				"tool_name": req.ToolName,
-				"reason":    "tool not in governance map — allowed through",
-				"session":   req.SessionID,
-				"peer_uid":  peer.UID,
-				"peer_pid":  peer.PID,
-			},
-		})
+		if err := server.logEvent("hook.pre_validate", req.SessionID, map[string]interface{}{
+			"decision":  "allow",
+			"tool_name": req.ToolName,
+			"reason":    "tool not in governance map — allowed through",
+			"peer_uid":  peer.UID,
+			"peer_pid":  peer.PID,
+		}); err != nil {
+			http.Error(w, "audit unavailable: required append failed before hook allow", http.StatusInternalServerError)
+			return
+		}
 		server.writeJSON(w, http.StatusOK, HookPreValidateResponse{Decision: "allow"})
 		return
 	}
@@ -126,21 +123,18 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		decision = "block"
 	}
 
-	_ = server.appendAuditEvent(server.auditPath, ledger.Event{
-		V:    1,
-		TS:   server.now().UTC().Format("2006-01-02T15:04:05.999999999Z07:00"),
-		Type: "hook.pre_validate",
-		Data: map[string]interface{}{
-			"decision":  decision,
-			"tool_name": req.ToolName,
-			"category":  toolDef.category,
-			"operation": toolDef.operation,
-			"reason":    result.Reason,
-			"session":   req.SessionID,
-			"peer_uid":  peer.UID,
-			"peer_pid":  peer.PID,
-		},
-	})
+	if err := server.logEvent("hook.pre_validate", req.SessionID, map[string]interface{}{
+		"decision":  decision,
+		"tool_name": req.ToolName,
+		"category":  toolDef.category,
+		"operation": toolDef.operation,
+		"reason":    result.Reason,
+		"peer_uid":  peer.UID,
+		"peer_pid":  peer.PID,
+	}); err != nil {
+		http.Error(w, "audit unavailable: required append failed before hook decision", http.StatusInternalServerError)
+		return
+	}
 
 	if decision == "allow" {
 		server.writeJSON(w, http.StatusOK, HookPreValidateResponse{Decision: "allow"})

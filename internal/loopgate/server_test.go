@@ -4242,6 +4242,120 @@ func TestLogEventWritesVerifiableAuditChain(t *testing.T) {
 	verifyAuditChain(2)
 }
 
+func TestHookPreValidateWritesAuditSequenceMetadata(t *testing.T) {
+	repoRoot := t.TempDir()
+	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
+	if err := os.MkdirAll(filepath.Join(repoRoot, "core", "policy"), 0o700); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "core", "policy", "policy.yaml"), []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+	writeTestMorphlingClassPolicy(t, repoRoot)
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	requestBody := bytes.NewBufferString(`{"tool_name":"Bash","session_id":"session-hook"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+
+	server.handleHookPreValidate(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response HookPreValidateResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode hook response: %v", err)
+	}
+	if response.Decision != "block" {
+		t.Fatalf("expected blocked Bash hook response, got %#v", response)
+	}
+
+	auditBytes, err := os.ReadFile(filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"))
+	if err != nil {
+		t.Fatalf("read audit file: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(auditBytes)), "\n")
+	if len(lines) == 0 {
+		t.Fatal("expected hook audit event")
+	}
+	lastAuditEvent, ok := ledger.ParseEvent([]byte(lines[len(lines)-1]))
+	if !ok {
+		t.Fatalf("parse hook audit event: %s", lines[len(lines)-1])
+	}
+	if lastAuditEvent.Type != "hook.pre_validate" {
+		t.Fatalf("expected hook.pre_validate event, got %#v", lastAuditEvent)
+	}
+	if _, found := lastAuditEvent.Data["audit_sequence"]; !found {
+		t.Fatalf("expected audit_sequence on hook audit event %#v", lastAuditEvent)
+	}
+	if decisionValue, _ := lastAuditEvent.Data["decision"].(string); decisionValue != "block" {
+		t.Fatalf("expected hook audit decision block, got %#v", lastAuditEvent.Data["decision"])
+	}
+}
+
+func TestNewServerLoadsLegacyHookAuditTailWithoutAuditSequence(t *testing.T) {
+	repoRoot := t.TempDir()
+	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
+	if err := os.MkdirAll(filepath.Join(repoRoot, "core", "policy"), 0o700); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "core", "policy", "policy.yaml"), []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+	writeTestMorphlingClassPolicy(t, repoRoot)
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	if err := server.logEvent("test.audit", "session-a", map[string]interface{}{"step": "one"}); err != nil {
+		t.Fatalf("log first audit event: %v", err)
+	}
+	if err := server.logEvent("test.audit", "session-a", map[string]interface{}{"step": "two"}); err != nil {
+		t.Fatalf("log second audit event: %v", err)
+	}
+
+	auditPath := filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl")
+	if err := ledger.Append(auditPath, ledger.Event{
+		TS:      time.Now().UTC().Format(time.RFC3339Nano),
+		Type:    "hook.pre_validate",
+		Session: "session-a",
+		Data: map[string]interface{}{
+			"decision":  "block",
+			"tool_name": "Bash",
+			"category":  "shell",
+			"operation": policypkg.OpExecute,
+			"reason":    "shell commands require operator approval",
+			"peer_uid":  uint32(os.Getuid()),
+			"peer_pid":  4242,
+		},
+	}); err != nil {
+		t.Fatalf("append legacy hook audit tail: %v", err)
+	}
+
+	restartedServer, err := NewServer(repoRoot, filepath.Join(t.TempDir(), "loopgate-restart.sock"))
+	if err != nil {
+		t.Fatalf("restart server with legacy hook audit tail: %v", err)
+	}
+	if restartedServer.auditSequence != 3 {
+		t.Fatalf("expected audit sequence 3 after legacy hook tail load, got %d", restartedServer.auditSequence)
+	}
+	if strings.TrimSpace(restartedServer.lastAuditHash) == "" {
+		t.Fatal("expected last audit hash after legacy hook tail load")
+	}
+
+	if err := restartedServer.logEvent("test.audit", "session-a", map[string]interface{}{"step": "three"}); err != nil {
+		t.Fatalf("append audit event after legacy hook tail restart: %v", err)
+	}
+}
+
 func TestNewServerLoadsRotatedAuditChainFromManifest(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
