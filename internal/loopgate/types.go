@@ -102,6 +102,10 @@ const (
 	// does not match the server-computed manifest for the pending approval. This prevents an
 	// operator decision from being bound to a different action than the one that was displayed.
 	DenialCodeApprovalManifestMismatch = "approval_manifest_mismatch"
+	// DenialCodeApprovalExecutionBodyMismatch is returned when the stored CapabilityRequest no
+	// longer matches ExecutionBodySHA256 recorded at approval creation (memory corruption,
+	// bug, or unexpected mutation of the pending record).
+	DenialCodeApprovalExecutionBodyMismatch = "approval_execution_body_mismatch"
 	// DenialCodeApprovalStateConflict is returned when an approval decision is submitted but
 	// the approval is already in a terminal or non-pending state due to a concurrent consume or
 	// revoke operation. This is distinct from DenialCodeApprovalStateInvalid, which covers

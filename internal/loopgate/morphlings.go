@@ -764,7 +764,7 @@ func (server *Server) createPendingMorphlingSpawnApproval(tokenClaims capability
 	server.pruneExpiredLocked()
 	pendingApprovalRecord := pendingApproval{
 		ID: approvalID,
-		Request: CapabilityRequest{
+		Request: cloneCapabilityRequest(CapabilityRequest{
 			RequestID:  authorizingRecord.RequestID,
 			SessionID:  tokenClaims.ControlSessionID,
 			Actor:      tokenClaims.ActorLabel,
@@ -774,7 +774,7 @@ func (server *Server) createPendingMorphlingSpawnApproval(tokenClaims capability
 				"goal_hint":    authorizingRecord.GoalHint,
 				"morphling_id": authorizingRecord.MorphlingID,
 			},
-		},
+		}),
 		CreatedAt: server.now().UTC(),
 		ExpiresAt: approvalDeadlineUTC,
 		Metadata: map[string]interface{}{

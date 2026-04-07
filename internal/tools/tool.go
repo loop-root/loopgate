@@ -37,6 +37,19 @@ type Tool interface {
 	Execute(ctx context.Context, args map[string]string) (output string, err error)
 }
 
+// SecretExportNameHeuristicOptOut is implemented by tools whose names match the conservative
+// secret-export name heuristic (see loopgate) but must not be blocked as raw secret exporters.
+// The registry is authoritative; the heuristic remains when this interface is absent.
+type SecretExportNameHeuristicOptOut interface {
+	SecretExportNameHeuristicOptOut() bool
+}
+
+// RawSecretExportProhibited is implemented by tools that must always be blocked from the raw
+// secret export path regardless of name (defense in depth on top of the heuristic).
+type RawSecretExportProhibited interface {
+	RawSecretExportProhibited() bool
+}
+
 // Schema describes a tool's arguments.
 type Schema struct {
 	Description string   `json:"description"`

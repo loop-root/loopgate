@@ -42,6 +42,8 @@ Developer IDE (Claude Code / Cursor / VS Code / Anti‑Gravity / Codex / …)
 
 ## Non-Negotiable Invariants
 
+**Recent control-plane hardening (2026-04):** Pending capability approvals store a deep-copied `CapabilityRequest`; post-approval execution verifies the body hash against `ExecutionBodySHA256` when present. Secret-export blocking consults the tool registry (optional interfaces) plus the legacy name heuristic. See `docs/adr/0009-macos-scope-and-approval-hardening.md` and `docs/reports/security-hardening-plan-2026-04.md`.
+
 These are the rules to keep in your head before editing anything:
 
 - Loopgate is the authority boundary.

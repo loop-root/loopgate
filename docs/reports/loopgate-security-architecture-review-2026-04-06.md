@@ -83,14 +83,14 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 - **Recommendation:** Wire from runtime config when product wants narrowing.  
 - **Type:** **Hardening / configuration gap**.
 
-### F3 — `isSecretExportCapability` is heuristic
+### F3 — `isSecretExportCapability` is heuristic — **partially addressed (2026-04-07)**
 
 - **Severity:** Medium  
 - **Category:** Secret isolation  
-- **Location:** `internal/loopgate/server.go` (~2824–2846)  
+- **Location:** `internal/loopgate/server.go` (`isSecretExportCapabilityHeuristic`); `internal/tools/tool.go` (optional interfaces); `capabilityProhibitsRawSecretExport`  
 - **Issue:** Prefix/substring rules; future capability names could evade while exporting sensitive data.  
-- **Recommendation:** Registry flag `ExportsSecretMaterial` + explicit deny; keep heuristic as defense-in-depth.  
-- **Type:** **Design risk / hardening**.
+- **Resolution (partial):** Registry implements `SecretExportNameHeuristicOptOut` / `RawSecretExportProhibited`; unregistered names still use the heuristic before the unknown-capability path. Further tightening: explicit allow/deny per registered capability.  
+- **Type:** **Design risk / hardening** (ongoing).
 
 ### F4 — `haven` + `TrustedSandboxLocal()` auto-allow under `NeedsApproval` policy
 
@@ -119,14 +119,14 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 - **Recommendation:** Per-session/global caps; monitoring.  
 - **Type:** **Hardening / reliability**.
 
-### F7 — `ExecutionBodySHA256` stored; shallow copy of `Arguments` in pending approvals
+### F7 — `ExecutionBodySHA256` stored; shallow copy of `Arguments` in pending approvals — **addressed (2026-04-07)**
 
 - **Severity:** Low  
 - **Category:** Approval integrity  
-- **Location:** `pendingApproval`, `buildCapabilityApprovalManifest`  
+- **Location:** `pendingApproval`, `buildCapabilityApprovalManifest`, `cloneCapabilityRequest`, approval decision handlers  
 - **Issue:** Comment referenced future live-body verify; execution uses stored request (good). Map aliasing is a minor integrity footgun if ever mutated.  
-- **Recommendation:** Deep-copy `CapabilityRequest` at approval creation; optional hash assert before execute.  
-- **Type:** **Hardening**.
+- **Resolution:** Deep-copy at store (`cloneCapabilityRequest`); verify body hash before post-approval execute when `ExecutionBodySHA256` is non-empty; tests in `approval_manifest_test.go` and `server_test.go`.  
+- **Type:** **Hardening** (closed for capability approvals; morphling spawn may add body hash in a follow-on).
 
 ### F8 — `GET /v1/diagnostic/report`: Bearer without request MAC — **addressed**
 
@@ -179,8 +179,8 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 ### Immediate (top 5)
 
 1. **`GET /v1/diagnostic/report` signed GET:** implemented 2026-04-06 (was: add `verifySignedRequestWithoutBody`).  
-2. Replace **heuristic** `isSecretExportCapability` with **registry metadata** + tests.  
-3. **Deep-copy** pending approval `CapabilityRequest` / assert body hash before execute.  
+2. Replace **heuristic** `isSecretExportCapability` with **registry metadata** + tests — **partial:** optional registry interfaces + heuristic fallback (2026-04-07).  
+3. **Deep-copy** pending approval `CapabilityRequest` / assert body hash before execute — **done** (2026-04-07).  
 4. Review **`shouldAutoAllowTrustedSandboxCapability`** surface; add policy hooks or metrics.  
 5. Document **MCP / delegated session / peer PID** requirements; align defaults with `local-open-session` where needed.
 
@@ -253,7 +253,7 @@ The implementation **earns** a serious local control-plane story: enforcement is
 
 ## 11. References (key files)
 
-- `internal/loopgate/server.go` — mux, `ConnContext`, `authenticate`, `authenticateApproval`, `verifySignedRequest`, pruning, `isSecretExportCapability`, `NewServerWithOptions`  
+- `internal/loopgate/server.go` — mux, `ConnContext`, `authenticate`, `authenticateApproval`, `verifySignedRequest`, pruning, `capabilityProhibitsRawSecretExport` / `isSecretExportCapabilityHeuristic`, `NewServerWithOptions`  
 - `internal/loopgate/server_model_handlers.go` — `handleSessionOpen`  
 - `internal/loopgate/server_capability_handlers.go` — execute + approval decision  
 - `internal/loopgate/server_diagnostic_handlers.go` — diagnostic outlier  

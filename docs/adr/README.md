@@ -35,5 +35,6 @@ Link from code comments when helpful: `See docs/adr/NNNN-....md`.
 | 0006 | Explicit memory key registry compiled until signed admin distribution | accepted |
 | 0007 | Preference anchor fallback stays secondary | accepted |
 | 0008 | Validated memory candidate separates analysis from write boundary | accepted |
+| 0009 | macOS scope (v1) and approval/snapshot hardening | accepted |
 
 Use `template.md` when creating a new ADR.

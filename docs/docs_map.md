@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-03
+**Last updated:** 2026-04-07
 
 # Docs Map
 
@@ -7,6 +7,10 @@ This file maps **`docs/`** — design intent, setup, RFCs, and benchmarks. Use w
 ## Architecture Decision Records (`docs/adr/`)
 
 Timestamped decisions (context, tradeoff, escape hatch). **Index:** `docs/adr/README.md`.
+
+## Security reports (`docs/reports/`)
+
+Actionable hardening plans and architecture reviews (e.g. `security-hardening-plan-2026-04.md`, `loopgate-security-architecture-review-2026-04-06.md`).
 
 ## Implementation sprints (repo root `sprints/`)
 

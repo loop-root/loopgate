@@ -65,6 +65,19 @@ func capabilityRequestBodySHA256(capabilityRequest CapabilityRequest) (string, e
 	return hex.EncodeToString(h[:]), nil
 }
 
+// cloneCapabilityRequest returns a deep copy so pending approval state cannot be mutated
+// through a shared Arguments map held by the caller (or concurrent reuse of the same map).
+func cloneCapabilityRequest(r CapabilityRequest) CapabilityRequest {
+	out := r
+	if r.Arguments != nil {
+		out.Arguments = make(map[string]string, len(r.Arguments))
+		for k, v := range r.Arguments {
+			out.Arguments[k] = v
+		}
+	}
+	return out
+}
+
 // capabilitySubjectBinding computes the subject binding for a capability approval manifest.
 // The binding is a type-prefixed SHA256 of the capability name, providing a stable object-level
 // binding without requiring a full capability version hash at this stage.

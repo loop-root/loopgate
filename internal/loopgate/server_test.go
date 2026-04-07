@@ -4068,6 +4068,131 @@ func TestShouldAutoAllowTrustedSandboxCapability_NonHavenActorDenied(t *testing.
 	}
 }
 
+type secretHeuristicOptOutTool struct {
+	fakeLoopgateTool
+}
+
+func (t secretHeuristicOptOutTool) Schema() toolspkg.Schema {
+	return toolspkg.Schema{
+		Description: t.description,
+		Args:        []toolspkg.ArgDef{{Name: "path", Required: true, Type: "path"}},
+	}
+}
+
+func (secretHeuristicOptOutTool) SecretExportNameHeuristicOptOut() bool { return true }
+
+func TestCapabilityProhibitsRawSecretExport_OptOutAllowsRegisteredTool(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	server.registry.Register(secretHeuristicOptOutTool{fakeLoopgateTool{
+		name:        "secret.notexport",
+		category:    "filesystem",
+		operation:   toolspkg.OpRead,
+		description: "test opt-out of secret name heuristic",
+		output:      "ok",
+	}})
+	capabilities := append(capabilityNames(status.Capabilities), "secret.notexport")
+	client.ConfigureSession("test-actor", "test-session", capabilities)
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-optout",
+		Capability: "secret.notexport",
+		Arguments: map[string]string{"path": "."},
+	})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if resp.Status != ResponseStatusSuccess {
+		t.Fatalf("expected successful read for heuristic opt-out tool, got %#v", resp)
+	}
+}
+
+func TestCapabilityProhibitsRawSecretExport_UnregisteredHeuristicNameDenied(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-heur",
+		Capability: "secret.no.such.tool",
+		Arguments: map[string]string{},
+	})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if resp.Status != ResponseStatusDenied || resp.DenialCode != DenialCodeSecretExportProhibited {
+		t.Fatalf("expected secret export prohibition for unregistered heuristic name, got %#v", resp)
+	}
+}
+
+func TestCapabilityProhibitsRawSecretExport_RegisteredBlockedNameStillDenied(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	server.registry.Register(fakeLoopgateTool{
+		name:        "secret.blocked",
+		category:    "filesystem",
+		operation:   toolspkg.OpRead,
+		description: "test blocked by heuristic",
+		output:      "ok",
+	})
+	capabilities := append(capabilityNames(status.Capabilities), "secret.blocked")
+	client.ConfigureSession("test-actor", "test-session", capabilities)
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-blocked",
+		Capability: "secret.blocked",
+		Arguments: map[string]string{},
+	})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if resp.Status != ResponseStatusDenied || resp.DenialCode != DenialCodeSecretExportProhibited {
+		t.Fatalf("expected secret export prohibition, got %#v", resp)
+	}
+}
+
+func TestApprovalExecuteDeniesWhenStoredExecutionBodyMutated(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+	pendingResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-integrity",
+		Capability: "fs_write",
+		Arguments: map[string]string{
+			"path":    "pending.txt",
+			"content": "hidden",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute pending approval: %v", err)
+	}
+	if !pendingResponse.ApprovalRequired {
+		t.Fatalf("expected pending approval, got %#v", pendingResponse)
+	}
+	server.mu.Lock()
+	pa := server.approvals[pendingResponse.ApprovalRequestID]
+	pa.Request.Arguments["path"] = "evil.txt"
+	server.approvals[pendingResponse.ApprovalRequestID] = pa
+	server.mu.Unlock()
+	approvedResponse, err := client.UIDecideApproval(context.Background(), pendingResponse.ApprovalRequestID, true)
+	if err != nil {
+		t.Fatalf("ui approval decision: %v", err)
+	}
+	if approvedResponse.DenialCode != DenialCodeApprovalExecutionBodyMismatch {
+		t.Fatalf("expected execution body mismatch, got %#v", approvedResponse)
+	}
+	if approvedResponse.Status != ResponseStatusError {
+		t.Fatalf("expected error status, got %#v", approvedResponse)
+	}
+}
+
 func TestBoundExecutionTokenRejectsDifferentNormalizedArguments(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

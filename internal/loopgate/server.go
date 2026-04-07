@@ -739,7 +739,8 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 	}
 
-	if isSecretExportCapability(capabilityRequest.Capability) {
+	tool := server.registry.Get(capabilityRequest.Capability)
+	if server.capabilityProhibitsRawSecretExport(tool, capabilityRequest.Capability) {
 		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
@@ -786,7 +787,6 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 	}
 
-	tool := server.registry.Get(capabilityRequest.Capability)
 	if tool == nil {
 		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 			"request_id":           capabilityRequest.RequestID,
@@ -914,7 +914,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		server.pruneExpiredLocked()
 		server.approvals[approvalID] = pendingApproval{
 			ID:               approvalID,
-			Request:          capabilityRequest,
+			Request:          cloneCapabilityRequest(capabilityRequest),
 			CreatedAt:        server.now().UTC(),
 			ExpiresAt:        expiresAt,
 			Metadata:         metadata,
@@ -979,7 +979,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 		server.emitUIApprovalPending(pendingApproval{
 			ID:               approvalID,
-			Request:          capabilityRequest,
+			Request:          cloneCapabilityRequest(capabilityRequest),
 			ExpiresAt:        server.now().UTC().Add(approvalTTL),
 			Metadata:         metadata,
 			Reason:           policyDecision.Reason,
@@ -2821,7 +2821,7 @@ func (server *Server) activeSessionsForPeerUIDLocked(peerUID uint32) int {
 	return activeSessionCount
 }
 
-func isSecretExportCapability(capability string) bool {
+func isSecretExportCapabilityHeuristic(capability string) bool {
 	lowerCapability := strings.ToLower(strings.TrimSpace(capability))
 	if lowerCapability == "" {
 		return false
