@@ -74,6 +74,27 @@ For integrators it matters in four ways:
     - `MemoryDiagnosticWakeResponse`
   - now carries richer task-board metadata in `TodoAddRequest`, `TodoAddResponse`, and `MemoryWakeStateOpenItem`
 
+### Haven Chat (agentic tool execution)
+
+- `server_haven_chat.go`
+  - Haven chat HTTP handler and SSE streaming loop
+  - `runHavenChatToolLoop` — the agent loop; now delegates to `executeHavenToolCallsConcurrent`
+  - `executeHavenToolCallsConcurrent` — fans out read-only tool calls in parallel (Phase 1: reads), then runs write/execute/unknown calls serially (Phase 2: writes). Each goroutine emits its own `tool_result` SSE event inline as it finishes, giving the operator live feedback.
+  - `executeHavenToolCalls` — retained as the simple serial reference implementation; no longer called by the chat loop but kept for direct-call tests and future fallback use
+  - `havenSSEEmitter` — now carries a `sync.Mutex` on the struct; `emit()` is goroutine-safe so concurrent read goroutines can stream events without corrupting SSE frames
+- `tool_classification.go` (**new**)
+  - `capabilityClass` struct: `readOnly bool` — derived from Loopgate's own `OpRead` / `OpWrite` / `OpExecute` taxonomy
+  - `classifyCapability(registry, capabilityName)` — pure, fail-closed: unregistered → serial (readOnly=false); OpRead → readOnly=true; OpWrite/OpExecute → readOnly=false
+  - Canonical dispatch decision for `executeHavenToolCallsConcurrent`. If you add a new `Op*` constant to `internal/tools/tool.go`, add a corresponding test case here.
+- `tool_classification_test.go` (**new**)
+  - Unit tests that pin the fail-closed contract and the OpRead / non-OpRead split
+  - Also spot-checks real capability names (fs_read, notes.list, notes.write) to guard against unintentional operation-type changes
+- `server_haven_chat_concurrent_test.go` (**new**)
+  - Integration tests for `executeHavenToolCallsConcurrent`:
+    - `TestHavenChat_ConcurrentReadOnlyToolsRunFasterThanSerial` — wall-clock timing proves reads overlap
+    - `TestHavenChat_SerialWriteToolsRunInOrder` — start-time tracking proves writes do not overlap
+    - `TestHavenChat_ToolResultsRetainInputOrder` — result slice order matches input call order despite parallel execution
+
 ### Request handlers (split from `server.go`)
 
 Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Examples:

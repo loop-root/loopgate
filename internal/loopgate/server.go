@@ -285,6 +285,14 @@ const (
 	approvalStateExecutionFailed = "execution_failed"
 )
 
+func normalizeSessionExecutablePinPath(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	return filepath.Clean(trimmed)
+}
+
 func NewServer(repoRoot string, socketPath string) (*Server, error) {
 	return NewServerWithOptions(repoRoot, socketPath, false)
 }
@@ -421,6 +429,9 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		taskExecutions:            make(map[string]*taskExecutionRecord),
 		hostAccessPlans:           make(map[string]*hostAccessStoredPlan),
 		hostAccessAppliedPlanAt:   make(map[string]time.Time),
+	}
+	if pin := normalizeSessionExecutablePinPath(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); pin != "" {
+		server.expectedClientPath = pin
 	}
 	server.saveMemoryState = func(path string, st continuityMemoryState, cfg config.RuntimeConfig) error {
 		return saveContinuityMemoryState(path, st, cfg, server.now().UTC())
@@ -844,7 +855,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 	}
 
 	policyDecision := server.checker.Check(tool)
-	if shouldAutoAllowTrustedSandboxCapability(tokenClaims, tool, policyDecision) {
+	if server.shouldAutoAllowTrustedSandboxCapability(tokenClaims, capabilityRequest.Capability, tool, policyDecision) {
 		policyDecision = policypkg.CheckResult{
 			Decision: policypkg.Allow,
 			Reason:   "trusted Haven-native sandbox capability",
@@ -2253,8 +2264,14 @@ func isHighRiskCapability(tool toolspkg.Tool, policyDecision policypkg.CheckResu
 	return tool.Operation() == toolspkg.OpWrite
 }
 
-func shouldAutoAllowTrustedSandboxCapability(tokenClaims capabilityToken, tool toolspkg.Tool, policyDecision policypkg.CheckResult) bool {
+func (server *Server) shouldAutoAllowTrustedSandboxCapability(tokenClaims capabilityToken, capabilityName string, tool toolspkg.Tool, policyDecision policypkg.CheckResult) bool {
 	if policyDecision.Decision != policypkg.NeedsApproval {
+		return false
+	}
+	if !server.policy.HavenTrustedSandboxAutoAllowEnabled() {
+		return false
+	}
+	if !server.policy.HavenTrustedSandboxAutoAllowMatchesCapability(capabilityName) {
 		return false
 	}
 	if tokenClaims.ActorLabel != "haven" {

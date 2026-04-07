@@ -333,6 +333,19 @@ memory:
 	}
 }
 
+func TestLoadRuntimeConfig_RejectsRelativeSessionExecutablePin(t *testing.T) {
+	repoRoot := t.TempDir()
+	cfg := DefaultRuntimeConfig()
+	cfg.ControlPlane.ExpectedSessionClientExecutable = "relative/client/path"
+	writeErr := WriteRuntimeConfigYAML(repoRoot, cfg)
+	if writeErr == nil {
+		t.Fatal("expected WriteRuntimeConfigYAML to reject relative control_plane.expected_session_client_executable")
+	}
+	if !strings.Contains(writeErr.Error(), "absolute") {
+		t.Fatalf("expected absolute-path validation error, got %v", writeErr)
+	}
+}
+
 func TestLoadRuntimeConfig_PreservesExplicitFalseForClosedSegmentVerification(t *testing.T) {
 	repoRoot := t.TempDir()
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")

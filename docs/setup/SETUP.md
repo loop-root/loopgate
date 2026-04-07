@@ -37,8 +37,8 @@ Default local socket: `runtime/state/loopgate.sock` (under your checkout; paths 
 
 ## Configuration and policy
 
-- Runtime: `config/runtime.yaml`
-- Policy: `core/policy/policy.yaml` (required at startup; Loopgate fails closed if missing)
+- Runtime: `config/runtime.yaml` — optional **`control_plane.expected_session_client_executable`**: when set to a non-empty **absolute** path, only that client binary may open a control session (`POST /v1/session/open`); empty keeps the default (no executable pinning).
+- Policy: `core/policy/policy.yaml` (required at startup; Loopgate fails closed if missing) — under **`safety`**, **`haven_trusted_sandbox_auto_allow`** (default-on when omitted) and optional **`haven_trusted_sandbox_auto_allow_capabilities`** restrict Haven’s automatic upgrade of `NeedsApproval` → `Allow` for `TrustedSandboxLocal` tools.
 - Morphling classes: `core/policy/morphling_classes.yaml`
 - Persona (optional declarative defaults for unprivileged clients): `persona/default.yaml`
 

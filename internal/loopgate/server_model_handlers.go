@@ -110,7 +110,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 			})
 			return
 		}
-		if exePath != server.expectedClientPath {
+		if normalizeSessionExecutablePinPath(exePath) != server.expectedClientPath {
 			if server.reportSecurityWarning != nil {
 				server.reportSecurityWarning("session_client_executable_mismatch", errors.New("executable path mismatch"))
 			}

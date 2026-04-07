@@ -55,4 +55,9 @@ memory:
 safety:
   allow_persona_modification: false
   allow_policy_modification: false
-  
+  # Haven may auto-allow TrustedSandboxLocal capabilities that would otherwise need approval (nil/omitted defaults to true).
+  haven_trusted_sandbox_auto_allow: true
+  # Optional: restrict auto-allow to named capabilities. Omit for all TrustedSandboxLocal tools; `[]` disables auto-allow.
+  # haven_trusted_sandbox_auto_allow_capabilities:
+  #   - "notes.write"
+

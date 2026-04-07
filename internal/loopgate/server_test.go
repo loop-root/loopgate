@@ -4044,7 +4044,8 @@ func TestShouldAutoAllowTrustedSandboxCapability_HavenTrustedWrite(t *testing.T)
 		trusted:   true,
 	}
 
-	allowed := shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven"}, tool, policypkg.CheckResult{
+	srv := &Server{policy: config.Policy{}}
+	allowed := srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven"}, tool.Name(), tool, policypkg.CheckResult{
 		Decision: policypkg.NeedsApproval,
 	})
 	if !allowed {
@@ -4060,11 +4061,75 @@ func TestShouldAutoAllowTrustedSandboxCapability_NonHavenActorDenied(t *testing.
 		trusted:   true,
 	}
 
-	allowed := shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "test-actor"}, tool, policypkg.CheckResult{
+	srv := &Server{policy: config.Policy{}}
+	allowed := srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "test-actor"}, tool.Name(), tool, policypkg.CheckResult{
 		Decision: policypkg.NeedsApproval,
 	})
 	if allowed {
 		t.Fatalf("expected non-Haven actor to keep approval semantics")
+	}
+}
+
+func TestShouldAutoAllowTrustedSandboxCapability_PolicyDisablesHavenAutoAllow(t *testing.T) {
+	tool := fakeLoopgateTool{
+		name:      "notes.write",
+		category:  "filesystem",
+		operation: toolspkg.OpWrite,
+		trusted:   true,
+	}
+	policy := config.Policy{}
+	disabled := false
+	policy.Safety.HavenTrustedSandboxAutoAllow = &disabled
+	srv := &Server{policy: policy}
+	if srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven"}, tool.Name(), tool, policypkg.CheckResult{
+		Decision: policypkg.NeedsApproval,
+	}) {
+		t.Fatalf("expected policy to disable Haven trusted-sandbox auto-allow")
+	}
+}
+
+func TestShouldAutoAllowTrustedSandboxCapability_EmptyAllowlistDeniesAll(t *testing.T) {
+	tool := fakeLoopgateTool{
+		name:      "notes.write",
+		category:  "filesystem",
+		operation: toolspkg.OpWrite,
+		trusted:   true,
+	}
+	policy := config.Policy{}
+	empty := []string{}
+	policy.Safety.HavenTrustedSandboxAutoAllowCapabilities = &empty
+	srv := &Server{policy: policy}
+	if srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven"}, tool.Name(), tool, policypkg.CheckResult{
+		Decision: policypkg.NeedsApproval,
+	}) {
+		t.Fatalf("expected empty explicit allowlist to deny auto-allow")
+	}
+}
+
+func TestShouldAutoAllowTrustedSandboxCapability_AllowlistRestrictsCapabilities(t *testing.T) {
+	toolWrite := fakeLoopgateTool{
+		name:      "notes.write",
+		category:  "filesystem",
+		operation: toolspkg.OpWrite,
+		trusted:   true,
+	}
+	policy := config.Policy{}
+	onlyRead := []string{"notes.read"}
+	policy.Safety.HavenTrustedSandboxAutoAllowCapabilities = &onlyRead
+	srv := &Server{policy: policy}
+	token := capabilityToken{ActorLabel: "haven"}
+	needsApproval := policypkg.CheckResult{Decision: policypkg.NeedsApproval}
+	if srv.shouldAutoAllowTrustedSandboxCapability(token, toolWrite.Name(), toolWrite, needsApproval) {
+		t.Fatalf("expected allowlist to exclude notes.write")
+	}
+	toolRead := fakeLoopgateTool{
+		name:      "notes.read",
+		category:  "filesystem",
+		operation: toolspkg.OpRead,
+		trusted:   true,
+	}
+	if !srv.shouldAutoAllowTrustedSandboxCapability(token, toolRead.Name(), toolRead, needsApproval) {
+		t.Fatalf("expected allowlist to include notes.read")
 	}
 }
 
@@ -4713,6 +4778,12 @@ func ageQuarantineRecordForPrune(t *testing.T, repoRoot string, quarantineRef st
 }
 
 func startLoopgateServer(t *testing.T, repoRoot string, policyYAML string) (*Client, StatusResponse, *Server) {
+	return startLoopgateServerWithRuntime(t, repoRoot, policyYAML, nil, true)
+}
+
+// startLoopgateServerWithRuntime starts Loopgate in a temp repo. When runSessionBootstrap is false,
+// the server is healthy but no control session is opened (for tests where session open must fail).
+func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML string, runtimeCfg *config.RuntimeConfig, runSessionBootstrap bool) (*Client, StatusResponse, *Server) {
 	t.Helper()
 
 	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
@@ -4723,6 +4794,11 @@ func startLoopgateServer(t *testing.T, repoRoot string, policyYAML string) (*Cli
 		t.Fatalf("write policy: %v", err)
 	}
 	writeTestMorphlingClassPolicy(t, repoRoot)
+	if runtimeCfg != nil {
+		if err := config.WriteRuntimeConfigYAML(repoRoot, *runtimeCfg); err != nil {
+			t.Fatalf("write runtime config: %v", err)
+		}
+	}
 
 	socketFile, err := os.CreateTemp("", "loopgate-*.sock")
 	if err != nil {
@@ -4762,6 +4838,10 @@ func startLoopgateServer(t *testing.T, repoRoot string, policyYAML string) (*Cli
 			t.Fatalf("wait for loopgate health: %v", err)
 		}
 		time.Sleep(25 * time.Millisecond)
+	}
+
+	if !runSessionBootstrap {
+		return client, StatusResponse{}, server
 	}
 
 	// Bootstrap session with a capability that exists on all default test policies so we can

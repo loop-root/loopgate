@@ -120,6 +120,12 @@ type RuntimeConfig struct {
 		DeploymentTenantID string `yaml:"deployment_tenant_id" json:"deployment_tenant_id"`
 		DeploymentUserID   string `yaml:"deployment_user_id" json:"deployment_user_id"`
 	} `yaml:"tenancy" json:"tenancy"`
+	// ControlPlane holds optional hardening for the local Unix-socket control plane.
+	ControlPlane struct {
+		// ExpectedSessionClientExecutable, when non-empty, requires POST /v1/session/open peers to
+		// resolve to this absolute executable path (after filepath.Clean). Empty disables pinning.
+		ExpectedSessionClientExecutable string `yaml:"expected_session_client_executable" json:"expected_session_client_executable"`
+	} `yaml:"control_plane" json:"control_plane"`
 }
 
 type RuntimeMemoryCorrection struct {
@@ -377,6 +383,28 @@ func validateRuntimeConfig(runtimeConfig RuntimeConfig) error {
 	}
 	if err := validateOptionalDeploymentIdentity("tenancy.deployment_user_id", runtimeConfig.Tenancy.DeploymentUserID); err != nil {
 		return err
+	}
+	if err := validateExpectedSessionClientExecutable(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); err != nil {
+		return err
+	}
+	return nil
+}
+
+const maxExpectedSessionClientExecutableRunes = 4096
+
+func validateExpectedSessionClientExecutable(raw string) error {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+	if len(trimmed) > maxExpectedSessionClientExecutableRunes {
+		return fmt.Errorf("control_plane.expected_session_client_executable exceeds maximum length (%d)", maxExpectedSessionClientExecutableRunes)
+	}
+	if strings.ContainsAny(trimmed, "\x00\n\r") {
+		return fmt.Errorf("control_plane.expected_session_client_executable contains control characters")
+	}
+	if !filepath.IsAbs(filepath.Clean(trimmed)) {
+		return fmt.Errorf("control_plane.expected_session_client_executable must be an absolute path when set")
 	}
 	return nil
 }

@@ -1,5 +1,10 @@
 version: "1"
 
+# Optional: require POST /v1/session/open peers to resolve to this absolute executable path (after filepath.Clean).
+# Empty = disabled (default). Use for shipped desktop bundles with a stable client binary path.
+control_plane:
+  expected_session_client_executable: ""
+
 # Single-node deployment identity (optional). Applied when a control session opens — not read from client JSON.
 # Leave empty for personal/desktop mode. Enterprise: set from node provisioning / operator config (future: IDP).
 tenancy:

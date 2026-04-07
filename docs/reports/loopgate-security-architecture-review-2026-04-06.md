@@ -15,7 +15,7 @@ Loopgate is a **local Unix-socket HTTP control plane** that mediates tool execut
 
 **Verdict:** For a **single-user, local-first** deployment model, the design is **credible and materially stronger** than typical “agent + shell + skills” stacks, because enforcement is **in code** (signing, replay controls, audit fail-closed paths, registry + policy) rather than advisory.
 
-**Primary residual risks:** optional controls not enabled by default (executable path pinning), **heuristic** secret-export blocking, **Haven** trusted-sandbox approval bypass, **Linux/Windows** secure-store stubs, and **in-memory DoS** surfaces. (`GET /v1/diagnostic/report` now requires signed GET headers; see F8.)
+**Primary residual risks:** **heuristic** secret-export blocking for unregistered capabilities, **Linux/Windows** secure-store stubs (fail-closed), **ledger hash chains without keyed authentication** (see hardening plan), and remaining **in-memory** monitoring. Executable path pinning and Haven auto-allow are **policy-configurable**; defaults remain permissive for pinning (off) and Haven auto-allow (on). (`GET /v1/diagnostic/report` requires signed GET headers; see F8.)
 
 **Correction vs an earlier draft:** Token use is **not** “same UID only.” `authenticate` and `authenticateApproval` require **`PeerIdentity` equality including PID** (and EPID on Darwin), so **cross-process token theft across different PIDs fails** unless the attacker reuses the same process identity (same process / same connection semantics). Session **open** remains available to any process that can connect to the socket and pass validation, yielding **that process’s own** session—not the victim’s existing session.
 
@@ -74,14 +74,14 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 - **Recommendation:** Document **socket permissions** and optional **`expectedClientPath`** pinning; consider default-on pinning for shipped desktop bundles where binary path is stable.  
 - **Type:** **Architectural / deployment assumption** (not a bug).
 
-### F2 — Executable path pinning exists but is off in default server
+### F2 — Executable path pinning — **addressed (2026-04-07)**
 
 - **Severity:** Medium  
 - **Category:** Client binding  
-- **Location:** `expectedClientPath` + `handleSessionOpen` (~103–124); `NewServerWithOptions` never sets field (`internal/loopgate/server.go`); `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` notes this.  
-- **Issue:** Optional defense is **unconfigured** in-tree.  
-- **Recommendation:** Wire from runtime config when product wants narrowing.  
-- **Type:** **Hardening / configuration gap**.
+- **Location:** `expectedClientPath` + `handleSessionOpen` (`internal/loopgate/server_model_handlers.go`); loaded from **`config/runtime.yaml`** → **`control_plane.expected_session_client_executable`** in `NewServerWithOptions` (`internal/loopgate/server.go`).  
+- **Issue (historical):** Optional defense was **unwired** from operator config.  
+- **Resolution:** Non-empty absolute path enables pin (after `filepath.Clean`); empty keeps default **off**. Tests: `session_executable_pin_test.go`, `config_test.go` (relative path rejected).  
+- **Type:** **Hardening** (closed for wiring; still **off** by default).
 
 ### F3 — `isSecretExportCapability` is heuristic — **partially addressed (2026-04-07)**
 
@@ -92,14 +92,14 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 - **Resolution (partial):** Registry implements `SecretExportNameHeuristicOptOut` / `RawSecretExportProhibited`; unregistered names still use the heuristic before the unknown-capability path. Further tightening: explicit allow/deny per registered capability.  
 - **Type:** **Design risk / hardening** (ongoing).
 
-### F4 — `haven` + `TrustedSandboxLocal()` auto-allow under `NeedsApproval` policy
+### F4 — `haven` + `TrustedSandboxLocal()` auto-allow under `NeedsApproval` policy — **policy-gated (2026-04-07)**
 
 - **Severity:** Medium  
 - **Category:** Policy  
-- **Location:** `shouldAutoAllowTrustedSandboxCapability` (`internal/loopgate/server.go`)  
-- **Issue:** Intended product behavior reduces human approval for specific actor/tools.  
-- **Recommendation:** Minimize trusted set; metrics; sub-policy for write size or paths.  
-- **Type:** **Design risk** (explicit).
+- **Location:** `Server.shouldAutoAllowTrustedSandboxCapability` (`internal/loopgate/server.go`); **`core/policy/policy.yaml`** → **`safety.haven_trusted_sandbox_auto_allow`** (optional; **default-on** when omitted) and **`safety.haven_trusted_sandbox_auto_allow_capabilities`** (optional allowlist; non-nil empty slice = disable for all).  
+- **Issue:** Intended product behavior reduces human approval for **actor `haven`** + **TrustedSandboxLocal** tools when policy would otherwise require approval.  
+- **Recommendation:** Operators tighten via policy; continue to minimize the trusted tool set in code; optional future metrics.  
+- **Type:** **Design risk** (explicit, now **configurable**).
 
 ### F5 — Linux/Windows secure store stubs (fail-closed)
 
@@ -162,7 +162,7 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 
 **Strong boundaries:** Unix locality; peer + token binding; MAC on most routes; sandbox resolver; morphling `ParentControlSessionID` checks.
 
-**Drift / optimism:** `haven` auto-allow; heuristic secret export; optional exe pin off by default; enterprise tenancy/IDP is **not** end-to-end proven in this review.
+**Drift / optimism:** heuristic secret export; ledger hash chain without keyed authentication; exe pin and Haven auto-allow **default permissive** until operators set policy/runtime fields; enterprise tenancy/IDP is **not** end-to-end proven in this review.
 
 ---
 
@@ -181,15 +181,15 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 1. **`GET /v1/diagnostic/report` signed GET:** implemented 2026-04-06 (was: add `verifySignedRequestWithoutBody`).  
 2. Replace **heuristic** `isSecretExportCapability` with **registry metadata** + tests — **partial:** optional registry interfaces + heuristic fallback (2026-04-07).  
 3. **Deep-copy** pending approval `CapabilityRequest` / assert body hash before execute — **done** (2026-04-07).  
-4. Review **`shouldAutoAllowTrustedSandboxCapability`** surface; add policy hooks or metrics.  
+4. Review **`shouldAutoAllowTrustedSandboxCapability`** surface — **done:** policy hooks under **`safety`** in `core/policy/policy.yaml`; metrics still optional.  
 5. Document **MCP / delegated session / peer PID** requirements; align defaults with `local-open-session` where needed.
 
 ### Next hardening (top 5)
 
 1. Linux/Windows **secure credential** backends.  
-2. **Executable path pinning** in production profiles.  
-3. **Caps** on replay/nonce/map growth.  
-4. **govulncheck** + dependency policy for indirect stacks (e.g. Wails-related).  
+2. **Ledger** keyed signing or checkpoints + operator threat-model doc (see `docs/reports/security-hardening-plan-2026-04.md`).  
+3. **Caps** on replay/nonce/map growth — **done** (2026-04-07); monitor in production.  
+4. **govulncheck** + dependency policy for indirect stacks (e.g. Wails-related) — **partial:** `govulncheck` script + CI workflow.  
 5. Fuzz/malformed JSON tests on hot handlers.
 
 ### Later but important (top 5)
@@ -239,13 +239,13 @@ See `handleSessionOpen` (`internal/loopgate/server_model_handlers.go`): valid PO
 
 ### Executable path binding
 
-Implemented behind `expectedClientPath != ""`; **default server does not set it** (`NewServerWithOptions`).
+Implemented when **`control_plane.expected_session_client_executable`** in **`config/runtime.yaml`** is non-empty (sets `expectedClientPath` after clean). **Default is empty** (pinning off).
 
 ---
 
 ## 10. Final verdict
 
-The implementation **earns** a serious local control-plane story: enforcement is mostly **explicit in code**, with stronger approval and audit mechanics than common agent frameworks. Residual work is **narrowing optional gaps** (exe pin, secret heuristic, diagnostic MAC consistency), **finishing cross-platform secrets**, and **operational clarity** for MCP and peer binding.
+The implementation **earns** a serious local control-plane story: enforcement is mostly **explicit in code**, with stronger approval and audit mechanics than common agent frameworks. Residual work is **secret-export classification**, **ledger authenticity** vs filesystem attackers, **finishing cross-platform secrets**, and **operational clarity** for MCP and peer binding. Diagnostic GET MAC consistency is **aligned** (F8).
 
 **AI-only authorship** does not invalidate the technical findings above; it **raises the bar** for independent test coverage, human review on boundary changes, and distrust of **comments without tests**.
 
@@ -264,7 +264,7 @@ The implementation **earns** a serious local control-plane story: enforcement is
 - `internal/sandbox/sandbox.go` — path resolution  
 - `internal/policy/checker.go` — policy  
 - `internal/secrets/stub_secure_store.go` — non-macOS stub  
-- `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — exe pin note  
+- `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — peer binding, exe pin, Haven auto-allow policy  
 
 ---
 
