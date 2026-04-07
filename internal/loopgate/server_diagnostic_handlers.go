@@ -6,14 +6,20 @@ import (
 	"morph/internal/troubleshoot"
 )
 
-// handleDiagnosticReport returns aggregated operator diagnostics (JSON). Requires a valid capability token
-// and Unix peer binding — same trust model as other privileged routes. Does not return raw ledger lines.
+// handleDiagnosticReport returns aggregated operator diagnostics (JSON). Requires a valid capability token,
+// Unix peer binding, and the same signed-request headers as other privileged GET routes (empty body hash).
+// Does not return raw ledger lines.
 func (server *Server) handleDiagnosticReport(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if _, ok := server.authenticate(writer, request); !ok {
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
 	report, err := troubleshoot.BuildReport(server.repoRoot, server.runtimeConfig)

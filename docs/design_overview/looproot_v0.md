@@ -1,7 +1,15 @@
 # LoopRoot v0
 
-**Status:** draft  
-**Last updated:** 2026-04-05
+**Status:** future vision — **not on the implementation roadmap**  
+**Last updated:** 2026-04-06
+
+This document captures a north-star runtime model (something between a container and a VM for agents, with deep OS-level work). It **does not exist** as a product today and is **out of scope** for near-term development: it would require substantial OS expertise and engineering beyond what a solo builder can take on until the concept is much sharper.
+
+**Current focus:** the **Haven CLI** (`~/Dev/haven_cli` — operator/client surface and workflows), while **Loopgate** remains the authority kernel for policy, capabilities, audit, and mediation in the repo you have today.
+
+LoopRoot may be revisited years from now, substantially revised, or abandoned in favor of smaller steps that achieve part of the same intent (governed workspace, explicit crossings, no ambient host powers) without shipping a new runtime substrate.
+
+---
 
 ## Summary
 
@@ -533,12 +541,12 @@ but through a non-agentic human workflow.
 
 The current repository already contains a proof-of-concept constitution system:
 
-- [AGENTS.md](/Users/adalaide/Dev/loopgate/AGENTS.md)
+- [AGENTS.md](../../AGENTS.md)
   - authority rules
   - safety constitution
   - implementation and review discipline
   - hard invariants
-- [context_map.md](/Users/adalaide/Dev/loopgate/context_map.md)
+- [context_map.md](../../context_map.md)
   - repo onboarding
   - package topology
   - high-signal file entrypoints

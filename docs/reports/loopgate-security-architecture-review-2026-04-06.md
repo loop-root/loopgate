@@ -1,0 +1,271 @@
+# Loopgate security and architecture review (code-grounded)
+
+**Date:** 2026-04-06  
+**Scope:** Current Go implementation under `internal/loopgate`, `internal/sandbox`, `internal/policy`, `internal/secrets`, `internal/ledger`, `internal/loopgate/mcpserve`, `cmd/loopgate`, and related security-sensitive paths.  
+**Method:** Static review of authoritative code paths (not legacy docs or removed surfaces unless verified in tree).  
+**Out of scope:** Full dependency CVE audit, formal verification, penetration test.
+
+This report consolidates: (1) security/architecture findings, (2) HTTP route authentication matrix, (3) corrected analysis of Unix peer binding vs “same-UID” trust, (4) prioritized recommendations, (5) impact of **AI-only authorship** on how to read these conclusions.
+
+---
+
+## 1. Executive summary
+
+Loopgate is a **local Unix-socket HTTP control plane** that mediates tool execution with **peer credentials**, **session-scoped capability tokens**, **HMAC-signed request bodies**, **policy checks**, **approval flows with manifest binding**, **hash-chained audit ledgers**, and **sandbox-oriented path resolution**. MCP is a **stdio bridge** that uses the same HTTP API over the socket.
+
+**Verdict:** For a **single-user, local-first** deployment model, the design is **credible and materially stronger** than typical “agent + shell + skills” stacks, because enforcement is **in code** (signing, replay controls, audit fail-closed paths, registry + policy) rather than advisory.
+
+**Primary residual risks:** optional controls not enabled by default (executable path pinning), **heuristic** secret-export blocking, **Haven** trusted-sandbox approval bypass, **Linux/Windows** secure-store stubs, and **in-memory DoS** surfaces. (`GET /v1/diagnostic/report` now requires signed GET headers; see F8.)
+
+**Correction vs an earlier draft:** Token use is **not** “same UID only.” `authenticate` and `authenticateApproval` require **`PeerIdentity` equality including PID** (and EPID on Darwin), so **cross-process token theft across different PIDs fails** unless the attacker reuses the same process identity (same process / same connection semantics). Session **open** remains available to any process that can connect to the socket and pass validation, yielding **that process’s own** session—not the victim’s existing session.
+
+---
+
+## 2. Authorship note and revised assessment (AI-generated codebase)
+
+Stakeholders report this repository is **entirely AI-generated** (code, comments, and docs), with **no human-authored lines**.
+
+**What this does *not* change**
+
+- **Runtime facts** are unchanged: security properties follow from what the binary does (peer binding, MAC verification, audit gating). A finding grounded in `authenticate` or `readAndVerifySignedBody` remains valid regardless of author.
+
+**What it *does* change (process and confidence)**
+
+1. **Comment–code drift risk is elevated.** Example already observed: `handleDiagnosticReport` states a trust model aligned with other routes but **skips** `verifySignedRequestWithoutBody` (`internal/loopgate/server_diagnostic_handlers.go`). AI-heavy repos often exhibit **convincing comments that lag refactors**.
+2. **Invariant testing and human review become the primary quality gate.** Strengths (lock-order notes, AMP references) signal **prompt-driven discipline**, not independent verification. Treat “documented invariants” as **claims to test**, not guarantees.
+3. **Uniform competence masking edge cases.** Broad consistency can hide **single-route inconsistencies** (diagnostic/MAC), **integration mismatches** (delegated credentials across subprocess PIDs vs peer binding—see §6), or **policy vs product exceptions** (`haven` auto-allow).
+4. **Supply chain and secret-handling narratives need extra scrutiny**—not because AI is malicious, but because **operational security** (key storage on Linux, deployment guides) is easy to present as complete while stubs remain.
+
+**Recommendation:** Institute **human security review** for boundary changes, maintain a **route × auth × MAC × audit** matrix as a CI-checked or review-checked artifact, and run **`govulncheck`** plus periodic dependency review.
+
+---
+
+## 3. Confirmed strengths (verified in code)
+
+| Area | Evidence |
+|------|-----------|
+| Unix socket + peer identity | `Serve` uses `net.Listen("unix", ...)`, `chmod` `0o600`; `ConnContext` attaches peer identity (`internal/loopgate/server.go`). |
+| Token + peer binding | `authenticate` compares `tokenClaims.PeerIdentity` to live peer (`internal/loopgate/server.go`). |
+| Approval + peer binding | `authenticateApproval` compares `activeSession.PeerIdentity` to live peer (same file). |
+| Signed requests | `verifySignedRequest` / `readAndVerifySignedBody`; nonces in `recordAuthNonce`; optional persistence `loadNonceReplayState` / `saveNonceReplayState`. |
+| Request-ID replay window | `recordRequest` per control session + request id. |
+| Single-use execution tokens | `deriveExecutionToken` + `consumeExecutionToken` with bound capability and sorted argument hash. |
+| Approval manifest | `computeApprovalManifestSHA256` / `buildCapabilityApprovalManifest`; decision verifies manifest on approve; post-approval execution uses **stored** `pendingApproval.Request` for generic capabilities (`internal/loopgate/server_capability_handlers.go`). |
+| Audit fail-closed (examples) | Many paths return `DenialCodeAuditUnavailable` when `logEvent` fails; morphling and task-plan tests assert behavior. |
+| Policy deny default | Unknown tool category → deny (`internal/policy/checker.go`). |
+| Sandbox paths | `NormalizeRelativePath`, `EvalSymlinks`, `ensureWithinRoot` (`internal/sandbox/sandbox.go`). |
+| Secret export heuristic + audit | `isSecretExportCapability` + `logEvent` before deny (`internal/loopgate/server.go`). |
+| Morphling parent session | Mismatch → `errMorphlingNotFound` pattern (non-leaking). |
+
+---
+
+## 4. Findings (severity, category, type)
+
+Each item: **severity**, **category**, **location**, **issue**, **why it matters**, **scenario**, **recommendation**, **type** (`vulnerability` / `design risk` / `hardening` / `informational`).
+
+### F1 — Session open: socket access ⇒ new control session (same OS user typically)
+
+- **Severity:** High (threat-model constraint)  
+- **Category:** Trust boundary  
+- **Location:** `handleSessionOpen` (`internal/loopgate/server_model_handlers.go`)  
+- **Issue:** No bearer/MAC at open. Any process that can connect to the socket and pass body validation can obtain **its own** session, MAC key, and tokens (subject to rate limits and capability intersection).  
+- **Why it matters:** Local malware **as the socket’s user** can use Loopgate as a **policy-governed** API for its own session.  
+- **Scenario:** Malicious binary connects, opens session, requests allowed capabilities.  
+- **Recommendation:** Document **socket permissions** and optional **`expectedClientPath`** pinning; consider default-on pinning for shipped desktop bundles where binary path is stable.  
+- **Type:** **Architectural / deployment assumption** (not a bug).
+
+### F2 — Executable path pinning exists but is off in default server
+
+- **Severity:** Medium  
+- **Category:** Client binding  
+- **Location:** `expectedClientPath` + `handleSessionOpen` (~103–124); `NewServerWithOptions` never sets field (`internal/loopgate/server.go`); `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` notes this.  
+- **Issue:** Optional defense is **unconfigured** in-tree.  
+- **Recommendation:** Wire from runtime config when product wants narrowing.  
+- **Type:** **Hardening / configuration gap**.
+
+### F3 — `isSecretExportCapability` is heuristic
+
+- **Severity:** Medium  
+- **Category:** Secret isolation  
+- **Location:** `internal/loopgate/server.go` (~2824–2846)  
+- **Issue:** Prefix/substring rules; future capability names could evade while exporting sensitive data.  
+- **Recommendation:** Registry flag `ExportsSecretMaterial` + explicit deny; keep heuristic as defense-in-depth.  
+- **Type:** **Design risk / hardening**.
+
+### F4 — `haven` + `TrustedSandboxLocal()` auto-allow under `NeedsApproval` policy
+
+- **Severity:** Medium  
+- **Category:** Policy  
+- **Location:** `shouldAutoAllowTrustedSandboxCapability` (`internal/loopgate/server.go`)  
+- **Issue:** Intended product behavior reduces human approval for specific actor/tools.  
+- **Recommendation:** Minimize trusted set; metrics; sub-policy for write size or paths.  
+- **Type:** **Design risk** (explicit).
+
+### F5 — Linux/Windows secure store stubs (fail-closed)
+
+- **Severity:** Medium (operational)  
+- **Category:** Secrets  
+- **Location:** `internal/secrets/local_dev_store.go`, `stub_secure_store.go`  
+- **Issue:** Non-macOS backends return unavailable for Get/Put.  
+- **Recommendation:** Real keyring integration or explicit supported mode docs.  
+- **Type:** **Gap** (fail-closed, not silent bypass).
+
+### F6 — In-memory maps: DoS / memory pressure
+
+- **Severity:** Medium  
+- **Category:** Availability  
+- **Location:** `Server` maps + `pruneExpiredLocked`  
+- **Issue:** Bounded only by time windows; hostile client can churn entries.  
+- **Recommendation:** Per-session/global caps; monitoring.  
+- **Type:** **Hardening / reliability**.
+
+### F7 — `ExecutionBodySHA256` stored; shallow copy of `Arguments` in pending approvals
+
+- **Severity:** Low  
+- **Category:** Approval integrity  
+- **Location:** `pendingApproval`, `buildCapabilityApprovalManifest`  
+- **Issue:** Comment referenced future live-body verify; execution uses stored request (good). Map aliasing is a minor integrity footgun if ever mutated.  
+- **Recommendation:** Deep-copy `CapabilityRequest` at approval creation; optional hash assert before execute.  
+- **Type:** **Hardening**.
+
+### F8 — `GET /v1/diagnostic/report`: Bearer without request MAC — **addressed**
+
+- **Severity:** Low–Medium (was)  
+- **Category:** Transport consistency  
+- **Location:** `internal/loopgate/server_diagnostic_handlers.go`  
+- **Issue (historical):** Handler authenticated with Bearer only and skipped request MAC.  
+- **Resolution (2026-04-06):** `handleDiagnosticReport` now calls `verifySignedRequestWithoutBody` after `authenticate`; regression test `TestDiagnosticReportRequiresSignedRequest` in `server_diagnostic_handlers_test.go`.  
+- **Type:** **Hardening** (closed in code).
+
+### F9 — Delegated MCP credentials vs peer PID binding
+
+- **Severity:** Informational–Medium (integration)  
+- **Category:** Integration  
+- **Location:** `authenticate` peer check; `mcpserve` delegated env path  
+- **Issue:** Tokens minted on process A **cannot** be used from process B (different PID). Tests use same OS process for two `Client` values (`server_test.go` delegated test). Real **parent-opens, child-uses** delegation may fail unless child opens session (e.g. `local-open-session`).  
+- **Recommendation:** Document **single-process** token use; prefer MCP modes that open session from the MCP process.  
+- **Type:** **Informational / integration contract**.
+
+### F10 — `/v1/hook/pre-validate` trust model
+
+- **Severity:** Informational  
+- **Category:** Hook  
+- **Location:** `internal/loopgate/server_hook_handlers.go`  
+- **Issue:** Peer **UID must equal server UID**; no session/MAC—by design for Claude Code hook.  
+- **Type:** **Informational** (document for operators).
+
+---
+
+## 5. Architecture assessment
+
+**Stated trust model vs implementation:** Largely aligned: NL is not authority for capabilities; registry + policy + tokens gate execution; approvals bind manifests; audit is mandatory on many sensitive transitions.
+
+**Strong boundaries:** Unix locality; peer + token binding; MAC on most routes; sandbox resolver; morphling `ParentControlSessionID` checks.
+
+**Drift / optimism:** `haven` auto-allow; heuristic secret export; optional exe pin off by default; enterprise tenancy/IDP is **not** end-to-end proven in this review.
+
+---
+
+## 6. Product / security positioning
+
+**Vs typical agent harnesses:** Stronger on **signed control plane**, **approval binding**, **audit fail-closed**, **sandbox path discipline**.
+
+**Public claims require:** Clear **single-user / local socket** story; honest **non-macOS secret** posture; explicit **`haven`** behavior; **human** review for AI-generated changes.
+
+---
+
+## 7. Priority recommendations
+
+### Immediate (top 5)
+
+1. **`GET /v1/diagnostic/report` signed GET:** implemented 2026-04-06 (was: add `verifySignedRequestWithoutBody`).  
+2. Replace **heuristic** `isSecretExportCapability` with **registry metadata** + tests.  
+3. **Deep-copy** pending approval `CapabilityRequest` / assert body hash before execute.  
+4. Review **`shouldAutoAllowTrustedSandboxCapability`** surface; add policy hooks or metrics.  
+5. Document **MCP / delegated session / peer PID** requirements; align defaults with `local-open-session` where needed.
+
+### Next hardening (top 5)
+
+1. Linux/Windows **secure credential** backends.  
+2. **Executable path pinning** in production profiles.  
+3. **Caps** on replay/nonce/map growth.  
+4. **govulncheck** + dependency policy for indirect stacks (e.g. Wails-related).  
+5. Fuzz/malformed JSON tests on hot handlers.
+
+### Later but important (top 5)
+
+1. HA / multi-instance ledger + nonce semantics.  
+2. MAC key rotation story for long sessions.  
+3. Formal **route × auth × MAC × audit-required** checklist in CI or review template.  
+4. Morphling runner binary as **privileged helper** supply-chain review.  
+5. Operator UX regression tests for approval manifest mismatch.
+
+---
+
+## 8. HTTP route × authentication matrix
+
+**Transport:** All routes on **Unix domain socket** (`internal/loopgate/server.go`).  
+**Peer:** For routes using `authenticate` / `authenticateApproval`, failed peer resolution → missing identity → **401** on those paths.
+
+| Pattern | AuthN | Request MAC | Representative routes |
+|---------|--------|-------------|------------------------|
+| None | None | None | `GET /v1/health` |
+| Peer UID = server UID | None | None | `POST /v1/hook/pre-validate` |
+| Session bootstrap | None | None | `POST /v1/session/open` (optional exe path if `expectedClientPath` set) |
+| Bearer + GET MAC | `authenticate` + `verifySignedRequestWithoutBody` | `GET /v1/status`, `GET /v1/connections/status`, `GET /v1/config/{section}`, `GET /v1/ui/*` (status-style), `GET /v1/tasks*`, Haven model list GETs |
+| Bearer + POST MAC | `authenticate` + `readAndVerifySignedBody` | `/v1/capabilities/execute`, `/v1/memory/*`, `/v1/sandbox/*`, `/v1/morphlings/*` (except worker open), `/v1/task/*`, `/v1/model/reply`, `/v1/chat`, `/v1/connections/*` POSTs, quarantine, folder access, etc. |
+| Haven actor gate | As above + `actor == haven` | `POST /v1/chat`, `GET /v1/model/openai/models`, … |
+| Approval | `X-Loopgate-Approval-Token` + `authenticateApproval` + signed body | `POST /v1/approvals/{id}/decision` |
+| Morphling worker | **Open:** peer + JSON, **no** bearer/MAC; **Actions:** worker auth + `readAndVerifyMorphlingWorkerSignedBody` | `/v1/morphlings/worker/open` vs `start|update|complete` |
+| (formerly outlier; now aligned) | Bearer + GET MAC | `GET /v1/diagnostic/report` |
+
+**Deprecated aliases:** `/v1/haven/...` → same handlers as `/v1/...` (`internal/loopgate/server.go`).
+
+---
+
+## 9. Session open and peer binding (precise)
+
+### Checks required to open a session
+
+See `handleSessionOpen` (`internal/loopgate/server_model_handlers.go`): valid POST JSON; non-empty granted capabilities (intersect with registry); peer identity present; optional executable path match if configured; `maxActiveSessionsPerUID` and `sessionOpenMinInterval`; successful `session.opened` audit or rollback.
+
+### Is “same UID” enough to use someone else’s session?
+
+**No** for Bearer or approval tokens: `tokenClaims.PeerIdentity != requestPeerIdentity` and `activeSession.PeerIdentity != requestPeerIdentity` deny (`internal/loopgate/server.go`). Identity includes **PID** (and **EPID** on Darwin via `LOCAL_PEERCRED` / `LOCAL_PEERPID` / `LOCAL_PEEREPID`).
+
+### Is “same UID” enough to get *a* Loopgate session?
+
+**If** the process can connect to the socket (typically same user as socket owner): **yes**, it can open **its own** session (subject to limits and capability filtering). That is **not** impersonation of another process’s session, but it can be **equivalent capability** for an attacker.
+
+### Executable path binding
+
+Implemented behind `expectedClientPath != ""`; **default server does not set it** (`NewServerWithOptions`).
+
+---
+
+## 10. Final verdict
+
+The implementation **earns** a serious local control-plane story: enforcement is mostly **explicit in code**, with stronger approval and audit mechanics than common agent frameworks. Residual work is **narrowing optional gaps** (exe pin, secret heuristic, diagnostic MAC consistency), **finishing cross-platform secrets**, and **operational clarity** for MCP and peer binding.
+
+**AI-only authorship** does not invalidate the technical findings above; it **raises the bar** for independent test coverage, human review on boundary changes, and distrust of **comments without tests**.
+
+---
+
+## 11. References (key files)
+
+- `internal/loopgate/server.go` — mux, `ConnContext`, `authenticate`, `authenticateApproval`, `verifySignedRequest`, pruning, `isSecretExportCapability`, `NewServerWithOptions`  
+- `internal/loopgate/server_model_handlers.go` — `handleSessionOpen`  
+- `internal/loopgate/server_capability_handlers.go` — execute + approval decision  
+- `internal/loopgate/server_diagnostic_handlers.go` — diagnostic outlier  
+- `internal/loopgate/server_hook_handlers.go` — hook trust model  
+- `internal/loopgate/server_morphling_worker_handlers.go` — worker auth shapes  
+- `internal/loopgate/approval_manifest.go` — manifest computation  
+- `internal/loopgate/peercred_darwin.go`, `peercred_linux.go` — peer identity  
+- `internal/sandbox/sandbox.go` — path resolution  
+- `internal/policy/checker.go` — policy  
+- `internal/secrets/stub_secure_store.go` — non-macOS stub  
+- `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — exe pin note  
+
+---
+
+*End of report.*
