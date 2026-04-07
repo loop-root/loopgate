@@ -3,6 +3,8 @@ package loopgate
 const (
 	controlCapabilityConfigRead  = "config.read"
 	controlCapabilityConfigWrite = "config.write"
+	controlCapabilityGoalSet     = "goal.set"
+	controlCapabilityGoalClose   = "goal.close"
 )
 
 var internalControlCapabilityCatalog = map[string]CapabilitySummary{
@@ -17,6 +19,18 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "control",
 		Operation:   "write",
 		Description: "Write Loopgate configuration state through the local control plane.",
+	},
+	controlCapabilityGoalSet: {
+		Name:        controlCapabilityGoalSet,
+		Category:    "continuity",
+		Operation:   "write",
+		Description: "Set a named persistent goal tracked across sessions in the continuity system.",
+	},
+	controlCapabilityGoalClose: {
+		Name:        controlCapabilityGoalClose,
+		Category:    "continuity",
+		Operation:   "write",
+		Description: "Close a goal when the objective has been achieved or is no longer relevant.",
 	},
 }
 

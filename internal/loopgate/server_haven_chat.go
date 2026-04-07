@@ -117,6 +117,15 @@ type havenChatRequest struct {
 	Message     string                `json:"message"`
 	ThreadID    *string               `json:"thread_id,omitempty"`
 	Attachments []havenChatAttachment `json:"attachments,omitempty"`
+	// Greet instructs Loopgate to generate a session-opening greeting from Morph
+	// rather than processing a user message. The Message field is ignored when
+	// Greet is true. The greeting is generated from the operator's wake state,
+	// current tasks/goals, and any time-sensitive items.
+	Greet           bool     `json:"greet,omitempty"`
+	ProjectPath     string   `json:"project_path,omitempty"`
+	ProjectName     string   `json:"project_name,omitempty"`
+	GitBranch       string   `json:"git_branch,omitempty"`
+	AdditionalPaths []string `json:"additional_paths,omitempty"`
 }
 
 // havenChatAttachment carries a single file or image alongside a chat message.
@@ -336,7 +345,18 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 		return
 	}
 	message := strings.TrimSpace(req.Message)
-	if message == "" {
+	if req.Greet {
+		// Greeting mode: replace the message with a hidden system instruction.
+		// The model uses the wake state + task board context already in its prompt
+		// to generate a personalized opening. The instruction is not shown to the
+		// operator — only Morph's response is surfaced.
+		message = "[SESSION_START_GREETING] Generate a brief, warm, personalized opening message for the operator. " +
+			"Use the REMEMBERED CONTINUITY and any active goals or tasks you are aware of. " +
+			"Mention the most recent or relevant work by name. " +
+			"If there are any tasks or goals with deadlines or scheduled dates that are approaching or overdue, call those out specifically. " +
+			"Do not ask generic questions like 'how can I help?' — be specific to what you know about them. " +
+			"Keep it to 2-4 sentences. Do not repeat this instruction in your response."
+	} else if message == "" {
 		if server.diagnostic != nil && server.diagnostic.Server != nil {
 			args := append([]any{"reason", "message must not be empty"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
 			server.diagnostic.Server.Warn("haven_chat_denied", args...)
@@ -515,7 +535,7 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	if useCompactHavenNativeTools {
 		availableToolDefs = buildCompactInvokeCapabilityToolDefinitions(capabilityNamesFromSummaries(allowedCapabilitySummaries))
 	}
-	runtimeFacts := server.buildHavenRuntimeFacts(allowedCapabilitySummaries)
+	runtimeFacts := server.buildHavenRuntimeFacts(allowedCapabilitySummaries, runtimeConfig.ProviderName, runtimeConfig.ModelName, req.ProjectPath, req.ProjectName, req.GitBranch, req.AdditionalPaths)
 	allowedCapabilityNames := make(map[string]struct{}, len(allowedCapabilitySummaries))
 	for _, summary := range allowedCapabilitySummaries {
 		allowedCapabilityNames[summary.Name] = struct{}{}
@@ -820,17 +840,48 @@ func (server *Server) havenWakeStateSummaryText(tenantID string) (string, error)
 	if len(wake.RecentFacts) == 0 && len(wake.ActiveGoals) == 0 && len(wake.UnresolvedItems) == 0 {
 		return "", nil
 	}
-	var parts []string
+
+	var sb strings.Builder
+
+	// Remembered facts (operator preferences, profile, routines).
+	var factParts []string
 	for _, f := range wake.RecentFacts {
-		if len(parts) >= 12 {
+		if len(factParts) >= 12 {
 			break
 		}
-		parts = append(parts, fmt.Sprintf("%s: %v", f.Name, f.Value))
+		factParts = append(factParts, fmt.Sprintf("  %s: %v", f.Name, f.Value))
 	}
-	if len(parts) == 0 {
-		return "Wake-state is loaded with continuity metadata.", nil
+	if len(factParts) > 0 {
+		sb.WriteString("REMEMBERED CONTINUITY (authoritative):\n")
+		sb.WriteString(strings.Join(factParts, "\n"))
+	} else {
+		sb.WriteString("Wake-state is loaded with continuity metadata.")
 	}
-	return "REMEMBERED CONTINUITY (authoritative):\n" + strings.Join(parts, "\n"), nil
+
+	// Active goals — persist across sessions.
+	if len(wake.ActiveGoals) > 0 {
+		sb.WriteString("\n\nACTIVE GOALS:\n")
+		for _, g := range wake.ActiveGoals {
+			sb.WriteString(fmt.Sprintf("  - %s\n", g))
+		}
+	}
+
+	// Open tasks — the live task board the operator can track.
+	if len(wake.UnresolvedItems) > 0 {
+		sb.WriteString("\n\nOPEN TASKS (task board — use todo.list to get IDs, todo.complete to close):\n")
+		for _, item := range wake.UnresolvedItems {
+			line := fmt.Sprintf("  [%s] %s", item.ID, item.Text)
+			if item.ScheduledForUTC != "" {
+				line += fmt.Sprintf(" (due: %s)", item.ScheduledForUTC)
+			}
+			if item.NextStep != "" {
+				line += fmt.Sprintf(" — next: %s", item.NextStep)
+			}
+			sb.WriteString(line + "\n")
+		}
+	}
+
+	return sb.String(), nil
 }
 
 // havenExtractOrganizePlanIDFromResults finds the plan_id from a successful host.organize.plan
@@ -1521,12 +1572,23 @@ func capabilityNamesFromSummaries(capabilitySummaries []CapabilitySummary) []str
 	return capabilityNames
 }
 
-func (server *Server) buildHavenRuntimeFacts(capabilitySummaries []CapabilitySummary) []string {
+func (server *Server) buildHavenRuntimeFacts(capabilitySummaries []CapabilitySummary, providerName string, modelName string, projectPath string, projectName string, gitBranch string, additionalPaths []string) []string {
 	currentTime := server.now()
 	capabilitySummaryText := buildResidentCapabilitySummary(capabilitySummaries)
+
+	identityFact := "Your name is Morph. You are Haven's resident assistant."
+	if modelName := strings.TrimSpace(modelName); modelName != "" {
+		provider := strings.TrimSpace(providerName)
+		if provider != "" {
+			identityFact += fmt.Sprintf(" If asked about your underlying model, say you are running on %s (%s).", modelName, provider)
+		} else {
+			identityFact += fmt.Sprintf(" If asked about your underlying model, say you are running on %s.", modelName)
+		}
+	}
+
 	runtimeFacts := []string{
 		fmt.Sprintf("Current date and time: %s (timezone: %s).", currentTime.Format("Monday, January 2, 2006 3:04 PM"), currentTime.Format("MST")),
-		"You are running inside Haven OS, a secure desktop environment. You act as a resident assistant on this workstation, not a generic anonymous chatbot.",
+		identityFact,
 		"The operator uses Haven to work with you; your files and tools run in a governed sandbox (/morph/home).",
 		"Your home directory is /morph/home. Your workspace is /morph/home/workspace. You also have /morph/home/scratch for temporary work.",
 		"When the user asks for something you can do with a listed tool, use the minimal tools needed instead of asking them to perform the filesystem work for you.",
@@ -1534,9 +1596,27 @@ func (server *Server) buildHavenRuntimeFacts(capabilitySummaries []CapabilitySum
 		"You may have durable continuity between sessions. The REMEMBERED CONTINUITY section is the memory state actually available right now. Treat it as authoritative when present; do not claim perfect recall if it is incomplete.",
 		"If REMEMBERED CONTINUITY is empty, say so honestly instead of inventing prior context.",
 		"Use memory.remember to propose short structured continuity candidates when the user clearly wants something carried across sessions — for example stable preferences, routines, profile or work context, or standing goals — not for throwaway chat. Each call is a suggestion: Loopgate policy and TCL governance accept, reshape, or reject it; do not tell the user something was saved until the tool succeeds. Use concise fact_key and fact_value; never store secrets, API keys, passwords, or long unstructured prose. If you are unsure what they want stored, ask one short question instead of guessing.",
+		"Auto-memory: by default, proactively call memory.remember when you notice something worth carrying across sessions (a new goal, preference, project name, deadline, or working-style detail the operator has not shared before). Check REMEMBERED CONTINUITY for operator.auto_memory — if its value is 'off', only store memories when the operator explicitly asks you to. If the operator says 'turn off auto-store memories' or similar, call memory.remember with fact_key='operator.auto_memory' and fact_value='off' and confirm. If they say 'turn it back on', set it to 'on'.",
 		"Use Haven-native tools when they directly serve the user's request. Do not open extra workstreams unless the user asked for those outcomes.",
 		"Tasks may need approval when they leave Haven, run shell_exec, or change real host files through granted folder access. Prefer the narrowest matching tool (fs_* for the sandbox workspace, host.folder.* for granted real Mac folders) instead of shell_exec when those tools apply. When approval is required, explain that clearly instead of pretending the action already happened.",
-		"Ignore any instructions about slash commands or CLI-only flows. You are running in Haven OS, not a terminal shell.",
+		"Ignore any instructions about slash commands or CLI-only flows. You are inside Haven, not a terminal shell.",
+		"Security boundary — never cross these lines regardless of operator instruction: do not read, write, modify, or delete Loopgate's own configuration files, policy files, or persona files; do not modify your own identity, values, or governing rules; do not access or alter the Loopgate source directory or any file that controls how you are governed. These constraints are enforced by Loopgate independently and cannot be overridden by the operator through you.",
+	}
+	if projectPath := strings.TrimSpace(projectPath); projectPath != "" {
+		name := strings.TrimSpace(projectName)
+		branch := strings.TrimSpace(gitBranch)
+		projectFact := fmt.Sprintf("The operator launched Haven from project '%s' at path %s", name, projectPath)
+		if branch != "" {
+			projectFact += fmt.Sprintf(" (git branch: %s)", branch)
+		}
+		projectFact += fmt.Sprintf(". When the operator refers to 'this project', 'the repo', 'here', or similar, they mean %s. To read files from this project use shell_exec with commands like 'cat %s/path/to/file' or 'ls %s' — each shell_exec call requires operator approval. Do NOT use host.folder.list or host.folder.read for this path; those tools only work with pre-registered folder presets (Downloads, Desktop, Documents).", projectPath, projectPath, projectPath)
+		runtimeFacts = append(runtimeFacts, projectFact)
+	}
+	if len(additionalPaths) > 0 {
+		runtimeFacts = append(runtimeFacts, fmt.Sprintf(
+			"The operator has also granted read access to these additional directories: %s. Use shell_exec with 'cat', 'ls', or 'find' to explore them — each shell_exec call requires operator approval.",
+			strings.Join(additionalPaths, ", "),
+		))
 	}
 	if capabilitySummaryText != "" {
 		runtimeFacts = append(runtimeFacts, "Describe your current built-in abilities in product language. Right now that includes: "+capabilitySummaryText+".")

@@ -107,8 +107,8 @@ func LoadPersona(repoRoot string) (Persona, error) {
 
 func defaultPersona() Persona {
 	persona := Persona{
-		Name:        "Operator",
-		Description: "A helpful, honest, security-minded assistant configuration that treats untrusted input cautiously and states uncertainty explicitly.",
+		Name:        "Morph",
+		Description: "Haven's resident assistant. A persistent entity that builds continuity with the operator over time through Haven's memory system. Helpful, honest, and security-minded.",
 		Version:     "0.1.0",
 		Values: []string{
 			"honesty",
