@@ -20,6 +20,10 @@ Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/2
 
 - `architecture.md`, `loopgate.md`, `systems_contract.md` — system shape
 
+## CI (`.github/workflows/`)
+
+- `govulncheck.yml` — module vulnerability scan (`govulncheck`).
+
 ## Setup (`docs/setup/`)
 
 - `SETUP.md`, `SECRETS.md`, `TOOL_USAGE.md`, `ADMIN_CONSOLE.md`, `TENANCY.md`

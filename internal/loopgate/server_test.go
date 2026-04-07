@@ -4193,6 +4193,81 @@ func TestApprovalExecuteDeniesWhenStoredExecutionBodyMutated(t *testing.T) {
 	}
 }
 
+func TestPendingApprovalLimitPerControlSession(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	server.maxPendingApprovalsPerControlSession = 2
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+	for i := range 2 {
+		resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+			RequestID:  fmt.Sprintf("req-ap-limit-%d", i),
+			Capability: "fs_write",
+			Arguments: map[string]string{
+				"path":    fmt.Sprintf("limit-%d.txt", i),
+				"content": "x",
+			},
+		})
+		if err != nil {
+			t.Fatalf("execute %d: %v", i, err)
+		}
+		if !resp.ApprovalRequired {
+			t.Fatalf("expected pending approval %d, got %#v", i, resp)
+		}
+	}
+	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-ap-limit-2",
+		Capability: "fs_write",
+		Arguments: map[string]string{
+			"path":    "limit-2.txt",
+			"content": "x",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute third: %v", err)
+	}
+	if resp.Status != ResponseStatusDenied || resp.DenialCode != DenialCodePendingApprovalLimitReached {
+		t.Fatalf("expected pending approval limit, got %#v", resp)
+	}
+}
+
+func TestRequestReplayStoreSaturates(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	server.maxSeenRequestReplayEntries = 2
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+	for i := range 2 {
+		_, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+			RequestID:  fmt.Sprintf("req-replay-sat-%d", i),
+			Capability: "fs_write",
+			Arguments: map[string]string{
+				"path":    fmt.Sprintf("rs%d.txt", i),
+				"content": "x",
+			},
+		})
+		if err != nil {
+			t.Fatalf("execute %d: %v", i, err)
+		}
+	}
+	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-replay-sat-2",
+		Capability: "fs_write",
+		Arguments: map[string]string{
+			"path":    "rs2.txt",
+			"content": "x",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute third: %v", err)
+	}
+	if resp.Status != ResponseStatusDenied || resp.DenialCode != DenialCodeReplayStateSaturated {
+		t.Fatalf("expected replay store saturated, got %#v", resp)
+	}
+}
+
 func TestBoundExecutionTokenRejectsDifferentNormalizedArguments(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

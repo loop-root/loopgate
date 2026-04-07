@@ -54,6 +54,11 @@ const (
 	DenialCodeSecretExportProhibited            = "secret_export_prohibited"
 	DenialCodeCapabilityScopeRequired           = "capability_scope_required"
 	DenialCodeRequestReplayDetected             = "request_replay_detected"
+	// DenialCodeReplayStateSaturated is returned when the in-memory replay table cannot accept
+	// another entry without evicting (eviction would weaken replay protection). Fail closed.
+	DenialCodeReplayStateSaturated = "replay_state_saturated"
+	// DenialCodePendingApprovalLimitReached caps pending (undecided) approvals per control session.
+	DenialCodePendingApprovalLimitReached = "pending_approval_limit_reached"
 	DenialCodeUnknownCapability                 = "unknown_capability"
 	DenialCodeInvalidCapabilityArguments        = "invalid_capability_arguments"
 	DenialCodePolicyDenied                      = "policy_denied"

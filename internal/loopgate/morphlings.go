@@ -737,8 +737,12 @@ func (server *Server) spawnMorphling(tokenClaims capabilityToken, spawnRequest M
 		spawnResponse, err := server.createPendingMorphlingSpawnApproval(tokenClaims, validatedClass, authorizingRecord)
 		if err != nil {
 			_ = server.failMorphlingAfterAdmission(tokenClaims.ControlSessionID, authorizingRecord.MorphlingID, morphlingOutcomeFailed, morphlingReasonExecutionStartFailed)
+			return spawnResponse, err
 		}
-		return spawnResponse, err
+		if spawnResponse.Status != ResponseStatusPendingApproval {
+			_ = server.failMorphlingAfterAdmission(tokenClaims.ControlSessionID, authorizingRecord.MorphlingID, morphlingOutcomeFailed, morphlingReasonExecutionStartFailed)
+		}
+		return spawnResponse, nil
 	}
 
 	spawnResponse, err := server.finalizeSpawnedMorphling(tokenClaims, validatedClass, authorizingRecord, "")
@@ -780,6 +784,26 @@ func (server *Server) createPendingMorphlingSpawnApproval(tokenClaims capability
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
+	if server.countPendingApprovalsForSessionLocked(tokenClaims.ControlSessionID) >= server.maxPendingApprovalsPerControlSession {
+		server.mu.Unlock()
+		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           authorizingRecord.RequestID,
+			"capability":           "morphling.spawn",
+			"reason":               "pending approval limit reached for control session",
+			"denial_code":          DenialCodePendingApprovalLimitReached,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			return MorphlingSpawnResponse{}, fmt.Errorf("%w: %v", errMorphlingAuditUnavailable, err)
+		}
+		return MorphlingSpawnResponse{
+			RequestID:    authorizingRecord.RequestID,
+			Status:       ResponseStatusDenied,
+			DenialReason: "pending approval limit reached for control session",
+			DenialCode:   DenialCodePendingApprovalLimitReached,
+		}, nil
+	}
 	pendingApprovalRecord := pendingApproval{
 		ID:               approvalID,
 		Request:          spawnRequest,

@@ -162,6 +162,10 @@ type Server struct {
 	maxActiveSessionsPerUID int
 	expirySweepMaxInterval  time.Duration
 	nextExpirySweepAt       time.Time
+	// maxPendingApprovalsPerControlSession limits pending (state=pending) approvals per session.
+	maxPendingApprovalsPerControlSession int
+	maxSeenRequestReplayEntries          int
+	maxAuthNonceReplayEntries            int
 }
 
 type capabilityToken struct {
@@ -262,6 +266,10 @@ const (
 	defaultExpirySweepMaxInterval  = 250 * time.Millisecond
 	defaultFsReadRateLimit         = 60 // reads per minute per session
 	fsReadRateWindow               = 1 * time.Minute
+	// In-memory bounds (F6 / DoS): single-session pending approvals and replay map sizes.
+	defaultMaxPendingApprovalsPerControlSession = 64
+	defaultMaxSeenRequestReplayEntries          = 65536
+	defaultMaxAuthNonceReplayEntries            = 65536
 )
 
 const (
@@ -405,6 +413,9 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		sessionOpenMinInterval:    defaultSessionOpenMinInterval,
 		maxActiveSessionsPerUID:   defaultMaxActiveSessionsPerUID,
 		expirySweepMaxInterval:    defaultExpirySweepMaxInterval,
+		maxPendingApprovalsPerControlSession: defaultMaxPendingApprovalsPerControlSession,
+		maxSeenRequestReplayEntries:          defaultMaxSeenRequestReplayEntries,
+		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,
 		taskPlans:                 make(map[string]*taskPlanRecord),
 		taskLeases:                make(map[string]*taskLeaseRecord),
 		taskExecutions:            make(map[string]*taskExecutionRecord),
@@ -734,8 +745,8 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 	}
 
 	if allowApprovalCreation {
-		if replayDeniedResponse, duplicate := server.recordRequest(tokenClaims.ControlSessionID, capabilityRequest); duplicate {
-			return replayDeniedResponse
+		if replayDenied := server.recordRequest(tokenClaims.ControlSessionID, capabilityRequest); replayDenied != nil {
+			return *replayDenied
 		}
 	}
 
@@ -912,6 +923,28 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 		server.mu.Lock()
 		server.pruneExpiredLocked()
+		if server.countPendingApprovalsForSessionLocked(tokenClaims.ControlSessionID) >= server.maxPendingApprovalsPerControlSession {
+			server.mu.Unlock()
+			if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+				"request_id":           capabilityRequest.RequestID,
+				"capability":           capabilityRequest.Capability,
+				"reason":               "pending approval limit reached for control session",
+				"denial_code":          DenialCodePendingApprovalLimitReached,
+				"actor_label":          tokenClaims.ActorLabel,
+				"client_session_label": tokenClaims.ClientSessionLabel,
+				"control_session_id":   tokenClaims.ControlSessionID,
+			}); err != nil {
+				return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+			}
+			deniedResponse := CapabilityResponse{
+				RequestID:    capabilityRequest.RequestID,
+				Status:       ResponseStatusDenied,
+				DenialReason: "pending approval limit reached for control session",
+				DenialCode:   DenialCodePendingApprovalLimitReached,
+			}
+			server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
+			return deniedResponse
+		}
 		server.approvals[approvalID] = pendingApproval{
 			ID:               approvalID,
 			Request:          cloneCapabilityRequest(capabilityRequest),
@@ -2485,12 +2518,8 @@ func (server *Server) verifySignedRequestWithMACKey(request *http.Request, reque
 		}, false
 	}
 
-	if server.recordAuthNonce(controlSessionID, requestNonce) {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request nonce replay was rejected",
-			DenialCode:   DenialCodeRequestNonceReplayDetected,
-		}, false
+	if nonceDenial := server.recordAuthNonce(controlSessionID, requestNonce); nonceDenial != nil {
+		return *nonceDenial, false
 	}
 
 	return CapabilityResponse{}, true
@@ -2685,25 +2714,48 @@ func (server *Server) saveNonceReplayState() error {
 	return nil
 }
 
-func (server *Server) recordRequest(controlSessionID string, capabilityRequest CapabilityRequest) (CapabilityResponse, bool) {
+func (server *Server) countPendingApprovalsForSessionLocked(controlSessionID string) int {
+	pendingCount := 0
+	for _, pendingApproval := range server.approvals {
+		if pendingApproval.ControlSessionID != controlSessionID {
+			continue
+		}
+		if pendingApproval.State == approvalStatePending {
+			pendingCount++
+		}
+	}
+	return pendingCount
+}
+
+// recordRequest returns nil when the request_id is accepted for replay tracking, or a denial
+// when duplicate or when the replay map is saturated (fail closed — no eviction).
+func (server *Server) recordRequest(controlSessionID string, capabilityRequest CapabilityRequest) *CapabilityResponse {
 	requestKey := controlSessionID + ":" + capabilityRequest.RequestID
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	server.pruneExpiredLocked()
 	if _, found := server.seenRequests[requestKey]; found {
-		return CapabilityResponse{
+		return &CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
 			Status:       ResponseStatusDenied,
 			DenialReason: "duplicate request_id was rejected",
 			DenialCode:   DenialCodeRequestReplayDetected,
-		}, true
+		}
+	}
+	if len(server.seenRequests) >= server.maxSeenRequestReplayEntries {
+		return &CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusDenied,
+			DenialReason: "request replay store is at capacity",
+			DenialCode:   DenialCodeReplayStateSaturated,
+		}
 	}
 	server.seenRequests[requestKey] = seenRequest{
 		ControlSessionID: controlSessionID,
 		SeenAt:           server.now().UTC(),
 	}
 	server.noteReplayWindowCandidateLocked(server.seenRequests[requestKey].SeenAt)
-	return CapabilityResponse{}, false
+	return nil
 }
 
 func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabilityRequest CapabilityRequest) (CapabilityResponse, bool) {
@@ -2751,20 +2803,33 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 	return CapabilityResponse{}, false
 }
 
-func (server *Server) recordAuthNonce(controlSessionID string, requestNonce string) bool {
+// recordAuthNonce returns nil if the nonce is new and recorded, a denial for replay, or a
+// denial when the nonce map is saturated (fail closed).
+func (server *Server) recordAuthNonce(controlSessionID string, requestNonce string) *CapabilityResponse {
 	nonceKey := controlSessionID + ":" + requestNonce
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	server.pruneExpiredLocked()
 	if _, found := server.seenAuthNonces[nonceKey]; found {
-		return true
+		return &CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request nonce replay was rejected",
+			DenialCode:   DenialCodeRequestNonceReplayDetected,
+		}
+	}
+	if len(server.seenAuthNonces) >= server.maxAuthNonceReplayEntries {
+		return &CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request nonce replay store is at capacity",
+			DenialCode:   DenialCodeReplayStateSaturated,
+		}
 	}
 	server.seenAuthNonces[nonceKey] = seenRequest{
 		ControlSessionID: controlSessionID,
 		SeenAt:           server.now().UTC(),
 	}
 	server.noteReplayWindowCandidateLocked(server.seenAuthNonces[nonceKey].SeenAt)
-	return false
+	return nil
 }
 
 func httpStatusForResponse(response CapabilityResponse) int {
@@ -2785,7 +2850,7 @@ func httpStatusForResponse(response CapabilityResponse) int {
 		case DenialCodeRequestReplayDetected, DenialCodeCapabilityTokenReused, DenialCodeApprovalStateConflict,
 			DenialCodeQuarantinePruneNotEligible:
 			return http.StatusConflict
-		case DenialCodeSessionOpenRateLimited, DenialCodeSessionActiveLimitReached:
+		case DenialCodeSessionOpenRateLimited, DenialCodeSessionActiveLimitReached, DenialCodeReplayStateSaturated, DenialCodePendingApprovalLimitReached:
 			return http.StatusTooManyRequests
 		case DenialCodeMalformedRequest, DenialCodeInvalidCapabilityArguments, DenialCodeSiteURLInvalid,
 			DenialCodeSiteInspectionUnsupportedType, DenialCodeSandboxPathInvalid, DenialCodeSandboxHostDestinationInvalid,
@@ -2918,6 +2983,8 @@ func signedRequestHTTPStatus(denialCode string) int {
 	switch denialCode {
 	case DenialCodeRequestSignatureMissing, DenialCodeRequestSignatureInvalid, DenialCodeRequestTimestampInvalid, DenialCodeRequestNonceReplayDetected, DenialCodeControlSessionBindingInvalid:
 		return http.StatusUnauthorized
+	case DenialCodeReplayStateSaturated:
+		return http.StatusTooManyRequests
 	default:
 		return http.StatusBadRequest
 	}

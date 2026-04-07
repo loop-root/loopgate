@@ -1,6 +1,6 @@
 # Security hardening plan (April 2026)
 
-**Status:** in progress (this iteration implements pending-approval and secret-export items below).
+**Status:** resource caps and CI govulncheck added (2026-04-07); remaining items are multi-platform and deeper policy hooks.
 
 **Scope note:** Near-term product assumptions are **macOS-only** and **single-instance**; multi-OS and multi-node hardening are explicitly deferred (see `docs/adr/0009-macos-scope-and-approval-hardening.md`).
 
@@ -11,17 +11,23 @@
 3. **Registry-first secret export classification** — Optional `internal/tools` interfaces (`SecretExportNameHeuristicOptOut`, `RawSecretExportProhibited`) with legacy name heuristic when interfaces are absent. Unregistered capability names that match the heuristic remain denied before the unknown-capability path.
 4. **Vulnerability scanning** — `scripts/govulncheck.sh` runs `govulncheck` over `./...` for local release hygiene (no CI assumption).
 
+## Completed (2026-04-07 continuation)
+
+5. **Resource caps (F6)** — Default limits: **64** pending approvals per control session, **65536** entries each for `seenRequests` and `seenAuthNonce` replay maps. Fail closed when full (no eviction). Denial codes: `pending_approval_limit_reached`, `replay_state_saturated` (HTTP **429** where applicable).
+6. **Morphling spawn + non-pending response** — If spawn approval returns anything other than `pending_approval` (e.g. pending limit), `failMorphlingAfterAdmission` runs so morphlings do not stick in an authorizing state.
+7. **CI** — `.github/workflows/govulncheck.yml` runs `govulncheck` on push to `main` and on pull requests.
+
 ## Follow-on (not done here)
 
-- **Resource caps** on in-memory replay / approval maps under abuse.
-- **Morphling spawn** approvals: optionally record `ExecutionBodySHA256` for the same integrity check as capability approvals (currently skipped when hash is empty).
-- **CI** wiring for `govulncheck` when the repo adds a standard pipeline.
+- **Executable path pinning** in production profiles.
+- **Linux/Windows** secure credential backends.
+- **Multi-platform** builds and tests when the project expands beyond macOS.
 - **Multi-platform** builds and tests when the project expands beyond macOS.
 
 ## Tests
 
 - `internal/loopgate/approval_manifest_test.go` — clone and execution-body verification.
-- `internal/loopgate/server_test.go` — secret-export registry/heuristic behavior; UI approval path denies on stored-body tampering.
+- `internal/loopgate/server_test.go` — secret-export registry/heuristic behavior; UI approval path denies on stored-body tampering; `TestPendingApprovalLimitPerControlSession`, `TestRequestReplayStoreSaturates`.
 
 ## References
 

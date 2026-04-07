@@ -110,14 +110,14 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 - **Recommendation:** Real keyring integration or explicit supported mode docs.  
 - **Type:** **Gap** (fail-closed, not silent bypass).
 
-### F6 — In-memory maps: DoS / memory pressure
+### F6 — In-memory maps: DoS / memory pressure — **partially addressed (2026-04-07)**
 
 - **Severity:** Medium  
 - **Category:** Availability  
-- **Location:** `Server` maps + `pruneExpiredLocked`  
+- **Location:** `Server` maps + `pruneExpiredLocked`; `countPendingApprovalsForSessionLocked`, `recordRequest`, `recordAuthNonce`  
 - **Issue:** Bounded only by time windows; hostile client can churn entries.  
-- **Recommendation:** Per-session/global caps; monitoring.  
-- **Type:** **Hardening / reliability**.
+- **Resolution (partial):** Default caps on pending approvals per control session (64) and on `seenRequests` / `seenAuthNonce` size (65536 each); fail closed with `pending_approval_limit_reached` / `replay_state_saturated` instead of evicting replay entries. Monitoring still recommended for production.  
+- **Type:** **Hardening / reliability** (ongoing).
 
 ### F7 — `ExecutionBodySHA256` stored; shallow copy of `Arguments` in pending approvals — **addressed (2026-04-07)**
 
