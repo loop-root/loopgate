@@ -10,8 +10,8 @@ import (
 )
 
 // verifyPendingApprovalStoredExecutionBody checks that pending.Request still serializes to the
-// same SHA256 recorded at approval creation. Skips when ExecutionBodySHA256 is empty (e.g.
-// morphling spawn approvals created before body binding or legacy backfill only).
+// same SHA256 recorded at approval creation. Skips when ExecutionBodySHA256 is empty (legacy
+// backfill-only records).
 func (server *Server) verifyPendingApprovalStoredExecutionBody(pending pendingApproval) (CapabilityResponse, bool) {
 	if strings.TrimSpace(pending.ExecutionBodySHA256) == "" {
 		return CapabilityResponse{}, true

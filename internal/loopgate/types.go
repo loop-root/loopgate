@@ -1176,6 +1176,10 @@ type MorphlingSpawnResponse struct {
 	Class               string   `json:"class,omitempty"`
 	ApprovalID          string   `json:"approval_id,omitempty"`
 	ApprovalDeadlineUTC string   `json:"approval_deadline_utc,omitempty"`
+	// ApprovalManifestSHA256 and ApprovalDecisionNonce are set when Status is pending_approval
+	// so DecideApproval can bind to the same manifest as capability.execute approvals (AMP RFC 0005 §6).
+	ApprovalManifestSHA256 string   `json:"approval_manifest_sha256,omitempty"`
+	ApprovalDecisionNonce  string   `json:"approval_decision_nonce,omitempty"`
 	GrantedCapabilities []string `json:"granted_capabilities,omitempty"`
 	VirtualSandboxPath  string   `json:"virtual_sandbox_path,omitempty"`
 	SpawnedAtUTC        string   `json:"spawned_at_utc,omitempty"`

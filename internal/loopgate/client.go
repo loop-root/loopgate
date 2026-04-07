@@ -462,6 +462,18 @@ func (client *Client) SpawnMorphling(ctx context.Context, request MorphlingSpawn
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/morphlings/spawn", capabilityToken, request, &response, nil); err != nil {
 		return MorphlingSpawnResponse{}, err
 	}
+	// Pending spawn approvals use the same manifest + nonce binding as capability approvals;
+	// cache them so DecideApproval (HTTP) can submit /v1/approvals/.../decision.
+	if response.Status == ResponseStatusPendingApproval && strings.TrimSpace(response.ApprovalID) != "" {
+		client.mu.Lock()
+		if strings.TrimSpace(response.ApprovalManifestSHA256) != "" {
+			client.approvalManifestSHA256[response.ApprovalID] = strings.TrimSpace(response.ApprovalManifestSHA256)
+		}
+		if strings.TrimSpace(response.ApprovalDecisionNonce) != "" {
+			client.approvalDecisionNonce[response.ApprovalID] = strings.TrimSpace(response.ApprovalDecisionNonce)
+		}
+		client.mu.Unlock()
+	}
 	return response, nil
 }
 

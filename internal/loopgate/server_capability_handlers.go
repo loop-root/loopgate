@@ -123,11 +123,9 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 			server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 			return
 		}
-		if !isMorphlingSpawnApproval(pendingApproval) {
-			if integrityDenial, integrityOK := server.verifyPendingApprovalStoredExecutionBody(pendingApproval); !integrityOK {
-				server.writePendingApprovalExecutionIntegrityDenial(writer, controlSession, approvalID, pendingApproval, integrityDenial)
-				return
-			}
+		if integrityDenial, integrityOK := server.verifyPendingApprovalStoredExecutionBody(pendingApproval); !integrityOK {
+			server.writePendingApprovalExecutionIntegrityDenial(writer, controlSession, approvalID, pendingApproval, integrityDenial)
+			return
 		}
 		if isMorphlingSpawnApproval(pendingApproval) {
 			response, err := server.resolveMorphlingSpawnApproval(pendingApproval, true, decisionRequest.DecisionNonce)

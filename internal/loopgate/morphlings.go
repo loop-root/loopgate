@@ -760,23 +760,31 @@ func (server *Server) createPendingMorphlingSpawnApproval(tokenClaims capability
 	approvalID := "approval-" + approvalIDSuffix
 	approvalDeadlineUTC := server.now().UTC().Add(time.Duration(validatedClass.SpawnApprovalTTLSeconds) * time.Second)
 
+	spawnRequest := cloneCapabilityRequest(CapabilityRequest{
+		RequestID:  authorizingRecord.RequestID,
+		SessionID:  tokenClaims.ControlSessionID,
+		Actor:      tokenClaims.ActorLabel,
+		Capability: "morphling.spawn",
+		Arguments: map[string]string{
+			"class":        authorizingRecord.Class,
+			"goal_hint":    authorizingRecord.GoalHint,
+			"morphling_id": authorizingRecord.MorphlingID,
+		},
+	})
+	// Same manifest/body binding as capability.execute approvals so operator decisions and
+	// post-approval execution integrity checks apply uniformly (AMP RFC 0005 §6).
+	manifestSHA256, bodySHA256, manifestErr := buildCapabilityApprovalManifest(spawnRequest, approvalDeadlineUTC.UnixMilli())
+	if manifestErr != nil {
+		return MorphlingSpawnResponse{}, fmt.Errorf("compute morphling spawn approval manifest: %w", manifestErr)
+	}
+
 	server.mu.Lock()
 	server.pruneExpiredLocked()
 	pendingApprovalRecord := pendingApproval{
-		ID: approvalID,
-		Request: cloneCapabilityRequest(CapabilityRequest{
-			RequestID:  authorizingRecord.RequestID,
-			SessionID:  tokenClaims.ControlSessionID,
-			Actor:      tokenClaims.ActorLabel,
-			Capability: "morphling.spawn",
-			Arguments: map[string]string{
-				"class":        authorizingRecord.Class,
-				"goal_hint":    authorizingRecord.GoalHint,
-				"morphling_id": authorizingRecord.MorphlingID,
-			},
-		}),
-		CreatedAt: server.now().UTC(),
-		ExpiresAt: approvalDeadlineUTC,
+		ID:               approvalID,
+		Request:          spawnRequest,
+		CreatedAt:        server.now().UTC(),
+		ExpiresAt:        approvalDeadlineUTC,
 		Metadata: map[string]interface{}{
 			"approval_class": ApprovalClassLaunchMorphling,
 			"approval_kind":  "morphling_spawn",
@@ -795,7 +803,9 @@ func (server *Server) createPendingMorphlingSpawnApproval(tokenClaims capability
 			TenantID:            tokenClaims.TenantID,
 			UserID:              tokenClaims.UserID,
 		},
-		State: approvalStatePending,
+		State:                  approvalStatePending,
+		ApprovalManifestSHA256: manifestSHA256,
+		ExecutionBodySHA256:    bodySHA256,
 	}
 	server.approvals[approvalID] = pendingApprovalRecord
 	server.noteExpiryCandidateLocked(approvalDeadlineUTC)
@@ -827,14 +837,16 @@ func (server *Server) createPendingMorphlingSpawnApproval(tokenClaims capability
 	}
 
 	return MorphlingSpawnResponse{
-		RequestID:           updatedRecord.RequestID,
-		Status:              ResponseStatusPendingApproval,
-		MorphlingID:         updatedRecord.MorphlingID,
-		TaskID:              updatedRecord.TaskID,
-		State:               updatedRecord.State,
-		Class:               updatedRecord.Class,
-		ApprovalID:          approvalID,
-		ApprovalDeadlineUTC: updatedRecord.ApprovalDeadlineUTC,
+		RequestID:              updatedRecord.RequestID,
+		Status:                 ResponseStatusPendingApproval,
+		MorphlingID:            updatedRecord.MorphlingID,
+		TaskID:                 updatedRecord.TaskID,
+		State:                  updatedRecord.State,
+		Class:                  updatedRecord.Class,
+		ApprovalID:             approvalID,
+		ApprovalDeadlineUTC:    updatedRecord.ApprovalDeadlineUTC,
+		ApprovalManifestSHA256: manifestSHA256,
+		ApprovalDecisionNonce:  decisionNonce,
 	}, nil
 }
 
