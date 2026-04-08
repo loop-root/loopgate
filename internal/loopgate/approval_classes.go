@@ -3,6 +3,7 @@ package loopgate
 const (
 	ApprovalClassReadSandboxPath    = "read_sandbox_path"
 	ApprovalClassReadHostFolder     = "read_host_folder"
+	ApprovalClassWriteHostFolder    = "write_host_folder"
 	ApprovalClassApplyHostPlan      = "apply_host_organization_plan"
 	ApprovalClassWriteSandboxPath   = "write_sandbox_path"
 	ApprovalClassExportSandboxArt   = "export_sandbox_artifact"
@@ -17,6 +18,8 @@ func ApprovalClassLabel(approvalClass string) string {
 		return "read sandbox path"
 	case ApprovalClassReadHostFolder:
 		return "read host folder"
+	case ApprovalClassWriteHostFolder:
+		return "write host folder"
 	case ApprovalClassApplyHostPlan:
 		return "apply host organization plan"
 	case ApprovalClassWriteSandboxPath:
@@ -40,6 +43,8 @@ func (server *Server) approvalClassForCapability(capabilityName string) string {
 		return ApprovalClassReadSandboxPath
 	case "host.folder.list", "host.folder.read", "host.organize.plan":
 		return ApprovalClassReadHostFolder
+	case "operator_mount.fs_write", "operator_mount.fs_mkdir":
+		return ApprovalClassWriteHostFolder
 	case "host.plan.apply":
 		return ApprovalClassApplyHostPlan
 	case "fs_write":

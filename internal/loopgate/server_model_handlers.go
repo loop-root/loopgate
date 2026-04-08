@@ -69,6 +69,15 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		})
 		return
 	}
+	normalizedPrimaryOperatorMount, primaryMountErr := normalizePrimaryOperatorMountPathForSession(openRequest.Actor, openRequest.PrimaryOperatorMountPath, normalizedOperatorMounts)
+	if primaryMountErr != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: primaryMountErr.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
 	if len(normalizedCapabilities) == 0 {
 		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -259,20 +268,21 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	}
 
 	server.sessions[controlSessionID] = controlSession{
-		ID:                    controlSessionID,
-		ActorLabel:            tokenClaims.ActorLabel,
-		ClientSessionLabel:    tokenClaims.ClientSessionLabel,
-		WorkspaceID:           strings.TrimSpace(openRequest.WorkspaceID),
-		OperatorMountPaths:    normalizedOperatorMounts,
-		RequestedCapabilities: capabilitySet(grantedCapabilities),
-		ApprovalToken:         approvalTokenString,
-		ApprovalTokenID:       approvalTokenID,
-		SessionMACKey:         sessionMACKey,
-		PeerIdentity:          requestPeerIdentity,
-		TenantID:              deploymentTenantID,
-		UserID:                deploymentUserID,
-		ExpiresAt:             expiresAt,
-		CreatedAt:             nowUTC,
+		ID:                       controlSessionID,
+		ActorLabel:               tokenClaims.ActorLabel,
+		ClientSessionLabel:       tokenClaims.ClientSessionLabel,
+		WorkspaceID:              strings.TrimSpace(openRequest.WorkspaceID),
+		OperatorMountPaths:       normalizedOperatorMounts,
+		PrimaryOperatorMountPath: normalizedPrimaryOperatorMount,
+		RequestedCapabilities:    capabilitySet(grantedCapabilities),
+		ApprovalToken:            approvalTokenString,
+		ApprovalTokenID:          approvalTokenID,
+		SessionMACKey:            sessionMACKey,
+		PeerIdentity:             requestPeerIdentity,
+		TenantID:                 deploymentTenantID,
+		UserID:                   deploymentUserID,
+		ExpiresAt:                expiresAt,
+		CreatedAt:                nowUTC,
 	}
 	server.tokens[capabilityTokenString] = tokenClaims
 	server.approvalTokenIndex[approvalTokenHash(approvalTokenString)] = controlSessionID
@@ -285,6 +295,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		"client_session_label":       tokenClaims.ClientSessionLabel,
 		"control_session_id":         controlSessionID,
 		"workspace_id":               strings.TrimSpace(openRequest.WorkspaceID),
+		"operator_mount_count":       len(normalizedOperatorMounts),
 		"requested_capability_count": len(normalizedCapabilities),
 		"granted_capability_count":   len(grantedCapabilities),
 		"token_id":                   tokenID,

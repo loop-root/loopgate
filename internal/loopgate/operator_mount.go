@@ -7,13 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"morph/internal/safety"
 	toolspkg "morph/internal/tools"
 )
 
 const (
 	maxOperatorMountPathsPerSession = 16
 	maxOperatorMountPathBytes       = 4096
+	operatorMountWriteGrantTTL      = 8 * time.Hour
 )
 
 type operatorMountCtxKey struct{}
@@ -98,20 +101,135 @@ func normalizeOperatorMountPathsForSession(actor string, rawPaths []string) ([]s
 	return out, nil
 }
 
-func operatorMountPathsFromContext(server *Server, ctx context.Context) ([]string, error) {
+func normalizePrimaryOperatorMountPathForSession(actor string, rawPrimary string, normalizedMounts []string) (string, error) {
+	rawPrimary = strings.TrimSpace(rawPrimary)
+	if rawPrimary == "" {
+		return "", nil
+	}
+	if defaultLabel(actor, "client") != "haven" {
+		return "", fmt.Errorf("primary_operator_mount_path is only accepted for actor haven")
+	}
+	if len(normalizedMounts) == 0 {
+		return "", fmt.Errorf("primary_operator_mount_path requires operator_mount_paths")
+	}
+	canon, err := canonicalizeOperatorMountPath(rawPrimary)
+	if err != nil {
+		return "", fmt.Errorf("primary_operator_mount_path: %w", err)
+	}
+	for _, mountPath := range normalizedMounts {
+		if mountPath == canon {
+			return canon, nil
+		}
+	}
+	return "", fmt.Errorf("primary_operator_mount_path must match one of operator_mount_paths")
+}
+
+type operatorMountSessionBinding struct {
+	primary string
+	paths   []string
+}
+
+type operatorMountWriteGrant struct {
+	root      string
+	expiresAt time.Time
+}
+
+func operatorMountBindingFromContext(server *Server, ctx context.Context) (operatorMountSessionBinding, error) {
 	sid, _ := ctx.Value(operatorMountCtxKey{}).(string)
 	sid = strings.TrimSpace(sid)
 	if sid == "" {
-		return nil, fmt.Errorf("missing control session binding for operator mount tool")
+		return operatorMountSessionBinding{}, fmt.Errorf("missing control session binding for operator mount tool")
 	}
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	sess, ok := server.sessions[sid]
 	if !ok {
-		return nil, fmt.Errorf("unknown control session")
+		return operatorMountSessionBinding{}, fmt.Errorf("unknown control session")
 	}
-	out := append([]string(nil), sess.OperatorMountPaths...)
-	return out, nil
+	return operatorMountSessionBinding{
+		primary: strings.TrimSpace(sess.PrimaryOperatorMountPath),
+		paths:   append([]string(nil), sess.OperatorMountPaths...),
+	}, nil
+}
+
+func operatorMountToolRoots(server *Server, ctx context.Context) (repoRoot string, allowedRoots []string, err error) {
+	binding, err := operatorMountBindingFromContext(server, ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(binding.paths) == 0 {
+		return "", nil, fmt.Errorf("no operator directory grants for this session; allow read in Haven or use /adir")
+	}
+	repoRoot = strings.TrimSpace(binding.primary)
+	if repoRoot == "" {
+		repoRoot = binding.paths[0]
+	}
+	return repoRoot, binding.paths, nil
+}
+
+func operatorMountBindingForControlSession(server *Server, controlSessionID string) (operatorMountSessionBinding, error) {
+	controlSessionID = strings.TrimSpace(controlSessionID)
+	if controlSessionID == "" {
+		return operatorMountSessionBinding{}, fmt.Errorf("missing control session binding for operator mount tool")
+	}
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	controlSession, found := server.sessions[controlSessionID]
+	if !found {
+		return operatorMountSessionBinding{}, fmt.Errorf("unknown control session")
+	}
+	return operatorMountSessionBinding{
+		primary: strings.TrimSpace(controlSession.PrimaryOperatorMountPath),
+		paths:   append([]string(nil), controlSession.OperatorMountPaths...),
+	}, nil
+}
+
+func operatorMountWriteGrantForRequest(server *Server, controlSessionID string, capabilityRequest CapabilityRequest) (operatorMountWriteGrant, bool, error) {
+	if capabilityRequest.Capability != "operator_mount.fs_write" && capabilityRequest.Capability != "operator_mount.fs_mkdir" {
+		return operatorMountWriteGrant{}, false, nil
+	}
+	binding, err := operatorMountBindingForControlSession(server, controlSessionID)
+	if err != nil {
+		return operatorMountWriteGrant{}, false, err
+	}
+	if len(binding.paths) == 0 {
+		return operatorMountWriteGrant{}, false, fmt.Errorf("no operator directory grants for this session")
+	}
+	repoRoot := strings.TrimSpace(binding.primary)
+	if repoRoot == "" {
+		repoRoot = binding.paths[0]
+	}
+	pathValue := strings.TrimSpace(capabilityRequest.Arguments["path"])
+	if pathValue == "" {
+		return operatorMountWriteGrant{}, false, fmt.Errorf("missing path argument")
+	}
+	safePathExplanation, err := safety.ExplainSafePath(repoRoot, binding.paths, nil, pathValue)
+	if err != nil {
+		return operatorMountWriteGrant{}, false, err
+	}
+	matchedRoot := strings.TrimSpace(safePathExplanation.AllowedMatch)
+	if matchedRoot == "" {
+		return operatorMountWriteGrant{}, false, fmt.Errorf("matched root not found")
+	}
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	controlSession, found := server.sessions[controlSessionID]
+	if !found {
+		return operatorMountWriteGrant{}, false, fmt.Errorf("unknown control session")
+	}
+	if controlSession.OperatorMountWriteGrants == nil {
+		return operatorMountWriteGrant{root: matchedRoot}, false, nil
+	}
+	expiresAt, granted := controlSession.OperatorMountWriteGrants[matchedRoot]
+	if !granted {
+		return operatorMountWriteGrant{root: matchedRoot}, false, nil
+	}
+	if !expiresAt.IsZero() && server.now().UTC().After(expiresAt) {
+		delete(controlSession.OperatorMountWriteGrants, matchedRoot)
+		server.sessions[controlSessionID] = controlSession
+		return operatorMountWriteGrant{root: matchedRoot}, false, nil
+	}
+	return operatorMountWriteGrant{root: matchedRoot, expiresAt: expiresAt}, true, nil
 }
 
 type operatorMountFSRead struct{ server *Server }
@@ -123,14 +241,11 @@ func (t operatorMountFSRead) Schema() toolspkg.Schema {
 	return (&toolspkg.FSRead{}).Schema()
 }
 func (t operatorMountFSRead) Execute(ctx context.Context, args map[string]string) (string, error) {
-	mounts, err := operatorMountPathsFromContext(t.server, ctx)
+	repoRoot, mounts, err := operatorMountToolRoots(t.server, ctx)
 	if err != nil {
 		return "", err
 	}
-	if len(mounts) == 0 {
-		return "", fmt.Errorf("no operator directory grants for this session; allow read in Haven or use /adir")
-	}
-	fr := &toolspkg.FSRead{RepoRoot: mounts[0], AllowedRoots: mounts, DeniedPaths: nil}
+	fr := &toolspkg.FSRead{RepoRoot: repoRoot, AllowedRoots: mounts, DeniedPaths: nil}
 	return fr.Execute(ctx, args)
 }
 
@@ -143,14 +258,11 @@ func (t operatorMountFSList) Schema() toolspkg.Schema {
 	return (&toolspkg.FSList{}).Schema()
 }
 func (t operatorMountFSList) Execute(ctx context.Context, args map[string]string) (string, error) {
-	mounts, err := operatorMountPathsFromContext(t.server, ctx)
+	repoRoot, mounts, err := operatorMountToolRoots(t.server, ctx)
 	if err != nil {
 		return "", err
 	}
-	if len(mounts) == 0 {
-		return "", fmt.Errorf("no operator directory grants for this session; allow read in Haven or use /adir")
-	}
-	fl := &toolspkg.FSList{RepoRoot: mounts[0], AllowedRoots: mounts, DeniedPaths: nil}
+	fl := &toolspkg.FSList{RepoRoot: repoRoot, AllowedRoots: mounts, DeniedPaths: nil}
 	return fl.Execute(ctx, args)
 }
 
@@ -163,14 +275,11 @@ func (t operatorMountFSWrite) Schema() toolspkg.Schema {
 	return (&toolspkg.FSWrite{}).Schema()
 }
 func (t operatorMountFSWrite) Execute(ctx context.Context, args map[string]string) (string, error) {
-	mounts, err := operatorMountPathsFromContext(t.server, ctx)
+	repoRoot, mounts, err := operatorMountToolRoots(t.server, ctx)
 	if err != nil {
 		return "", err
 	}
-	if len(mounts) == 0 {
-		return "", fmt.Errorf("no operator directory grants for this session; allow read in Haven or use /adir")
-	}
-	fw := &toolspkg.FSWrite{RepoRoot: mounts[0], AllowedRoots: mounts, DeniedPaths: nil}
+	fw := &toolspkg.FSWrite{RepoRoot: repoRoot, AllowedRoots: mounts, DeniedPaths: nil}
 	return fw.Execute(ctx, args)
 }
 
@@ -183,14 +292,11 @@ func (t operatorMountFSMkdir) Schema() toolspkg.Schema {
 	return (&toolspkg.FSMkdir{}).Schema()
 }
 func (t operatorMountFSMkdir) Execute(ctx context.Context, args map[string]string) (string, error) {
-	mounts, err := operatorMountPathsFromContext(t.server, ctx)
+	repoRoot, mounts, err := operatorMountToolRoots(t.server, ctx)
 	if err != nil {
 		return "", err
 	}
-	if len(mounts) == 0 {
-		return "", fmt.Errorf("no operator directory grants for this session; allow read in Haven or use /adir")
-	}
-	fm := &toolspkg.FSMkdir{RepoRoot: mounts[0], AllowedRoots: mounts, DeniedPaths: nil}
+	fm := &toolspkg.FSMkdir{RepoRoot: repoRoot, AllowedRoots: mounts, DeniedPaths: nil}
 	return fm.Execute(ctx, args)
 }
 

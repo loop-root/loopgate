@@ -31,6 +31,33 @@ func TestNormalizeOperatorMountPathsForSession_acceptsHaven(t *testing.T) {
 	}
 }
 
+func TestNormalizePrimaryOperatorMountPathForSession_acceptsMatchingMount(t *testing.T) {
+	dir := t.TempDir()
+	mounts, err := normalizeOperatorMountPathsForSession("haven", []string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := normalizePrimaryOperatorMountPathForSession("haven", dir, mounts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != mounts[0] {
+		t.Fatalf("got %q want %q", got, mounts[0])
+	}
+}
+
+func TestNormalizePrimaryOperatorMountPathForSession_rejectsPathOutsideMounts(t *testing.T) {
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	mounts, err := normalizeOperatorMountPathsForSession("haven", []string{dirA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := normalizePrimaryOperatorMountPathForSession("haven", dirB, mounts); err == nil {
+		t.Fatal("expected error for primary mount outside granted mounts")
+	}
+}
+
 func TestIsDangerousOperatorMountPath(t *testing.T) {
 	if !isDangerousOperatorMountPath("/etc") {
 		t.Fatal("expected /etc dangerous")

@@ -204,12 +204,14 @@ type controlSession struct {
 	WorkspaceID        string
 	// OperatorMountPaths are absolute host directories bound from Haven at session
 	// open (actor haven only). They scope operator_mount.fs_* tools — never from model text.
-	OperatorMountPaths    []string
-	RequestedCapabilities map[string]struct{}
-	ApprovalToken         string
-	ApprovalTokenID       string
-	SessionMACKey         string
-	PeerIdentity          peerIdentity
+	OperatorMountPaths       []string
+	PrimaryOperatorMountPath string
+	OperatorMountWriteGrants map[string]time.Time
+	RequestedCapabilities    map[string]struct{}
+	ApprovalToken            string
+	ApprovalTokenID          string
+	SessionMACKey            string
+	PeerIdentity             peerIdentity
 	// TenantID/UserID are copied from config.Tenancy at session open (never from the client body).
 	TenantID  string
 	UserID    string
@@ -887,6 +889,12 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 
 	policyDecision := server.checker.Check(tool)
 	originalPolicyDecision := policyDecision
+	if operatorMountGrant, granted, grantErr := operatorMountWriteGrantForRequest(server, tokenClaims.ControlSessionID, capabilityRequest); grantErr == nil && granted {
+		policyDecision = policypkg.CheckResult{
+			Decision: policypkg.Allow,
+			Reason:   "active operator-mounted write grant for " + operatorMountGrant.root,
+		}
+	}
 	if server.shouldAutoAllowTrustedSandboxCapability(tokenClaims, capabilityRequest.Capability, tool, policyDecision) {
 		policyDecision = policypkg.CheckResult{
 			Decision: policypkg.Allow,
@@ -966,7 +974,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			}
 		}
 
-		metadata := server.approvalMetadata(capabilityRequest)
+		metadata := server.approvalMetadata(tokenClaims.ControlSessionID, capabilityRequest)
 		expiresAt := server.now().UTC().Add(approvalTTL)
 		manifestSHA256, bodySHA256, manifestErr := buildCapabilityApprovalManifest(capabilityRequest, expiresAt.UnixMilli())
 		if manifestErr != nil {
@@ -1602,6 +1610,14 @@ func mergeAuditTenancyFromControlSession(auditData map[string]interface{}, sessi
 	}
 }
 
+func interfaceStringValue(rawValue interface{}) string {
+	stringValue, ok := rawValue.(string)
+	if !ok {
+		return ""
+	}
+	return stringValue
+}
+
 // tenantUserForControlSession returns tenancy fields for audit and diagnostic enrichment.
 // It acquires server.mu without holding auditMu so logEvent stays free of lock-order inversions.
 func (server *Server) tenantUserForControlSession(controlSessionID string) (tenantID string, userID string) {
@@ -1771,6 +1787,12 @@ func buildApprovalGrantedAuditData(approvalID string, pendingApproval pendingApp
 	if approvalClass, ok := pendingApproval.Metadata["approval_class"].(string); ok && strings.TrimSpace(approvalClass) != "" {
 		auditData["approval_class"] = approvalClass
 	}
+	if grantRoot, ok := pendingApproval.Metadata["grant_root"].(string); ok && strings.TrimSpace(grantRoot) != "" {
+		auditData["grant_root"] = grantRoot
+	}
+	if grantTTLSeconds, found := pendingApproval.Metadata["grant_ttl_seconds"]; found {
+		auditData["grant_ttl_seconds"] = grantTTLSeconds
+	}
 	return auditData
 }
 
@@ -1927,8 +1949,22 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 	if session, ok := server.sessions[pendingApproval.ControlSessionID]; ok {
 		mergeAuditTenancyFromControlSession(grantAuditData, session)
 	}
+	grantRoot := strings.TrimSpace(interfaceStringValue(pendingApproval.Metadata["grant_root"]))
+	var grantExpiresAt time.Time
+	if grantRoot != "" {
+		grantExpiresAt = server.now().UTC().Add(operatorMountWriteGrantTTL)
+		grantAuditData["grant_expires_at_utc"] = grantExpiresAt.Format(time.RFC3339Nano)
+	}
 	if err := server.logEvent("approval.granted", pendingApproval.ControlSessionID, grantAuditData); err != nil {
 		return err
+	}
+	if grantRoot != "" {
+		controlSession := server.sessions[pendingApproval.ControlSessionID]
+		if controlSession.OperatorMountWriteGrants == nil {
+			controlSession.OperatorMountWriteGrants = make(map[string]time.Time)
+		}
+		controlSession.OperatorMountWriteGrants[grantRoot] = grantExpiresAt
+		server.sessions[pendingApproval.ControlSessionID] = controlSession
 	}
 	pendingApproval.State = approvalStateConsumed
 	pendingApproval.DecisionSubmittedAt = server.now().UTC()
@@ -2024,7 +2060,7 @@ func (server *Server) markApprovalExecutionResult(approvalID string, executionSt
 	server.approvals[approvalID] = pendingApproval
 }
 
-func (server *Server) approvalMetadata(capabilityRequest CapabilityRequest) map[string]interface{} {
+func (server *Server) approvalMetadata(controlSessionID string, capabilityRequest CapabilityRequest) map[string]interface{} {
 	metadata := map[string]interface{}{
 		"capability": capabilityRequest.Capability,
 	}
@@ -2043,6 +2079,10 @@ func (server *Server) approvalMetadata(capabilityRequest CapabilityRequest) map[
 			continue
 		}
 		metadata["arg_"+argumentKey] = argumentValue
+	}
+	if operatorMountGrant, _, err := operatorMountWriteGrantForRequest(server, controlSessionID, capabilityRequest); err == nil && strings.TrimSpace(operatorMountGrant.root) != "" {
+		metadata["grant_root"] = operatorMountGrant.root
+		metadata["grant_ttl_seconds"] = int(operatorMountWriteGrantTTL / time.Second)
 	}
 	if capabilityRequest.Capability == "host.plan.apply" {
 		for k, v := range server.hostPlanApplyApprovalOperatorFields(capabilityRequest.Arguments["plan_id"]) {
@@ -2335,6 +2375,12 @@ func isHighRiskCapability(tool toolspkg.Tool, policyDecision policypkg.CheckResu
 
 func (server *Server) shouldAutoAllowTrustedSandboxCapability(tokenClaims capabilityToken, capabilityName string, tool toolspkg.Tool, policyDecision policypkg.CheckResult) bool {
 	if policyDecision.Decision != policypkg.NeedsApproval {
+		return false
+	}
+	// Host-mounted project tools are never "trusted sandbox" work. They reach the
+	// real host filesystem under operator-granted roots and must preserve normal
+	// approval semantics even if someone accidentally tags them trusted later.
+	if strings.HasPrefix(strings.TrimSpace(capabilityName), "operator_mount.") {
 		return false
 	}
 	if !server.policy.HavenTrustedSandboxAutoAllowEnabled() {

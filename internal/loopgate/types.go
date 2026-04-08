@@ -275,6 +275,10 @@ type OpenSessionRequest struct {
 	// OperatorMountPaths binds Haven-granted host directories to this control session
 	// (actor haven only). Loopgate canonicalizes and rejects unsafe paths.
 	OperatorMountPaths []string `json:"operator_mount_paths,omitempty"`
+	// PrimaryOperatorMountPath selects the default repo root for relative
+	// operator_mount.fs_* paths. It must match one of OperatorMountPaths after
+	// Loopgate canonicalization; it never widens scope.
+	PrimaryOperatorMountPath string `json:"primary_operator_mount_path,omitempty"`
 }
 
 type OpenSessionResponse struct {

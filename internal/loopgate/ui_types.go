@@ -24,21 +24,27 @@ type UIStatusPolicySummary struct {
 	HavenTrustedSandboxAllowlistMode string `json:"haven_trusted_sandbox_allowlist_mode"`
 }
 
+type UIOperatorMountWriteGrant struct {
+	RootPath     string `json:"root_path"`
+	ExpiresAtUTC string `json:"expires_at_utc,omitempty"`
+}
+
 type UIStatusResponse struct {
-	Version            string                `json:"version"`
-	PersonaName        string                `json:"persona_name"`
-	PersonaVersion     string                `json:"persona_version"`
-	ControlSessionID   string                `json:"control_session_id"`
-	ActorLabel         string                `json:"actor_label"`
-	ClientSessionLabel string                `json:"client_session_label"`
-	RuntimeSessionID   string                `json:"runtime_session_id,omitempty"`
-	TurnCount          int                   `json:"turn_count"`
-	DistillCursorLine  int                   `json:"distill_cursor_line"`
-	PendingApprovals   int                   `json:"pending_approvals"`
-	ActiveMorphlings   int                   `json:"active_morphlings"`
-	CapabilityCount    int                   `json:"capability_count"`
-	ConnectionCount    int                   `json:"connection_count"`
-	Policy             UIStatusPolicySummary `json:"policy"`
+	Version                  string                      `json:"version"`
+	PersonaName              string                      `json:"persona_name"`
+	PersonaVersion           string                      `json:"persona_version"`
+	ControlSessionID         string                      `json:"control_session_id"`
+	ActorLabel               string                      `json:"actor_label"`
+	ClientSessionLabel       string                      `json:"client_session_label"`
+	RuntimeSessionID         string                      `json:"runtime_session_id,omitempty"`
+	TurnCount                int                         `json:"turn_count"`
+	DistillCursorLine        int                         `json:"distill_cursor_line"`
+	PendingApprovals         int                         `json:"pending_approvals"`
+	ActiveMorphlings         int                         `json:"active_morphlings"`
+	CapabilityCount          int                         `json:"capability_count"`
+	ConnectionCount          int                         `json:"connection_count"`
+	OperatorMountWriteGrants []UIOperatorMountWriteGrant `json:"operator_mount_write_grants,omitempty"`
+	Policy                   UIStatusPolicySummary       `json:"policy"`
 }
 
 type UIApprovalSummary struct {

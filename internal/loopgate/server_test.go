@@ -332,6 +332,230 @@ func TestClientExecuteCapability_RequiresApproval(t *testing.T) {
 	}
 }
 
+func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForHaven(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+
+	controlSessionID := "cs-operator-mount-write"
+	server.mu.Lock()
+	server.sessions[controlSessionID] = controlSession{
+		ID:                       controlSessionID,
+		ActorLabel:               "haven",
+		ClientSessionLabel:       "haven-session",
+		OperatorMountPaths:       []string{repoRoot},
+		PrimaryOperatorMountPath: repoRoot,
+		RequestedCapabilities:    capabilitySet([]string{"operator_mount.fs_write"}),
+		ExpiresAt:                time.Now().UTC().Add(time.Hour),
+		CreatedAt:                time.Now().UTC(),
+	}
+	server.mu.Unlock()
+
+	response := server.executeCapabilityRequest(
+		withOperatorMountControlSession(context.Background(), controlSessionID),
+		capabilityToken{
+			TokenID:             "tok-operator-mount-write",
+			ControlSessionID:    controlSessionID,
+			ActorLabel:          "haven",
+			ClientSessionLabel:  "haven-session",
+			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
+			ExpiresAt:           time.Now().UTC().Add(time.Hour),
+		},
+		CapabilityRequest{
+			RequestID:  "req-operator-mount-write",
+			Capability: "operator_mount.fs_write",
+			Arguments: map[string]string{
+				"path":    "test.md",
+				"content": "# blocked until approval\n",
+			},
+		},
+		true,
+	)
+
+	if !response.ApprovalRequired {
+		t.Fatalf("expected approval required, got %#v", response)
+	}
+	if response.Status != ResponseStatusPendingApproval {
+		t.Fatalf("expected pending approval, got %#v", response)
+	}
+	if response.DenialCode != DenialCodeApprovalRequired {
+		t.Fatalf("expected approval-required denial code, got %#v", response)
+	}
+	if approvalClass, _ := response.Metadata["approval_class"].(string); approvalClass != ApprovalClassWriteHostFolder {
+		t.Fatalf("expected approval_class %q, got %#v", ApprovalClassWriteHostFolder, response.Metadata)
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot, "test.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected file to remain unwritten before approval, stat err=%v", err)
+	}
+}
+
+func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	resolvedRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		t.Fatalf("eval symlinks repoRoot: %v", err)
+	}
+
+	nowUTC := time.Date(2026, 4, 7, 12, 0, 0, 0, time.UTC)
+	server.SetNowForTest(func() time.Time { return nowUTC })
+
+	controlSessionID := "cs-operator-mount-grant"
+	server.mu.Lock()
+	server.sessions[controlSessionID] = controlSession{
+		ID:                       controlSessionID,
+		ActorLabel:               "haven",
+		ClientSessionLabel:       "haven-session",
+		OperatorMountPaths:       []string{repoRoot},
+		PrimaryOperatorMountPath: repoRoot,
+		RequestedCapabilities:    capabilitySet([]string{"operator_mount.fs_write"}),
+		ExpiresAt:                nowUTC.Add(time.Hour),
+		CreatedAt:                nowUTC,
+	}
+	server.mu.Unlock()
+
+	pendingResponse := server.executeCapabilityRequest(
+		withOperatorMountControlSession(context.Background(), controlSessionID),
+		capabilityToken{
+			TokenID:             "tok-operator-mount-write",
+			ControlSessionID:    controlSessionID,
+			ActorLabel:          "haven",
+			ClientSessionLabel:  "haven-session",
+			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
+			ExpiresAt:           nowUTC.Add(time.Hour),
+		},
+		CapabilityRequest{
+			RequestID:  "req-operator-mount-grant-1",
+			Capability: "operator_mount.fs_write",
+			Arguments: map[string]string{
+				"path":    "first.md",
+				"content": "# first\n",
+			},
+		},
+		true,
+	)
+	if !pendingResponse.ApprovalRequired {
+		t.Fatalf("expected approval required, got %#v", pendingResponse)
+	}
+	decisionNonce, _ := pendingResponse.Metadata["approval_decision_nonce"].(string)
+	if strings.TrimSpace(decisionNonce) == "" {
+		t.Fatalf("expected approval_decision_nonce, got %#v", pendingResponse.Metadata)
+	}
+
+	if err := server.commitApprovalGrantConsumed(pendingResponse.ApprovalRequestID, decisionNonce); err != nil {
+		t.Fatalf("commit approval grant consumed: %v", err)
+	}
+
+	server.mu.Lock()
+	sessionAfterGrant := server.sessions[controlSessionID]
+	grantExpiresAt, granted := sessionAfterGrant.OperatorMountWriteGrants[resolvedRepoRoot]
+	server.mu.Unlock()
+	if !granted {
+		t.Fatalf("expected operator mount write grant for %q, got %#v", resolvedRepoRoot, sessionAfterGrant.OperatorMountWriteGrants)
+	}
+	if !grantExpiresAt.Equal(nowUTC.Add(operatorMountWriteGrantTTL)) {
+		t.Fatalf("grant expires at %v want %v", grantExpiresAt, nowUTC.Add(operatorMountWriteGrantTTL))
+	}
+
+	secondResponse := server.executeCapabilityRequest(
+		withOperatorMountControlSession(context.Background(), controlSessionID),
+		capabilityToken{
+			TokenID:             "tok-operator-mount-write-2",
+			ControlSessionID:    controlSessionID,
+			ActorLabel:          "haven",
+			ClientSessionLabel:  "haven-session",
+			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
+			ExpiresAt:           nowUTC.Add(time.Hour),
+		},
+		CapabilityRequest{
+			RequestID:  "req-operator-mount-grant-2",
+			Capability: "operator_mount.fs_write",
+			Arguments: map[string]string{
+				"path":    "second.md",
+				"content": "# second\n",
+			},
+		},
+		true,
+	)
+	if secondResponse.Status != ResponseStatusSuccess {
+		t.Fatalf("expected granted write success, got %#v", secondResponse)
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot, "second.md")); err != nil {
+		t.Fatalf("expected second write to succeed: %v", err)
+	}
+}
+
+func TestExecuteCapabilityRequest_ExpiredOperatorMountWriteGrantRequiresApprovalAgain(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	resolvedRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		t.Fatalf("eval symlinks repoRoot: %v", err)
+	}
+
+	nowUTC := time.Date(2026, 4, 7, 12, 0, 0, 0, time.UTC)
+	server.SetNowForTest(func() time.Time { return nowUTC })
+
+	controlSessionID := "cs-operator-mount-expired-grant"
+	server.mu.Lock()
+	server.sessions[controlSessionID] = controlSession{
+		ID:                       controlSessionID,
+		ActorLabel:               "haven",
+		ClientSessionLabel:       "haven-session",
+		OperatorMountPaths:       []string{repoRoot},
+		PrimaryOperatorMountPath: repoRoot,
+		OperatorMountWriteGrants: map[string]time.Time{
+			resolvedRepoRoot: nowUTC.Add(-time.Minute),
+		},
+		RequestedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
+		ExpiresAt:             nowUTC.Add(time.Hour),
+		CreatedAt:             nowUTC,
+	}
+	server.mu.Unlock()
+
+	response := server.executeCapabilityRequest(
+		withOperatorMountControlSession(context.Background(), controlSessionID),
+		capabilityToken{
+			TokenID:             "tok-operator-mount-expired",
+			ControlSessionID:    controlSessionID,
+			ActorLabel:          "haven",
+			ClientSessionLabel:  "haven-session",
+			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
+			ExpiresAt:           nowUTC.Add(time.Hour),
+		},
+		CapabilityRequest{
+			RequestID:  "req-operator-mount-expired",
+			Capability: "operator_mount.fs_write",
+			Arguments: map[string]string{
+				"path":    "expired.md",
+				"content": "# expired\n",
+			},
+		},
+		true,
+	)
+	if !response.ApprovalRequired {
+		t.Fatalf("expected approval required after grant expiry, got %#v", response)
+	}
+}
+
+func TestShouldAutoAllowTrustedSandboxCapability_DeniesOperatorMountWrites(t *testing.T) {
+	tool := fakeLoopgateTool{
+		name:      "operator_mount.fs_write",
+		category:  "filesystem",
+		operation: toolspkg.OpWrite,
+		trusted:   true,
+	}
+
+	enabled := true
+	policy := config.Policy{}
+	policy.Safety.HavenTrustedSandboxAutoAllow = &enabled
+	server := &Server{policy: policy}
+	if server.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven"}, tool.Name(), tool, policypkg.CheckResult{
+		Decision: policypkg.NeedsApproval,
+	}) {
+		t.Fatalf("expected operator_mount writes to keep approval semantics")
+	}
+}
+
 func TestSandboxImportAndStageAndExport(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -1942,6 +2166,42 @@ func TestUIStatusReturnsDisplaySafeFields(t *testing.T) {
 		if strings.Contains(lowerJSON, forbiddenField) {
 			t.Fatalf("ui status leaked forbidden field %q: %s", forbiddenField, encodedStatus)
 		}
+	}
+}
+
+func TestUIStatusIncludesActiveOperatorMountWriteGrants(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	resolvedRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		t.Fatalf("eval symlinks: %v", err)
+	}
+
+	server.mu.Lock()
+	controlSession := server.sessions[client.controlSessionID]
+	controlSession.OperatorMountWriteGrants = map[string]time.Time{
+		resolvedRepoRoot: server.now().UTC().Add(2 * time.Hour),
+		filepath.Join(resolvedRepoRoot, "expired"): server.now().UTC().Add(-1 * time.Minute),
+	}
+	server.sessions[client.controlSessionID] = controlSession
+	server.mu.Unlock()
+
+	uiStatus, err := client.UIStatus(context.Background())
+	if err != nil {
+		t.Fatalf("ui status: %v", err)
+	}
+	if len(uiStatus.OperatorMountWriteGrants) != 1 {
+		t.Fatalf("operator mount write grants: %#v", uiStatus.OperatorMountWriteGrants)
+	}
+	if uiStatus.OperatorMountWriteGrants[0].RootPath != resolvedRepoRoot {
+		t.Fatalf("grant root = %q want %q", uiStatus.OperatorMountWriteGrants[0].RootPath, resolvedRepoRoot)
+	}
+	if strings.TrimSpace(uiStatus.OperatorMountWriteGrants[0].ExpiresAtUTC) == "" {
+		t.Fatalf("expected expiry in ui status grant, got %#v", uiStatus.OperatorMountWriteGrants[0])
 	}
 }
 
@@ -4177,7 +4437,7 @@ func TestCapabilityProhibitsRawSecretExport_OptOutAllowsRegisteredTool(t *testin
 	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
 		RequestID:  "req-optout",
 		Capability: "secret.notexport",
-		Arguments: map[string]string{"path": "."},
+		Arguments:  map[string]string{"path": "."},
 	})
 	if err != nil {
 		t.Fatalf("execute: %v", err)
@@ -4196,7 +4456,7 @@ func TestCapabilityProhibitsRawSecretExport_UnregisteredHeuristicNameDenied(t *t
 	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
 		RequestID:  "req-heur",
 		Capability: "secret.no.such.tool",
-		Arguments: map[string]string{},
+		Arguments:  map[string]string{},
 	})
 	if err != nil {
 		t.Fatalf("execute: %v", err)
@@ -4224,7 +4484,7 @@ func TestCapabilityProhibitsRawSecretExport_RegisteredBlockedNameStillDenied(t *
 	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
 		RequestID:  "req-blocked",
 		Capability: "secret.blocked",
-		Arguments: map[string]string{},
+		Arguments:  map[string]string{},
 	})
 	if err != nil {
 		t.Fatalf("execute: %v", err)

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"morph/internal/config"
 	"morph/internal/secrets"
@@ -56,32 +57,56 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
+	nowUTC := server.now().UTC()
 	pendingCount := 0
+	writeGrants := make([]UIOperatorMountWriteGrant, 0)
 	for _, pendingApproval := range server.approvals {
 		if pendingApproval.ControlSessionID == tokenClaims.ControlSessionID && pendingApproval.State == approvalStatePending {
 			pendingCount++
 		}
 	}
+	if controlSession, found := server.sessions[tokenClaims.ControlSessionID]; found {
+		for grantRootPath, grantExpiresAtUTC := range controlSession.OperatorMountWriteGrants {
+			if strings.TrimSpace(grantRootPath) == "" {
+				continue
+			}
+			if !grantExpiresAtUTC.IsZero() && !grantExpiresAtUTC.After(nowUTC) {
+				delete(controlSession.OperatorMountWriteGrants, grantRootPath)
+				continue
+			}
+			writeGrant := UIOperatorMountWriteGrant{
+				RootPath: strings.TrimSpace(grantRootPath),
+			}
+			if !grantExpiresAtUTC.IsZero() {
+				writeGrant.ExpiresAtUTC = grantExpiresAtUTC.UTC().Format(time.RFC3339Nano)
+			}
+			writeGrants = append(writeGrants, writeGrant)
+		}
+		sort.Slice(writeGrants, func(leftIndex, rightIndex int) bool {
+			return writeGrants[leftIndex].RootPath < writeGrants[rightIndex].RootPath
+		})
+	}
 	server.mu.Unlock()
 
 	response := UIStatusResponse{
-		Version:            statusVersion,
-		PersonaName:        personaName,
-		PersonaVersion:     personaVersion,
-		ControlSessionID:   tokenClaims.ControlSessionID,
-		ActorLabel:         tokenClaims.ActorLabel,
-		ClientSessionLabel: tokenClaims.ClientSessionLabel,
-		RuntimeSessionID:   runtimeState.SessionID,
-		TurnCount:          runtimeState.TurnCount,
-		DistillCursorLine:  runtimeState.DistillCursorLine,
-		PendingApprovals:   pendingCount,
-		ActiveMorphlings:   server.activeMorphlingCount(server.now().UTC()),
-		CapabilityCount:    len(tokenClaims.AllowedCapabilities),
-		ConnectionCount:    len(server.connectionStatuses()),
+		Version:                  statusVersion,
+		PersonaName:              personaName,
+		PersonaVersion:           personaVersion,
+		ControlSessionID:         tokenClaims.ControlSessionID,
+		ActorLabel:               tokenClaims.ActorLabel,
+		ClientSessionLabel:       tokenClaims.ClientSessionLabel,
+		RuntimeSessionID:         runtimeState.SessionID,
+		TurnCount:                runtimeState.TurnCount,
+		DistillCursorLine:        runtimeState.DistillCursorLine,
+		PendingApprovals:         pendingCount,
+		ActiveMorphlings:         server.activeMorphlingCount(server.now().UTC()),
+		CapabilityCount:          len(tokenClaims.AllowedCapabilities),
+		ConnectionCount:          len(server.connectionStatuses()),
+		OperatorMountWriteGrants: writeGrants,
 		Policy: UIStatusPolicySummary{
-			ReadEnabled:           server.policy.Tools.Filesystem.ReadEnabled,
-			WriteEnabled:          server.policy.Tools.Filesystem.WriteEnabled,
-			WriteRequiresApproval: server.policy.Tools.Filesystem.WriteRequiresApproval,
+			ReadEnabled:                      server.policy.Tools.Filesystem.ReadEnabled,
+			WriteEnabled:                     server.policy.Tools.Filesystem.WriteEnabled,
+			WriteRequiresApproval:            server.policy.Tools.Filesystem.WriteRequiresApproval,
 			HavenTrustedSandboxAutoAllow:     server.policy.HavenTrustedSandboxAutoAllowEnabled(),
 			HavenTrustedSandboxAllowlistMode: havenTrustedSandboxAllowlistMode(server.policy),
 		},
