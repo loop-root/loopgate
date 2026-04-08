@@ -26,7 +26,7 @@ import (
 // This is a minimal vertical slice proving that a morphling can run as a
 // separate local process. It does NOT implement:
 //   - Real process isolation or sandboxing
-//   - MCP provider integration
+//   - External provider integration (out-of-tree)
 //   - Multi-step plan execution
 //   - Lease renewal or session refresh
 // =============================================================================

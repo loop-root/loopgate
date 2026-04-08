@@ -2,7 +2,7 @@
 
 # Master implementation plan (historical) — Loopgate
 
-> **Archive / context:** This document captured a **desktop-first ship** slice (Wails bundle + `.dmg`) from an earlier product framing. **This repository’s focus is Loopgate** as the control plane; MCP and proxy are the primary integration surfaces. Keep the **engineering tasks and file references**; treat **distribution and demo** steps as optional or superseded unless you are explicitly maintaining the in-repo **`cmd/haven/`** reference shell.
+> **Archive / context:** This document captured a **desktop-first ship** slice (Wails bundle + `.dmg`) from an earlier product framing. **This repository’s focus is Loopgate** as the control plane; **HTTP on the Unix socket** and **proxy** are the primary integration directions (**in-tree MCP deprecated/removed** — ADR 0010). Keep the **engineering tasks and file references**; treat **distribution and demo** steps as optional or superseded unless you are explicitly maintaining the in-repo **`cmd/haven/`** reference shell.
 
 > **For agentic workers:** If executing tasks from this plan, use superpowers:subagent-driven-development or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax for tracking.
 

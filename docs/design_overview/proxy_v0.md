@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-04
+**Last updated:** 2026-04-08
 
 # Proxy v0
 
@@ -15,7 +15,7 @@ Proxy v0 exists to solve these problems:
 - existing IDEs and agent hosts need a default governed path
 - Loopgate must be able to mediate risky actions consistently
 - approval and audit behavior should not depend on whether a host happens to
-  call an MCP tool
+  use a particular IDE bridge shape (HTTP, proxy, or future thin adapter)
 - local clients should be able to use Loopgate as the control plane while
   keeping their normal UI
 
@@ -35,8 +35,9 @@ Proxy v0 is not:
 - a hidden recall mechanism
 - a remote internet-facing service
 
-Memory remains available through explicit Loopgate surfaces such as MCP and
-typed HTTP APIs.
+Memory remains available through explicit Loopgate surfaces such as **typed
+HTTP APIs** on the control-plane socket (and **out-of-tree** MCP→HTTP forwarders
+where operators choose them; **in-tree MCP removed** — ADR 0010).
 
 ---
 
@@ -263,28 +264,30 @@ That is enough to prove the product direction.
 
 ---
 
-## Relationship to MCP
+## Relationship to MCP (deprecated in-tree)
 
-MCP remains the explicit control surface.
+**In-tree MCP is deprecated and removed** (ADR 0010) to shrink attack surface.
+**Reserved:** a future ADR may add a **thin MCP forwarder** to the same HTTP API;
+until then, “explicit control surface” for capabilities is **HTTP on the Unix
+socket** (session open, signed `execute_capability`, memory routes, status).
 
-Use MCP for:
+Use **HTTP control-plane** calls for:
 
-- `memory.remember`
-- `memory.discover`
-- `memory.recall`
+- `memory.remember` / recall / discover (via governed capability and HTTP routes)
 - status and diagnostics
 - explicit governance-aware operations
 
-Use proxy for:
+Use **proxy** for:
 
 - default governed model path
 - tool and policy mediation
 - approval and audit enforcement
 
-MCP and proxy are complementary:
+**Proxy and explicit HTTP** are complementary:
 
-- MCP = explicit control plane surface
-- proxy = default governed request path
+- **HTTP on UDS** = normative local control plane (v1)
+- **Proxy** = default governed model traffic path (when shipped)
+- **MCP** = optional **out-of-tree** or **future in-tree forwarder** only — never a weaker trust boundary than HTTP
 
 ---
 

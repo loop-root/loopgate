@@ -6,7 +6,7 @@ Status: draft
 
 ## 1. Summary
 
-The **operator experience** (IDE, MCP host, or other unprivileged client) should become more capable of multi-step work without moving authority out of Loopgate.
+The **operator experience** (IDE or other unprivileged **HTTP** client — **in-tree MCP deprecated**, ADR 0010) should become more capable of multi-step work without moving authority out of Loopgate.
 
 This RFC proposes:
 

@@ -29,6 +29,7 @@ var errMorphlingStateInvalid = errors.New("morphling state is invalid")
 var errMorphlingReviewInvalid = errors.New("morphling review is invalid")
 var errMorphlingWorkerLaunchInvalid = errors.New("morphling worker launch token is invalid")
 var errMorphlingWorkerTokenInvalid = errors.New("morphling worker session is invalid")
+var errMorphlingWorkerSessionsSaturated = errors.New("morphling worker session store is at capacity")
 var errMorphlingAuditUnavailable = errors.New("morphling audit is unavailable")
 
 type morphlingRecord struct {
@@ -784,6 +785,26 @@ func (server *Server) createPendingMorphlingSpawnApproval(tokenClaims capability
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
+	if len(server.approvals) >= server.maxTotalApprovalRecords {
+		server.mu.Unlock()
+		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           authorizingRecord.RequestID,
+			"capability":           "morphling.spawn",
+			"reason":               "control-plane approval store is at capacity",
+			"denial_code":          DenialCodeControlPlaneStateSaturated,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			return MorphlingSpawnResponse{}, fmt.Errorf("%w: %v", errMorphlingAuditUnavailable, err)
+		}
+		return MorphlingSpawnResponse{
+			RequestID:    authorizingRecord.RequestID,
+			Status:       ResponseStatusDenied,
+			DenialReason: "control-plane approval store is at capacity",
+			DenialCode:   DenialCodeControlPlaneStateSaturated,
+		}, nil
+	}
 	if server.countPendingApprovalsForSessionLocked(tokenClaims.ControlSessionID) >= server.maxPendingApprovalsPerControlSession {
 		server.mu.Unlock()
 		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{

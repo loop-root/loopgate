@@ -9,7 +9,7 @@ We implement **`tenant_id` (and related identity) on the local enforcement node 
 
 ## Tradeoff
 
-Enterprise operators wait longer for “full hub-and-spoke” stories; the alternative is bolting tenant semantics onto MCP or admin UI later and rewriting hot paths under time pressure.
+Enterprise operators wait longer for “full hub-and-spoke” stories; the alternative is bolting tenant semantics onto an **IDE bridge stack** (e.g. historical in-tree MCP, now removed) or admin UI later and rewriting hot paths under time pressure.
 
 ## Consequences
 

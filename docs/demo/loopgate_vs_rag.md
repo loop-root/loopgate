@@ -76,7 +76,7 @@ The 2026-04-03 acceptance dry-run used the main **Cursor IDE**, not the newer Cu
 
 Observed friction and operator guidance:
 
-- The Cursor IDE successfully connected to Loopgate MCP through the local/dev `mcp-serve -local-open-session ...` path.
+- The Cursor IDE successfully connected through the **historical in-tree MCP** path (`mcp-serve` / `local-open-session`). **That surface is deprecated and removed** (ADR 0010 — reduced attack surface); new integrations use **HTTP on the Unix socket** or an **out-of-tree** MCP→HTTP forwarder. This bullet records **dry-run evidence only**.
 - The newer Cursor app surface did not expose the same tool inventory reliably, so the demo should use the main Cursor IDE for now.
 - Cursor IDE surfaced the built-in Loopgate tools with **underscore names** instead of dotted names:
   - `loopgate_status`

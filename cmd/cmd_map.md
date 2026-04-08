@@ -10,14 +10,13 @@ Use it when changing:
 
 ## Core Role
 
-`cmd/` contains small binaries. **Loopgate** (`cmd/loopgate/`) is the primary shipped server from this repository. The active product-facing surfaces are Loopgate itself, MCP integration, proxy work, and typed local control-plane APIs.
+`cmd/` contains small binaries. **Loopgate** (`cmd/loopgate/`) is the primary shipped server from this repository. The active product-facing surfaces are Loopgate itself, **HTTP-on-UDS** control plane, proxy work (when shipped), and typed local APIs. **In-tree MCP removed** (ADR 0010).
 
 ## `cmd/loopgate/`
 
 - `main.go`
   - constructs socket path `runtime/state/loopgate.sock` under cwd-as-repo-root
   - optional `-accept-policy` for policy hash acknowledgment
-  - runs `mcp-serve` subcommand for local IDE integration over stdio MCP
   - runs `memory.InspectUnsupportedRawMemoryArtifacts` with warnings to stderr
   - starts `loopgate.NewServerWithOptions` and runs until signal
 

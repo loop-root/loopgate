@@ -14,6 +14,10 @@ This file is intentionally narrower than `ARCHITECTURE.md`.
 
 ---
 
+> **2026-04 (ADR 0010):** **In-tree MCP is deprecated and removed** — **smaller attack surface** (no bundled `loopgate mcp-serve` / `mcp-go`). **Normative integration** is **HTTP on the Unix socket** (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`). Sections below that describe **`loopgate mcp-serve`** are **historical** unless marked otherwise. **Reserved:** a **future ADR** may add a **thin MCP forwarder** with full HTTP policy/audit parity.
+
+---
+
 ## Current Mission
 
 Make Loopgate enterprise-ready.
@@ -24,9 +28,9 @@ The security kernel and enforcement runtime already exist. The current work is a
 
 ## The Slice We Are Building
 
-### 1. MCP server
+### 1. HTTP control plane (v1) — **in-tree MCP removed**
 
-Loopgate exposes itself as an MCP server. Claude Code, Cursor, and any MCP-compatible IDE connects with a single config entry and gets governed capability execution, memory recall, and policy enforcement. The developer's existing tool is the UI. We don't build one.
+Local clients integrate via **HTTP on the Unix socket** (session open, signing, capability execution). **In-tree MCP server removed** (ADR 0010). Operators may use **out-of-tree** MCP→HTTP forwarders; a **future ADR** may reserve a thin in-tree forwarder **only** with identical policy/audit invariants.
 
 ### 2. Multi-tenancy foundation
 
@@ -48,22 +52,18 @@ Minimal web UI served by an admin-mode Loopgate node: policy viewer, audit log, 
 
 ## In Scope Right Now
 
-### 1. MCP Server
+### 1. In-tree MCP server — **removed (historical checklist)**
 
-Implement `loopgate mcp-serve` — an MCP protocol handler that delegates all requests to the local Loopgate enforcement node.
+**Status:** **Deprecated and deleted** (ADR 0010). The following goals applied while `loopgate mcp-serve` existed; **equivalent behavior** is expected from **HTTP clients** and any **future** thin forwarder approved by ADR.
 
-**Minimum goals:**
+**Historical minimum goals (for reference):**
 
-- register Loopgate's typed capability set as MCP tools
+- surface Loopgate capabilities without a parallel permission model
 - validate all requests through the same policy evaluation path as HTTP handlers
 - emit audit events for every capability execution — identical to HTTP paths
-- surface approval workflows to the connected IDE (tool result with approval ID)
-- expose `memory.remember` and memory recall as MCP tools
-- one config entry (`.mcp.json`) connects any MCP-compatible IDE
+- surface approval workflows to the connected client
 
-**Non-negotiable:** MCP is not a trust bypass. A capability denied over HTTP is denied over MCP. Same policy evaluation, same audit logging, same approval workflow.
-
-**Recommended library:** `github.com/mark3labs/mcp-go` (Go MCP implementation). Review before adopting.
+**Non-negotiable (still):** No transport may bypass policy or audit. **Recommended library note** (`mcp-go`) applies only if a **new ADR** reintroduces MCP in-tree.
 
 ---
 
@@ -169,7 +169,7 @@ These may matter later. They do not define the current slice.
 - Policy decision tree editor UI
 - Zero-code canvas agent builder
 - Multi-node admin ↔ local sync protocol
-- Proxy mode implementation (MCP is higher priority)
+- Proxy mode implementation (**HTTP control plane is normative**; in-tree MCP removed)
 - Non-Loopgate desktop UI features (paint animation, uninstaller, man page) — defer
 - Full production installer / distribution improvements
 - Distributed morphling execution across nodes
@@ -194,12 +194,12 @@ Do not replace what already works:
 
 ## Success Criteria
 
-### MCP server
+### HTTP control plane / IDE integration
 
-- a developer adds one `.mcp.json` config entry and uses Loopgate from Claude Code
+- a developer’s client opens a Loopgate **control session** over the Unix socket and executes capabilities with **signed** requests
 - capability execution goes through policy evaluation (verify in audit log)
 - memory recall surfaces facts across sessions
-- approval-gated capabilities surface an approval request to the IDE, not a silent denial
+- approval-gated capabilities surface an approval request to the operator, not a silent denial
 
 ### Multi-tenancy foundation
 
@@ -238,7 +238,7 @@ If yes, high priority.
 
 ### Does it require building a new UI that developers use every day?
 
-If yes, question whether MCP or proxy integration can solve it instead.
+If yes, question whether **HTTP client**, **proxy**, or **out-of-tree** bridge integration can solve it instead.
 
 ### Does it increase backend complexity without improving the enterprise story?
 
@@ -250,6 +250,6 @@ If yes, defer.
 
 - The security constitution in `AGENTS.md` does not change because the product direction changed. Every invariant, policy rule, and security constraint remains in force.
 - Multi-tenancy is a **data model change first**. Do not introduce sync protocols, network topology, or admin node networking until `tenant_id` isolation is correct in the single-node data model.
-- MCP handlers must go through the **same policy evaluation path** as HTTP handlers. There is no MCP fast path that skips policy. This is a hard requirement, not a guideline.
+- **Any IDE bridge or MCP-shaped transport** (out-of-tree or future in-tree per ADR) must go through the **same policy evaluation path** as HTTP handlers. There is no alternate fast path that skips policy. This is a hard requirement, not a guideline.
 - Do not ship the admin console without authentication. Even v0 must require Loopgate session authentication before serving any admin routes.
 - `cmd/haven/` (Wails prototype) is frozen. Do not add product features there.

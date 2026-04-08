@@ -19,14 +19,14 @@ This repo implements the enforcement runtime (`cmd/loopgate`, `internal/loopgate
 
 Product surfaces:
 
-- **Enterprise integration (primary target):** MCP server and transparent proxy so developers keep using **Claude Code**, **Cursor**, **VS Code**, **Google Anti‑Gravity**, **OpenAI Codex**, and other MCP- or proxy-capable tools.
+- **Enterprise integration (primary target):** **HTTP-on-UDS** control plane and (when shipped) **transparent proxy** so developers keep using familiar IDEs via **native HTTP clients** or **out-of-tree** bridges. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR.
 
 This repository centers on **Loopgate** as the governance engine.
 
 ## Current Product Shape
 
 - `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, memory continuity, morphling lifecycle.
-- The **enterprise integration surface** (current development priority): MCP server + proxy mode lets developers use Loopgate from existing IDEs.
+- The **enterprise integration surface** (current development priority): **HTTP control plane** + proxy mode (when shipped); optional **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
 - **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile). Admin node connects via mTLS over TCP. Apple XPC is optional post-launch hardening (no committed date).
 - `Morphlings` are bounded subordinate workers governed by Loopgate, not free agents.
 - **Multi-tenancy:** `tenant_id` namespace isolation is the foundation for enterprise deployment — being added now. Every resource, audit event, and capability grant will carry a `tenant_id`.
@@ -34,8 +34,8 @@ This repository centers on **Loopgate** as the governance engine.
 Useful mental model (enterprise):
 
 ```text
-Developer IDE (Claude Code / Cursor / VS Code / Anti‑Gravity / Codex / …)
-  -> Loopgate MCP server / proxy (local node)
+Developer IDE or local HTTP client
+  -> Loopgate **HTTP on UDS** / proxy (local node)
   -> Policy evaluation, audit, memory, approvals
   -> Admin node (governance, IDP, audit aggregation)
 ```
@@ -78,7 +78,7 @@ If you are new to the repo, read in this order:
 Notes:
 
 - `AGENTS.md` at the repo root is the tracked security constitution; `AGENTS/` is a local-only directory (gitignored). It may not exist on every clone.
-- The enterprise pivot (MCP server, proxy, multi-tenancy) is the current primary direction.
+- The enterprise pivot (**HTTP-native integrations**, proxy, multi-tenancy; **in-tree MCP deprecated**) is the current primary direction.
 
 ## Top-Level Map
 
@@ -123,9 +123,9 @@ They are local/ignored rather than core product docs, so do not assume every clo
 
 ## Entrypoints
 
-### Primary: MCP / IDE
+### Primary: HTTP control plane / IDE bridges
 
-- **Docs:** `docs/setup/LOOPGATE_MCP.md`, `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`.
+- **Docs:** `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative); `docs/setup/LOOPGATE_MCP.md` (**deprecated in-tree MCP**, out-of-tree / future-ADR note).
 
 ### `cmd/loopgate/`
 
@@ -310,7 +310,7 @@ For a **folder-by-folder overview** of `docs/`, see `docs/docs_map.md`. Agent ph
 
 - `docs/setup/SETUP.md`
 - `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — Unix-socket HTTP, signing, routes
-- `docs/setup/LOOPGATE_MCP.md` — MCP server
+- `docs/setup/LOOPGATE_MCP.md` — **deprecated in-tree MCP** (removed); future reservation (ADR 0010)
 - `docs/setup/SECRETS.md`
 - `docs/setup/TOOL_USAGE.md`
 
@@ -481,7 +481,7 @@ The enforcement runtime, policy evaluation, audit system, memory continuity, and
 
 **Primary work right now:**
 
-1. **MCP server** — Loopgate exposes itself as an MCP server. Claude Code, Cursor, and any MCP-compatible IDE connects with a single config entry. The developer's existing tool is the UI. We don't build another one.
+1. **HTTP control plane (v1)** — Integrations use **HTTP on the Unix socket** (session open, signed requests). **In-tree MCP removed** (ADR 0010); **out-of-tree** forwarders or a **future ADR** may add a thin MCP layer without a weaker trust boundary.
 2. **Multi-tenancy foundation** — `tenant_id` isolation across all resources. Prerequisite for everything multi-tenant.
 3. **Memory system fixes** — key registry expansion (`goal.*`, `work.*`), preference facet coverage. Silent data-loss bugs that must be fixed before memory is relied on.
 4. **Chat path hardening** — panic recovery, audit log coverage, typing indicator for legacy HTTP chat handlers (`handleHavenChat` and related; `haven` prefix is a wire/handler name, not a product).

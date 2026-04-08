@@ -10,7 +10,7 @@
 
 # Summary
 
-**Loopgate** is the **kernel** of the governed system: the local control plane that enforces policy, issues capability and approval tokens, mediates the sandbox, owns morphling lifecycle, resolves secrets, and appends authoritative control-plane audit. **Unprivileged operator clients** (IDE, MCP host, reference shell) attach over the local socket; Loopgate is the **authority boundary**.
+**Loopgate** is the **kernel** of the governed system: the local control plane that enforces policy, issues capability and approval tokens, mediates the sandbox, owns morphling lifecycle, resolves secrets, and appends authoritative control-plane audit. **Unprivileged operator clients** (IDE, reference shell, proxy-integrated hosts, **out-of-tree** MCP→HTTP forwarders) attach over the local socket; Loopgate is the **authority boundary**. **In-tree MCP is deprecated and removed** (ADR 0010).
 
 This RFC is a **future-state design target**. Much of the token, approval, morphling, and memory path is implemented; the full `/morph/home` product layout and every invariant below may still be partially mapped to repo-local paths—see RFC-MORPH-0004 and implementation code.
 

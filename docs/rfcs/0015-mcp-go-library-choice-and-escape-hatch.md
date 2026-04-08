@@ -1,10 +1,10 @@
 # ADR 0015: MCP Library Choice and Architectural Escape Hatch
 
-**Status:** Accepted
+**Status:** Superseded — in-tree MCP server **removed** (deprecated — **attack surface reduced**); see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`. **Reserved:** a future ADR may reintroduce MCP only as a **thin HTTP forwarder** with identical policy/audit invariants.  
 **Date:** 2026-04-03
 
-## Context
-As part of the Loopgate enterprise pivot (Phase 2), we need to integrate the Model Context Protocol (MCP). The objective is to expose governed Loopgate capabilities to connected developer tools (like Claude Code, Cursor, VS Code) without compromising our strict policy and audit boundaries.
+## Context (historical)
+As part of the Loopgate enterprise pivot (Phase 2), we planned to integrate the Model Context Protocol (MCP) in-tree. The objective is to expose governed Loopgate capabilities to connected developer tools (like Claude Code, Cursor, VS Code) without compromising our strict policy and audit boundaries.
 
 Loopgate is fundamentally a Go application. We need an MCP implementation that supports stdio transport (and eventually HTTP/SSE) while integrating seamlessly with our existing control plane.
 

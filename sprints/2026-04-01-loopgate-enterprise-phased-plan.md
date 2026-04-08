@@ -4,7 +4,9 @@
 **Status:** active roadmap (update this file when scope or order changes)  
 **Companion docs:** `AGENTS/BUILD_NOW.md`, `AGENTS/ARCHITECTURE.md`, `context_map.md`, `docs/adr/`
 
-This plan is the **execution roadmap** for the enterprise pivot: MCP, tenant isolation, memory fixes, **legacy HTTP chat** stability (`/v1/haven/chat` family), and admin console v0. It assumes the security constitution in root `AGENTS.md` is non-negotiable.
+This plan is the **execution roadmap** for the enterprise pivot: tenant isolation, memory fixes, **legacy HTTP chat** stability (`/v1/haven/chat` family), and admin console v0. It assumes the security constitution in root `AGENTS.md` is non-negotiable.
+
+> **2026-04 supersession:** **In-tree MCP is deprecated and removed** (ADR 0010 — **reduced attack surface**). Sections below that reference **`loopgate mcp-serve`** / `internal/loopgate/mcpserve` describe **historical Phase 2 intent**; **normative control plane** is **HTTP on the Unix socket**. MCP may **resurface** only under a **new ADR** as a thin forwarder with full HTTP parity.
 
 ---
 
@@ -34,14 +36,14 @@ Loopgate already ships **human-legible diagnostic logs** via `log/slog`, configu
 
 **Tenant correlation:** Whenever a control session or request context carries **`tenant_id`** (and **`user_id`** when available), diagnostic lines for that path **must** include those fields as structured `slog` attributes so multi-tenant operators can filter and support can avoid cross-tenant noise. Use the same sentinel or empty-string semantics as audit (see Phase 1 ADR for personal mode); for code paths **before** any session exists (early listen/bind failures), omit tenant/user or log `tenant_id=none` consistently — document which in code comments once.
 
-New surfaces (**MCP**, **admin**, major handler changes) should log **start/finish or error** at minimum at INFO; DEBUG/TRACE reserved for deeper diagnosis when YAML turns verbosity up.
+New surfaces (**admin**, major handler changes, **HTTP** extensions) should log **start/finish or error** at minimum at INFO; DEBUG/TRACE reserved for deeper diagnosis when YAML turns verbosity up.
 
 ---
 
 ## Dependency overview
 
 ```text
-Phase 1 (tenant_id) ──┬──► Phase 2 (MCP) ──► same policy/audit paths must carry tenant
+Phase 1 (tenant_id) ──┬──► Phase 2 *(historical MCP; removed — ADR 0010)* ──► same policy/audit paths must carry tenant
                       │
                       └──► Phase 5 (admin v0) ──► audit/user views need tenant namespace
 
@@ -50,7 +52,7 @@ Phase 3 (memory registry) ──► can overlap Phase 1–2 if staffing allows; 
 Phase 4 (chat regressions) ──► parallel; unblocks **local demo** flows but must not weaken audit/policy
 ```
 
-**Intentional sequencing:** Multi-tenancy **data model on single-node** comes before betting heavily on MCP and admin UI, so new surfaces do not paint us into a corner. MCP and admin work should **thread `tenant_id` through** from the first merged PR, even if personal mode uses an explicit empty or default sentinel (see ADR when we lock the sentinel semantics).
+**Intentional sequencing:** Multi-tenancy **data model on single-node** comes before betting heavily on **extra IDE bridge surfaces** and admin UI, so new surfaces do not paint us into a corner. Admin and **HTTP** handler work should **thread `tenant_id` through** from the first merged PR, even if personal mode uses an explicit empty or default sentinel (see ADR when we lock the sentinel semantics).
 
 ---
 
@@ -64,7 +66,7 @@ Phase 4 (chat regressions) ──► parallel; unblocks **local demo** flows but
 
 - [x] `ControlSession` (or equivalent) has `TenantID` / `UserID` (names per code review) populated from a single initialization path.
 - [x] Audit events include `tenant_id` consistently.
-- [x] **Diagnostic logs** on session-scoped handlers (HTTP, and later MCP) include **`tenant_id`** and **`user_id`** as structured attributes whenever the active `ControlSession` (or equivalent) is known — same semantics as audit so grep and log aggregators stay aligned. *(Audit-derived control-plane/model lines use `diagAppendTenantAttrs`; legacy HTTP chat panic/SSE lines use `diagnosticSlogTenantUser`. Pre-session paths — listen, socket bind, per-request HTTP middleware — omit tenant by design.)*
+- [x] **Diagnostic logs** on session-scoped handlers (HTTP; **out-of-tree** bridges if any) include **`tenant_id`** and **`user_id`** as structured attributes whenever the active `ControlSession` (or equivalent) is known — same semantics as audit so grep and log aggregators stay aligned. *(Audit-derived control-plane/model lines use `diagAppendTenantAttrs`; legacy HTTP chat panic/SSE lines use `diagnosticSlogTenantUser`. Pre-session paths — listen, socket bind, per-request HTTP middleware — omit tenant by design.)*
 - [x] Tests: cross-tenant denial for at least one representative resource class (memory, audit read, or grant).
 - [x] ADR: default tenant for personal/single-user mode and why.
 
@@ -76,9 +78,9 @@ Phase 4 (chat regressions) ──► parallel; unblocks **local demo** flows but
 
 ---
 
-## Phase 2 — MCP server
+## Phase 2 — MCP server *(historical — in-tree server removed ADR 0010)*
 
-**Goal:** `loopgate mcp-serve` (or agreed command) exposes Loopgate as an MCP server; **same policy evaluation, approvals, and audit** as HTTP handlers.
+**Goal (archival):** ~~`loopgate mcp-serve`~~ exposed Loopgate as an MCP server with **same policy evaluation, approvals, and audit** as HTTP handlers. **Current direction:** **HTTP on the Unix socket** only in-tree; MCP **reserved** for future ADR as thin forwarder.
 
 **Exit criteria**
 
@@ -88,7 +90,7 @@ Phase 4 (chat regressions) ──► parallel; unblocks **local demo** flows but
 - [x] MCP lifecycle and request failures are **logged** on the appropriate diagnostic channel (see Operational logging), including **`tenant_id` / `user_id`** on each tool or session-scoped line when the MCP connection is bound to a control session; operators can raise verbosity via `logging.diagnostic` without code changes.
 - [x] ADR: library choice (e.g. mcp-go) and why, plus escape hatch if we replace it. *(ADR 0005 + `docs/setup/LOOPGATE_MCP.md`.)*
 
-**MCP vs proxy (what Phase 2 does *not* replace):** In a typical IDE setup, **chat** traffic flows **IDE ↔ model provider** (or local model); the MCP server receives **tool calls** only. Loopgate then sits **between the model and governed actions** (capabilities, memory via tools like `memory.remember` / recall, approvals) — **not** automatically between the model and every user token. **Automatic memory-in-context** for the whole prompt requires **transparent proxy mode** (IDE → Loopgate → provider) or an equivalent client-side injection strategy. **Proxy mode** is already a **documented enterprise target** (same policy/audit parity as HTTP) but **deferred behind MCP** in `AGENTS/BUILD_NOW.md` and tracked alongside MCP in `docs/roadmap/roadmap.md` / `context_map.md`. The two surfaces **compose**: MCP for tools + proxy for chat when both ship.
+**MCP vs proxy (what Phase 2 does *not* replace):** In a typical IDE setup, **chat** traffic flows **IDE ↔ model provider** (or local model); the MCP server receives **tool calls** only. Loopgate then sits **between the model and governed actions** (capabilities, memory via tools like `memory.remember` / recall, approvals) — **not** automatically between the model and every user token. **Automatic memory-in-context** for the whole prompt requires **transparent proxy mode** (IDE → Loopgate → provider) or an equivalent client-side injection strategy. **Proxy mode** is already a **documented enterprise target** (same policy/audit parity as HTTP). **In-tree MCP** (historical Phase 2) **removed** (ADR 0010); **proxy** is tracked alongside **HTTP** in `AGENTS/BUILD_NOW.md`, `docs/roadmap/roadmap.md`, and `context_map.md`. The two surfaces **compose**: **HTTP** for tools + **proxy** for chat when proxy ships (**out-of-tree** MCP→HTTP forwarders optional).
 
 **Risk to watch:** MCP becoming a “fast path” that skips redaction or audit — treat as a **security bug**, not a performance feature.
 
@@ -98,7 +100,7 @@ Phase 4 (chat regressions) ──► parallel; unblocks **local demo** flows but
 
 **Today:** `Server.Serve` listens only on a **Unix domain socket** (`internal/loopgate/server.go`). That matches v1 local IPC (native apps and same-host tooling) but is awkward for some **enterprise** layouts: containers without a shared UDS mount, integrators that expect a **TCP** port, cross-host callers, or ops standards that mandate **TLS on the wire**.
 
-**Not the same link as admin governance:** `AGENTS.md` already distinguishes **local client ↔ Loopgate** (v1: HTTP over UDS) from **local node ↔ admin node** (enterprise: **mTLS over TCP**). This section is about the **local control-plane listen surface** that local HTTP clients, MCP HTTP bridges, and other integrations attach to — not replacing the admin-node protocol design.
+**Not the same link as admin governance:** `AGENTS.md` already distinguishes **local client ↔ Loopgate** (v1: HTTP over UDS) from **local node ↔ admin node** (enterprise: **mTLS over TCP**). This section is about the **local control-plane listen surface** that local HTTP clients and **out-of-tree** bridges attach to — not replacing the admin-node protocol design.
 
 **MCP vs transport:** MCP’s IDE-facing leg is usually **stdio** to a subprocess. That subprocess can call Loopgate over **UDS on the same machine** without TCP. You need **TCP (+ TLS/mTLS)** when a caller **cannot** use UDS or must cross a network hop to reach Loopgate.
 
@@ -120,7 +122,7 @@ Phase 4 (chat regressions) ──► parallel; unblocks **local demo** flows but
 
 **Goal:** Registry and facet rules match product promises; no silent drop of `goal.*` / `work.*`; broader preference facet coverage per `BUILD_NOW.md`.
 
-**Primary touchpoints:** `internal/tcl/memory_registry.go`, capability hints (including legacy `cmd/haven/` only if still required for builds — prefer **MCP/proxy + Loopgate** as the primary integration path).
+**Primary touchpoints:** `internal/tcl/memory_registry.go`, capability hints (including legacy `cmd/haven/` only if still required for builds — prefer **HTTP + Loopgate** and **proxy** (when shipped) as the primary integration path).
 
 **Exit criteria**
 
@@ -184,7 +186,7 @@ Use this when the sprint doc and code drift. **Last verified against tree:** 202
 | Phase / claim | Where to verify in repo |
 |---------------|-------------------------|
 | **1** Tenancy + memory partitions | `docs/setup/TENANCY.md`, `memory_partition.go`, ADR 0004, `tenancy_phase1_test.go` |
-| **2** MCP stdio + dynamic tools | `cmd/loopgate/main.go` (`mcp-serve`), `internal/loopgate/mcpserve/`, `docs/setup/LOOPGATE_MCP.md`, ADR 0005 |
+| **2** MCP stdio + dynamic tools *(removed — ADR 0010)* | ~~`cmd/loopgate/main.go` (`mcp-serve`)~~, ~~`internal/loopgate/mcpserve/`~~, `docs/setup/LOOPGATE_MCP.md`, ADR 0005 |
 | **3** `goal.*` / `work.*` registry | `internal/tcl/memory_registry.go` (`explicitMemoryPrefixRules`), ADR 0006 |
 | **4** Legacy HTTP chat logging / audit | `server_haven_chat.go` (`haven_chat_*` diagnostic, `haven.chat*` audit) |
 | **5** Admin console | `internal/loopgate/admin_console.go`, `loopgate --admin`, `config/runtime.yaml` → `admin_console`, `LOOPGATE_ADMIN_TOKEN`, `docs/setup/ADMIN_CONSOLE.md`, ADR 0016 |
@@ -200,7 +202,7 @@ Append rows here as phases ship:
 | Phase | Completed (date) | Notes |
 |-------|------------------|-------|
 | 1 | 2026-04-01 (complete) | `controlSession` tenancy, session open from `runtime.yaml`, audit + `logEvent` (+ approval-path lock fix), morphling tenant mismatch → deny, memory **partitions** + migration + tests + `TENANCY.md`, ADR 0004, diagnostic **tenant_id** / **user_id** on audit-derived logs + legacy HTTP chat. Grants/secrets: instance-scoped for v1; Vault/IdP deferred (see § *Future enterprise integration layers*). |
-| 2 | 2026-04-03 (complete) | `loopgate mcp-serve` now fetches dynamic capabilities and registers them as typed MCP tools (e.g., `memory.remember`, `fs_list`), passing correct environment telemetry through a configured `loopdiag` integration (`tenant_id`, `user_id`). Tests verify denial/success matching HTTP constraints. |
+| 2 | 2026-04-03 *(superseded 2026-04 — MCP removed ADR 0010)* | *Historical:* `loopgate mcp-serve` shipped dynamic MCP tools then **removed** to shrink attack surface; **normative** path is HTTP on UDS. |
 | 3 | 2026-04-03 (complete) | Added `goal.*` and `work.*` prefixes. Expanded preference facet mappings. Updated capabilities hint. Logged ADR 0006-explicit-memory-key-registry-compiled-until-signed-admin-distribution. |
 | 4 | 2026-04-03 (complete) | Fixed legacy HTTP chat panics (secured fail-closed route explicitly), appended missing loopdiag logs with tenant context to all HTTP early returns, added `haven.chat.error` audit telemetry, elongated local model timeout configs for `openai_compatible` inference, patched native client attachment handling, repaired typing indicator. |
 | 5 | 2026-04-01 (complete) | Loopback admin console v0: dual gate (`admin_console.enabled` + `--admin`), bcrypt-hashed `LOOPGATE_ADMIN_TOKEN`, `/admin/*` policy + redacted audit CSV/HTML + session list, tenant filter when `deployment_tenant_id` set, diagnostic `admin_console_*` events with deployment tenant id, tests for redirect/login/redaction/filter. |

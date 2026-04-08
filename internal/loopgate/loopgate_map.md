@@ -1,6 +1,6 @@
 # Loopgate Map
 
-This file maps the main Loopgate package files. **Loopgate** is the authority and enforcement runtime in this repository. **Operator clients** attach over **MCP**, **proxy**, or **HTTP on the local control-plane socket**. Any remaining legacy client shells in the repo are deletion candidates, not active product surfaces.
+This file maps the main Loopgate package files. **Loopgate** is the authority and enforcement runtime in this repository. **Operator clients** attach over **HTTP on the local control-plane socket** (and may use **out-of-tree** proxy or MCP→HTTP forwarders). **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface; **reserved** for a possible future thin forwarder via new ADR). Any remaining legacy client shells in the repo are deletion candidates, not active product surfaces.
 
 Use it when changing:
 
@@ -29,10 +29,6 @@ For integrators it matters in four ways:
 - it centralizes tasks, approvals, memory, and host-action state so **every client** (IDE, CLI, proxy-integrated client) shares one auditable substrate
 
 ## Key Files
-
-### MCP (enterprise IDE integration)
-
-- `mcpserve/` — **`loopgate mcp-serve`**: stdio MCP (`mcp-go`), tools forward to **`loopgate.Client`** + delegated `LOOPGATE_MCP_*` env against the Unix socket (no second control-plane writer). See `docs/setup/LOOPGATE_MCP.md`, ADR 0005.
 
 ### Authority and Capability Inventory
 

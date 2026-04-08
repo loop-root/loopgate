@@ -4,7 +4,7 @@
 
 This document defines what must remain true in the **operator client + Loopgate** split.
 
-**Terminology:** The **operator client** is whatever local process attaches to Loopgate (IDE-hosted agent, CLI, native UI, or proxy-integrated editor). This contract uses **operator client** / **client** for the unprivileged runtime. Prefer **MCP/proxy** for real workflows (`docs/setup/LOOPGATE_MCP.md`).
+**Terminology:** The **operator client** is whatever local process attaches to Loopgate (IDE-hosted agent, CLI, native UI, or proxy-integrated editor). This contract uses **operator client** / **client** for the unprivileged runtime. Prefer **HTTP on the Unix socket** for real workflows (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`). **In-tree MCP is deprecated** (`docs/setup/LOOPGATE_MCP.md`, ADR 0010).
 
 ## 1) Purpose
 

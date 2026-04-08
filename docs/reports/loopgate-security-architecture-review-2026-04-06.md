@@ -1,7 +1,7 @@
 # Loopgate security and architecture review (code-grounded)
 
 **Date:** 2026-04-06  
-**Scope:** Current Go implementation under `internal/loopgate`, `internal/sandbox`, `internal/policy`, `internal/secrets`, `internal/ledger`, `internal/loopgate/mcpserve`, `cmd/loopgate`, and related security-sensitive paths.  
+**Scope:** Current Go implementation under `internal/loopgate`, `internal/sandbox`, `internal/policy`, `internal/secrets`, `internal/ledger`, `cmd/loopgate`, and related security-sensitive paths. *(Review date: `internal/loopgate/mcpserve` still existed; **in-tree MCP since removed** — ADR 0010.)*  
 **Method:** Static review of authoritative code paths (not legacy docs or removed surfaces unless verified in tree).  
 **Out of scope:** Full dependency CVE audit, formal verification, penetration test.
 
@@ -11,7 +11,7 @@ This report consolidates: (1) security/architecture findings, (2) HTTP route aut
 
 ## 1. Executive summary
 
-Loopgate is a **local Unix-socket HTTP control plane** that mediates tool execution with **peer credentials**, **session-scoped capability tokens**, **HMAC-signed request bodies**, **policy checks**, **approval flows with manifest binding**, **hash-chained audit ledgers**, and **sandbox-oriented path resolution**. MCP is a **stdio bridge** that uses the same HTTP API over the socket.
+Loopgate is a **local Unix-socket HTTP control plane** that mediates tool execution with **peer credentials**, **session-scoped capability tokens**, **HMAC-signed request bodies**, **policy checks**, **approval flows with manifest binding**, **hash-chained audit ledgers**, and **sandbox-oriented path resolution**. At review time, an **in-tree MCP stdio bridge** forwarded to the same HTTP API; that package is **deprecated and removed** (ADR 0010 — shrinks attack surface; **reserved** for a possible future thin forwarder via new ADR).
 
 **Verdict:** For a **single-user, local-first** deployment model, the design is **credible and materially stronger** than typical “agent + shell + skills” stacks, because enforcement is **in code** (signing, replay controls, audit fail-closed paths, registry + policy) rather than advisory.
 
@@ -137,14 +137,14 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 - **Resolution (2026-04-06):** `handleDiagnosticReport` now calls `verifySignedRequestWithoutBody` after `authenticate`; regression test `TestDiagnosticReportRequiresSignedRequest` in `server_diagnostic_handlers_test.go`.  
 - **Type:** **Hardening** (closed in code).
 
-### F9 — Delegated MCP credentials vs peer PID binding
+### F9 — Delegated MCP credentials vs peer PID binding *(historical — `mcpserve` removed)*
 
-- **Severity:** Informational–Medium (integration)  
+- **Severity:** Informational–Medium (integration) *(at time of review)*  
 - **Category:** Integration  
-- **Location:** `authenticate` peer check; `mcpserve` delegated env path  
-- **Issue:** Tokens minted on process A **cannot** be used from process B (different PID). Tests use same OS process for two `Client` values (`server_test.go` delegated test). Real **parent-opens, child-uses** delegation may fail unless child opens session (e.g. `local-open-session`).  
-- **Recommendation:** Document **single-process** token use; prefer MCP modes that open session from the MCP process.  
-- **Type:** **Informational / integration contract**.
+- **Location:** `authenticate` peer check; **former** `mcpserve` delegated env path (**removed** per ADR 0010)  
+- **Issue:** Tokens minted on process A **cannot** be used from process B (different PID). **Still true** for any **out-of-tree** bridge that reuses the HTTP API: each client process should open **its own** session on the socket.  
+- **Recommendation:** Keep documenting **single-process** token use for HTTP clients; any **future** MCP forwarder must not weaken this model.  
+- **Type:** **Informational / integration contract** (retained for peer-binding semantics).
 
 ### F10 — `/v1/hook/pre-validate` trust model
 
@@ -182,7 +182,7 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 2. Replace **heuristic** `isSecretExportCapability` with **registry metadata** + tests — **partial:** optional registry interfaces + heuristic fallback (2026-04-07).  
 3. **Deep-copy** pending approval `CapabilityRequest` / assert body hash before execute — **done** (2026-04-07).  
 4. Review **`shouldAutoAllowTrustedSandboxCapability`** surface — **done:** policy hooks under **`safety`** in `core/policy/policy.yaml`; metrics still optional.  
-5. Document **MCP / delegated session / peer PID** requirements; align defaults with `local-open-session` where needed.
+5. Document **delegated session / peer PID** requirements for **HTTP and out-of-tree bridges** (in-tree MCP removed; see ADR 0010).
 
 ### Next hardening (top 5)
 
@@ -245,7 +245,7 @@ Implemented when **`control_plane.expected_session_client_executable`** in **`co
 
 ## 10. Final verdict
 
-The implementation **earns** a serious local control-plane story: enforcement is mostly **explicit in code**, with stronger approval and audit mechanics than common agent frameworks. Residual work is **secret-export classification**, **ledger authenticity** vs filesystem attackers, **finishing cross-platform secrets**, and **operational clarity** for MCP and peer binding. Diagnostic GET MAC consistency is **aligned** (F8).
+The implementation **earns** a serious local control-plane story: enforcement is mostly **explicit in code**, with stronger approval and audit mechanics than common agent frameworks. Residual work is **secret-export classification**, **ledger authenticity** vs filesystem attackers, **finishing cross-platform secrets**, and **operational clarity** for **peer binding** (and any **out-of-tree** IDE bridges). Diagnostic GET MAC consistency is **aligned** (F8).
 
 **AI-only authorship** does not invalidate the technical findings above; it **raises the bar** for independent test coverage, human review on boundary changes, and distrust of **comments without tests**.
 

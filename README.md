@@ -1,6 +1,6 @@
 # Loopgate
 
-**Last updated:** 2026-04-07
+**Last updated:** 2026-04-08
 
 **Loopgate** is a policy-governed AI governance engine and enforcement runtime. It is the control plane between AI models and your infrastructure: capabilities, approvals, audit, secrets, sandboxing, continuity memory, and bounded worker (morphling) lifecycle.
 
@@ -29,11 +29,11 @@ Specific problems Loopgate addresses:
 | Subagents | Nested agents with the same (or wider) authority | Morphlings bounded by declared class; spawn requires approval; isolated execution envelope |
 | Trust model | Model output is trusted as instruction | Model output is untrusted input; language is never authority |
 | Multi-tenant isolation | Not native | `tenant_id` isolation across memory, audit, capability grants, secrets (in progress) |
-| IDE integration | Python/JS SDKs, custom tool definitions | MCP server: works natively with Claude Code, Cursor, VS Code, Anti-Gravity, Codex |
+| IDE integration | Python/JS SDKs, custom tool definitions | **HTTP on Unix socket** (v1); **in-tree MCP deprecated/removed** (ADR 0010 — smaller attack surface); **out-of-tree** MCP→HTTP forwarders possible |
 
 ## Core capabilities
 
-Loopgate ships a registered capability inventory. The Haven TUI client uses these through the governed chat surface; IDE clients use them through MCP or HTTP.
+Loopgate ships a registered capability inventory. The Haven TUI client uses these through the governed chat surface; IDE clients use them through **HTTP on the local socket** (and **out-of-tree** bridges where operators use MCP-shaped hosts).
 
 **Filesystem**
 - `fs_read` — read a file within granted paths
@@ -77,7 +77,7 @@ Loopgate ships a registered capability inventory. The Haven TUI client uses thes
 ```
 Developer tool (Claude Code, Cursor, VS Code, etc.)
         │
-        │  MCP stdio  │  HTTP proxy  │  Unix socket (local)
+        │  Out-of-tree MCP→HTTP  │  HTTP proxy  │  Unix socket (local, normative)
         ▼
    ┌──────────────────────────────────────────────────────────┐
    │                       Loopgate                          │
@@ -97,7 +97,7 @@ Developer tool (Claude Code, Cursor, VS Code, etc.)
    Model provider (Anthropic, etc. — credentials in Loopgate)
 ```
 
-**Transport:** Unix domain socket at `runtime/state/loopgate.sock`. MCP subprocess and proxy modes attach the same way. No public TCP listener by default.
+**Transport:** Unix domain socket at `runtime/state/loopgate.sock`. **Normative v1:** HTTP clients attach directly; **proxy** (when shipped) attaches the same authority model. **In-tree MCP subprocess removed** (ADR 0010). No public TCP listener by default.
 
 **Auth model** — layered:
 1. `POST /v1/session/open` → control session + MAC key
@@ -120,7 +120,7 @@ go test ./...
 go run ./cmd/loopgate
 ```
 
-**IDE integration (MCP):** See `docs/setup/LOOPGATE_MCP.md`. Works with Claude Code, Cursor, VS Code, Anti-Gravity, and OpenAI Codex.
+**IDE integration:** **HTTP API** — `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`. **Deprecated in-tree MCP** — `docs/setup/LOOPGATE_MCP.md` (removal rationale, **reserved** future thin forwarder via ADR).
 
 **Haven TUI:** See the `haven_cli` repo — the terminal workstation for governed AI work.
 
@@ -172,7 +172,7 @@ runtime/               local state and logs (gitignored)
 
 - [Architecture](./docs/design_overview/architecture.md)
 - [Loopgate design](./docs/design_overview/loopgate.md)
-- [MCP setup](./docs/setup/LOOPGATE_MCP.md)
+- [MCP (deprecated in-tree)](./docs/setup/LOOPGATE_MCP.md)
 - [HTTP API for local clients](./docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
 - [Threat model](./docs/loopgate-threat-model.md)
 - [Setup](./docs/setup/SETUP.md)

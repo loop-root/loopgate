@@ -620,6 +620,52 @@ func (server *Server) handleHavenWorkspaceList(writer http.ResponseWriter, reque
 	server.writeJSON(writer, http.StatusOK, listResponse)
 }
 
+func (server *Server) handleHavenWorkspaceHostLayout(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+	if err := server.sandboxPaths.Ensure(); err != nil {
+		server.writeJSON(writer, http.StatusOK, HavenWorkspaceHostLayoutResponse{
+			Error: "sandbox layout unavailable",
+		})
+		return
+	}
+	projectsPath := server.sandboxPaths.Workspace
+	researchPath := server.sandboxPaths.Scratch
+	projectsResolved, err := filepath.EvalSymlinks(projectsPath)
+	if err != nil {
+		projectsResolved = projectsPath
+	}
+	researchResolved, err := filepath.EvalSymlinks(researchPath)
+	if err != nil {
+		researchResolved = researchPath
+	}
+	if err := server.logEvent("haven.ui.workspace_host_layout", tokenClaims.ControlSessionID, map[string]interface{}{
+		"control_session_id": tokenClaims.ControlSessionID,
+		"actor_label":        tokenClaims.ActorLabel,
+	}); err != nil {
+		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: "control-plane audit is unavailable",
+			DenialCode:   DenialCodeAuditUnavailable,
+		})
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, HavenWorkspaceHostLayoutResponse{
+		ProjectsHostPath: filepath.Clean(projectsResolved),
+		ResearchHostPath: filepath.Clean(researchResolved),
+	})
+}
+
 func (server *Server) havenWorkspaceListResponse(tokenClaims capabilityToken, listRequest HavenWorkspaceListRequest) (HavenWorkspaceListResponse, error) {
 	requestedPath := strings.TrimSpace(listRequest.Path)
 	if requestedPath == "" {

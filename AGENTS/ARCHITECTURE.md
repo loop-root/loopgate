@@ -29,10 +29,10 @@ The system prioritizes:
 - policy as the authority boundary — not model output, not client UI
 - auditability at every capability boundary
 - tenant isolation by design, not bolted on later
-- developer-invisible governance via MCP and proxy integration
+- developer-invisible governance via **HTTP control-plane** and **proxy** integration (**in-tree MCP deprecated** — ADR 0010)
 - transparent enforcement that fails closed
 
-**Operator clients** (IDEs via MCP/proxy, optional local HTTP clients) connect to Loopgate; they are not authority sources. Enterprise workflows standardize on MCP and transparent proxy without requiring a dedicated desktop product in this repository.
+**Operator clients** (IDEs via **HTTP on the Unix socket**, **proxy** when shipped, optional **out-of-tree** MCP→HTTP forwarders) connect to Loopgate; they are not authority sources. Enterprise workflows standardize on **transparent proxy** and native HTTP clients without requiring a dedicated desktop product in this repository.
 
 ---
 
@@ -40,7 +40,7 @@ The system prioritizes:
 
 ## Single-node (personal / developer)
 
-One Loopgate node per machine. The operator uses a connected IDE (MCP/proxy) and/or other local clients documented in `docs/setup/`. Loopgate mediates all capability execution locally.
+One Loopgate node per machine. The operator uses a connected IDE or other **HTTP** local clients documented in `docs/setup/` (and **proxy** when shipped). Loopgate mediates all capability execution locally.
 
 ```
 User
@@ -54,8 +54,8 @@ User
 Each developer machine runs a local Loopgate node. An admin node provides governance, policy, identity, and audit aggregation. Local nodes are **full enforcement runtimes** — not thin clients.
 
 ```
-Developer IDE (Claude Code / Cursor / VS Code)
-  → Loopgate local node  (MCP server or transparent proxy)
+Developer IDE or local HTTP client
+  → Loopgate local node  (HTTP on UDS; transparent proxy when shipped)
        ↕ policy sync · audit stream · identity verification
   Loopgate admin node
        → Policy store and distribution
@@ -72,7 +72,7 @@ The mental model is corporate MDM or VPN: a local agent enforces policy from a c
 
 ## Loopgate Node (enforcement runtime)
 
-The authority boundary. Every capability request — whether from a developer IDE via MCP, from a local client over HTTP on the control-plane binding, or from a morphling worker — passes through the Loopgate node.
+The authority boundary. Every capability request — whether from a developer IDE via **HTTP on the control-plane binding** (or **out-of-tree** bridge), or from a morphling worker — passes through the Loopgate node.
 
 Responsibilities:
 
@@ -108,26 +108,19 @@ The admin node does not run model calls. It is a governance authority, not an ex
 
 ---
 
-## MCP Integration Surface
+## MCP integration (deprecated in-tree)
 
-The primary developer integration point. Loopgate exposes itself as an MCP (Model Context Protocol) server. Any MCP-compatible tool (Claude Code, Cursor, Zed, Windsurf) connects with a single config entry and gains governed capability execution, memory, and policy enforcement without changing its workflow.
+**In-tree MCP is deprecated and removed** (ADR 0010) to **shrink attack surface** (stdio subprocess, extra protocol dependencies, parallel bootstrap paths). The **primary developer integration point** is **HTTP on the Unix domain socket** — session open, signed requests, capability execution — see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`.
 
-```json
-{
-  "loopgate": {
-    "command": "loopgate",
-    "args": ["mcp-serve"]
-  }
-}
-```
+**Reserved:** a **future ADR** may add a **thin MCP forwarder** (or other IDE protocol) that translates to the same HTTP API. **Out-of-tree** MCP→HTTP adapters remain an operator choice today.
 
-MCP handlers must apply the **same** policy evaluation, approval workflows, and audit logging as HTTP handlers. MCP is not a trust boundary bypass. A capability denied over HTTP is denied over MCP.
+**Invariant:** any MCP-shaped transport must apply the **same** policy evaluation, approval workflows, and audit logging as HTTP handlers — **never** a trust boundary bypass.
 
 ---
 
 ## Proxy Mode
 
-A transparent API proxy for IDEs that do not support MCP. Loopgate sits between the IDE and the model API. The developer changes one URL in their settings; nothing else changes.
+A transparent API proxy for IDEs that do not route model traffic through a native Loopgate HTTP client. Loopgate sits between the IDE and the model API. The developer changes one URL in their settings; nothing else changes.
 
 ```
 IDE → Loopgate (localhost:port) → Anthropic / OpenAI / local model
@@ -141,7 +134,7 @@ Loopgate intercepts every request: injects memory context into the system prompt
 
 In-repo **Wails + React** prototype only: contract tests, bindings, and parity experiments. **Not** a committed product surface; do not evolve it for new operator features.
 
-Primary integrations: **MCP** and **proxy** (`docs/setup/LOOPGATE_MCP.md`). Local HTTP API details: `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`.
+Primary integrations: **HTTP control plane** (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`) and **proxy** (when shipped). **Deprecated in-tree MCP:** `docs/setup/LOOPGATE_MCP.md`.
 
 ---
 
@@ -221,7 +214,7 @@ Org-level memory and user-level memory are separate namespaces within the same t
 
 ## Local client ↔ Loopgate (v1 standard)
 
-HTTP over a Unix domain socket (local control-plane binding). Local HTTP clients, MCP subprocess, proxy mode, and any local tooling connect this way.
+HTTP over a Unix domain socket (local control-plane binding). Local HTTP clients, proxy mode (when shipped), and any local tooling connect this way (**in-tree MCP subprocess removed** — ADR 0010).
 
 Layered auth:
 1. local transport binding
@@ -298,7 +291,7 @@ Unknown capabilities are denied. Unavailable backends return explicit errors —
 
 ### Developer invisible
 
-The best governance is the kind developers don't notice day-to-day. MCP and proxy integration should require zero workflow change from the developer's perspective.
+The best governance is the kind developers don't notice day-to-day. **Proxy** and **HTTP-native** integrations should require zero workflow change from the developer's perspective (MCP only if reintroduced as a thin forwarder per ADR).
 
 ### Audit everything
 

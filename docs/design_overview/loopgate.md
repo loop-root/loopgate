@@ -7,11 +7,9 @@ Loopgate is the policy-governed control plane and enforcement runtime in this re
 It is not just a reverse proxy.
 It is the enforcement point for capabilities, approvals, integration auth, and outbound execution.
 
-**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — MCP subprocesses, proxy adapters, IDE bridges, and custom integrators attach this way. That is the deliberate v1 architecture (engineering cost and ship speed). **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md`, `docs/loopgate-threat-model.md`, and `docs/product-rfcs/RFC-MORPH-0009`.
+**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — IDE bridges, proxy adapters, and custom integrators attach this way. (An in-tree stdio MCP server was **removed**; see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`.) **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md`, `docs/loopgate-threat-model.md`, and `docs/product-rfcs/RFC-MORPH-0009`.
 
-**Primary integrators:** [Loopgate MCP](../setup/LOOPGATE_MCP.md) for Claude Code, Cursor, VS Code, Anti‑Gravity, OpenAI Codex, and other MCP hosts.
-
-**HTTP integrator guide:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list).
+**Primary integrators:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list). MCP-shaped hosts should use an **external forwarder**; see [LOOPGATE_MCP.md](../setup/LOOPGATE_MCP.md) for **deprecated in-tree MCP**, attack-surface rationale, and **reserved** future thin-forwarder path (new ADR only).
 
 **Security posture (honest v1 vs future work):** [Threat model](../loopgate-threat-model.md) and [RFC 0001](../rfcs/0001-loopgate-token-policy.md) — same-user threat scope, **`GET /v1/health`** as the only unauthenticated inventory-free probe, signed **`GET /v1/status`** / **`GET /v1/connections/status`**, peer binding, and v2 backlog (codesign / XPC).
 
@@ -21,7 +19,7 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
 
 - Unix-socket service at `runtime/state/loopgate.sock`
 - authoritative policy loaded inside Loopgate
-- server-issued control sessions for local operator clients (IDE/MCP bridges, proxy clients, tests)
+- server-issued control sessions for local operator clients (IDE bridges, proxy clients, tests; **in-tree MCP removed** — external MCP forwarders out-of-tree)
 - client-supplied `actor` / `session_id` treated as labels, not approval authority
 - capability and approval tokens bound to the Unix-socket peer identity that opened the session
 - subsequent privileged requests signed with a server-issued session MAC key and single-use request nonces
@@ -233,7 +231,7 @@ Not yet implemented:
 
 ### Unprivileged operator client owns
 
-- operator UX (IDE, MCP host, or proxy-integrated client)
+- operator UX (IDE, proxy-integrated client, or other local HTTP client; MCP hosts via **out-of-tree** forwarders unless a future ADR adds a thin in-tree adapter)
 - model interaction and prompt compilation (where applicable)
 - local session state
 - local append-only continuity ledger and explicit `current / next / previous` role state (where used)

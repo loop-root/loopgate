@@ -4044,7 +4044,10 @@ func TestShouldAutoAllowTrustedSandboxCapability_HavenTrustedWrite(t *testing.T)
 		trusted:   true,
 	}
 
-	srv := &Server{policy: config.Policy{}}
+	enabled := true
+	pol := config.Policy{}
+	pol.Safety.HavenTrustedSandboxAutoAllow = &enabled
+	srv := &Server{policy: pol}
 	allowed := srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven"}, tool.Name(), tool, policypkg.CheckResult{
 		Decision: policypkg.NeedsApproval,
 	})
@@ -4095,7 +4098,9 @@ func TestShouldAutoAllowTrustedSandboxCapability_EmptyAllowlistDeniesAll(t *test
 		operation: toolspkg.OpWrite,
 		trusted:   true,
 	}
+	enabled := true
 	policy := config.Policy{}
+	policy.Safety.HavenTrustedSandboxAutoAllow = &enabled
 	empty := []string{}
 	policy.Safety.HavenTrustedSandboxAutoAllowCapabilities = &empty
 	srv := &Server{policy: policy}
@@ -4113,7 +4118,9 @@ func TestShouldAutoAllowTrustedSandboxCapability_AllowlistRestrictsCapabilities(
 		operation: toolspkg.OpWrite,
 		trusted:   true,
 	}
+	enabled := true
 	policy := config.Policy{}
+	policy.Safety.HavenTrustedSandboxAutoAllow = &enabled
 	onlyRead := []string{"notes.read"}
 	policy.Safety.HavenTrustedSandboxAutoAllowCapabilities = &onlyRead
 	srv := &Server{policy: policy}
@@ -4860,6 +4867,20 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 	return client, status, server
 }
 
+func TestSessionOpen_ControlPlaneSessionStoreSaturated(t *testing.T) {
+	repoRoot := t.TempDir()
+	client1, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	_ = client1
+	server.maxTotalControlSessions = 1
+
+	client2 := NewClient(server.socketPath)
+	client2.ConfigureSession("test-actor", "second-session", capabilityNames(status.Capabilities))
+	_, err := client2.ensureCapabilityToken(context.Background())
+	if err == nil {
+		t.Fatalf("expected second session open when at session cap")
+	}
+}
+
 func TestHealthUnauthenticatedSucceeds(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -5120,7 +5141,8 @@ func loopgatePolicyYAML(writeRequiresApproval bool) string {
 		"  continuity_review_required: false\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n"
+		"  allow_policy_modification: false\n" +
+		"  haven_trusted_sandbox_auto_allow: true\n"
 }
 
 func loopgateMorphlingPolicyYAML(writeRequiresApproval bool, spawnEnabled bool, maxActive int) string {
@@ -5167,7 +5189,8 @@ func loopgateMorphlingPolicyYAML(writeRequiresApproval bool, spawnEnabled bool, 
 		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n"
+		"  allow_policy_modification: false\n" +
+		"  haven_trusted_sandbox_auto_allow: true\n"
 }
 
 func loopgateHTTPPolicyYAML(requiresApproval bool) string {
@@ -5207,7 +5230,8 @@ func loopgateHTTPPolicyYAML(requiresApproval bool) string {
 		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n"
+		"  allow_policy_modification: false\n" +
+		"  haven_trusted_sandbox_auto_allow: true\n"
 }
 
 func writeConfiguredConnectionYAML(t *testing.T, repoRoot string, providerBaseURL string) {

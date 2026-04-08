@@ -39,3 +39,9 @@ It is **client-side** durability, not Loopgate’s authoritative audit ledger (s
 
 - Never disable redaction “for debugging” in paths that persist to disk.
 - Preserve append-only semantics; repairing history belongs in migration tools, not silent rewrite.
+
+## Crash recovery / index divergence (F7)
+
+`AppendEvent` always **syncs the JSONL append** first; the thread **index file** is updated **best-effort** (`persistIndexBestEffort`). If the process crashes after a successful append but before a successful index write, on-disk JSONL is authoritative and the index may be stale.
+
+**Operator recovery:** call `Store.RebuildIndex()` (or restart tooling that performs an equivalent rebuild) so listing and metadata match thread files. This is an **availability/consistency** concern, not a confidentiality bypass—redaction still runs on append.

@@ -6,7 +6,7 @@
 //
 // This binary proves that morphling execution can occur in a separate process
 // communicating with Loopgate via the Unix domain socket. It does NOT implement
-// process isolation, sandboxing, or MCP integration.
+// process isolation, sandboxing, or IDE integration.
 //
 // Usage:
 //

@@ -147,6 +147,16 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		}
 	}
 
+	if server.maxTotalControlSessions > 0 && len(server.sessions) >= server.maxTotalControlSessions {
+		server.mu.Unlock()
+		server.writeJSON(writer, http.StatusTooManyRequests, CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "control-plane session store is at capacity",
+			DenialCode:   DenialCodeControlPlaneStateSaturated,
+		})
+		return
+	}
+
 	if server.maxActiveSessionsPerUID > 0 && server.activeSessionsForPeerUIDLocked(requestPeerIdentity.UID) >= server.maxActiveSessionsPerUID {
 		server.mu.Unlock()
 		server.writeJSON(writer, http.StatusTooManyRequests, CapabilityResponse{

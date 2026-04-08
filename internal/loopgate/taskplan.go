@@ -25,7 +25,7 @@ import (
 //
 // What this slice does NOT prove:
 //   - Full morphling process isolation (morphling is a logical identity only)
-//   - Real MCP provider integration (echo provider is local/fake)
+//   - Real external provider integration (echo provider is local/fake; in-tree MCP removed — ADR 0010)
 //   - Multi-step plan execution (Steps[] exists but only step 0 is used)
 //   - Durable persistence across server restarts (in-memory only)
 //   - Lease revocation or plan cancellation

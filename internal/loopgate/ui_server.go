@@ -17,6 +17,19 @@ import (
 
 const maxUIEventBuffer = 200
 
+// havenTrustedSandboxAllowlistMode summarizes how capability names are filtered for Haven auto-allow (see config.Policy.HavenTrustedSandboxAutoAllowMatchesCapability).
+func havenTrustedSandboxAllowlistMode(policy config.Policy) string {
+	listPtr := policy.Safety.HavenTrustedSandboxAutoAllowCapabilities
+	if listPtr == nil {
+		return "all"
+	}
+	list := *listPtr
+	if len(list) == 0 {
+		return "none"
+	}
+	return "restricted"
+}
+
 type uiEventSubscriber struct {
 	controlSessionID string
 	id               int
@@ -69,6 +82,8 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 			ReadEnabled:           server.policy.Tools.Filesystem.ReadEnabled,
 			WriteEnabled:          server.policy.Tools.Filesystem.WriteEnabled,
 			WriteRequiresApproval: server.policy.Tools.Filesystem.WriteRequiresApproval,
+			HavenTrustedSandboxAutoAllow:     server.policy.HavenTrustedSandboxAutoAllowEnabled(),
+			HavenTrustedSandboxAllowlistMode: havenTrustedSandboxAllowlistMode(server.policy),
 		},
 	}
 	server.writeJSON(writer, http.StatusOK, response)

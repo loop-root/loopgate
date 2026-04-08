@@ -2,14 +2,14 @@
 
 # Loopgate local HTTP API — guide for HTTP-native clients
 
-This document explains how a **local process** (native app, test harness, or bridge) talks to **Loopgate** over **HTTP on a Unix domain socket**. It is the supported **v1 transport** for privileged control-plane calls alongside MCP.
+This document explains how a **local process** (native app, test harness, or bridge) talks to **Loopgate** over **HTTP on a Unix domain socket**. It is the **only supported in-tree v1 transport** for privileged control-plane calls. **In-tree MCP is deprecated and removed** ([ADR 0010](../adr/0010-macos-supported-target-and-mcp-removal.md)); use this HTTP API directly or an **out-of-tree** MCP→HTTP forwarder if needed.
 
 **Normative details:** [RFC 0001: Loopgate Token and Request Integrity Policy](../rfcs/0001-loopgate-token-policy.md).  
 **Reference implementation:** `internal/loopgate/client.go` (Go) — match its wire behavior byte-for-byte when in doubt.
 
 ### Neutral routes, legacy aliases, and the `haven` actor
 
-Prefer the neutral routes in this document, such as **`/v1/chat`** and **`/v1/continuity/inspect-thread`**. Loopgate still keeps the historical **`/v1/haven/...`** routes as compatibility aliases for existing local HTTP clients. The session **actor label `haven`** is also still used by a few compatibility paths; it is a stable identifier, not a product boundary. Prefer **MCP** for new IDE integrations.
+Prefer the neutral routes in this document, such as **`/v1/chat`** and **`/v1/continuity/inspect-thread`**. Loopgate still keeps the historical **`/v1/haven/...`** routes as compatibility aliases for existing local HTTP clients. The session **actor label `haven`** is also still used by a few compatibility paths; it is a stable identifier, not a product boundary. **Prefer this HTTP API** for new IDE and native integrations (in-tree MCP removed — see [LOOPGATE_MCP.md](./LOOPGATE_MCP.md)).
 
 ---
 
@@ -328,7 +328,7 @@ If a parent process opens Loopgate and passes tokens to a child via a **launch-b
 
 ## 11. Related docs
 
-- [SETUP.md](./SETUP.md) — minimal repo setup and pointers to MCP/HTTP docs.
+- [SETUP.md](./SETUP.md) — minimal repo setup and pointers to HTTP and deprecated-MCP docs.
 - [SECRETS.md](./SECRETS.md) — how secrets are supposed to flow (Loopgate-owned).
 - [loopgate.md](../design_overview/loopgate.md) — product/system overview.
 - [RFC 0001](../rfcs/0001-loopgate-token-policy.md) — token and signing rules.

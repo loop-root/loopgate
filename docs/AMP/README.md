@@ -116,7 +116,7 @@ Before tagging a release or claiming **"aligned with AMP local-uds-v1"**, comple
 ## Scope boundary
 
 - **Here (`docs/AMP/`):** neutral names, transport profile, object model, integrity, approvals, memory authority, capability execution (protocol intent).
-- **Elsewhere in this repository:** Loopgate routes, MCP/proxy setup, product RFCs, threat model, and the in-repo Wails reference under `cmd/haven/` (contract shell only).
+- **Elsewhere in this repository:** Loopgate routes, **HTTP-on-UDS** setup (in-tree MCP deprecated — ADR 0010), proxy direction, product RFCs, threat model, and the in-repo Wails reference under `cmd/haven/` (contract shell only).
 
 ## Contributing
 

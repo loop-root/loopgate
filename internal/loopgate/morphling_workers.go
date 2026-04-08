@@ -218,6 +218,11 @@ func (server *Server) openMorphlingWorkerSession(requestPeerIdentity peerIdentit
 	}
 	workerControlSessionID := "worker-" + controlSessionSuffix
 
+	if server.maxMorphlingWorkerSessions > 0 && len(server.morphlingWorkerSessions) >= server.maxMorphlingWorkerSessions {
+		server.mu.Unlock()
+		return MorphlingWorkerSessionResponse{}, errMorphlingWorkerSessionsSaturated
+	}
+
 	delete(server.morphlingWorkerLaunches, strings.TrimSpace(openRequest.LaunchToken))
 	server.revokeMorphlingWorkerAccessLocked(record.MorphlingID)
 	server.morphlingWorkerSessions[workerToken] = morphlingWorkerSession{

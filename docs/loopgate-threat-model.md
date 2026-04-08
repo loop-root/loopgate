@@ -2,18 +2,18 @@
 
 # Loopgate Threat Model
 
-**Threat model snapshot reviewed:** 2026-04-03. Re-validate after major transport, multi-tenant, or MCP/proxy surface changes.
+**Threat model snapshot reviewed:** 2026-04-03. Re-validate after major transport, multi-tenant, or proxy / **out-of-tree IDE bridge** surface changes. (**In-tree MCP removed** — ADR 0010 — reducing subprocess/protocol attack surface; a future thin MCP forwarder would re-open review.)
 
 ## Executive summary
 
 The highest-risk themes in a typical **Loopgate** deployment are local control-plane abuse, audit and state integrity, and sensitive third-party data handling through Loopgate-managed provider connections. Implemented controls include peer-bound and signed Loopgate requests, explicit approval state, typed/policy-gated capabilities, quarantined remote payloads, and OS-backed secure secret storage on macOS. Residual risks concentrate on same-user local abuse of the control plane (including **unauthenticated `GET /v1/health`** as a trivial liveness probe — by design), fail-open configuration defaults around filesystem scope, local integrity gaps in audit-derived memory, and emerging browser/bridge bootstrap risks as `morphui` approaches implementation. Inventory routes **`GET /v1/status`** / **`GET /v1/connections/status`** require authenticated signed GETs; see [RFC 0001 — token policy](rfcs/0001-loopgate-token-policy.md). Evidence anchors: [server.go](../internal/loopgate/server.go), [client_credentials.go](../internal/loopgate/client_credentials.go), [pkce.go](../internal/loopgate/pkce.go), [quarantine.go](../internal/loopgate/quarantine.go), [ui_surface_contract.md](design_overview/ui_surface_contract.md), [0002-delegated-session-refresh.md](rfcs/0002-delegated-session-refresh.md).
 
-**Product framing:** Loopgate is the **primary product** in this repository. **Operator clients** are MCP hosts, proxy adapters, IDE integrations, and the in-repo **Wails reference** under `cmd/haven/` (frozen contract shell — not a ship target). **Morphlings** remain Loopgate-governed bounded workers.
+**Product framing:** Loopgate is the **primary product** in this repository. **Operator clients** are IDE integrations and proxy adapters over **HTTP on the Unix socket** (optional **out-of-tree** MCP→HTTP forwarders; **in-tree MCP deprecated/removed** per ADR 0010). The in-repo **Wails reference** under `cmd/haven/` is a frozen contract shell — not a ship target. **Morphlings** remain Loopgate-governed bounded workers.
 
 ## Scope and assumptions
 
 - In scope:
-  - **Operator clients** connecting over HTTP on the Loopgate Unix socket (MCP bridges, reference Wails shell, tests, custom integrators)
+  - **Operator clients** connecting over HTTP on the Loopgate Unix socket (IDE bridges, reference Wails shell, tests, custom integrators)
   - `cmd/loopgate`, `internal/loopgate`, and supporting packages for policy, tools, audit, memory, secrets
   - `internal/shell`, `internal/modelruntime`, `internal/model`, `internal/tools`, `internal/safety`, `internal/config`, `internal/ledger`, `internal/state`, `internal/memory`, `internal/secrets`
   - `docs/design_overview/ui_surface_contract.md`, `docs/rfcs/0002-delegated-session-refresh.md`, `core/policy/policy.yaml`
@@ -26,7 +26,7 @@ The highest-risk themes in a typical **Loopgate** deployment are local control-p
   - Same-user local processes remain in scope as realistic attackers.
   - The model does not assume the local user account is fully trusted simply because transport is local.
   - Loopgate-managed provider connections should be treated as capable of accessing production-sensitive third-party data.
-  - **Primary integration direction** is **MCP / proxy** + existing IDEs; the in-repo Wails tree is a **reference** attachment, not the normative deployment story.
+  - **Primary integration direction** is **HTTP on the local socket** + proxy-capable IDEs; the in-repo Wails tree is a **reference** attachment, not the normative deployment story.
   - The `morphui` bridge/browser path is near-term in scope as an emerging surface, not yet the primary runtime path.
 - Open questions that would materially change ranking:
   - Whether a dedicated launcher becomes the sole bootstrap for Loopgate and `morphui`, with stronger launch-bound identity than same-user local access.
@@ -36,7 +36,7 @@ The highest-risk themes in a typical **Loopgate** deployment are local control-p
 
 ### Primary components
 
-- **Operator client** (MCP host, IDE, or in-repo **Wails reference** under `cmd/haven/`):
+- **Operator client** (IDE, HTTP local client, or in-repo **Wails reference** under `cmd/haven/`):
   - handles prompt/model interaction, local state, and operator UX on the unprivileged side.
   - Evidence (reference path): [main.go](../cmd/haven/main.go), [chat.go](../cmd/haven/chat.go), [commands.go](../internal/shell/commands.go).
 - **Loopgate** local control plane:
@@ -95,7 +95,7 @@ The highest-risk themes in a typical **Loopgate** deployment are local control-p
 
 ```mermaid
 flowchart TD
-  User["Local user or same-user process"] --> Client["Operator client (IDE / MCP / Wails ref)"]
+  User["Local user or same-user process"] --> Client["Operator client (IDE / HTTP / Wails ref)"]
   Client --> Loopgate["Loopgate control plane"]
   Client --> Model["Model provider"]
   Loopgate --> Files["Filesystem capabilities"]
@@ -210,7 +210,7 @@ flowchart TD
 - Strengthen launch-bound local identity for Loopgate and future `morphui` bootstrap.
 - Add richer connection rotation metadata and explicit lifecycle telemetry for provider secrets.
 - Continue runtime file/socket permission sweep across state, config, quarantine, and future bridge artifacts.
-- As **MCP**, **proxy mode**, **admin console**, and **`tenant_id`** land, extend this document with explicit trust boundaries for those surfaces (fail-closed policy parity with HTTP handlers per `AGENTS.md`).
+- As **proxy mode**, **admin console**, **`tenant_id`**, and **documented out-of-tree IDE bridges** (including any future **thin MCP forwarder** introduced by ADR) land, extend this document with explicit trust boundaries for those surfaces (fail-closed policy parity with HTTP handlers per `AGENTS.md`).
 
 ## Focus paths for manual security review
 
@@ -220,5 +220,5 @@ flowchart TD
 
 - Loopgate session, capability, approval, connection, and UI endpoints covered.
 - Trust boundaries include local user/process → operator client → Loopgate → filesystem/providers/persistence → emerging bridge.
-- **Wails** path under `cmd/haven/` labeled reference-only; MCP/proxy IDEs are the primary integration direction.
+- **Wails** path under `cmd/haven/` labeled reference-only; HTTP-on-socket and proxy IDEs are the primary integration direction.
 - Enterprise integration surfaces flagged for future threat-model expansion as implemented.

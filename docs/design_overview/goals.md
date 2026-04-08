@@ -5,7 +5,7 @@
 ## Product goals
 
 - **Governed AI execution** — Use models on real work without treating prompt text or completions as authority.
-- **Explicit boundary** — **Loopgate** is the primary product and authority for policy, capabilities, secrets, sandbox, audit, and morphlings; **operator clients** attach via MCP, proxy, or local HTTP.
+- **Explicit boundary** — **Loopgate** is the primary product and authority for policy, capabilities, secrets, sandbox, audit, and morphlings; **operator clients** attach via **HTTP on the local Unix socket**. **In-tree MCP is deprecated and removed** (ADR 0010 — shrinks attack surface); **out-of-tree** MCP→HTTP forwarders or proxy adapters remain possible outside this repo’s shipped surface, and a **future ADR** may reserve a thin in-tree forwarder only.
 - **Auditable workflow** — Approvals, denials, lifecycle transitions, and memory governance are recorded in structured, reviewable ways.
 - **Bounded agents** — **Morphlings** run as Loopgate-scoped workers, not self-authorizing background processes.
 

@@ -11,42 +11,10 @@ import (
 	"syscall"
 
 	"morph/internal/loopgate"
-	"morph/internal/loopgate/mcpserve"
 	"morph/internal/memory"
 )
 
 func main() {
-	if len(os.Args) >= 2 && os.Args[1] == "mcp-serve" {
-		mcpServeFlags := flag.NewFlagSet("mcp-serve", flag.ContinueOnError)
-		mcpServeFlags.SetOutput(os.Stderr)
-		localOpenSession := mcpServeFlags.Bool("local-open-session", false, "Local/dev IDE integration only. Opens a normal local Loopgate session over the Unix socket; not a new general auth model or remote bootstrap path.")
-		localActor := mcpServeFlags.String("actor", mcpserve.DefaultActor, "Actor label for local-open-session mode.")
-		localClientSession := mcpServeFlags.String("client-session", mcpserve.DefaultClientSession, "Client session label for local-open-session mode.")
-		localRequestedCapabilities := mcpServeFlags.String("requested-capabilities", "", "Comma-separated requested capabilities for local-open-session mode. Required when -local-open-session is set.")
-		localWorkspaceID := mcpServeFlags.String("workspace-id", "", "Optional workspace id bound into local-open-session requests.")
-		if err := mcpServeFlags.Parse(os.Args[2:]); err != nil {
-			os.Exit(2)
-		}
-
-		runOptions := mcpserve.RunOptions{}
-		if *localOpenSession {
-			requestedCapabilities := splitAndTrimCommaList(*localRequestedCapabilities)
-			runOptions.LocalOpenSession = &mcpserve.LocalOpenSessionConfig{
-				Actor:                 *localActor,
-				ClientSession:         *localClientSession,
-				RequestedCapabilities: requestedCapabilities,
-				WorkspaceID:           strings.TrimSpace(*localWorkspaceID),
-			}
-		}
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		defer stop()
-		if err := mcpserve.RunWithOptions(ctx, runOptions); err != nil {
-			fmt.Fprintln(os.Stderr, "ERROR: mcp-serve:", err)
-			os.Exit(1)
-		}
-		return
-	}
-
 	rootFlags, acceptPolicy := newRootFlagSet()
 	if err := rootFlags.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
@@ -101,17 +69,4 @@ func newRootFlagSet() (*flag.FlagSet, *bool) {
 	rootFlags.SetOutput(os.Stderr)
 	acceptPolicy := rootFlags.Bool("accept-policy", false, "accept a changed policy file hash on startup")
 	return rootFlags, acceptPolicy
-}
-
-func splitAndTrimCommaList(raw string) []string {
-	rawParts := strings.Split(raw, ",")
-	trimmedParts := make([]string, 0, len(rawParts))
-	for _, rawPart := range rawParts {
-		trimmedPart := strings.TrimSpace(rawPart)
-		if trimmedPart == "" {
-			continue
-		}
-		trimmedParts = append(trimmedParts, trimmedPart)
-	}
-	return trimmedParts
 }

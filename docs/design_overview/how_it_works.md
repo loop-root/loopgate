@@ -1,14 +1,14 @@
-**Last updated:** 2026-04-03
+**Last updated:** 2026-04-08
 
 # How it works (operator client and Loopgate)
 
-**Primary operator experience:** developer tools via **MCP** or **proxy** (see `docs/setup/LOOPGATE_MCP.md` and root `AGENTS.md`).
+**Primary operator experience:** developer tools via **HTTP on the local Unix socket** and, when shipped, **proxy** mode. **In-tree MCP is deprecated and removed** (see `docs/setup/LOOPGATE_MCP.md`, ADR 0010); use native HTTP clients or **out-of-tree** forwarders.
 
 There is **no separate product CLI** in the supported path for new integrations. Privileged work goes through **Loopgate** on a local Unix socket.
 
 ## 1) Startup — IDE client or local integration
 
-On launch, the IDE host, MCP subprocess, or local client:
+On launch, the IDE host or local HTTP client:
 
 1. resolves the active **project root** (or workspace binding)
 2. loads persona and effective model runtime configuration

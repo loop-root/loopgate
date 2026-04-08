@@ -26,7 +26,7 @@ import (
 //
 // NOT proven by this test:
 //   - Morphling process isolation (morphling is a logical identity)
-//   - Real MCP providers (echo is a local fake)
+//   - Real external providers (echo is a local fake; in-tree MCP removed — ADR 0010)
 //   - Multi-step plans
 //   - Durable persistence
 func TestTaskPlanGoldenPath(t *testing.T) {

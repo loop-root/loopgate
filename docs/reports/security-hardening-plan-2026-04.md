@@ -13,13 +13,13 @@
 
 ## Completed (2026-04-07 continuation)
 
-5. **Resource caps (F6)** — Default limits: **64** pending approvals per control session, **65536** entries each for `seenRequests` and `seenAuthNonce` replay maps. Fail closed when full (no eviction). Denial codes: `pending_approval_limit_reached`, `replay_state_saturated` (HTTP **429** where applicable).
-6. **Morphling spawn + non-pending response** — If spawn approval returns anything other than `pending_approval` (e.g. pending limit), `failMorphlingAfterAdmission` runs so morphlings do not stick in an authorizing state.
-7. **Haven trusted-sandbox auto-allow policy** — `core/policy/policy.yaml` → `safety.haven_trusted_sandbox_auto_allow` (optional `*bool`, default-on when omitted) and `safety.haven_trusted_sandbox_auto_allow_capabilities` (optional allowlist; empty list disables auto-allow for all). Wired in `Server.shouldAutoAllowTrustedSandboxCapability`.
+1. **Resource caps (F6)** — Default limits: **64** pending approvals per control session, **65536** entries each for `seenRequests` and `seenAuthNonce` replay maps. Fail closed when full (no eviction). Denial codes: `pending_approval_limit_reached`, `replay_state_saturated` (HTTP **429** where applicable).
+2. **Morphling spawn + non-pending response** — If spawn approval returns anything other than `pending_approval` (e.g. pending limit), `failMorphlingAfterAdmission` runs so morphlings do not stick in an authorizing state.
+3. **Haven trusted-sandbox auto-allow policy** — `core/policy/policy.yaml` → `safety.haven_trusted_sandbox_auto_allow` (optional `*bool`, default-on when omitted) and `safety.haven_trusted_sandbox_auto_allow_capabilities` (optional allowlist; empty list disables auto-allow for all). Wired in `Server.shouldAutoAllowTrustedSandboxCapability`.
 
 ## Completed (2026-04-07 — executable pinning)
 
-8. **Executable path pinning (F2)** — `config/runtime.yaml` → `control_plane.expected_session_client_executable`: non-empty absolute path required when set; compared (after clean) to the peer executable at `POST /v1/session/open`. Empty = disabled (default).
+1. **Executable path pinning (F2)** — `config/runtime.yaml` → `control_plane.expected_session_client_executable`: non-empty absolute path required when set; compared (after clean) to the peer executable at `POST /v1/session/open`. Empty = disabled (default).
 
 ## Follow-on (tracked, not done)
 

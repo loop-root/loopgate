@@ -170,6 +170,8 @@ func morphlingDenialCode(err error) string {
 		return DenialCodeMorphlingWorkerLaunchInvalid
 	case errors.Is(err, errMorphlingWorkerTokenInvalid):
 		return DenialCodeMorphlingWorkerTokenInvalid
+	case errors.Is(err, errMorphlingWorkerSessionsSaturated):
+		return DenialCodeControlPlaneStateSaturated
 	case errors.Is(err, sandbox.ErrSandboxPathInvalid), errors.Is(err, sandbox.ErrSandboxPathOutsideRoot), errors.Is(err, sandbox.ErrSandboxSourceUnavailable):
 		return DenialCodeSandboxPathInvalid
 	case errors.Is(err, sandbox.ErrSandboxDestinationExists):
@@ -193,6 +195,8 @@ func morphlingHTTPStatus(err error) int {
 		return http.StatusNotFound
 	case DenialCodeMorphlingWorkerLaunchInvalid, DenialCodeMorphlingWorkerTokenInvalid, DenialCodeMorphlingWorkerTokenMissing:
 		return http.StatusUnauthorized
+	case DenialCodeControlPlaneStateSaturated:
+		return http.StatusTooManyRequests
 	case DenialCodeAuditUnavailable:
 		return http.StatusServiceUnavailable
 	default:

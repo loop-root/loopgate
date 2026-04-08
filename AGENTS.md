@@ -1,6 +1,6 @@
 # Claude Code Agent Instructions for Loopgate
 
-**Last updated:** 2026-04-03 (Loopgate-only docs; MCP-first integrations).
+**Last updated:** 2026-04-08 (Loopgate-only docs; **HTTP-on-UDS** control plane; **in-tree MCP deprecated/removed** — ADR 0010).
 
 You are working on a security-sensitive Go project for governing and constraining AI agent activity.
 
@@ -65,7 +65,7 @@ These rules align with the local control-plane design and AMP direction.
 
 ### Transport standards
 
-- **Local client ↔ Loopgate (v1 standard):** HTTP over a Unix domain socket (local control-plane binding). MCP subprocess hosts, proxy mode, IDE adapters, and other local tooling connect this way. Not Apple XPC.
+- **Local client ↔ Loopgate (v1 standard):** HTTP over a Unix domain socket (local control-plane binding). IDE adapters, proxy mode (when shipped), tests, and **out-of-tree** bridges connect this way. **In-tree MCP subprocess host removed** (ADR 0010 — reduced attack surface; **reserved** for future thin forwarder via new ADR). Not Apple XPC.
 - **Local node ↔ admin node (enterprise):** mTLS over TCP. Admin node authority must be cryptographically verified — IP address or hostname alone is not sufficient.
 - **Apple XPC hardening** is optional post-launch backlog only (no committed date). See `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`.
 
@@ -82,7 +82,7 @@ Bearer possession alone is not enough.
 
 ### Enterprise integration surface owns (primary)
 
-- **MCP server:** exposes Loopgate capabilities to connected developer tools (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, any MCP-compatible IDE). Developers do not need a separate Loopgate UI.
+- **Local HTTP control plane (v1):** normative attachment for developer tools — session open, signed requests, capability execution over **HTTP on the Unix socket** (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`). **In-tree MCP server deprecated and removed** (ADR 0010); **out-of-tree** MCP→HTTP forwarders remain an operator choice; a **future ADR** may reserve a thin in-tree forwarder **only** with identical policy/audit invariants.
 - **Proxy mode:** transparent API proxy between developer IDEs and model endpoints — intercepts requests, injects memory context, applies policy, logs to audit.
 - **Admin console:** web UI for IT admins — policy configuration, user/team provisioning, IDP integration, audit log viewer. Not a developer-facing surface.
 
@@ -109,7 +109,7 @@ Morphlings are internal Loopgate-governed runtime objects.
 - Their lifecycle, execution envelope, and audit trail are owned by Loopgate.
 - A client UI (IDE, MCP host, proxy-integrated editor, or local client) may render a pool of morphlings and their projected status, but that UI is not the source of truth for morphling state.
 
-**MCP handlers must apply the same policy evaluation, approval workflows, and audit logging as HTTP handlers. MCP is not a trust boundary bypass.** The proxy mode must not weaken policy or audit. The admin console must require authentication before serving routes.
+**Any MCP-shaped or IDE-bridge transport** (in-tree or out-of-tree) **must** apply the same policy evaluation, approval workflows, and audit logging as HTTP handlers — **never** a trust bypass. The removed in-tree server followed this rule; any **future** reintroduction does too (ADR 0010). The proxy mode must not weaken policy or audit. The admin console must require authentication before serving routes.
 
 ## Multi-tenancy model
 

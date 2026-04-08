@@ -1,90 +1,19 @@
-**Last updated:** 2026-04-03
+# MCP integration (deprecated in-tree)
 
-# Loopgate MCP server (`loopgate mcp-serve`)
+**Status:** **Deprecated and removed** from this repository. This page documents **what changed**, **why** (attack surface), and **what is reserved** for a possible future design.
 
-The **Model Context Protocol** (stdio JSON-RPC) lets IDEs (**Claude Code**, **Cursor**, **VS Code**, **Google Anti‑Gravity**, **OpenAI Codex**, and other MCP hosts) call tools implemented by a subprocess. Loopgate exposes a minimal MCP server that **forwards** tool calls to a **running** Loopgate daemon over the **local Unix socket** — the same HTTP API and AMP-style session integrity as HTTP-native clients (see [RFC 0001](../rfcs/0001-loopgate-token-policy.md), [AMP](../AMP/README.md)).
+The **`loopgate mcp-serve`** stdio MCP server and package `internal/loopgate/mcpserve` were **deleted** (see [`docs/adr/0010-macos-supported-target-and-mcp-removal.md`](../adr/0010-macos-supported-target-and-mcp-removal.md)).
 
-**Product note:** MCP is the **primary** developer integration path. Any HTTP-native client (custom app, test harness, or the in-repo Wails reference) can open a control session and export credentials using the same contract.
+## Why it was removed
 
-## Prerequisites
+The in-tree MCP server added **supply-chain and protocol surface** (e.g. `mcp-go`), **stdio subprocess bootstrap**, and **parallel session/credential paths** next to the authoritative **HTTP-on-Unix-socket** control plane. Removing it **does not** relax policy: it eliminates a whole class of integration bugs and trust-boundary confusion while keeping a **single** wire path for privileged calls.
 
-1. **Loopgate daemon** listening (default: `loopgate` with `runtime/state/loopgate.sock`, or `LOOPGATE_SOCKET`).
-2. A **valid open session**: capability token, approval token, session MAC key, and expiry — normally obtained from `POST /v1/session/open` (or delegated session export from an existing client).
+## Reserved for later (explicit ADR only)
 
-## Local / dev IDE mode
+**MCP is not permanently rejected as a product idea.** A **future ADR** may reintroduce MCP (or another IDE protocol) **only** as a **thin forwarder** to the existing HTTP API, with the same invariants as all other clients: same policy evaluation, approvals, audit, and signing — **never** a bypass. Until then, treat MCP as **out of scope for in-tree shipping**.
 
-`loopgate mcp-serve -local-open-session ...` is a **local/dev convenience mode only**.
+## What to use instead
 
-- It is intended for a local IDE such as **Claude Code** or **Cursor** running on the **same machine** as Loopgate.
-- It does **not** introduce a new auth model.
-- It does **not** create a remote bootstrap path.
-- It still opens a normal Loopgate control session over the **local Unix socket** using the existing request-signing and policy flow.
+Integrations should attach to Loopgate over **HTTP on the local Unix socket** using the normal **session open** and **signed request** flow (`/v1/session/open`, `/v1/capabilities/execute`, etc.), identical to other local control-plane clients. See [LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md](./LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md).
 
-Use this mode only for local IDE integration. Do not treat it as a production or remote deployment pattern.
-
-Example:
-
-```bash
-loopgate mcp-serve \
-  -local-open-session \
-  -actor claude_code \
-  -client-session cursor_demo \
-  -requested-capabilities memory.remember,todo.add,todo.complete,todo.list,fs_list
-```
-
-`-requested-capabilities` must contain **Loopgate capability ids**, not MCP built-in tool names. For example:
-
-- valid: `memory.remember`, `todo.add`, `fs_list`
-- invalid: `loopgate.status`, `loopgate.memory_discover`
-
-## Environment variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `MORPH_REPO_ROOT` | No | Repo root (default: cwd). Used for default socket path. |
-| `LOOPGATE_SOCKET` | No | Override Unix socket path. |
-| `LOOPGATE_MCP_CONTROL_SESSION_ID` | Yes | Control session id (must match the minted session). |
-| `LOOPGATE_MCP_CAPABILITY_TOKEN` | Yes | Bearer capability token. |
-| `LOOPGATE_MCP_APPROVAL_TOKEN` | Yes | Approval token from session open. |
-| `LOOPGATE_MCP_SESSION_MAC_KEY` | Yes | Hex session MAC key for signed POST bodies. |
-| `LOOPGATE_MCP_EXPIRES_AT` | Yes | Token expiry, RFC3339 or RFC3339Nano. |
-| `LOOPGATE_MCP_ACTOR` | No | Client actor label for signing (default: `mcp`). **Effective actor is still the token’s session actor** — use a session opened with the actor/capabilities you need. |
-| `LOOPGATE_MCP_CLIENT_SESSION` | No | Client session label for signing (default: `mcp-stdio`). |
-| `LOOPGATE_MCP_TENANT_ID` | No | Copied into MCP diagnostic context; use same values as the control session / `config/runtime.yaml` tenancy when set. **Empty** for personal / default deployment (matches `docs/setup/TENANCY.md`). |
-| `LOOPGATE_MCP_USER_ID` | No | Same as tenant id row — optional; empty in personal mode. |
-
-Treat these values as **secrets**; do not commit them to `.mcp.json`. Prefer a wrapper script or OS keychain-fed env.
-
-## Tools
-
-| Tool | Purpose |
-|------|---------|
-| `loopgate.status` | Same inventory as `GET /v1/status`. |
-| `loopgate.memory_wake_state` | Loads the current wake-state summary via `GET /v1/memory/wake-state`. |
-| `loopgate.memory_discover` | Typed memory discovery wrapper over `POST /v1/memory/discover`. |
-| `loopgate.memory_remember` | Typed explicit-memory write wrapper over `POST /v1/memory/remember`. |
-| `<Capability Name>` | Each allowed Loopgate capability (for example `fs_list`, `memory.remember`) is also registered dynamically as a native MCP tool mapped to `POST /v1/capabilities/execute`. This remains the fallback surface when a typed wrapper does not exist yet. |
-
-## Example IDE config shape (illustrative)
-
-Exact schema depends on the IDE. The **command** is the `loopgate` binary with first argument `mcp-serve`; **env** carries delegated credentials (injected by your launcher, not checked into git).
-
-## Limitations (v0)
-
-- Requires a **separate** long-running `loopgate` process; MCP does not start the control plane.
-- Stdout is reserved for MCP; errors use stderr.
-- `-local-open-session` is for **local/dev IDE integration only**, not a general auth surface.
-
-## Cursor dry-run notes
-
-The 2026-04-03 local dry-run showed these host-specific behaviors:
-
-- **Cursor IDE** successfully loaded the Loopgate MCP server from `~/.cursor/mcp.json`.
-- The newer Cursor app surface did **not** expose the same tool set reliably; use the main Cursor IDE for now.
-- Cursor IDE surfaced the built-in Loopgate MCP tools with **underscore names**, for example:
-  - `loopgate_status`
-  - `loopgate_memory_wake_state`
-  - `loopgate_memory_discover`
-  - `loopgate_memory_remember`
-- The fallback capability tools may appear under a host-prefixed name such as `user-loopgate-...`.
-- If you need the generic dispatcher tool, include `invoke_capability` in `-requested-capabilities`; otherwise direct typed MCP tools are the preferred path.
+If you need an MCP-shaped adapter for an IDE host today, treat it as an **out-of-tree forwarder** that speaks MCP on one side and Loopgate HTTP on the other, without weakening policy, audit, or signing requirements.

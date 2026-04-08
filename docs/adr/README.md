@@ -31,7 +31,8 @@ Link from code comments when helpful: `See docs/adr/NNNN-....md`.
 | 0002 | Single-node tenant model before multi-node | accepted |
 | 0003 | Diagnostic slog as operator product surface | accepted |
 | 0004 | Deployment tenant from runtime config (not client JSON) | accepted |
-| 0005 | MCP server: stdio + mcp-go, delegated session over UDS client | accepted |
+| 0005 | MCP server: stdio + mcp-go, delegated session over UDS client | superseded by 0010 |
+| 0010 | macOS supported target; **in-tree MCP deprecated** (removed — shrinks attack surface); thin forwarder only via future ADR | accepted |
 | 0006 | Explicit memory key registry compiled until signed admin distribution | accepted |
 | 0007 | Preference anchor fallback stays secondary | accepted |
 | 0008 | Validated memory candidate separates analysis from write boundary | accepted |

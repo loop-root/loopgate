@@ -226,6 +226,7 @@ func buildSystemInstruction(request Request) (string, error) {
 		if request.HavenConstrainedToolUse {
 			writeSection(&builder, "TOOL USE", []string{
 				"Your tools are available via the native tool-use API. Use them directly — do not emit XML tool call tags.",
+				"The structured tool definitions attached to this request are authoritative for each tool's name, parameters, and when to use it.",
 				"Do not claim a tool succeeded unless you received a tool result.",
 				"Use tools only when needed to answer the user's current request or to complete work they explicitly asked for. Prefer the smallest set of tool calls that suffices.",
 				"Do not start side work: do not add tasks, journal entries, sticky notes, or durable memories for your own planning unless the user asked for that outcome.",
@@ -236,6 +237,7 @@ func buildSystemInstruction(request Request) (string, error) {
 		} else {
 			writeSection(&builder, "TOOL USE", []string{
 				"Your tools are available via the native tool-use API. Use them directly — do not emit XML tool call tags.",
+				"The structured tool definitions attached to this request are authoritative for each tool's name, parameters, and when to use it.",
 				"Do not claim a tool succeeded unless you received a tool result.",
 				"Use tools proactively when they help answer the user's question or accomplish their request.",
 				"When the user asks or clearly implies that a stable fact should persist, prefer the memory tool if one is listed. If the fact is ambiguous, ask one brief clarifying question.",

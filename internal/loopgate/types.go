@@ -59,6 +59,9 @@ const (
 	DenialCodeReplayStateSaturated = "replay_state_saturated"
 	// DenialCodePendingApprovalLimitReached caps pending (undecided) approvals per control session.
 	DenialCodePendingApprovalLimitReached = "pending_approval_limit_reached"
+	// DenialCodeControlPlaneStateSaturated is returned when an in-memory control-plane map
+	// (sessions, approvals, worker sessions) cannot accept new entries (fail closed).
+	DenialCodeControlPlaneStateSaturated = "control_plane_state_saturated"
 	DenialCodeUnknownCapability                 = "unknown_capability"
 	DenialCodeInvalidCapabilityArguments        = "invalid_capability_arguments"
 	DenialCodePolicyDenied                      = "policy_denied"
@@ -849,6 +852,14 @@ type HavenWorkspaceListResponse struct {
 	Path    string                    `json:"path"`
 	Entries []HavenWorkspaceListEntry `json:"entries"`
 	Error   string                    `json:"error,omitempty"`
+}
+
+// HavenWorkspaceHostLayoutResponse is GET /v1/ui/workspace/host-layout — resolved
+// host filesystem locations for primary sandbox dirs (operator convenience).
+type HavenWorkspaceHostLayoutResponse struct {
+	ProjectsHostPath string `json:"projects_host_path,omitempty"`
+	ResearchHostPath string `json:"research_host_path,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 // HavenWorkspacePreviewRequest is POST /v1/ui/workspace/preview.

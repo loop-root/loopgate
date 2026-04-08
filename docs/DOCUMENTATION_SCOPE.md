@@ -22,7 +22,7 @@ Long-form archives may live outside this clone. Public engineering direction for
 | Area | Path | Role |
 |------|------|------|
 | Index | `docs/README.md` | Entry points and RFC lists |
-| Setup & ops | `docs/setup/` | Install, secrets, tools, HTTP API, MCP |
+| Setup & ops | `docs/setup/` | Install, secrets, tools, HTTP API; MCP doc = **deprecated in-tree** (removed — ADR 0010), out-of-tree / future-ADR reservation |
 | Numbered RFCs | `docs/rfcs/` | Transport, memory, promotion, extraction policy |
 | AMP (neutral protocol) | `docs/AMP/` | Vendored RFCs, implementation mapping, conformance |
 | Product RFCs | `docs/product-rfcs/` | Stable IDs `RFC-MORPH-*` (legacy prefix); see folder `README.md` |

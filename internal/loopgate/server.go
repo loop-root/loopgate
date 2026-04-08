@@ -166,6 +166,12 @@ type Server struct {
 	maxPendingApprovalsPerControlSession int
 	maxSeenRequestReplayEntries          int
 	maxAuthNonceReplayEntries            int
+	// maxTotalControlSessions caps active control sessions (fail closed when full).
+	maxTotalControlSessions int
+	// maxTotalApprovalRecords caps server.approvals map size including terminal rows until pruned.
+	maxTotalApprovalRecords int
+	// maxMorphlingWorkerSessions caps in-memory morphling worker sessions.
+	maxMorphlingWorkerSessions int
 }
 
 type capabilityToken struct {
@@ -266,10 +272,13 @@ const (
 	defaultExpirySweepMaxInterval  = 250 * time.Millisecond
 	defaultFsReadRateLimit         = 60 // reads per minute per session
 	fsReadRateWindow               = 1 * time.Minute
-	// In-memory bounds (F6 / DoS): single-session pending approvals and replay map sizes.
+	// In-memory bounds (DoS): single-session pending approvals, replay maps, and global tables.
 	defaultMaxPendingApprovalsPerControlSession = 64
 	defaultMaxSeenRequestReplayEntries          = 65536
 	defaultMaxAuthNonceReplayEntries            = 65536
+	defaultMaxTotalControlSessions              = 512
+	defaultMaxTotalApprovalRecords              = 4096
+	defaultMaxMorphlingWorkerSessions           = 256
 )
 
 const (
@@ -299,6 +308,10 @@ func NewServer(repoRoot string, socketPath string) (*Server, error) {
 
 // NewServerWithOptions constructs the Loopgate server for the local Unix-socket control plane.
 func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool) (*Server, error) {
+	if err := verifySupportedExecutionPlatform(); err != nil {
+		return nil, err
+	}
+
 	configStateDir := filepath.Join(repoRoot, "runtime", "state", "config")
 
 	// Load policy: JSON state → YAML seed → fail.
@@ -424,6 +437,9 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		maxPendingApprovalsPerControlSession: defaultMaxPendingApprovalsPerControlSession,
 		maxSeenRequestReplayEntries:          defaultMaxSeenRequestReplayEntries,
 		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,
+		maxTotalControlSessions:              defaultMaxTotalControlSessions,
+		maxTotalApprovalRecords:              defaultMaxTotalApprovalRecords,
+		maxMorphlingWorkerSessions:           defaultMaxMorphlingWorkerSessions,
 		taskPlans:                 make(map[string]*taskPlanRecord),
 		taskLeases:                make(map[string]*taskLeaseRecord),
 		taskExecutions:            make(map[string]*taskExecutionRecord),
@@ -512,6 +528,7 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	mux.HandleFunc("/v1/ui/working-notes/entry", server.handleHavenWorkingNotesEntry)
 	mux.HandleFunc("/v1/ui/working-notes", server.handleHavenWorkingNotes)
 	mux.HandleFunc("/v1/ui/workspace/list", server.handleHavenWorkspaceList)
+	mux.HandleFunc("/v1/ui/workspace/host-layout", server.handleHavenWorkspaceHostLayout)
 	mux.HandleFunc("/v1/ui/workspace/preview", server.handleHavenWorkspacePreview)
 	mux.HandleFunc("/v1/ui/memory/reset", server.handleHavenMemoryReset)
 	mux.HandleFunc("/v1/ui/memory", server.handleHavenMemoryInventory)
@@ -855,10 +872,24 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 	}
 
 	policyDecision := server.checker.Check(tool)
+	originalPolicyDecision := policyDecision
 	if server.shouldAutoAllowTrustedSandboxCapability(tokenClaims, capabilityRequest.Capability, tool, policyDecision) {
 		policyDecision = policypkg.CheckResult{
 			Decision: policypkg.Allow,
 			Reason:   "trusted Haven-native sandbox capability",
+		}
+	}
+	// Distinct audit when policy would have required approval but Haven trusted-sandbox auto-allow applied.
+	// Operators grep this event to verify the bypass path; failure to persist is fail-closed like other capability audits.
+	if originalPolicyDecision.Decision == policypkg.NeedsApproval && policyDecision.Decision == policypkg.Allow {
+		if err := server.logEvent("capability.haven_trusted_sandbox_auto_allow", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 		}
 	}
 	if err := server.logEvent("capability.requested", tokenClaims.ControlSessionID, map[string]interface{}{
@@ -934,6 +965,28 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 		server.mu.Lock()
 		server.pruneExpiredLocked()
+		if len(server.approvals) >= server.maxTotalApprovalRecords {
+			server.mu.Unlock()
+			if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+				"request_id":           capabilityRequest.RequestID,
+				"capability":           capabilityRequest.Capability,
+				"reason":               "control-plane approval store is at capacity",
+				"denial_code":          DenialCodeControlPlaneStateSaturated,
+				"actor_label":          tokenClaims.ActorLabel,
+				"client_session_label": tokenClaims.ClientSessionLabel,
+				"control_session_id":   tokenClaims.ControlSessionID,
+			}); err != nil {
+				return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+			}
+			deniedResponse := CapabilityResponse{
+				RequestID:    capabilityRequest.RequestID,
+				Status:       ResponseStatusDenied,
+				DenialReason: "control-plane approval store is at capacity",
+				DenialCode:   DenialCodeControlPlaneStateSaturated,
+			}
+			server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
+			return deniedResponse
+		}
 		if server.countPendingApprovalsForSessionLocked(tokenClaims.ControlSessionID) >= server.maxPendingApprovalsPerControlSession {
 			server.mu.Unlock()
 			if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
@@ -2867,7 +2920,7 @@ func httpStatusForResponse(response CapabilityResponse) int {
 		case DenialCodeRequestReplayDetected, DenialCodeCapabilityTokenReused, DenialCodeApprovalStateConflict,
 			DenialCodeQuarantinePruneNotEligible:
 			return http.StatusConflict
-		case DenialCodeSessionOpenRateLimited, DenialCodeSessionActiveLimitReached, DenialCodeReplayStateSaturated, DenialCodePendingApprovalLimitReached:
+		case DenialCodeSessionOpenRateLimited, DenialCodeSessionActiveLimitReached, DenialCodeReplayStateSaturated, DenialCodePendingApprovalLimitReached, DenialCodeControlPlaneStateSaturated:
 			return http.StatusTooManyRequests
 		case DenialCodeMalformedRequest, DenialCodeInvalidCapabilityArguments, DenialCodeSiteURLInvalid,
 			DenialCodeSiteInspectionUnsupportedType, DenialCodeSandboxPathInvalid, DenialCodeSandboxHostDestinationInvalid,

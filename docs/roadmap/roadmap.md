@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-03
+**Last updated:** 2026-04-08
 
 # Loopgate roadmap
 
@@ -7,7 +7,7 @@
 **Snapshot from:** 2026-03-12 (feature list). **Doc reviewed:** 2026-03-24.
 
 The repo ships the **Loopgate** control plane with a real security boundary.
-**Primary integration targets** are **MCP- and proxy-capable IDEs** (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, …). The in-repo **`cmd/haven/`** Wails tree is **reference-only** (contracts/tests).
+**Primary integration targets** are **HTTP-on-UDS local clients** and, when shipped, **proxy-capable** toolchains. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR; **out-of-tree** MCP→HTTP bridges remain an operator choice. The in-repo **`cmd/haven/`** Wails tree is **reference-only** (contracts/tests).
 
 Implemented:
 
@@ -153,7 +153,7 @@ The control plane is real, but **enterprise integration** and **multi-tenancy** 
 
 Not yet implemented (non-exhaustive):
 
-- **MCP server** and **transparent proxy** as primary developer integration surfaces
+- **Transparent proxy** as a primary developer integration surface; **normative local control plane** remains **HTTP on the Unix socket**. (**In-tree MCP removed** — see ADR 0010; optional **future** thin MCP layer only with a new ADR.)
 - **`tenant_id` namespace** across remaining resources (memory partitions and core audit paths are in progress; grants and other state may still be global per instance)
 - **Enterprise identity layer:** customer **IdP** via **OIDC/OAuth** (and SAML where required) for admin and/or node identity — RFC-first; config-sourced tenancy until then (`docs/setup/TENANCY.md`)
 - **Enterprise secrets layer:** pluggable backends for **Vault**, **cloud KMS**, **HSM**-backed stores, **TPM**/platform identity for bootstrap — RFC-first; see `docs/setup/SECRETS.md` § *Enterprise integration layer*
@@ -216,7 +216,7 @@ Lift: medium-large
 
 ## Phase 5: Enterprise / remote profile (RFC-first, in progress)
 
-- MCP server and proxy mode with policy parity to HTTP handlers
+- Proxy mode (and any **future** MCP-shaped adapter introduced by ADR) with **policy parity** to HTTP handlers — **no alternate trust boundary**
 - `tenant_id` isolation and admin-node governance (mTLS)
 - define remote transport profiles that preserve the Loopgate authority model
 - replace local peer binding with deployment identity where required

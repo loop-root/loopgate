@@ -57,8 +57,8 @@ Current product layers:
 - **Loopgate**
   - privileged control-plane implementation (primary product in this repo)
   - policy, approvals, execution, secrets, audit, morphlings
-- **Operator client** (IDE MCP host, proxy, native UI, or in-repo **`cmd/haven/`** Wails **reference** only)
-  - unprivileged shell for planning and presentation (**MCP/proxy IDEs are the primary integration direction**)
+- **Operator client** (IDE-hosted agent, proxy, native UI, or in-repo **`cmd/haven/`** Wails **reference** only)
+  - unprivileged shell for planning and presentation (**HTTP on the Unix socket** is the normative local control plane; **in-tree MCP deprecated** — ADR 0010; proxy when shipped)
   - planning and presentation
   - bounded continuity projection
   - user interaction

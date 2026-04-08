@@ -12,7 +12,7 @@ This plan is intentionally narrower than the enterprise phased plan. It is the e
 
 The current memory engine and benchmark story are strong enough to justify product work, but the delivery UX is still wrong.
 
-- The MCP path is a good explicit operator surface, but it exposes tool plumbing and does not create the "told it once, new session still knows" experience by default.
+- A **dedicated IDE bridge** (historically in-tree MCP; **now deprecated/removed** — ADR 0010) can be an explicit operator surface, but it exposes extra protocol/tool plumbing and does not create the "told it once, new session still knows" experience by default; **normative control plane** is **HTTP on the Unix socket** (and future **proxy** for chat).
 - The repo still carries legacy Haven/Morph naming, docs, and shells that blur what Loopgate is.
 - The web admin/policy UI is unnecessary attack surface and maintenance debt for the current product direction.
 
@@ -36,7 +36,7 @@ If a legacy surface is unused and safely removable, delete it.
 ## Guiding rules
 
 1. Delete dead surfaces instead of preserving them "just in case".
-2. Keep Loopgate product-agnostic: control plane, MCP, proxy, typed APIs.
+2. Keep Loopgate product-agnostic: control plane, **HTTP-on-UDS** typed APIs, proxy (when shipped); **in-tree MCP removed** (reserved for future ADR only).
 3. Do not weaken policy, audit, or memory invariants to make proxy feel magical.
 4. Keep proxy fast by making memory work conditional and bounded.
 5. Prefer small PRs with tests first.
@@ -109,7 +109,7 @@ Delete the loopback admin console and its startup/config/documentation surface.
 
 ### Safety rule
 
-Delete only the UI/web surface. Do not accidentally delete underlying policy/config/audit data structures that are still used by the control plane or future proxy/MCP work.
+Delete only the UI/web surface. Do not accidentally delete underlying policy/config/audit data structures that are still used by the control plane or future proxy / **out-of-tree IDE bridge** work.
 
 ---
 
@@ -141,7 +141,7 @@ Proxy v0 is not a second agent runtime and not a UI. It is a request/response me
 - no broad prompt rewriting
 - no hidden background worker fleet
 - no full enterprise transport matrix in v0
-- no replacement for MCP typed tools
+- no replacement for **in-tree** MCP typed tools (removed — use HTTP capabilities or out-of-tree forwarders)
 
 ### Performance model
 
@@ -181,7 +181,7 @@ Proxy stays responsive by using a cheap gate before any memory work:
 
 - one provider path works through the proxy
 - proxy injects bounded memory only when the cheap trigger fires
-- explicit remember statements can persist through the validated memory path without manual MCP schema entry
+- explicit remember statements can persist through the validated memory path without manual **IDE bridge** schema entry
 - proxy actions are auditable and test-covered
 - no broad regression in ordinary non-memory requests
 
@@ -192,7 +192,7 @@ Proxy stays responsive by using a cheap gate before any memory work:
 ### PR 1 — Docs/maps cleanup
 
 - remove active Haven/Morph product framing from docs and maps
-- make Loopgate daemon + MCP + proxy + typed APIs the official surfaces
+- make Loopgate daemon + **HTTP control plane** + proxy + typed APIs the official surfaces (**in-tree MCP deprecated**)
 
 ### PR 2 — Prompt cleanup
 
