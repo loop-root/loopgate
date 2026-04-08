@@ -1,0 +1,101 @@
+# =============================================================================
+# Loopgate / Morph policy — EXAMPLE with line-by-line guidance
+# =============================================================================
+#
+# Copy to your deployment's policy seed path only after review. The live file
+# used at runtime is managed under runtime/state/config (see Loopgate docs).
+# This example mirrors core/policy/policy.yaml with extra comments for MVP ops.
+#
+# PRESETS (mental model):
+#   • STRICT MVP — http.enabled: false, shell.enabled: false, write_requires_approval: true
+#   • DEV        — enable shell/http locally; never ship permissive defaults to prod
+#
+# Future integration proxies (Loopgate-only; not in default tool registry yet):
+#   • integration.mail_draft — outbound mail via Loopgate, never raw SMTP from the model
+#   • integration.http_fetch — browsing/fetch via allowlisted domains + approval
+#
+# =============================================================================
+
+version: 0.1.0
+
+# -----------------------------------------------------------------------------
+# tools.filesystem — sandbox + operator_mount.* capabilities
+# -----------------------------------------------------------------------------
+# Applies to:
+#   • fs_* inside Haven's sandbox home (/morph/home/...)
+#   • operator_mount.fs_* — host directories bound at session open (Haven sends
+#     operator_mount_paths on POST /v1/session/open for actor "haven" only).
+#
+# read_enabled: if false, fs_read and operator_mount.fs_read are denied.
+# write_enabled: if false, all writes denied.
+# write_requires_approval: if true, fs_write / operator_mount.fs_write need approval.
+# -----------------------------------------------------------------------------
+tools:
+
+  filesystem:
+    # Sandbox working tree roots (repo-relative "." is the morph sandbox home root).
+    allowed_roots:
+      - "."
+    # Block sensitive subtrees even if a broad allowed_roots would include them.
+    denied_paths:
+      - ".morph/memory"
+      - "core/memory/ledger"
+      - "core/memory/distillates"
+      - "core/policy"
+      - "persona"
+      - "runtime/state/memory"
+    # Example STRICT: read_enabled: true, write_enabled: false
+    read_enabled: true
+    write_enabled: true
+    # Example: false only in trusted automation (generally keep true for Haven UX).
+    write_requires_approval: true
+
+  # ---------------------------------------------------------------------------
+  # HTTP — future "browse via Loop" style tools use this section.
+  # ---------------------------------------------------------------------------
+  # STRICT MVP: enabled: false
+  # DEV: enabled: true, allowed_domains: ["example.com"], requires_approval: true
+  http:
+    enabled: true
+    allowed_domains: [] # empty = deny all domain-specific fetches unless policy extended
+    requires_approval: true
+    timeout_seconds: 10
+
+  # ---------------------------------------------------------------------------
+  # shell — terminal execution (Haven: /shell enable).
+  # ---------------------------------------------------------------------------
+  # STRICT MVP: enabled: false
+  shell:
+    enabled: true
+    allowed_commands: [] # empty = no allowlist pattern (policy engine may still gate)
+    requires_approval: true
+
+  morphlings:
+    # Background / delegated work — keep spawn_enabled false until product enables it.
+    spawn_enabled: false
+    max_active: 5
+    require_template: true
+
+logging:
+  log_commands: true
+  log_tool_calls: true
+  log_memory_promotions: true
+
+memory:
+  auto_distillate: true
+  require_promotion_approval: true
+  continuity_review_required: false
+  submit_previous_min_events: 3
+  submit_previous_min_payload_bytes: 512
+  submit_previous_min_prompt_tokens: 120
+
+safety:
+  # Never let the model rewrite persona or policy through tools.
+  allow_persona_modification: false
+  allow_policy_modification: false
+  # When true, actor "haven" may auto-allow TrustedSandboxLocal tools (journal, notes, …).
+  # Omit or false = more prompts (secure default).
+  haven_trusted_sandbox_auto_allow: true
+  # Optional narrow list; use [] to disable auto-allow entirely:
+  # haven_trusted_sandbox_auto_allow_capabilities:
+  #   - "notes.read"

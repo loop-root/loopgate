@@ -30,30 +30,30 @@ const (
 )
 
 const (
-	DenialCodeCapabilityTokenMissing            = "capability_token_missing"
-	DenialCodeCapabilityTokenInvalid            = "capability_token_invalid"
-	DenialCodeCapabilityTokenExpired            = "capability_token_expired"
-	DenialCodeCapabilityTokenScopeDenied        = "capability_token_scope_denied"
-	DenialCodeCapabilityTokenReused             = "capability_token_reused"
-	DenialCodeCapabilityTokenBindingInvalid     = "capability_token_binding_invalid"
-	DenialCodeRequestSignatureMissing           = "request_signature_missing"
-	DenialCodeRequestSignatureInvalid           = "request_signature_invalid"
-	DenialCodeRequestTimestampInvalid           = "request_timestamp_invalid"
-	DenialCodeRequestNonceReplayDetected        = "request_nonce_replay_detected"
-	DenialCodeControlSessionBindingInvalid      = "control_session_binding_invalid"
-	DenialCodeApprovalTokenMissing              = "approval_token_missing"
-	DenialCodeApprovalTokenInvalid              = "approval_token_invalid"
-	DenialCodeApprovalTokenExpired              = "approval_token_expired"
-	DenialCodeApprovalDecisionNonceMissing      = "approval_decision_nonce_missing"
-	DenialCodeApprovalDecisionNonceInvalid      = "approval_decision_nonce_invalid"
-	DenialCodeApprovalNotFound                  = "approval_request_not_found"
-	DenialCodeApprovalOwnerMismatch             = "approval_owner_mismatch"
-	DenialCodeApprovalRequired                  = "approval_required"
-	DenialCodeApprovalDenied                    = "approval_denied"
-	DenialCodeApprovalStateInvalid              = "approval_state_invalid"
-	DenialCodeSecretExportProhibited            = "secret_export_prohibited"
-	DenialCodeCapabilityScopeRequired           = "capability_scope_required"
-	DenialCodeRequestReplayDetected             = "request_replay_detected"
+	DenialCodeCapabilityTokenMissing        = "capability_token_missing"
+	DenialCodeCapabilityTokenInvalid        = "capability_token_invalid"
+	DenialCodeCapabilityTokenExpired        = "capability_token_expired"
+	DenialCodeCapabilityTokenScopeDenied    = "capability_token_scope_denied"
+	DenialCodeCapabilityTokenReused         = "capability_token_reused"
+	DenialCodeCapabilityTokenBindingInvalid = "capability_token_binding_invalid"
+	DenialCodeRequestSignatureMissing       = "request_signature_missing"
+	DenialCodeRequestSignatureInvalid       = "request_signature_invalid"
+	DenialCodeRequestTimestampInvalid       = "request_timestamp_invalid"
+	DenialCodeRequestNonceReplayDetected    = "request_nonce_replay_detected"
+	DenialCodeControlSessionBindingInvalid  = "control_session_binding_invalid"
+	DenialCodeApprovalTokenMissing          = "approval_token_missing"
+	DenialCodeApprovalTokenInvalid          = "approval_token_invalid"
+	DenialCodeApprovalTokenExpired          = "approval_token_expired"
+	DenialCodeApprovalDecisionNonceMissing  = "approval_decision_nonce_missing"
+	DenialCodeApprovalDecisionNonceInvalid  = "approval_decision_nonce_invalid"
+	DenialCodeApprovalNotFound              = "approval_request_not_found"
+	DenialCodeApprovalOwnerMismatch         = "approval_owner_mismatch"
+	DenialCodeApprovalRequired              = "approval_required"
+	DenialCodeApprovalDenied                = "approval_denied"
+	DenialCodeApprovalStateInvalid          = "approval_state_invalid"
+	DenialCodeSecretExportProhibited        = "secret_export_prohibited"
+	DenialCodeCapabilityScopeRequired       = "capability_scope_required"
+	DenialCodeRequestReplayDetected         = "request_replay_detected"
 	// DenialCodeReplayStateSaturated is returned when the in-memory replay table cannot accept
 	// another entry without evicting (eviction would weaken replay protection). Fail closed.
 	DenialCodeReplayStateSaturated = "replay_state_saturated"
@@ -61,7 +61,7 @@ const (
 	DenialCodePendingApprovalLimitReached = "pending_approval_limit_reached"
 	// DenialCodeControlPlaneStateSaturated is returned when an in-memory control-plane map
 	// (sessions, approvals, worker sessions) cannot accept new entries (fail closed).
-	DenialCodeControlPlaneStateSaturated = "control_plane_state_saturated"
+	DenialCodeControlPlaneStateSaturated        = "control_plane_state_saturated"
 	DenialCodeUnknownCapability                 = "unknown_capability"
 	DenialCodeInvalidCapabilityArguments        = "invalid_capability_arguments"
 	DenialCodePolicyDenied                      = "policy_denied"
@@ -272,6 +272,9 @@ type OpenSessionRequest struct {
 	RequestedCapabilities []string `json:"requested_capabilities"`
 	CorrelationID         string   `json:"correlation_id"`
 	WorkspaceID           string   `json:"workspace_id,omitempty"`
+	// OperatorMountPaths binds Haven-granted host directories to this control session
+	// (actor haven only). Loopgate canonicalizes and rejects unsafe paths.
+	OperatorMountPaths []string `json:"operator_mount_paths,omitempty"`
 }
 
 type OpenSessionResponse struct {
@@ -282,7 +285,7 @@ type OpenSessionResponse struct {
 	ExpiresAtUTC     string `json:"expires_at_utc"`
 }
 
-// SessionMACKeySlotInfo describes one 12-hour epoch key and the derived session_mac_key for a control session.
+// SessionMACKeySlotInfo is one epoch slot in GET /v1/session/mac-keys.
 type SessionMACKeySlotInfo struct {
 	Slot                 string `json:"slot"`
 	EpochIndex           int64  `json:"epoch_index"`
@@ -292,13 +295,13 @@ type SessionMACKeySlotInfo struct {
 	DerivedSessionMACKey string `json:"derived_session_mac_key"`
 }
 
-// SessionMACKeysResponse is returned by GET /v1/session/mac-keys (authenticated, signed GET).
+// SessionMACKeysResponse is the JSON body for GET /v1/session/mac-keys.
 type SessionMACKeysResponse struct {
-	SchemaVersion         string `json:"schema_version"`
-	RotationPeriodSeconds int64  `json:"rotation_period_seconds"`
-	DerivedKeySchema      string `json:"derived_key_schema"`
-	ControlSessionID      string `json:"control_session_id"`
-	CurrentEpochIndex     int64  `json:"current_epoch_index"`
+	SchemaVersion         string                `json:"schema_version"`
+	RotationPeriodSeconds int64                 `json:"rotation_period_seconds"`
+	DerivedKeySchema      string                `json:"derived_key_schema"`
+	ControlSessionID      string                `json:"control_session_id"`
+	CurrentEpochIndex     int64                 `json:"current_epoch_index"`
 	Previous              SessionMACKeySlotInfo `json:"previous"`
 	Current               SessionMACKeySlotInfo `json:"current"`
 	Next                  SessionMACKeySlotInfo `json:"next"`
@@ -1204,24 +1207,24 @@ type MorphlingSummary struct {
 }
 
 type MorphlingSpawnResponse struct {
-	RequestID           string   `json:"request_id,omitempty"`
-	Status              string   `json:"status"`
-	DenialReason        string   `json:"denial_reason,omitempty"`
-	DenialCode          string   `json:"denial_code,omitempty"`
-	MorphlingID         string   `json:"morphling_id,omitempty"`
-	TaskID              string   `json:"task_id,omitempty"`
-	State               string   `json:"state,omitempty"`
-	Class               string   `json:"class,omitempty"`
-	ApprovalID          string   `json:"approval_id,omitempty"`
-	ApprovalDeadlineUTC string   `json:"approval_deadline_utc,omitempty"`
+	RequestID           string `json:"request_id,omitempty"`
+	Status              string `json:"status"`
+	DenialReason        string `json:"denial_reason,omitempty"`
+	DenialCode          string `json:"denial_code,omitempty"`
+	MorphlingID         string `json:"morphling_id,omitempty"`
+	TaskID              string `json:"task_id,omitempty"`
+	State               string `json:"state,omitempty"`
+	Class               string `json:"class,omitempty"`
+	ApprovalID          string `json:"approval_id,omitempty"`
+	ApprovalDeadlineUTC string `json:"approval_deadline_utc,omitempty"`
 	// ApprovalManifestSHA256 and ApprovalDecisionNonce are set when Status is pending_approval
 	// so DecideApproval can bind to the same manifest as capability.execute approvals (AMP RFC 0005 §6).
 	ApprovalManifestSHA256 string   `json:"approval_manifest_sha256,omitempty"`
 	ApprovalDecisionNonce  string   `json:"approval_decision_nonce,omitempty"`
-	GrantedCapabilities []string `json:"granted_capabilities,omitempty"`
-	VirtualSandboxPath  string   `json:"virtual_sandbox_path,omitempty"`
-	SpawnedAtUTC        string   `json:"spawned_at_utc,omitempty"`
-	TokenExpiryUTC      string   `json:"token_expiry_utc,omitempty"`
+	GrantedCapabilities    []string `json:"granted_capabilities,omitempty"`
+	VirtualSandboxPath     string   `json:"virtual_sandbox_path,omitempty"`
+	SpawnedAtUTC           string   `json:"spawned_at_utc,omitempty"`
+	TokenExpiryUTC         string   `json:"token_expiry_utc,omitempty"`
 }
 
 type MorphlingStatusResponse struct {

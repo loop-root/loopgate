@@ -85,8 +85,6 @@ type Server struct {
 	auditMu       sync.Mutex
 	auditSequence uint64
 	lastAuditHash string
-	// sessionMACRotationMaster seeds 12-hour epoch keys for control-plane request HMAC (session_mac_rotation.go).
-	sessionMACRotationMaster []byte
 
 	promotionMu sync.Mutex
 
@@ -174,6 +172,10 @@ type Server struct {
 	maxTotalApprovalRecords int
 	// maxMorphlingWorkerSessions caps in-memory morphling worker sessions.
 	maxMorphlingWorkerSessions int
+
+	// sessionMACRotationMaster is 32 bytes of server-held entropy used to derive per-epoch
+	// session MAC keys (see session_mac_rotation.go). Loaded or created under runtime/state.
+	sessionMACRotationMaster []byte
 }
 
 type capabilityToken struct {
@@ -196,10 +198,13 @@ type capabilityToken struct {
 }
 
 type controlSession struct {
-	ID                    string
-	ActorLabel            string
-	ClientSessionLabel    string
-	WorkspaceID           string
+	ID                 string
+	ActorLabel         string
+	ClientSessionLabel string
+	WorkspaceID        string
+	// OperatorMountPaths are absolute host directories bound from Haven at session
+	// open (actor haven only). They scope operator_mount.fs_* tools — never from model text.
+	OperatorMountPaths    []string
 	RequestedCapabilities map[string]struct{}
 	ApprovalToken         string
 	ApprovalTokenID       string
@@ -461,6 +466,9 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		return ledger.AppendWithRotation(path, auditEvent, server.auditLedgerRotationSettings())
 	}
 	server.newModelClientFromConfig = server.newModelClientFromRuntimeConfig
+	if err := registerOperatorMountTools(server); err != nil {
+		return nil, fmt.Errorf("register operator mount tools: %w", err)
+	}
 	if err := server.registerConfiguredCapabilities(); err != nil {
 		return nil, fmt.Errorf("register configured capabilities: %w", err)
 	}
@@ -1113,8 +1121,8 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		return denialResponse
 	}
 
-	// Per-session rate limiting for fs_read.
-	if capabilityRequest.Capability == "fs_read" {
+	// Per-session rate limiting for fs_read and operator_mount.fs_read.
+	if capabilityRequest.Capability == "fs_read" || capabilityRequest.Capability == "operator_mount.fs_read" {
 		if denied := server.checkFsReadRateLimit(effectiveTokenClaims.ControlSessionID); denied {
 			if auditErr := server.logEvent("capability.denied", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
 				"request_id":           capabilityRequest.RequestID,
@@ -1173,6 +1181,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		executionContext, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
+	executionContext = withOperatorMountControlSession(executionContext, effectiveTokenClaims.ControlSessionID)
 
 	output, err := tool.Execute(executionContext, capabilityRequest.Arguments)
 	if err != nil {
@@ -2045,7 +2054,7 @@ func (server *Server) approvalMetadata(capabilityRequest CapabilityRequest) map[
 
 func classifyCapabilityResult(capability string) (ResultClassification, string) {
 	switch capability {
-	case "fs_list":
+	case "fs_list", "operator_mount.fs_list":
 		return ResultClassification{
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
@@ -2053,7 +2062,7 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 				Memory: true,
 			},
 		}, ""
-	case "fs_write":
+	case "fs_write", "operator_mount.fs_write":
 		return ResultClassification{
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
@@ -2069,7 +2078,7 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 				Memory: false,
 			},
 		}, ""
-	case "fs_read":
+	case "fs_read", "operator_mount.fs_read":
 		return ResultClassification{
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
@@ -2077,7 +2086,7 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 				Memory: false,
 			},
 		}, ""
-	case "fs_mkdir":
+	case "fs_mkdir", "operator_mount.fs_mkdir":
 		return ResultClassification{
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
@@ -2126,7 +2135,7 @@ func buildCapabilityResult(capability string, arguments map[string]string, outpu
 			return nil, nil, ResultClassification{}, "", err
 		}
 		return structuredResult, fieldsMeta, classification, "", nil
-	case "fs_list":
+	case "fs_list", "operator_mount.fs_list":
 		structuredResult := map[string]interface{}{
 			"path":    arguments["path"],
 			"entries": []string{},
@@ -2148,7 +2157,7 @@ func buildCapabilityResult(capability string, arguments map[string]string, outpu
 			return nil, nil, ResultClassification{}, "", err
 		}
 		return structuredResult, fieldsMeta, classification, "", nil
-	case "fs_write":
+	case "fs_write", "operator_mount.fs_write":
 		structuredResult := map[string]interface{}{
 			"path":    arguments["path"],
 			"bytes":   len(arguments["content"]),
@@ -2166,7 +2175,7 @@ func buildCapabilityResult(capability string, arguments map[string]string, outpu
 			return nil, nil, ResultClassification{}, "", err
 		}
 		return structuredResult, fieldsMeta, classification, "", nil
-	case "fs_read":
+	case "fs_read", "operator_mount.fs_read":
 		structuredResult := map[string]interface{}{
 			"path":    arguments["path"],
 			"content": output,
@@ -2481,7 +2490,9 @@ func decodeJSONBytes(requestBodyBytes []byte, destination interface{}) error {
 	return nil
 }
 
-// parseAndValidateSignedControlPlaneRequest checks signed-request headers and timestamp skew for a bound control session.
+// parseAndValidateSignedControlPlaneRequest checks signed-request headers and timestamp skew.
+// It does not verify the HMAC. Callers supply expectedControlSessionID (e.g. morphling worker
+// session id from the worker token table); those ids are not necessarily rows in server.sessions.
 func (server *Server) parseAndValidateSignedControlPlaneRequest(request *http.Request, expectedControlSessionID string) (requestTimestamp string, requestNonce string, requestSignature string, denial CapabilityResponse, ok bool) {
 	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
 	requestTimestamp = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
@@ -2518,21 +2529,24 @@ func (server *Server) parseAndValidateSignedControlPlaneRequest(request *http.Re
 			DenialCode:   DenialCodeRequestTimestampInvalid,
 		}, false
 	}
+
 	return requestTimestamp, requestNonce, requestSignature, CapabilityResponse{}, true
 }
 
 func (server *Server) verifySignedRequest(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string) (CapabilityResponse, bool) {
-	requestTimestamp, requestNonce, requestSignature, denial, ok := server.parseAndValidateSignedControlPlaneRequest(request, expectedControlSessionID)
-	if !ok {
-		return denial, false
-	}
-
 	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
-	server.mu.Lock()
-	server.pruneExpiredLocked()
-	_, found := server.sessions[controlSessionID]
-	server.mu.Unlock()
-	if !found {
+	requestTimestamp := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
+	requestNonce := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))
+	requestSignature := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature"))
+
+	if controlSessionID == "" || requestTimestamp == "" || requestNonce == "" || requestSignature == "" {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "signed control-plane headers are required",
+			DenialCode:   DenialCodeRequestSignatureMissing,
+		}, false
+	}
+	if controlSessionID != expectedControlSessionID {
 		return CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "control session binding is invalid",
@@ -2540,7 +2554,107 @@ func (server *Server) verifySignedRequest(request *http.Request, requestBodyByte
 		}, false
 	}
 
-	return server.verifySignedRequestAgainstRotatingSessionMAC(request, requestBodyBytes, controlSessionID, requestTimestamp, requestNonce, requestSignature)
+	parsedTimestamp, err := time.Parse(time.RFC3339Nano, requestTimestamp)
+	if err != nil {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request timestamp is invalid",
+			DenialCode:   DenialCodeRequestTimestampInvalid,
+		}, false
+	}
+	if parsedTimestamp.Before(server.now().UTC().Add(-requestSignatureSkew)) || parsedTimestamp.After(server.now().UTC().Add(requestSignatureSkew)) {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request timestamp is outside the allowed skew window",
+			DenialCode:   DenialCodeRequestTimestampInvalid,
+		}, false
+	}
+
+	server.mu.Lock()
+	server.pruneExpiredLocked()
+	activeSession, found := server.sessions[controlSessionID]
+	server.mu.Unlock()
+	if !found || strings.TrimSpace(activeSession.SessionMACKey) == "" {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "control session binding is invalid",
+			DenialCode:   DenialCodeControlSessionBindingInvalid,
+		}, false
+	}
+
+	if len(server.sessionMACRotationMaster) > 0 {
+		return server.verifySignedRequestAgainstRotatingSessionMAC(request, requestBodyBytes, expectedControlSessionID, requestTimestamp, requestNonce, requestSignature)
+	}
+	return server.verifySignedRequestWithMACKey(request, requestBodyBytes, expectedControlSessionID, activeSession.SessionMACKey)
+}
+
+func (server *Server) verifySignedRequestWithMACKey(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string, sessionMACKey string) (CapabilityResponse, bool) {
+	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
+	requestTimestamp := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
+	requestNonce := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))
+	requestSignature := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature"))
+
+	if controlSessionID == "" || requestTimestamp == "" || requestNonce == "" || requestSignature == "" {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "signed control-plane headers are required",
+			DenialCode:   DenialCodeRequestSignatureMissing,
+		}, false
+	}
+	if controlSessionID != expectedControlSessionID {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "control session binding is invalid",
+			DenialCode:   DenialCodeControlSessionBindingInvalid,
+		}, false
+	}
+
+	parsedTimestamp, err := time.Parse(time.RFC3339Nano, requestTimestamp)
+	if err != nil {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request timestamp is invalid",
+			DenialCode:   DenialCodeRequestTimestampInvalid,
+		}, false
+	}
+	if parsedTimestamp.Before(server.now().UTC().Add(-requestSignatureSkew)) || parsedTimestamp.After(server.now().UTC().Add(requestSignatureSkew)) {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request timestamp is outside the allowed skew window",
+			DenialCode:   DenialCodeRequestTimestampInvalid,
+		}, false
+	}
+
+	expectedSignature := signRequest(sessionMACKey, request.Method, request.URL.Path, controlSessionID, requestTimestamp, requestNonce, requestBodyBytes)
+	decodedRequestSignature, err := hex.DecodeString(requestSignature)
+	if err != nil {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request signature is invalid",
+			DenialCode:   DenialCodeRequestSignatureInvalid,
+		}, false
+	}
+	decodedExpectedSignature, err := hex.DecodeString(expectedSignature)
+	if err != nil {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request signature is invalid",
+			DenialCode:   DenialCodeRequestSignatureInvalid,
+		}, false
+	}
+	if !hmac.Equal(decodedExpectedSignature, decodedRequestSignature) {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "request signature is invalid",
+			DenialCode:   DenialCodeRequestSignatureInvalid,
+		}, false
+	}
+
+	if nonceDenial := server.recordAuthNonce(controlSessionID, requestNonce); nonceDenial != nil {
+		return *nonceDenial, false
+	}
+
+	return CapabilityResponse{}, true
 }
 
 func (server *Server) pruneExpiredLocked() {

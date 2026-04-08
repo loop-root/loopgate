@@ -1,6 +1,6 @@
 # Security hardening plan (April 2026)
 
-**Status:** executable path pinning and Haven policy hooks documented; ledger authenticity follow-up tracked below. **Deferred (explicit):** Linux/Windows secure stores (no test matrix here), multi-instance / HA.
+**Status:** session MAC rotation (12h epochs), secret-export classification tightening, and control-plane route checklist landed; ledger **append** wiring for optional audit HMAC checkpoints remains follow-up. **Deferred (explicit):** Linux/Windows secure stores (no test matrix here), multi-instance / HA.
 
 **Scope note:** Near-term product assumptions are **macOS-only** and **single-instance** where not otherwise stated (see `docs/adr/0009-macos-scope-and-approval-hardening.md`).
 
@@ -8,7 +8,7 @@
 
 1. **Pending approval snapshot (`CapabilityRequest`)** — Deep-copy `Arguments` when storing `pendingApproval` and when emitting UI pending events so a shared map cannot mutate the approved payload after creation.
 2. **Execution body integrity** — Before executing a non–morphling-spawn approval, verify `capabilityRequestBody256(pending.Request)` matches `ExecutionBodySHA256` from approval creation; fail closed with `DenialCodeApprovalExecutionBodyMismatch` and audit `approval.denied`.
-3. **Registry-first secret export classification** — Optional `internal/tools` interfaces (`SecretExportNameHeuristicOptOut`, `RawSecretExportProhibited`) with legacy name heuristic when interfaces are absent. Unregistered capability names that match the heuristic remain denied before the unknown-capability path.
+3. **Secret export classification** — Optional `internal/tools` interfaces (`SecretExportNameHeuristicOptOut`, `RawSecretExportProhibited`). **Registered** tools are judged **only** via those interfaces (no name fallback). **Unregistered** names still use the legacy name heuristic in `internal/loopgate/secret_export.go` before the unknown-capability path. **Configured HTTP capabilities** (`configuredCapabilityTool`) implement `RawSecretExportProhibited` using the same heuristic on the configured name so YAML-defined integrations cannot bypass blocking by being “registered.”
 4. **Vulnerability scanning** — `scripts/govulncheck.sh` runs `govulncheck` over `./...` for local release hygiene; `.github/workflows/govulncheck.yml` on `main` and PRs.
 
 ## Completed (2026-04-07 continuation)
@@ -20,6 +20,18 @@
 ## Completed (2026-04-07 — executable pinning)
 
 1. **Executable path pinning (F2)** — `config/runtime.yaml` → `control_plane.expected_session_client_executable`: non-empty absolute path required when set; compared (after clean) to the peer executable at `POST /v1/session/open`. Empty = disabled (default).
+
+## Completed (2026-04-08) — session MAC rotation
+
+1. **12-hour UTC epoch keys** — Server derives session MAC material per epoch; verifies requests with **previous / current / next** epoch overlap (`internal/loopgate/session_mac_rotation.go` and tests). `verifySignedRequest` uses rotating verification when the session MAC rotation master is loaded (same overlap as morphling worker signed bodies).
+2. **`GET /v1/session/mac-keys`** — Same auth and signed GET envelope as `GET /v1/status`; returns epoch slots and derived keys for client refresh (`handleSessionMACKeys`).
+3. **Go client** — `SessionMACKeys`, `RefreshSessionMACKeyFromServer` (`internal/loopgate/client.go`); tests in `client_session_mac_test.go`.
+
+## Completed (2026-04-08) — secret-export tightening + route checklist
+
+1. **Registered vs unregistered** — `capabilityProhibitsRawSecretExport` applies the name heuristic only when the capability is **not** in the registry; registered tools require explicit interface classification (`pending_approval_integrity.go`, `secret_export.go`).
+2. **Default registry guardrail** — `default_registry_secret_export_test.go` asserts any default tool whose **name** matches the heuristic implements one of the two optional interfaces.
+3. **Control-plane route checklist** — [control-plane-route-checklist.md](control-plane-route-checklist.md) for review/PR hygiene (auth × MAC × audit expectations); optional checkbox in `.github/pull_request_template.md`.
 
 ## Completed (2026-04-08) — ledger authenticity (documentation)
 
@@ -39,9 +51,7 @@ SHA-256 chaining plus optional **HMAC checkpoints** still assume **local** contr
 
 ### Other
 
-- Further **secret-export** tightening (explicit per-capability classification vs heuristic for unregistered names).
-- **MAC key rotation** for long-lived control-plane sessions (distinct from optional audit-ledger checkpoint HMAC key rotation above unless unified by design).
-- **Route × auth × MAC × audit** checklist in CI or review template.
+- Optional **CI** that diffs `mux.HandleFunc` registrations against the route checklist (not implemented; checklist is manual + PR template).
 
 **Explicitly out of scope here:** Linux/Windows secure credential backends (untested in current environment); multi-instance ledger + nonce semantics.
 
@@ -50,6 +60,8 @@ SHA-256 chaining plus optional **HMAC checkpoints** still assume **local** contr
 - `internal/ledger/ledger_test.go` — append and chain verification (integrity anomalies fail closed).
 - `internal/ledger/hmac_checkpoint_test.go` — checkpoint message and `VerifyAuditLedgerHMACCheckpointEvent`.
 - `internal/loopgate/session_mac_rotation_test.go` — epoch index and MAC derivation helpers.
+- `internal/loopgate/client_session_mac_test.go` — client mac-keys refresh behavior.
+- `internal/loopgate/default_registry_secret_export_test.go` — default registry vs secret-export name heuristic.
 - `internal/config/config_test.go` — HMAC checkpoint runtime validation (enabled without `secret_ref`, bad interval).
 - `internal/loopgate/approval_manifest_test.go` — clone and execution-body verification.
 - `internal/loopgate/server_test.go` — secret-export registry/heuristic; UI approval path; pending/replay caps.

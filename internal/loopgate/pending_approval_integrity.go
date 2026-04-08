@@ -78,8 +78,11 @@ func (server *Server) writePendingApprovalExecutionIntegrityDenial(
 	server.writeJSON(writer, httpStatusForResponse(denial), denial)
 }
 
-// capabilityProhibitsRawSecretExport uses registry metadata when implemented, with the legacy
-// name heuristic as defense in depth when not (see AGENTS.md).
+// capabilityProhibitsRawSecretExport: registered tools are classified only via optional interfaces
+// (no name-based fallback for arbitrary registered Tool implementations). Unregistered capability
+// names still use the legacy name heuristic before the unknown-capability path. Configured HTTP
+// capabilities register as *configuredCapabilityTool, which implements RawSecretExportProhibited
+// using the same heuristic on the configured name so YAML-defined integrations stay covered.
 func (server *Server) capabilityProhibitsRawSecretExport(tool toolspkg.Tool, capabilityName string) bool {
 	if tool != nil {
 		if explicit, ok := tool.(toolspkg.RawSecretExportProhibited); ok && explicit.RawSecretExportProhibited() {
@@ -88,6 +91,7 @@ func (server *Server) capabilityProhibitsRawSecretExport(tool toolspkg.Tool, cap
 		if optOut, ok := tool.(toolspkg.SecretExportNameHeuristicOptOut); ok && optOut.SecretExportNameHeuristicOptOut() {
 			return false
 		}
+		return false
 	}
-	return isSecretExportCapabilityHeuristic(capabilityName)
+	return secretExportCapabilityNameHeuristic(capabilityName)
 }

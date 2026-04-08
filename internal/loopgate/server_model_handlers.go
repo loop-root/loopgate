@@ -60,6 +60,15 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		})
 		return
 	}
+	normalizedOperatorMounts, mountErr := normalizeOperatorMountPathsForSession(openRequest.Actor, openRequest.OperatorMountPaths)
+	if mountErr != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: mountErr.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
 	if len(normalizedCapabilities) == 0 {
 		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -254,6 +263,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		ActorLabel:            tokenClaims.ActorLabel,
 		ClientSessionLabel:    tokenClaims.ClientSessionLabel,
 		WorkspaceID:           strings.TrimSpace(openRequest.WorkspaceID),
+		OperatorMountPaths:    normalizedOperatorMounts,
 		RequestedCapabilities: capabilitySet(grantedCapabilities),
 		ApprovalToken:         approvalTokenString,
 		ApprovalTokenID:       approvalTokenID,

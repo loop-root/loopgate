@@ -16,14 +16,14 @@ const HavenOperatorContextGuideVersion = "2026-04-08"
 const havenOperatorGuideBody = `Haven operator guide (from Loopgate; authoritative for harness behavior)
 
 MOUNTS / ADDITIONAL DIRECTORIES
-- The Haven app may send additional_paths on each chat turn so you can help with files under those directories (typically via shell_exec after operator approval).
+- The Haven app may send additional_paths on each chat turn and binds the same paths to the Loopgate session as operator_mount_paths. Use operator_mount.fs_list / operator_mount.fs_read (and write tools when policy allows) for those trees; shell_exec is optional for builds and git.
 - Directory grants are intended to be time-bounded; when a path disappears from the request, treat it as no longer in scope for new work until the operator re-grants it in Haven (/adir or setup). Loopgate may enforce its own grant store in a future release.
 - Paths are normalized on the client (symlinks resolved; unsafe system roots rejected). If the operator hits "not permitted", they chose a blocked path.
 
 TUI LAYOUT
 - Side panels (tasks, goals, approvals, journal list) are OFF by default for a minimal chat view. The operator presses Ctrl+B to toggle them on.
 - Tab switches focus between chat and the sidebar when the sidebar is visible.
-- Bracketed paste of folder paths: pasting one or more absolute directory paths (or file:/// URLs) into the chat input can register mounts automatically (same rules as /adir).
+- On first launch, Haven may ask once (Y/N) to grant read access to the current project folder; bracketed paste of paths also registers mounts like /adir.
 
 SHORTCUTS / COMMANDS (Haven TUI)
 - /adir <path> — grant a resolved directory (TTL managed in Haven config until Loopgate stores grants).
@@ -31,7 +31,7 @@ SHORTCUTS / COMMANDS (Haven TUI)
 - /help — full slash list; /status — session summary.
 
 TROUBLESHOOTING
-- "No access to files": check shell_exec is enabled if they need terminal reads; check additional_paths and project path in /status; host Mac folders use host.folder.* only when those presets are granted in Loopgate setup — not the same as arbitrary paths.
+- "No access to files": check additional_paths in /status and that operator_mount.* tools succeed; enable shell only for terminal workflows; host Mac folders use host.folder.* only for Setup presets — not arbitrary paths.
 - Approvals: operator uses /approve or the sidebar (when visible) or haven approve in another terminal.
 - Journal sidebar lists sandbox journal files; full entry opens on Enter (separate from working notes).
 

@@ -87,7 +87,7 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 
 - **Severity:** Medium  
 - **Category:** Secret isolation  
-- **Location:** `internal/loopgate/server.go` (`isSecretExportCapabilityHeuristic`); `internal/tools/tool.go` (optional interfaces); `capabilityProhibitsRawSecretExport`  
+- **Location:** `internal/loopgate/secret_export.go` (name heuristic for **unregistered** names); `internal/tools/tool.go` (optional interfaces); `capabilityProhibitsRawSecretExport` (registered tools: interfaces only; configured capabilities: `configuredCapabilityTool.RawSecretExportProhibited`)  
 - **Issue:** Prefix/substring rules; future capability names could evade while exporting sensitive data.  
 - **Resolution (partial):** Registry implements `SecretExportNameHeuristicOptOut` / `RawSecretExportProhibited`; unregistered names still use the heuristic before the unknown-capability path. Further tightening: explicit allow/deny per registered capability.  
 - **Type:** **Design risk / hardening** (ongoing).
@@ -253,7 +253,8 @@ The implementation **earns** a serious local control-plane story: enforcement is
 
 ## 11. References (key files)
 
-- `internal/loopgate/server.go` — mux, `ConnContext`, `authenticate`, `authenticateApproval`, `verifySignedRequest`, pruning, `capabilityProhibitsRawSecretExport` / `isSecretExportCapabilityHeuristic`, `NewServerWithOptions`  
+- `internal/loopgate/server.go` — mux, `ConnContext`, `authenticate`, `authenticateApproval`, `verifySignedRequest`, pruning, `capabilityProhibitsRawSecretExport`, `NewServerWithOptions`
+- `internal/loopgate/secret_export.go` — unregistered secret-export name heuristic  
 - `internal/loopgate/server_model_handlers.go` — `handleSessionOpen`  
 - `internal/loopgate/server_capability_handlers.go` — execute + approval decision  
 - `internal/loopgate/server_diagnostic_handlers.go` — diagnostic outlier  

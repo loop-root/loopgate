@@ -40,6 +40,7 @@ This layer is important because:
   - journal list/read/write tools
 - `haven_operator_context.go`
   - read-only `haven.operator_context` tool: Loopgate-maintained operator guide for Haven (mounts, TUI, troubleshooting); trusted-sandbox-local registration
+- **Operator mount tools** (`operator_mount.fs_*`) are registered from `internal/loopgate/operator_mount.go` (not this package): session-scoped host directory access from Haven `operator_mount_paths` on `POST /v1/session/open`
 - `paint_tools.go`
   - flat prompt-oriented paint save/list tools
 - `note_create.go`

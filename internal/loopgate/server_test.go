@@ -4153,6 +4153,12 @@ func (t secretHeuristicOptOutTool) Schema() toolspkg.Schema {
 
 func (secretHeuristicOptOutTool) SecretExportNameHeuristicOptOut() bool { return true }
 
+type rawSecretExportExplicitlyBlockedTool struct {
+	fakeLoopgateTool
+}
+
+func (rawSecretExportExplicitlyBlockedTool) RawSecretExportProhibited() bool { return true }
+
 func TestCapabilityProhibitsRawSecretExport_OptOutAllowsRegisteredTool(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -4203,13 +4209,13 @@ func TestCapabilityProhibitsRawSecretExport_UnregisteredHeuristicNameDenied(t *t
 func TestCapabilityProhibitsRawSecretExport_RegisteredBlockedNameStillDenied(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	server.registry.Register(fakeLoopgateTool{
+	server.registry.Register(rawSecretExportExplicitlyBlockedTool{fakeLoopgateTool{
 		name:        "secret.blocked",
 		category:    "filesystem",
 		operation:   toolspkg.OpRead,
-		description: "test blocked by heuristic",
+		description: "test blocked via RawSecretExportProhibited",
 		output:      "ok",
-	})
+	}})
 	capabilities := append(capabilityNames(status.Capabilities), "secret.blocked")
 	client.ConfigureSession("test-actor", "test-session", capabilities)
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {

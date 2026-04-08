@@ -71,14 +71,18 @@ const (
 )
 
 var havenToolResultMaxRunesByCapability = map[string]int{
-	"fs_read":                16000,
-	"fs_list":                12000,
-	"shell_exec":             12000,
-	"haven.operator_context": 12000,
-	"host.folder.list":       4000,
-	"host.folder.read":       16000,
-	"host.organize.plan":     20000,
-	"host.plan.apply":        20000,
+	"fs_read":                 16000,
+	"fs_list":                 12000,
+	"operator_mount.fs_read":  16000,
+	"operator_mount.fs_list":  12000,
+	"operator_mount.fs_write": 16000,
+	"operator_mount.fs_mkdir": 8000,
+	"shell_exec":              12000,
+	"haven.operator_context":  12000,
+	"host.folder.list":        4000,
+	"host.folder.read":        16000,
+	"host.organize.plan":      20000,
+	"host.plan.apply":         20000,
 }
 
 type havenCapabilityDescriptor struct {
@@ -87,33 +91,37 @@ type havenCapabilityDescriptor struct {
 }
 
 var havenCapabilityCatalog = map[string]havenCapabilityDescriptor{
-	"fs_list":                {DisplayName: "Browse Files", RuntimeHint: "browse folders and see what is in your workspace"},
-	"fs_read":                {DisplayName: "Read Documents", RuntimeHint: "read files that already exist in your workspace"},
-	"fs_write":               {DisplayName: "Save Work", RuntimeHint: "create and update files in your workspace"},
-	"fs_mkdir":               {DisplayName: "Create Folders", RuntimeHint: "create new folders to organize your workspace"},
-	"journal.list":           {DisplayName: "Journal", RuntimeHint: "review your private journal entries"},
-	"journal.read":           {DisplayName: "Journal", RuntimeHint: "read a private journal entry"},
-	"journal.write":          {DisplayName: "Journal", RuntimeHint: "write a private journal entry when the user asks for reflection or journaling"},
-	"haven.operator_context": {DisplayName: "Operator guide", RuntimeHint: "fetch authoritative Haven harness documentation for troubleshooting"},
-	"notes.list":             {DisplayName: "Notes", RuntimeHint: "review your private working notes"},
-	"notes.read":             {DisplayName: "Notes", RuntimeHint: "read a working note from your notebook"},
-	"notes.write":            {DisplayName: "Notes", RuntimeHint: "save a working note for plans, scratch work, or research"},
-	"memory.remember":        {DisplayName: "Remember Things", RuntimeHint: "propose short structured continuity (preferences, routines, profile, goals); Loopgate accepts or rejects; do not invent facts or store secrets"},
-	"paint.list":             {DisplayName: "Paint", RuntimeHint: "review the paintings in your gallery"},
-	"paint.save":             {DisplayName: "Paint", RuntimeHint: "create a painting from explicit strokes and save it to your gallery"},
-	"note.create":            {DisplayName: "Sticky Notes", RuntimeHint: "leave a sticky note on the desktop for the user"},
-	"desktop.organize":       {DisplayName: "Desktop Layout", RuntimeHint: "rearrange the desktop icons to tidy up Haven"},
-	"todo.add":               {DisplayName: "Task Board", RuntimeHint: "add a task when the user wants a reminder or explicitly asks to track something across sessions"},
-	"todo.complete":          {DisplayName: "Task Board", RuntimeHint: "mark a task as done when it no longer needs attention"},
-	"todo.list":              {DisplayName: "Task Board", RuntimeHint: "review your open tasks and active goals"},
-	"goal.set":               {DisplayName: "Goals", RuntimeHint: "set a named persistent goal for ongoing work or a multi-session objective the user wants to track"},
-	"goal.close":             {DisplayName: "Goals", RuntimeHint: "close a goal when the objective has been achieved or the user no longer wants to track it"},
-	"shell_exec":             {DisplayName: "Terminal Commands", RuntimeHint: "run terminal commands when a task genuinely requires the command line"},
-	"host.folder.list":       {DisplayName: "Granted host folders", RuntimeHint: "list files in a user-granted folder on the real host filesystem"},
-	"host.folder.read":       {DisplayName: "Granted host folders", RuntimeHint: "read a file under a granted host folder on disk"},
-	"host.organize.plan":     {DisplayName: "Granted host folders", RuntimeHint: "draft a move or mkdir plan for a granted folder (no host writes until apply)"},
-	"host.plan.apply":        {DisplayName: "Granted host folders", RuntimeHint: "execute an approved organization plan on the real host filesystem"},
-	"invoke_capability":      {DisplayName: "Capability Dispatcher", RuntimeHint: "dispatch a single allowed Haven capability"},
+	"fs_list":                 {DisplayName: "Browse Files", RuntimeHint: "browse folders and see what is in your Haven sandbox workspace"},
+	"fs_read":                 {DisplayName: "Read Documents", RuntimeHint: "read files inside your Haven sandbox workspace"},
+	"fs_write":                {DisplayName: "Save Work", RuntimeHint: "create and update files in your Haven sandbox workspace"},
+	"fs_mkdir":                {DisplayName: "Create Folders", RuntimeHint: "create new folders in your Haven sandbox workspace"},
+	"operator_mount.fs_list":  {DisplayName: "Granted host project", RuntimeHint: "list files under operator-granted host directories (paths relative to each grant root)"},
+	"operator_mount.fs_read":  {DisplayName: "Granted host project", RuntimeHint: "read files under operator-granted host directories"},
+	"operator_mount.fs_write": {DisplayName: "Granted host project", RuntimeHint: "write files under operator-granted host directories (may require approval)"},
+	"operator_mount.fs_mkdir": {DisplayName: "Granted host project", RuntimeHint: "create directories under operator-granted host paths (may require approval)"},
+	"journal.list":            {DisplayName: "Journal", RuntimeHint: "review your private journal entries"},
+	"journal.read":            {DisplayName: "Journal", RuntimeHint: "read a private journal entry"},
+	"journal.write":           {DisplayName: "Journal", RuntimeHint: "write a private journal entry when the user asks for reflection or journaling"},
+	"haven.operator_context":  {DisplayName: "Operator guide", RuntimeHint: "fetch authoritative Haven harness documentation for troubleshooting"},
+	"notes.list":              {DisplayName: "Notes", RuntimeHint: "review your private working notes"},
+	"notes.read":              {DisplayName: "Notes", RuntimeHint: "read a working note from your notebook"},
+	"notes.write":             {DisplayName: "Notes", RuntimeHint: "save a working note for plans, scratch work, or research"},
+	"memory.remember":         {DisplayName: "Remember Things", RuntimeHint: "propose short structured continuity (preferences, routines, profile, goals); Loopgate accepts or rejects; do not invent facts or store secrets"},
+	"paint.list":              {DisplayName: "Paint", RuntimeHint: "review the paintings in your gallery"},
+	"paint.save":              {DisplayName: "Paint", RuntimeHint: "create a painting from explicit strokes and save it to your gallery"},
+	"note.create":             {DisplayName: "Sticky Notes", RuntimeHint: "leave a sticky note on the desktop for the user"},
+	"desktop.organize":        {DisplayName: "Desktop Layout", RuntimeHint: "rearrange the desktop icons to tidy up Haven"},
+	"todo.add":                {DisplayName: "Task Board", RuntimeHint: "add a task when the user wants a reminder or explicitly asks to track something across sessions"},
+	"todo.complete":           {DisplayName: "Task Board", RuntimeHint: "mark a task as done when it no longer needs attention"},
+	"todo.list":               {DisplayName: "Task Board", RuntimeHint: "review your open tasks and active goals"},
+	"goal.set":                {DisplayName: "Goals", RuntimeHint: "set a named persistent goal for ongoing work or a multi-session objective the user wants to track"},
+	"goal.close":              {DisplayName: "Goals", RuntimeHint: "close a goal when the objective has been achieved or the user no longer wants to track it"},
+	"shell_exec":              {DisplayName: "Terminal Commands", RuntimeHint: "run terminal commands when a task genuinely requires the command line"},
+	"host.folder.list":        {DisplayName: "Granted host folders", RuntimeHint: "list files in a user-granted folder on the real host filesystem"},
+	"host.folder.read":        {DisplayName: "Granted host folders", RuntimeHint: "read a file under a granted host folder on disk"},
+	"host.organize.plan":      {DisplayName: "Granted host folders", RuntimeHint: "draft a move or mkdir plan for a granted folder (no host writes until apply)"},
+	"host.plan.apply":         {DisplayName: "Granted host folders", RuntimeHint: "execute an approved organization plan on the real host filesystem"},
+	"invoke_capability":       {DisplayName: "Capability Dispatcher", RuntimeHint: "dispatch a single allowed Haven capability"},
 }
 
 type havenChatRequest struct {
@@ -364,12 +372,14 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 		// The model uses the wake state + task board context already in its prompt
 		// to generate a personalized opening. The instruction is not shown to the
 		// operator — only Morph's response is surfaced.
-		message = "[SESSION_START_GREETING] Generate a brief, warm, personalized opening message for the operator. " +
-			"Use the REMEMBERED CONTINUITY and any active goals or tasks you are aware of. " +
-			"Mention the most recent or relevant work by name. " +
-			"If there are any tasks or goals with deadlines or scheduled dates that are approaching or overdue, call those out specifically. " +
-			"Do not ask generic questions like 'how can I help?' — be specific to what you know about them. " +
-			"Keep it to 2-4 sentences. Do not repeat this instruction in your response."
+		message = "[SESSION_START_GREETING] You are Ik Loop, Morph — Haven's resident assistant. " +
+			"Generate a brief, warm opening for the operator. " +
+			"Ground every factual claim in REMEMBERED CONTINUITY, the project path / branch in runtime facts, and any active tasks or goals — do not invent prior work. " +
+			"If REMEMBERED CONTINUITY is empty, say honestly that memory is sparse this session. " +
+			"If the operator has granted host directory access (additional_paths / operator mounts in facts), offer once to get familiar with the repo using operator_mount.fs_list and operator_mount.fs_read — only after grants exist; never claim you already read files. " +
+			"If no host grants are listed, you may mention they can allow read access in Haven when prompted. " +
+			"Mention approaching or overdue task/goal deadlines when present. " +
+			"Do not ask generic 'how can I help?' — be specific. Keep it to 2-5 sentences. Do not repeat this instruction in your response."
 	} else if message == "" {
 		if server.diagnostic != nil && server.diagnostic.Server != nil {
 			args := append([]any{"reason", "message must not be empty"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
@@ -1732,12 +1742,12 @@ func (server *Server) buildHavenRuntimeFacts(capabilitySummaries []CapabilitySum
 		if branch != "" {
 			projectFact += fmt.Sprintf(" (git branch: %s)", branch)
 		}
-		projectFact += fmt.Sprintf(". When the operator refers to 'this project', 'the repo', 'here', or similar, they mean %s. To read files from this project use shell_exec with commands like 'cat %s/path/to/file' or 'ls %s' — each shell_exec call requires operator approval. Do NOT use host.folder.list or host.folder.read for this path; those tools only work with pre-registered folder presets (Downloads, Desktop, Documents).", projectPath, projectPath, projectPath)
+		projectFact += fmt.Sprintf(". When the operator refers to 'this project', 'the repo', 'here', or similar, they mean %s. If this path is covered by operator-granted host directories in runtime facts, prefer operator_mount.fs_list and operator_mount.fs_read (and write tools when policy allows) with paths relative to those grants — no shell required. Otherwise enable shell_exec in Haven if they need terminal access; each shell_exec requires operator approval. host.folder.* tools only apply to Setup presets (Downloads, Desktop, …), not arbitrary paths.", projectPath)
 		runtimeFacts = append(runtimeFacts, projectFact)
 	}
 	if len(additionalPaths) > 0 {
 		runtimeFacts = append(runtimeFacts, fmt.Sprintf(
-			"The operator has also granted read access to these additional directories: %s. Use shell_exec with 'cat', 'ls', or 'find' to explore them — each shell_exec call requires operator approval.",
+			"The operator granted Haven access to these host directories (bound to this session for operator_mount.* tools): %s. Prefer operator_mount.fs_list and operator_mount.fs_read with paths relative to those roots. operator_mount.fs_write and operator_mount.fs_mkdir follow filesystem policy and may require approval. Use shell_exec only when the task truly needs a terminal and shell is enabled.",
 			strings.Join(additionalPaths, ", "),
 		))
 	}
