@@ -140,6 +140,8 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 
 Long-lived processes should **refresh** the in-memory signing key from **`current.derived_session_mac_key`** periodically (or call **`GET /v1/session/mac-keys`** after each epoch), because verification only overlaps **three** epochs (~36 hours of slack, depending on where the session started).
 
+The Go client exposes **`SessionMACKeys`** and **`RefreshSessionMACKeyFromServer`** (`internal/loopgate/client.go`): the latter fetches mac-keys and sets `session_mac_key` from the **current** slot. It requires a **still-valid** request signature (same as any signed GET); if the in-memory key is garbage or too many epochs stale, open a **new** session instead.
+
 **Typical error shape:** JSON body compatible with `CapabilityResponse` (`status`, `denial_code`, `denial_reason`, …) with non-2xx HTTP status on failures.
 
 ---

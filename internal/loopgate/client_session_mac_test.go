@@ -2,53 +2,48 @@ package loopgate
 
 import (
 	"context"
-	"strings"
 	"testing"
 )
 
-func TestClientRefreshSessionMACKeyFromServer_restoresValidSigning(t *testing.T) {
+func TestClientRefreshSessionMACKeyFromServer_alignsWithMacKeysCurrentSlot(t *testing.T) {
 	ctx := context.Background()
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	fsList := func(requestID string) (CapabilityResponse, error) {
-		return client.ExecuteCapability(ctx, CapabilityRequest{
-			RequestID:  requestID,
-			Capability: "fs_list",
-			Arguments:  map[string]string{"path": "."},
-		})
-	}
-
-	baseline, err := fsList("req-mac-refresh-1")
+	keys, err := client.SessionMACKeys(ctx)
 	if err != nil {
-		t.Fatalf("baseline execute: %v", err)
+		t.Fatalf("SessionMACKeys: %v", err)
 	}
-	if baseline.Status != ResponseStatusSuccess {
-		t.Fatalf("expected baseline success, got %#v", baseline)
+	if keys.Current.DerivedSessionMACKey == keys.Previous.DerivedSessionMACKey {
+		t.Fatal("expected previous and current derived keys to differ for the test scenario")
 	}
 
-	// Corrupt the in-memory MAC key so signed requests fail (same pattern as signature denial tests).
+	// Use the previous epoch's derived key: still inside the server's verify window (prev/current/next),
+	// but not the canonical current slot we want the client to hold after refresh.
 	client.mu.Lock()
-	client.sessionMACKey = strings.Repeat("aa", 32)
+	client.sessionMACKey = keys.Previous.DerivedSessionMACKey
 	client.mu.Unlock()
-
-	broken, err := fsList("req-mac-refresh-2")
-	if err != nil {
-		t.Fatalf("execute with bad mac key: %v", err)
-	}
-	if broken.Status != ResponseStatusDenied || broken.DenialCode != DenialCodeRequestSignatureInvalid {
-		t.Fatalf("expected request_signature_invalid after corrupting session_mac_key, got %#v", broken)
-	}
 
 	if err := client.RefreshSessionMACKeyFromServer(ctx); err != nil {
 		t.Fatalf("RefreshSessionMACKeyFromServer: %v", err)
 	}
 
-	restored, err := fsList("req-mac-refresh-3")
+	client.mu.Lock()
+	got := client.sessionMACKey
+	client.mu.Unlock()
+	if got != keys.Current.DerivedSessionMACKey {
+		t.Fatalf("after refresh want current derived key %q, got %q", keys.Current.DerivedSessionMACKey, got)
+	}
+
+	resp, err := client.ExecuteCapability(ctx, CapabilityRequest{
+		RequestID:  "req-mac-refresh-align",
+		Capability: "fs_list",
+		Arguments:  map[string]string{"path": "."},
+	})
 	if err != nil {
 		t.Fatalf("execute after refresh: %v", err)
 	}
-	if restored.Status != ResponseStatusSuccess {
-		t.Fatalf("expected success after refresh, got %#v", restored)
+	if resp.Status != ResponseStatusSuccess {
+		t.Fatalf("expected success after refresh, got %#v", resp)
 	}
 }

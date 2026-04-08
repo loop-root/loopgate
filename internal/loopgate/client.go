@@ -133,7 +133,17 @@ func (client *Client) SessionMACKeys(ctx context.Context) (SessionMACKeysRespons
 // RefreshSessionMACKeyFromServer replaces the in-memory session_mac_key using the server's current
 // rotation slot (GET /v1/session/mac-keys). Call after session open or when signatures fail across epochs.
 func (client *Client) RefreshSessionMACKeyFromServer(ctx context.Context) error {
-	_ = ctx
+	keys, err := client.SessionMACKeys(ctx)
+	if err != nil {
+		return fmt.Errorf("refresh session mac key: %w", err)
+	}
+	derived := strings.TrimSpace(keys.Current.DerivedSessionMACKey)
+	if derived == "" {
+		return fmt.Errorf("refresh session mac key: empty current.derived_session_mac_key from server")
+	}
+	client.mu.Lock()
+	client.sessionMACKey = derived
+	client.mu.Unlock()
 	return nil
 }
 
