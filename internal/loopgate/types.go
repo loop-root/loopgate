@@ -282,6 +282,28 @@ type OpenSessionResponse struct {
 	ExpiresAtUTC     string `json:"expires_at_utc"`
 }
 
+// SessionMACKeySlotInfo describes one 12-hour epoch key and the derived session_mac_key for a control session.
+type SessionMACKeySlotInfo struct {
+	Slot                 string `json:"slot"`
+	EpochIndex           int64  `json:"epoch_index"`
+	ValidFromUTC         string `json:"valid_from_utc"`
+	ValidUntilUTC        string `json:"valid_until_utc"`
+	EpochKeyMaterialHex  string `json:"epoch_key_material_hex"`
+	DerivedSessionMACKey string `json:"derived_session_mac_key"`
+}
+
+// SessionMACKeysResponse is returned by GET /v1/session/mac-keys (authenticated, signed GET).
+type SessionMACKeysResponse struct {
+	SchemaVersion         string `json:"schema_version"`
+	RotationPeriodSeconds int64  `json:"rotation_period_seconds"`
+	DerivedKeySchema      string `json:"derived_key_schema"`
+	ControlSessionID      string `json:"control_session_id"`
+	CurrentEpochIndex     int64  `json:"current_epoch_index"`
+	Previous              SessionMACKeySlotInfo `json:"previous"`
+	Current               SessionMACKeySlotInfo `json:"current"`
+	Next                  SessionMACKeySlotInfo `json:"next"`
+}
+
 type CapabilityRequest struct {
 	RequestID     string            `json:"request_id"`
 	SessionID     string            `json:"session_id"`

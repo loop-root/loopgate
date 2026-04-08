@@ -17,6 +17,25 @@ func (server *Server) handleHealth(writer http.ResponseWriter, request *http.Req
 	})
 }
 
+func (server *Server) handleSessionMACKeys(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	response := server.buildSessionMACKeysResponse(tokenClaims.ControlSessionID)
+	server.writeJSON(writer, http.StatusOK, response)
+}
+
 func (server *Server) handleStatus(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)

@@ -211,11 +211,6 @@ func (server *Server) openMorphlingWorkerSession(requestPeerIdentity peerIdentit
 		server.mu.Unlock()
 		return MorphlingWorkerSessionResponse{}, fmt.Errorf("generate morphling worker token: %w", err)
 	}
-	sessionMACKey, err := randomHex(32)
-	if err != nil {
-		server.mu.Unlock()
-		return MorphlingWorkerSessionResponse{}, fmt.Errorf("generate morphling worker session mac key: %w", err)
-	}
 	workerControlSessionID := "worker-" + controlSessionSuffix
 
 	if server.maxMorphlingWorkerSessions > 0 && len(server.morphlingWorkerSessions) >= server.maxMorphlingWorkerSessions {
@@ -225,6 +220,7 @@ func (server *Server) openMorphlingWorkerSession(requestPeerIdentity peerIdentit
 
 	delete(server.morphlingWorkerLaunches, strings.TrimSpace(openRequest.LaunchToken))
 	server.revokeMorphlingWorkerAccessLocked(record.MorphlingID)
+	sessionMACKey := server.sessionMACKeyForControlSessionAtEpoch(workerControlSessionID, server.currentSessionMACEpochIndex())
 	server.morphlingWorkerSessions[workerToken] = morphlingWorkerSession{
 		WorkerToken:            workerToken,
 		ControlSessionID:       workerControlSessionID,

@@ -38,6 +38,8 @@ This layer is important because:
   - used so Loopgate can reduce approval friction for the `haven` actor without trusting the same tool names globally
 - `journal_tools.go`
   - journal list/read/write tools
+- `haven_operator_context.go`
+  - read-only `haven.operator_context` tool: Loopgate-maintained operator guide for Haven (mounts, TUI, troubleshooting); trusted-sandbox-local registration
 - `paint_tools.go`
   - flat prompt-oriented paint save/list tools
 - `note_create.go`

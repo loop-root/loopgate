@@ -399,12 +399,16 @@ func morphlingGoalHint(goalText string) string {
 
 func (server *Server) goalHMACForSession(controlSessionID string, goalText string) (string, error) {
 	server.mu.Lock()
-	activeSession, found := server.sessions[controlSessionID]
+	_, found := server.sessions[controlSessionID]
 	server.mu.Unlock()
-	if !found || strings.TrimSpace(activeSession.SessionMACKey) == "" {
+	if !found {
+		return "", fmt.Errorf("control session not found for goal hmac: %s", controlSessionID)
+	}
+	sessionMACKey := server.sessionMACKeyForControlSessionAtEpoch(controlSessionID, server.currentSessionMACEpochIndex())
+	if strings.TrimSpace(sessionMACKey) == "" {
 		return "", fmt.Errorf("session mac key not available for control session %s", controlSessionID)
 	}
-	mac := hmac.New(sha256.New, []byte(activeSession.SessionMACKey))
+	mac := hmac.New(sha256.New, []byte(sessionMACKey))
 	_, _ = mac.Write([]byte(strings.TrimSpace(goalText)))
 	return hex.EncodeToString(mac.Sum(nil)), nil
 }

@@ -222,16 +222,6 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		})
 		return
 	}
-	sessionMACKey, err := randomHex(32)
-	if err != nil {
-		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: "failed to mint session mac key",
-			DenialCode:   DenialCodeExecutionFailed,
-		})
-		return
-	}
 	tokenID, err := randomHex(8)
 	if err != nil {
 		server.mu.Unlock()
@@ -243,6 +233,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		return
 	}
 	expiresAt := nowUTC.Add(sessionTTL)
+	sessionMACKey := server.sessionMACKeyForControlSessionAtEpoch(controlSessionID, server.currentSessionMACEpochIndex())
 	deploymentTenantID := strings.TrimSpace(server.runtimeConfig.Tenancy.DeploymentTenantID)
 	deploymentUserID := strings.TrimSpace(server.runtimeConfig.Tenancy.DeploymentUserID)
 	tokenClaims := capabilityToken{

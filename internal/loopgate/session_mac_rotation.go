@@ -1,0 +1,181 @@
+package loopgate
+
+import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+const (
+	sessionMACEpochDuration = 12 * time.Hour
+
+	sessionMACRotationMasterFile    = "loopgate_session_mac_rotation_master"
+	sessionMACRotationMasterByteCount = 32
+
+	sessionMACDerivedKeySchemaV1 = "loopgate-session-mac-v1"
+	sessionMACKeysWireSchemaV1     = "loopgate.session_mac_keys.v1"
+
+	sessionMACEpochDomainV1 = "loopgate-session-mac-epoch-v1\x00"
+)
+
+func sessionMACEpochIndexAt(utc time.Time) int64 {
+	sec := utc.Unix()
+	period := int64(sessionMACEpochDuration / time.Second)
+	if sec >= 0 {
+		return sec / period
+	}
+	// Floor division for negative Unix times (pre-1970); not expected in practice.
+	return (sec - period + 1) / period
+}
+
+func sessionMACEpochWallRange(epochIndex int64) (validFromUTC, validUntilUTC time.Time) {
+	period := int64(sessionMACEpochDuration / time.Second)
+	startUnix := epochIndex * period
+	validFromUTC = time.Unix(startUnix, 0).UTC()
+	validUntilUTC = validFromUTC.Add(sessionMACEpochDuration)
+	return validFromUTC, validUntilUTC
+}
+
+func deriveEpochKeyMaterial(master []byte, epochIndex int64) []byte {
+	if len(master) == 0 {
+		return nil
+	}
+	mac := hmac.New(sha256.New, master)
+	_, _ = mac.Write([]byte(sessionMACEpochDomainV1))
+	var idxBuf [8]byte
+	binary.BigEndian.PutUint64(idxBuf[:], uint64(epochIndex))
+	_, _ = mac.Write(idxBuf[:])
+	return mac.Sum(nil)
+}
+
+// derivedSessionMACKeyString returns the 64-character lowercase hex string used as session_mac_key
+// on the wire (UTF-8 bytes of that string are passed to HMAC-SHA256 in signRequest).
+func derivedSessionMACKeyString(epochKeyMaterial []byte, controlSessionID string) string {
+	if len(epochKeyMaterial) == 0 {
+		return ""
+	}
+	mac := hmac.New(sha256.New, epochKeyMaterial)
+	_, _ = mac.Write([]byte(controlSessionID))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func (server *Server) currentSessionMACEpochIndex() int64 {
+	return sessionMACEpochIndexAt(server.now().UTC())
+}
+
+func (server *Server) sessionMACKeyForControlSessionAtEpoch(controlSessionID string, epochIndex int64) string {
+	mat := deriveEpochKeyMaterial(server.sessionMACRotationMaster, epochIndex)
+	return derivedSessionMACKeyString(mat, controlSessionID)
+}
+
+func (server *Server) loadOrCreateSessionMACRotationMaster() error {
+	stateDir := filepath.Join(server.repoRoot, "runtime", "state")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		return fmt.Errorf("mkdir runtime state: %w", err)
+	}
+	path := filepath.Join(stateDir, sessionMACRotationMasterFile)
+	existing, err := os.ReadFile(path)
+	if err == nil {
+		if len(existing) != sessionMACRotationMasterByteCount {
+			return fmt.Errorf("session mac rotation master file %q has wrong size (want %d bytes)", path, sessionMACRotationMasterByteCount)
+		}
+		server.sessionMACRotationMaster = append([]byte(nil), existing...)
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("read session mac rotation master: %w", err)
+	}
+	material := make([]byte, sessionMACRotationMasterByteCount)
+	if _, err := rand.Read(material); err != nil {
+		return fmt.Errorf("generate session mac rotation master: %w", err)
+	}
+	if err := os.WriteFile(path, material, 0o600); err != nil {
+		return fmt.Errorf("write session mac rotation master: %w", err)
+	}
+	server.sessionMACRotationMaster = material
+	return nil
+}
+
+func (server *Server) buildSessionMACKeysResponse(controlSessionID string) SessionMACKeysResponse {
+	cur := server.currentSessionMACEpochIndex()
+	prevIdx, nextIdx := cur-1, cur+1
+
+	buildSlot := func(slot string, epochIndex int64) SessionMACKeySlotInfo {
+		validFrom, validUntil := sessionMACEpochWallRange(epochIndex)
+		mat := deriveEpochKeyMaterial(server.sessionMACRotationMaster, epochIndex)
+		return SessionMACKeySlotInfo{
+			Slot:                 slot,
+			EpochIndex:           epochIndex,
+			ValidFromUTC:         validFrom.Format(time.RFC3339Nano),
+			ValidUntilUTC:        validUntil.Format(time.RFC3339Nano),
+			EpochKeyMaterialHex:  hex.EncodeToString(mat),
+			DerivedSessionMACKey: derivedSessionMACKeyString(mat, controlSessionID),
+		}
+	}
+
+	return SessionMACKeysResponse{
+		SchemaVersion:          sessionMACKeysWireSchemaV1,
+		RotationPeriodSeconds:  int64(sessionMACEpochDuration / time.Second),
+		DerivedKeySchema:       sessionMACDerivedKeySchemaV1,
+		ControlSessionID:       controlSessionID,
+		CurrentEpochIndex:      cur,
+		Previous:               buildSlot("previous", prevIdx),
+		Current:                buildSlot("current", cur),
+		Next:                   buildSlot("next", nextIdx),
+	}
+}
+
+func requestSignatureBytesMatchMACKey(requestSignatureHex string, method string, path string, controlSessionID string, requestTimestamp string, requestNonce string, requestBodyBytes []byte, sessionMACKey string) bool {
+	decodedRequestSignature, err := hex.DecodeString(requestSignatureHex)
+	if err != nil {
+		return false
+	}
+	expectedHex := signRequest(sessionMACKey, method, path, controlSessionID, requestTimestamp, requestNonce, requestBodyBytes)
+	decodedExpectedSignature, err := hex.DecodeString(expectedHex)
+	if err != nil {
+		return false
+	}
+	if len(decodedRequestSignature) != len(decodedExpectedSignature) {
+		return false
+	}
+	return subtle.ConstantTimeCompare(decodedExpectedSignature, decodedRequestSignature) == 1
+}
+
+// verifySignedRequestAgainstRotatingSessionMAC tries HMAC keys derived from previous, current, and next
+// 12-hour epochs so clients can cross rotation boundaries without immediately refreshing session_mac_key.
+// boundControlSessionID must match X-Loopgate-Control-Session and is used for both derivation and signing_payload.
+func (server *Server) verifySignedRequestAgainstRotatingSessionMAC(request *http.Request, requestBodyBytes []byte, boundControlSessionID string, requestTimestamp string, requestNonce string, requestSignature string) (CapabilityResponse, bool) {
+	if len(server.sessionMACRotationMaster) == 0 {
+		return CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "session mac rotation is not initialized",
+			DenialCode:   DenialCodeRequestSignatureInvalid,
+		}, false
+	}
+	cur := server.currentSessionMACEpochIndex()
+	for _, epochIndex := range []int64{cur - 1, cur, cur + 1} {
+		keyStr := server.sessionMACKeyForControlSessionAtEpoch(boundControlSessionID, epochIndex)
+		if keyStr == "" {
+			continue
+		}
+		if requestSignatureBytesMatchMACKey(requestSignature, request.Method, request.URL.Path, boundControlSessionID, requestTimestamp, requestNonce, requestBodyBytes, keyStr) {
+			if nonceDenial := server.recordAuthNonce(boundControlSessionID, requestNonce); nonceDenial != nil {
+				return *nonceDenial, false
+			}
+			return CapabilityResponse{}, true
+		}
+	}
+	return CapabilityResponse{
+		Status:       ResponseStatusDenied,
+		DenialReason: "request signature is invalid",
+		DenialCode:   DenialCodeRequestSignatureInvalid,
+	}, false
+}

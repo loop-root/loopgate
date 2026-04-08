@@ -116,6 +116,20 @@ func (client *Client) Status(ctx context.Context) (StatusResponse, error) {
 	return response, nil
 }
 
+// SessionMACKeys returns previous, current, and next 12-hour epoch MAC material for this control session.
+// Same transport requirements as Status (Bearer token + signed GET).
+func (client *Client) SessionMACKeys(ctx context.Context) (SessionMACKeysResponse, error) {
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		return SessionMACKeysResponse{}, err
+	}
+	var response SessionMACKeysResponse
+	if err := client.doJSON(ctx, http.MethodGet, "/v1/session/mac-keys", capabilityToken, nil, &response, nil); err != nil {
+		return SessionMACKeysResponse{}, err
+	}
+	return response, nil
+}
+
 // FetchDiagnosticReport loads aggregated operator diagnostics (JSON). Requires an open control session
 // over the same Unix peer binding as other privileged routes.
 func (client *Client) FetchDiagnosticReport(ctx context.Context, responseBody interface{}) error {

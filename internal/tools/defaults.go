@@ -42,6 +42,9 @@ func NewSandboxRegistry(repoRoot string, sandboxHome string, policy config.Polic
 	})); err != nil {
 		return nil, err
 	}
+	if err := registry.TryRegister(WrapTrustedSandboxLocal(&HavenOperatorContextTool{})); err != nil {
+		return nil, err
+	}
 	if err := registry.TryRegister(WrapTrustedSandboxLocal(&NotesList{
 		Root: sandboxHome,
 	})); err != nil {

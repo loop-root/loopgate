@@ -71,13 +71,14 @@ const (
 )
 
 var havenToolResultMaxRunesByCapability = map[string]int{
-	"fs_read":            16000,
-	"fs_list":            12000,
-	"shell_exec":         12000,
-	"host.folder.list":   4000,
-	"host.folder.read":   16000,
-	"host.organize.plan": 20000,
-	"host.plan.apply":    20000,
+	"fs_read":                16000,
+	"fs_list":                12000,
+	"shell_exec":             12000,
+	"haven.operator_context": 12000,
+	"host.folder.list":       4000,
+	"host.folder.read":       16000,
+	"host.organize.plan":     20000,
+	"host.plan.apply":        20000,
 }
 
 type havenCapabilityDescriptor struct {
@@ -86,32 +87,33 @@ type havenCapabilityDescriptor struct {
 }
 
 var havenCapabilityCatalog = map[string]havenCapabilityDescriptor{
-	"fs_list":            {DisplayName: "Browse Files", RuntimeHint: "browse folders and see what is in your workspace"},
-	"fs_read":            {DisplayName: "Read Documents", RuntimeHint: "read files that already exist in your workspace"},
-	"fs_write":           {DisplayName: "Save Work", RuntimeHint: "create and update files in your workspace"},
-	"fs_mkdir":           {DisplayName: "Create Folders", RuntimeHint: "create new folders to organize your workspace"},
-	"journal.list":       {DisplayName: "Journal", RuntimeHint: "review your private journal entries"},
-	"journal.read":       {DisplayName: "Journal", RuntimeHint: "read a private journal entry"},
-	"journal.write":      {DisplayName: "Journal", RuntimeHint: "write a private journal entry when the user asks for reflection or journaling"},
-	"notes.list":         {DisplayName: "Notes", RuntimeHint: "review your private working notes"},
-	"notes.read":         {DisplayName: "Notes", RuntimeHint: "read a working note from your notebook"},
-	"notes.write":        {DisplayName: "Notes", RuntimeHint: "save a working note for plans, scratch work, or research"},
-	"memory.remember":    {DisplayName: "Remember Things", RuntimeHint: "propose short structured continuity (preferences, routines, profile, goals); Loopgate accepts or rejects; do not invent facts or store secrets"},
-	"paint.list":         {DisplayName: "Paint", RuntimeHint: "review the paintings in your gallery"},
-	"paint.save":         {DisplayName: "Paint", RuntimeHint: "create a painting from explicit strokes and save it to your gallery"},
-	"note.create":        {DisplayName: "Sticky Notes", RuntimeHint: "leave a sticky note on the desktop for the user"},
-	"desktop.organize":   {DisplayName: "Desktop Layout", RuntimeHint: "rearrange the desktop icons to tidy up Haven"},
-	"todo.add":           {DisplayName: "Task Board", RuntimeHint: "add a task when the user wants a reminder or explicitly asks to track something across sessions"},
-	"todo.complete":      {DisplayName: "Task Board", RuntimeHint: "mark a task as done when it no longer needs attention"},
-	"todo.list":          {DisplayName: "Task Board", RuntimeHint: "review your open tasks and active goals"},
-	"goal.set":           {DisplayName: "Goals", RuntimeHint: "set a named persistent goal for ongoing work or a multi-session objective the user wants to track"},
-	"goal.close":         {DisplayName: "Goals", RuntimeHint: "close a goal when the objective has been achieved or the user no longer wants to track it"},
-	"shell_exec":         {DisplayName: "Terminal Commands", RuntimeHint: "run terminal commands when a task genuinely requires the command line"},
-	"host.folder.list":   {DisplayName: "Granted host folders", RuntimeHint: "list files in a user-granted folder on the real host filesystem"},
-	"host.folder.read":   {DisplayName: "Granted host folders", RuntimeHint: "read a file under a granted host folder on disk"},
-	"host.organize.plan": {DisplayName: "Granted host folders", RuntimeHint: "draft a move or mkdir plan for a granted folder (no host writes until apply)"},
-	"host.plan.apply":    {DisplayName: "Granted host folders", RuntimeHint: "execute an approved organization plan on the real host filesystem"},
-	"invoke_capability":  {DisplayName: "Capability Dispatcher", RuntimeHint: "dispatch a single allowed Haven capability"},
+	"fs_list":                {DisplayName: "Browse Files", RuntimeHint: "browse folders and see what is in your workspace"},
+	"fs_read":                {DisplayName: "Read Documents", RuntimeHint: "read files that already exist in your workspace"},
+	"fs_write":               {DisplayName: "Save Work", RuntimeHint: "create and update files in your workspace"},
+	"fs_mkdir":               {DisplayName: "Create Folders", RuntimeHint: "create new folders to organize your workspace"},
+	"journal.list":           {DisplayName: "Journal", RuntimeHint: "review your private journal entries"},
+	"journal.read":           {DisplayName: "Journal", RuntimeHint: "read a private journal entry"},
+	"journal.write":          {DisplayName: "Journal", RuntimeHint: "write a private journal entry when the user asks for reflection or journaling"},
+	"haven.operator_context": {DisplayName: "Operator guide", RuntimeHint: "fetch authoritative Haven harness documentation for troubleshooting"},
+	"notes.list":             {DisplayName: "Notes", RuntimeHint: "review your private working notes"},
+	"notes.read":             {DisplayName: "Notes", RuntimeHint: "read a working note from your notebook"},
+	"notes.write":            {DisplayName: "Notes", RuntimeHint: "save a working note for plans, scratch work, or research"},
+	"memory.remember":        {DisplayName: "Remember Things", RuntimeHint: "propose short structured continuity (preferences, routines, profile, goals); Loopgate accepts or rejects; do not invent facts or store secrets"},
+	"paint.list":             {DisplayName: "Paint", RuntimeHint: "review the paintings in your gallery"},
+	"paint.save":             {DisplayName: "Paint", RuntimeHint: "create a painting from explicit strokes and save it to your gallery"},
+	"note.create":            {DisplayName: "Sticky Notes", RuntimeHint: "leave a sticky note on the desktop for the user"},
+	"desktop.organize":       {DisplayName: "Desktop Layout", RuntimeHint: "rearrange the desktop icons to tidy up Haven"},
+	"todo.add":               {DisplayName: "Task Board", RuntimeHint: "add a task when the user wants a reminder or explicitly asks to track something across sessions"},
+	"todo.complete":          {DisplayName: "Task Board", RuntimeHint: "mark a task as done when it no longer needs attention"},
+	"todo.list":              {DisplayName: "Task Board", RuntimeHint: "review your open tasks and active goals"},
+	"goal.set":               {DisplayName: "Goals", RuntimeHint: "set a named persistent goal for ongoing work or a multi-session objective the user wants to track"},
+	"goal.close":             {DisplayName: "Goals", RuntimeHint: "close a goal when the objective has been achieved or the user no longer wants to track it"},
+	"shell_exec":             {DisplayName: "Terminal Commands", RuntimeHint: "run terminal commands when a task genuinely requires the command line"},
+	"host.folder.list":       {DisplayName: "Granted host folders", RuntimeHint: "list files in a user-granted folder on the real host filesystem"},
+	"host.folder.read":       {DisplayName: "Granted host folders", RuntimeHint: "read a file under a granted host folder on disk"},
+	"host.organize.plan":     {DisplayName: "Granted host folders", RuntimeHint: "draft a move or mkdir plan for a granted folder (no host writes until apply)"},
+	"host.plan.apply":        {DisplayName: "Granted host folders", RuntimeHint: "execute an approved organization plan on the real host filesystem"},
+	"invoke_capability":      {DisplayName: "Capability Dispatcher", RuntimeHint: "dispatch a single allowed Haven capability"},
 }
 
 type havenChatRequest struct {
@@ -522,7 +524,7 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	}
 
 	// Extend the timeout significantly for local models because CPU inference
-	// or slow GPU offload can cause the first token to exceed default windows, 
+	// or slow GPU offload can cause the first token to exceed default windows,
 	// silently terminating the loop before the response generates.
 	timeoutWindow := 60 * time.Second
 	if runtimeConfig.ProviderName == "openai_compatible" || modelruntime.IsLoopbackModelBaseURL(runtimeConfig.BaseURL) {
@@ -1113,11 +1115,12 @@ func havenHostFolderProseNudgeApplies(initialUserMessage string, conversationWit
 //     boundary; the loop does not continue past a pending_approval result.
 //
 // Checkpoint gap (known limitation):
-//   The conversation accumulates in memory across iterations. If the HTTP handler is
-//   cancelled mid-loop (ctx cancellation, client disconnect, server restart) all
-//   in-flight tool results are lost. A durable checkpoint would write each completed
-//   tool-result turn to the threadstore before advancing to the next model call.
-//   This is not yet implemented; recovery requires re-sending the user message.
+//
+//	The conversation accumulates in memory across iterations. If the HTTP handler is
+//	cancelled mid-loop (ctx cancellation, client disconnect, server restart) all
+//	in-flight tool results are lost. A durable checkpoint would write each completed
+//	tool-result turn to the threadstore before advancing to the next model call.
+//	This is not yet implemented; recovery requires re-sending the user message.
 //
 // TODO(checkpoint): write completed tool-result turns to store after each iteration
 // so that a cancelled or crashed request can be resumed without data loss.
@@ -1780,6 +1783,9 @@ func buildResidentCapabilityFacts(capabilitySummaries []CapabilitySummary) []str
 	runtimeFacts := make([]string, 0, 6)
 	if hasAllHavenCapabilities(availableCapabilities, "journal.list", "journal.read", "journal.write") {
 		runtimeFacts = append(runtimeFacts, "You have a Journal app. Use journal.list and journal.read when the user wants to review prior entries. Use journal.write only when they ask for journaling, reflection, or an explicit journal entry.")
+	}
+	if _, hasOpGuide := availableCapabilities["haven.operator_context"]; hasOpGuide {
+		runtimeFacts = append(runtimeFacts, "You have haven.operator_context: when the operator asks how Haven mounts work, TUI layout (sidebar off by default, Ctrl+B), shortcuts, drag-and-drop path paste, or harness troubleshooting, call it with no arguments. It returns Loopgate-maintained operator documentation — do not invent TTL, policy, or shortcut details from memory alone.")
 	}
 	if hasAllHavenCapabilities(availableCapabilities, "notes.list", "notes.read", "notes.write") {
 		runtimeFacts = append(runtimeFacts, "You have a Notes app for working memory. Use notes.write for plans, scratch work, or research notes that should persist inside Haven without becoming a journal entry.")

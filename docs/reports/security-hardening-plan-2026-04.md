@@ -25,18 +25,22 @@
 
 1. **Operator semantics** — [docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md](../setup/LEDGER_AND_AUDIT_INTEGRITY.md): what SHA-256 chaining proves, same-user filesystem rewrite limitation, macOS single-instance scope, pointers to TM-05 and code. Threat model and maps cross-linked.
 
+## Completed (2026-04-07) — audit ledger HMAC checkpoints (implementation)
+
+1. **Keyed checkpoints** — Optional `logging.audit_ledger.hmac_checkpoint` in `config/runtime.yaml` (config + `internal/ledger/hmac_checkpoint.go` verification helpers). **Server append path** to the audit JSONL is tracked for a follow-up wiring pass when re-integrated with `Server.logEvent`.
+
 ## Follow-on (tracked, not done)
 
-### Ledger authenticity (implementation backlog)
+### Ledger authenticity (remaining backlog)
 
-Append-only ledgers use **SHA-256 hash chaining** (`event_hash`, `previous_event_hash`) for **tamper-evidence** and **ordering**, not a **secret-keyed MAC or signature**. An attacker with **filesystem write** to ledger paths can replace a file with a **new internally consistent chain** from genesis; verification does not prove Loopgate authorship. **Operator expectations are documented** (see link above).
+SHA-256 chaining plus optional **HMAC checkpoints** still assume **local** control of the JSONL and signing key. A same-user attacker with both can forge a new chain and new checkpoints if they possess the key.
 
-**Remaining options:** periodic **remote append-only** export; **HMAC or asymmetric signing** of events or checkpoints with a key in **secure storage** (not colocated with a mutable ledger file); enterprise **admin-node** aggregation.
+**Remaining options:** periodic **remote append-only** export; **asymmetric signing** or **off-box verification** workflows; enterprise **admin-node** aggregation; documented **rotation** for the checkpoint key (operators must overlap verify windows when rotating).
 
 ### Other
 
 - Further **secret-export** tightening (explicit per-capability classification vs heuristic for unregistered names).
-- **MAC key rotation** for long-lived sessions.
+- **MAC key rotation** for long-lived control-plane sessions (distinct from optional audit-ledger checkpoint HMAC key rotation above unless unified by design).
 - **Route × auth × MAC × audit** checklist in CI or review template.
 
 **Explicitly out of scope here:** Linux/Windows secure credential backends (untested in current environment); multi-instance ledger + nonce semantics.
@@ -44,6 +48,9 @@ Append-only ledgers use **SHA-256 hash chaining** (`event_hash`, `previous_event
 ## Tests
 
 - `internal/ledger/ledger_test.go` — append and chain verification (integrity anomalies fail closed).
+- `internal/ledger/hmac_checkpoint_test.go` — checkpoint message and `VerifyAuditLedgerHMACCheckpointEvent`.
+- `internal/loopgate/session_mac_rotation_test.go` — epoch index and MAC derivation helpers.
+- `internal/config/config_test.go` — HMAC checkpoint runtime validation (enabled without `secret_ref`, bad interval).
 - `internal/loopgate/approval_manifest_test.go` — clone and execution-body verification.
 - `internal/loopgate/server_test.go` — secret-export registry/heuristic; UI approval path; pending/replay caps.
 - `internal/loopgate/session_executable_pin_test.go` — executable pin mismatch and match.

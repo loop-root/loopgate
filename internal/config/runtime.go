@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"morph/internal/identifiers"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,6 +41,24 @@ type DiagnosticFiles struct {
 	Model  string `yaml:"model" json:"model"`
 }
 
+// AuditLedgerHMACCheckpoint configures optional HMAC-signed checkpoint lines in the control-plane audit JSONL.
+// When enabled, Loopgate appends audit.ledger.hmac_checkpoint after every IntervalEvents non-checkpoint audit events.
+// IntervalEvents zero/unset defaults to 256 in applyRuntimeConfigDefaults; negative values are rejected at validate.
+// The signing key is loaded via secret_ref (macOS: macos_keychain; CI/tests: env with account_name = env var name).
+type AuditLedgerHMACCheckpoint struct {
+	Enabled        bool                       `yaml:"enabled" json:"enabled"`
+	IntervalEvents int                        `yaml:"interval_events" json:"interval_events"`
+	SecretRef      *AuditLedgerHMACSecretRef  `yaml:"secret_ref,omitempty" json:"secret_ref,omitempty"`
+}
+
+// AuditLedgerHMACSecretRef references secret material for audit ledger checkpoint HMAC (same shape as secrets.SecretRef).
+type AuditLedgerHMACSecretRef struct {
+	ID          string `yaml:"id" json:"id"`
+	Backend     string `yaml:"backend" json:"backend"`
+	AccountName string `yaml:"account_name" json:"account_name"`
+	Scope       string `yaml:"scope" json:"scope"`
+}
+
 // ResolvedDirectory returns the log directory relative to repo root (after defaults).
 func (d DiagnosticLogging) ResolvedDirectory() string {
 	dir := strings.TrimSpace(d.Directory)
@@ -62,11 +82,12 @@ type RuntimeConfig struct {
 	Version string `yaml:"version" json:"version"`
 	Logging struct {
 		AuditLedger struct {
-			MaxEventBytes                 int    `yaml:"max_event_bytes" json:"max_event_bytes"`
-			RotateAtBytes                 int64  `yaml:"rotate_at_bytes" json:"rotate_at_bytes"`
-			SegmentDir                    string `yaml:"segment_dir" json:"segment_dir"`
-			ManifestPath                  string `yaml:"manifest_path" json:"manifest_path"`
-			VerifyClosedSegmentsOnStartup *bool  `yaml:"verify_closed_segments_on_startup" json:"verify_closed_segments_on_startup"`
+			MaxEventBytes                 int                       `yaml:"max_event_bytes" json:"max_event_bytes"`
+			RotateAtBytes                 int64                     `yaml:"rotate_at_bytes" json:"rotate_at_bytes"`
+			SegmentDir                    string                    `yaml:"segment_dir" json:"segment_dir"`
+			ManifestPath                  string                    `yaml:"manifest_path" json:"manifest_path"`
+			VerifyClosedSegmentsOnStartup *bool                     `yaml:"verify_closed_segments_on_startup" json:"verify_closed_segments_on_startup"`
+			HMACCheckpoint                AuditLedgerHMACCheckpoint `yaml:"hmac_checkpoint" json:"hmac_checkpoint"`
 		} `yaml:"audit_ledger" json:"audit_ledger"`
 		// Diagnostic is non-authoritative operator telemetry (text files under runtime/logs or runtime/state).
 		// It must not replace loopgate_events.jsonl; never log secrets or raw tokens.
@@ -208,6 +229,11 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	if runtimeConfig.Logging.AuditLedger.VerifyClosedSegmentsOnStartup == nil {
 		defaultVerifyClosedSegments := true
 		runtimeConfig.Logging.AuditLedger.VerifyClosedSegmentsOnStartup = &defaultVerifyClosedSegments
+	}
+	hc := &runtimeConfig.Logging.AuditLedger.HMACCheckpoint
+	// Default only the unset (zero) case so negative values fail validation instead of being coerced.
+	if hc.Enabled && hc.IntervalEvents == 0 {
+		hc.IntervalEvents = 256
 	}
 	d := &runtimeConfig.Logging.Diagnostic
 	if strings.TrimSpace(d.DefaultLevel) == "" {
@@ -385,6 +411,35 @@ func validateRuntimeConfig(runtimeConfig RuntimeConfig) error {
 		return err
 	}
 	if err := validateExpectedSessionClientExecutable(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); err != nil {
+		return err
+	}
+	if err := validateAuditLedgerHMACCheckpoint(runtimeConfig.Logging.AuditLedger.HMACCheckpoint); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateAuditLedgerHMACCheckpoint(hc AuditLedgerHMACCheckpoint) error {
+	if !hc.Enabled {
+		return nil
+	}
+	if hc.IntervalEvents <= 0 {
+		return fmt.Errorf("logging.audit_ledger.hmac_checkpoint.interval_events must be positive when enabled")
+	}
+	if hc.SecretRef == nil {
+		return fmt.Errorf("logging.audit_ledger.hmac_checkpoint.secret_ref is required when enabled")
+	}
+	sr := hc.SecretRef
+	if err := identifiers.ValidateSafeIdentifier("logging.audit_ledger.hmac_checkpoint.secret_ref.id", sr.ID); err != nil {
+		return err
+	}
+	if err := identifiers.ValidateSafeIdentifier("logging.audit_ledger.hmac_checkpoint.secret_ref.backend", sr.Backend); err != nil {
+		return err
+	}
+	if err := identifiers.ValidateSafeIdentifier("logging.audit_ledger.hmac_checkpoint.secret_ref.account_name", sr.AccountName); err != nil {
+		return err
+	}
+	if err := identifiers.ValidateSafeIdentifier("logging.audit_ledger.hmac_checkpoint.secret_ref.scope", sr.Scope); err != nil {
 		return err
 	}
 	return nil

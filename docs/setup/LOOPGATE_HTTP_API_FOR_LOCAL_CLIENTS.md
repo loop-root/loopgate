@@ -124,8 +124,21 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 | `control_session_id` | Store; send on signed requests. |
 | `capability_token` | Store; send as `Authorization: Bearer …` for execution and most privileged routes. |
 | `approval_token` | Store; send as `X-Loopgate-Approval-Token` for approval UI routes (see RFC 0001). |
-| `session_mac_key` | Store in memory only; **never** log, persist to disk unencrypted, or ship in analytics. Used for HMAC-SHA256 request signing. |
+| `session_mac_key` | Store in memory only; **never** log, persist to disk unencrypted, or ship in analytics. Used for HMAC-SHA256 request signing. The server **derives** this from rotating epoch material (12-hour UTC windows); see **Session MAC key rotation** below. |
 | `expires_at_utc` | Refresh the session before expiry (call `/v1/session/open` again with the same labels, or implement refresh policy your product needs). |
+
+### Session MAC key rotation (12-hour epochs)
+
+`session_mac_key` is **derived** from a server-held master secret and the **control session id**, and changes each **12-hour UTC epoch**. Loopgate accepts signatures built with the **previous**, **current**, or **next** epoch’s derived key so clients can cross a single boundary without dropping traffic.
+
+**`GET /v1/session/mac-keys`** — same authentication as **`GET /v1/status`**: `Authorization: Bearer …` plus the **signed GET envelope** (§6, empty body). Response JSON includes:
+
+- `rotation_period_seconds` — always **43200** (12 hours).
+- `derived_key_schema` — **`loopgate-session-mac-v1`** (stable identifier for the derivation rule).
+- `current_epoch_index` — non-negative epoch counter.
+- **`previous`**, **`current`**, **`next`** — each has `slot`, `epoch_index`, `valid_from_utc`, `valid_until_utc`, `epoch_key_material_hex` (32-byte key as 64 hex chars), and `derived_session_mac_key` (the **64-hex-character** string to use as `session_mac_key` UTF-8 for HMAC, same shape as session open).
+
+Long-lived processes should **refresh** the in-memory signing key from **`current.derived_session_mac_key`** periodically (or call **`GET /v1/session/mac-keys`** after each epoch), because verification only overlaps **three** epochs (~36 hours of slack, depending on where the session started).
 
 **Typical error shape:** JSON body compatible with `CapabilityResponse` (`status`, `denial_code`, `denial_reason`, …) with non-2xx HTTP status on failures.
 

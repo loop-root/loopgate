@@ -272,7 +272,11 @@ func (server *Server) readAndVerifyMorphlingWorkerSignedBody(writer http.Respons
 			DenialCode:   DenialCodeMalformedRequest,
 		}, false
 	}
-	if verificationResponse, ok := server.verifySignedRequestWithMACKey(request, requestBodyBytes, workerSession.ControlSessionID, workerSession.SessionMACKey); !ok {
+	requestTimestamp, requestNonce, requestSignature, denial, ok := server.parseAndValidateSignedControlPlaneRequest(request, workerSession.ControlSessionID)
+	if !ok {
+		return nil, denial, false
+	}
+	if verificationResponse, ok := server.verifySignedRequestAgainstRotatingSessionMAC(request, requestBodyBytes, workerSession.ControlSessionID, requestTimestamp, requestNonce, requestSignature); !ok {
 		return nil, verificationResponse, false
 	}
 	return requestBodyBytes, CapabilityResponse{}, true

@@ -85,6 +85,8 @@ type Server struct {
 	auditMu       sync.Mutex
 	auditSequence uint64
 	lastAuditHash string
+	// sessionMACRotationMaster seeds 12-hour epoch keys for control-plane request HMAC (session_mac_rotation.go).
+	sessionMACRotationMaster []byte
 
 	promotionMu sync.Mutex
 
@@ -410,41 +412,41 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		reportSecurityWarning: func(eventCode string, cause error) {
 			fmt.Fprintf(os.Stderr, "WARN: security event=%s class=%s\n", eventCode, secrets.LoopgateOperatorErrorClass(cause))
 		},
-		resolvePeerIdentity:       peerIdentityFromConn,
-		resolveExePath:            resolveExecutablePath,
-		resolveUserHomeDir:        os.UserHomeDir,
-		providerTokens:            make(map[string]providerAccessToken),
-		configuredConnections:     configuredConnections,
-		configuredCapabilities:    configuredCapabilities,
-		httpClient:                &http.Client{Timeout: time.Duration(policy.Tools.HTTP.TimeoutSeconds) * time.Second},
-		pkceSessions:              make(map[string]pendingPKCESession),
-		memoryFactWritesBySession: make(map[string][]time.Time),
-		memoryFactWritesByUID:     make(map[uint32][]time.Time),
-		morphlingWorkerLaunches:   make(map[string]morphlingWorkerLaunch),
-		morphlingWorkerSessions:   make(map[string]morphlingWorkerSession),
-		sessions:                  make(map[string]controlSession),
-		tokens:                    make(map[string]capabilityToken),
-		approvals:                 make(map[string]pendingApproval),
-		seenRequests:              make(map[string]seenRequest),
-		seenAuthNonces:            make(map[string]seenRequest),
-		usedTokens:                make(map[string]usedToken),
-		sessionOpenByUID:          make(map[uint32]time.Time),
-		approvalTokenIndex:        make(map[string]string),
-		sessionReadCounts:         make(map[string][]time.Time),
-		sessionOpenMinInterval:    defaultSessionOpenMinInterval,
-		maxActiveSessionsPerUID:   defaultMaxActiveSessionsPerUID,
-		expirySweepMaxInterval:    defaultExpirySweepMaxInterval,
+		resolvePeerIdentity:                  peerIdentityFromConn,
+		resolveExePath:                       resolveExecutablePath,
+		resolveUserHomeDir:                   os.UserHomeDir,
+		providerTokens:                       make(map[string]providerAccessToken),
+		configuredConnections:                configuredConnections,
+		configuredCapabilities:               configuredCapabilities,
+		httpClient:                           &http.Client{Timeout: time.Duration(policy.Tools.HTTP.TimeoutSeconds) * time.Second},
+		pkceSessions:                         make(map[string]pendingPKCESession),
+		memoryFactWritesBySession:            make(map[string][]time.Time),
+		memoryFactWritesByUID:                make(map[uint32][]time.Time),
+		morphlingWorkerLaunches:              make(map[string]morphlingWorkerLaunch),
+		morphlingWorkerSessions:              make(map[string]morphlingWorkerSession),
+		sessions:                             make(map[string]controlSession),
+		tokens:                               make(map[string]capabilityToken),
+		approvals:                            make(map[string]pendingApproval),
+		seenRequests:                         make(map[string]seenRequest),
+		seenAuthNonces:                       make(map[string]seenRequest),
+		usedTokens:                           make(map[string]usedToken),
+		sessionOpenByUID:                     make(map[uint32]time.Time),
+		approvalTokenIndex:                   make(map[string]string),
+		sessionReadCounts:                    make(map[string][]time.Time),
+		sessionOpenMinInterval:               defaultSessionOpenMinInterval,
+		maxActiveSessionsPerUID:              defaultMaxActiveSessionsPerUID,
+		expirySweepMaxInterval:               defaultExpirySweepMaxInterval,
 		maxPendingApprovalsPerControlSession: defaultMaxPendingApprovalsPerControlSession,
 		maxSeenRequestReplayEntries:          defaultMaxSeenRequestReplayEntries,
 		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,
 		maxTotalControlSessions:              defaultMaxTotalControlSessions,
 		maxTotalApprovalRecords:              defaultMaxTotalApprovalRecords,
 		maxMorphlingWorkerSessions:           defaultMaxMorphlingWorkerSessions,
-		taskPlans:                 make(map[string]*taskPlanRecord),
-		taskLeases:                make(map[string]*taskLeaseRecord),
-		taskExecutions:            make(map[string]*taskExecutionRecord),
-		hostAccessPlans:           make(map[string]*hostAccessStoredPlan),
-		hostAccessAppliedPlanAt:   make(map[string]time.Time),
+		taskPlans:                            make(map[string]*taskPlanRecord),
+		taskLeases:                           make(map[string]*taskLeaseRecord),
+		taskExecutions:                       make(map[string]*taskExecutionRecord),
+		hostAccessPlans:                      make(map[string]*hostAccessStoredPlan),
+		hostAccessAppliedPlanAt:              make(map[string]time.Time),
 	}
 	if pin := normalizeSessionExecutablePinPath(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); pin != "" {
 		server.expectedClientPath = pin
@@ -506,6 +508,9 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	if err := server.loadNonceReplayState(); err != nil {
 		return nil, fmt.Errorf("load nonce replay state: %w", err)
 	}
+	if err := server.loadOrCreateSessionMACRotationMaster(); err != nil {
+		return nil, fmt.Errorf("session mac rotation master: %w", err)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", server.handleHealth)
@@ -536,6 +541,7 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	mux.HandleFunc("/v1/ui/presence", server.handleHavenPresence)
 	mux.HandleFunc("/v1/diagnostic/report", server.handleDiagnosticReport)
 	mux.HandleFunc("/v1/session/open", server.handleSessionOpen)
+	mux.HandleFunc("/v1/session/mac-keys", server.handleSessionMACKeys)
 	mux.HandleFunc("/v1/model/reply", server.handleModelReply)
 	mux.HandleFunc("/v1/model/validate", server.handleModelValidate)
 	mux.HandleFunc("/v1/model/ollama/tags", server.handleOllamaTags)
@@ -2080,6 +2086,7 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 			},
 		}, ""
 	case "journal.read", "journal.write", "journal.list",
+		"haven.operator_context",
 		"notes.read", "notes.write", "notes.list",
 		"note.create", "paint.save", "paint.list",
 		"desktop.organize":
@@ -2474,21 +2481,22 @@ func decodeJSONBytes(requestBodyBytes []byte, destination interface{}) error {
 	return nil
 }
 
-func (server *Server) verifySignedRequest(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string) (CapabilityResponse, bool) {
+// parseAndValidateSignedControlPlaneRequest checks signed-request headers and timestamp skew for a bound control session.
+func (server *Server) parseAndValidateSignedControlPlaneRequest(request *http.Request, expectedControlSessionID string) (requestTimestamp string, requestNonce string, requestSignature string, denial CapabilityResponse, ok bool) {
 	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
-	requestTimestamp := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
-	requestNonce := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))
-	requestSignature := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature"))
+	requestTimestamp = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
+	requestNonce = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))
+	requestSignature = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature"))
 
 	if controlSessionID == "" || requestTimestamp == "" || requestNonce == "" || requestSignature == "" {
-		return CapabilityResponse{
+		return "", "", "", CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "signed control-plane headers are required",
 			DenialCode:   DenialCodeRequestSignatureMissing,
 		}, false
 	}
 	if controlSessionID != expectedControlSessionID {
-		return CapabilityResponse{
+		return "", "", "", CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "control session binding is invalid",
 			DenialCode:   DenialCodeControlSessionBindingInvalid,
@@ -2497,49 +2505,34 @@ func (server *Server) verifySignedRequest(request *http.Request, requestBodyByte
 
 	parsedTimestamp, err := time.Parse(time.RFC3339Nano, requestTimestamp)
 	if err != nil {
-		return CapabilityResponse{
+		return "", "", "", CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "request timestamp is invalid",
 			DenialCode:   DenialCodeRequestTimestampInvalid,
 		}, false
 	}
 	if parsedTimestamp.Before(server.now().UTC().Add(-requestSignatureSkew)) || parsedTimestamp.After(server.now().UTC().Add(requestSignatureSkew)) {
-		return CapabilityResponse{
+		return "", "", "", CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "request timestamp is outside the allowed skew window",
 			DenialCode:   DenialCodeRequestTimestampInvalid,
 		}, false
 	}
-
-	server.mu.Lock()
-	server.pruneExpiredLocked()
-	activeSession, found := server.sessions[controlSessionID]
-	server.mu.Unlock()
-	if !found || strings.TrimSpace(activeSession.SessionMACKey) == "" {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "control session binding is invalid",
-			DenialCode:   DenialCodeControlSessionBindingInvalid,
-		}, false
-	}
-
-	return server.verifySignedRequestWithMACKey(request, requestBodyBytes, expectedControlSessionID, activeSession.SessionMACKey)
+	return requestTimestamp, requestNonce, requestSignature, CapabilityResponse{}, true
 }
 
-func (server *Server) verifySignedRequestWithMACKey(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string, sessionMACKey string) (CapabilityResponse, bool) {
-	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
-	requestTimestamp := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
-	requestNonce := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))
-	requestSignature := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature"))
-
-	if controlSessionID == "" || requestTimestamp == "" || requestNonce == "" || requestSignature == "" {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "signed control-plane headers are required",
-			DenialCode:   DenialCodeRequestSignatureMissing,
-		}, false
+func (server *Server) verifySignedRequest(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string) (CapabilityResponse, bool) {
+	requestTimestamp, requestNonce, requestSignature, denial, ok := server.parseAndValidateSignedControlPlaneRequest(request, expectedControlSessionID)
+	if !ok {
+		return denial, false
 	}
-	if controlSessionID != expectedControlSessionID {
+
+	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
+	server.mu.Lock()
+	server.pruneExpiredLocked()
+	_, found := server.sessions[controlSessionID]
+	server.mu.Unlock()
+	if !found {
 		return CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "control session binding is invalid",
@@ -2547,52 +2540,7 @@ func (server *Server) verifySignedRequestWithMACKey(request *http.Request, reque
 		}, false
 	}
 
-	parsedTimestamp, err := time.Parse(time.RFC3339Nano, requestTimestamp)
-	if err != nil {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request timestamp is invalid",
-			DenialCode:   DenialCodeRequestTimestampInvalid,
-		}, false
-	}
-	if parsedTimestamp.Before(server.now().UTC().Add(-requestSignatureSkew)) || parsedTimestamp.After(server.now().UTC().Add(requestSignatureSkew)) {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request timestamp is outside the allowed skew window",
-			DenialCode:   DenialCodeRequestTimestampInvalid,
-		}, false
-	}
-
-	expectedSignature := signRequest(sessionMACKey, request.Method, request.URL.Path, controlSessionID, requestTimestamp, requestNonce, requestBodyBytes)
-	decodedRequestSignature, err := hex.DecodeString(requestSignature)
-	if err != nil {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request signature is invalid",
-			DenialCode:   DenialCodeRequestSignatureInvalid,
-		}, false
-	}
-	decodedExpectedSignature, err := hex.DecodeString(expectedSignature)
-	if err != nil {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request signature is invalid",
-			DenialCode:   DenialCodeRequestSignatureInvalid,
-		}, false
-	}
-	if !hmac.Equal(decodedExpectedSignature, decodedRequestSignature) {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request signature is invalid",
-			DenialCode:   DenialCodeRequestSignatureInvalid,
-		}, false
-	}
-
-	if nonceDenial := server.recordAuthNonce(controlSessionID, requestNonce); nonceDenial != nil {
-		return *nonceDenial, false
-	}
-
-	return CapabilityResponse{}, true
+	return server.verifySignedRequestAgainstRotatingSessionMAC(request, requestBodyBytes, controlSessionID, requestTimestamp, requestNonce, requestSignature)
 }
 
 func (server *Server) pruneExpiredLocked() {

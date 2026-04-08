@@ -18,6 +18,18 @@ logging:
     segment_dir: "runtime/state/loopgate_event_segments"
     manifest_path: "runtime/state/loopgate_event_segments/manifest.jsonl"
     verify_closed_segments_on_startup: true
+    # Optional: HMAC-SHA256 checkpoints over the hash-chain head (key from secret store, not the JSONL).
+    # When enabled: true, set interval_events (>0) and secret_ref. Omitted interval_events with enabled
+    # defaults to 256 in config apply. Key: >=32 raw bytes, or exactly 64 hex chars decoded to 32 bytes.
+    # Example (disabled): tests often use backend env and account_name = env var name.
+    # hmac_checkpoint:
+    #   enabled: false
+    #   interval_events: 256
+    #   secret_ref:
+    #     id: "audit_ledger_hmac"
+    #     backend: "macos_keychain"
+    #     account_name: "loopgate.audit_ledger_hmac"
+    #     scope: "local"
   # Optional text logs under directory (slog). Not authoritative; loopgate_events.jsonl is.
   # Levels: error, warn, info, debug, trace (per-channel keys: audit, server, client, socket, memory, ledger, model).
   # Haven Settings can write runtime/state/loopgate_diagnostic_logging.override.json (merged on load; restart Loopgate).
