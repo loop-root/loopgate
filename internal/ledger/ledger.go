@@ -231,6 +231,10 @@ func hashStoredChainEvent(event Event) (string, error) {
 	return hashEvent(canonicalEvent)
 }
 
+// hashEvent returns hex(SHA-256(canonical JSON of event)) with event_hash stripped from Data.
+// The chain detects reordering/corruption and links each line to the previous hash; it is not
+// a secret-keyed MAC, so a filesystem writer can replace the entire file with a new consistent
+// chain. See docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md for operator-facing semantics.
 func hashEvent(event Event) (string, error) {
 	canonicalEvent := event
 	if event.Data != nil {

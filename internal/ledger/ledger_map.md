@@ -35,3 +35,4 @@ Use it when changing:
 
 - Never mutate past events; ordering and hashes must stay consistent.
 - Partial writes and integrity errors must surface explicitly to callers.
+- **Security semantics:** `event_hash` / `previous_event_hash` are **SHA-256 over canonical JSON** (not a secret-keyed MAC). They detect accidental corruption and intra-file tampering that breaks the chain; they do **not** prove Loopgate authorship against a same-user attacker who replaces the whole file with a new valid chain. Operators: `docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md`.

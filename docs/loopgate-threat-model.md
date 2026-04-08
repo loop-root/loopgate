@@ -82,7 +82,7 @@ The highest-risk themes in a typical **Loopgate** deployment are local control-p
   - Channel: local file append and atomic rename.
   - Security guarantees: `0600` file permissions for sensitive files, append-only ledger path, atomic temp-write+rename for state-like files, quarantine dir `0700`.
   - Validation/normalization: chain metadata, full prior-chain verification on append/bootstrap, canonical file paths, redacted audit metadata.
-  - Gaps: not externally anchored or signed against out-of-band same-user edits; malformed ledger content fails closed, but there is not yet a separate integrity-event stream for downstream operators.
+  - Gaps: hash chains are **tamper-evident within the file**, not **keyed proof of Loopgate authorship**; a same-user filesystem writer can replace a JSONL file with a new internally consistent chain. Malformed ledger content fails closed, but there is not yet signed checkpoints or remote append-only export in-tree. **Operator-facing detail:** [LEDGER_AND_AUDIT_INTEGRITY.md](setup/LEDGER_AND_AUDIT_INTEGRITY.md).
   - Evidence: [ledger.go](../internal/ledger/ledger.go), [state.go](../internal/state/state.go), [distillate.go](../internal/memory/distillate.go), [quarantine.go](../internal/loopgate/quarantine.go).
 - Operator client → future `morphui` bridge/browser
   - Data: delegated Loopgate credentials, display-safe UI events, approval decisions.

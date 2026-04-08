@@ -31,3 +31,4 @@ This supports the project invariant that **security-relevant audit failures must
 ## Important Watchouts
 
 - Do not convert must-persist failures into warn-only without an explicit design change and tests.
+- Persisted events inherit **ledger** integrity semantics (hash chain vs keyed signing); see `docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md`.

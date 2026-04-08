@@ -21,13 +21,17 @@
 
 1. **Executable path pinning (F2)** — `config/runtime.yaml` → `control_plane.expected_session_client_executable`: non-empty absolute path required when set; compared (after clean) to the peer executable at `POST /v1/session/open`. Empty = disabled (default).
 
+## Completed (2026-04-08) — ledger authenticity (documentation)
+
+1. **Operator semantics** — [docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md](../setup/LEDGER_AND_AUDIT_INTEGRITY.md): what SHA-256 chaining proves, same-user filesystem rewrite limitation, macOS single-instance scope, pointers to TM-05 and code. Threat model and maps cross-linked.
+
 ## Follow-on (tracked, not done)
 
-### Ledger authenticity (hash chain vs signing)
+### Ledger authenticity (implementation backlog)
 
-Append-only ledgers use **SHA-256 hash chaining** (`event_hash`, `previous_event_hash`) for **tamper-evidence** and **ordering**, not a **secret-keyed MAC or signature**. An attacker with **filesystem write** to ledger paths can replace a file with a **new internally consistent chain** from genesis; verification does not prove Loopgate authorship.
+Append-only ledgers use **SHA-256 hash chaining** (`event_hash`, `previous_event_hash`) for **tamper-evidence** and **ordering**, not a **secret-keyed MAC or signature**. An attacker with **filesystem write** to ledger paths can replace a file with a **new internally consistent chain** from genesis; verification does not prove Loopgate authorship. **Operator expectations are documented** (see link above).
 
-**Follow-up options:** document the threat model in operator docs; periodic **remote append-only** export; **HMAC or asymmetric signing** of events or checkpoints with a key in **secure storage** (not colocated with a mutable ledger file); enterprise **admin-node** aggregation.
+**Remaining options:** periodic **remote append-only** export; **HMAC or asymmetric signing** of events or checkpoints with a key in **secure storage** (not colocated with a mutable ledger file); enterprise **admin-node** aggregation.
 
 ### Other
 
@@ -39,6 +43,7 @@ Append-only ledgers use **SHA-256 hash chaining** (`event_hash`, `previous_event
 
 ## Tests
 
+- `internal/ledger/ledger_test.go` — append and chain verification (integrity anomalies fail closed).
 - `internal/loopgate/approval_manifest_test.go` — clone and execution-body verification.
 - `internal/loopgate/server_test.go` — secret-export registry/heuristic; UI approval path; pending/replay caps.
 - `internal/loopgate/session_executable_pin_test.go` — executable pin mismatch and match.

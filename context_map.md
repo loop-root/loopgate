@@ -310,6 +310,7 @@ For a **folder-by-folder overview** of `docs/`, see `docs/docs_map.md`. Agent ph
 
 - `docs/setup/SETUP.md`
 - `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — Unix-socket HTTP, signing, routes
+- `docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md` — append-only JSONL hash-chain semantics (macOS operator expectations)
 - `docs/setup/LOOPGATE_MCP.md` — **deprecated in-tree MCP** (removed); future reservation (ADR 0010)
 - `docs/setup/SECRETS.md`
 - `docs/setup/TOOL_USAGE.md`

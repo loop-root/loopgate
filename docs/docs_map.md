@@ -26,7 +26,7 @@ Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/2
 
 ## Setup (`docs/setup/`)
 
-- `SETUP.md`, `SECRETS.md`, `TOOL_USAGE.md`, `ADMIN_CONSOLE.md`, `TENANCY.md`
+- `SETUP.md`, `LEDGER_AND_AUDIT_INTEGRITY.md`, `SECRETS.md`, `TOOL_USAGE.md`, `ADMIN_CONSOLE.md`, `TENANCY.md`
 - `LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — HTTP over Unix socket for integrators
 - `LOOPGATE_MCP.md` — **deprecated in-tree MCP** (removed); out-of-tree / future-ADR note
 

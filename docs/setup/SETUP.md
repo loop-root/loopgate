@@ -44,6 +44,7 @@ Default local socket: `runtime/state/loopgate.sock` (under your checkout; paths 
 
 ## Further reading
 
+- [Ledger and audit integrity](./LEDGER_AND_AUDIT_INTEGRITY.md) — what hash chaining proves on macOS (and what it does not)
 - [Secrets](./SECRETS.md)
 - [Tool usage](./TOOL_USAGE.md)
 - [Tenancy](./TENANCY.md)

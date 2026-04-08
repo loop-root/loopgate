@@ -9,6 +9,7 @@
 ## Start here
 
 - [Setup](./setup/SETUP.md)
+- [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md) — hash chain semantics (macOS)
 - [**Loopgate MCP (deprecated in-tree)**](./setup/LOOPGATE_MCP.md) — removal rationale, out-of-tree forwarders, future ADR reservation
 - [**Loopgate HTTP API (local clients)**](./setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) — Unix-socket HTTP, session open, signing, route inventory
 - [Tool Usage](./setup/TOOL_USAGE.md)
