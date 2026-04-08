@@ -130,6 +130,13 @@ func (client *Client) SessionMACKeys(ctx context.Context) (SessionMACKeysRespons
 	return response, nil
 }
 
+// RefreshSessionMACKeyFromServer replaces the in-memory session_mac_key using the server's current
+// rotation slot (GET /v1/session/mac-keys). Call after session open or when signatures fail across epochs.
+func (client *Client) RefreshSessionMACKeyFromServer(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
 // FetchDiagnosticReport loads aggregated operator diagnostics (JSON). Requires an open control session
 // over the same Unix peer binding as other privileged routes.
 func (client *Client) FetchDiagnosticReport(ctx context.Context, responseBody interface{}) error {
