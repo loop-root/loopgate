@@ -114,9 +114,11 @@ Next lift:
   now cross the backend seam; explicit remember candidate prep is backend-owned
   in the live path, the dead per-artifact store hooks were removed, and
   continuity inspect now rejects cross-session/thread/scope packet smuggling
-  plus duplicate or non-monotonic event metadata. Remaining gaps are test-only
-  compatibility seams, stronger authoritative provenance for continuity
-  sources, and broader TCL-informed continuity derivation.
+  plus duplicate or non-monotonic event metadata. Continuity-derived fact
+  persistence is also now bounded to scalar values that survive TCL analysis
+  instead of blindly storing arbitrary payload shapes. Remaining gaps are
+  test-only compatibility seams, stronger authoritative provenance for
+  continuity sources, and broader TCL-informed continuity derivation.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys
 - replace the current conservative attribute-anchor heuristics with richer TCL-derived conflict anchors for more preference and intent families
 - simplify the memory/TCL implementation before widening it further; a dated

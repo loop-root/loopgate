@@ -634,20 +634,12 @@ func deriveContinuityDistillate(validatedRequest ContinuityInspectRequest, inspe
 			}
 			sort.Strings(factNames)
 			for _, factName := range factNames {
-				factValue := candidateFacts[factName]
-				semanticProjection := deriveContinuityFactSemanticProjection(factName, factValue)
-				distillateRecord.Facts = append(distillateRecord.Facts, continuityDistillateFact{
-					Name:               factName,
-					Value:              factValue,
-					SourceRef:          eventSourceRef.Ref,
-					EpistemicFlavor:    continuityEvent.EpistemicFlavor,
-					CertaintyScore:     certaintyScoreForEpistemicFlavor(continuityEvent.EpistemicFlavor),
-					SemanticProjection: semanticProjection,
-				})
-				recordLoopgateMemoryTags(discoveredTags, factName)
-				if factValue, isString := factValue.(string); isString {
-					recordLoopgateMemoryTags(discoveredTags, factValue)
+				derivedFact, ok := deriveContinuityDistillateFact(eventSourceRef.Ref, continuityEvent, factName, candidateFacts[factName])
+				if !ok {
+					continue
 				}
+				distillateRecord.Facts = append(distillateRecord.Facts, derivedFact)
+				recordLoopgateMemoryTags(discoveredTags, derivedFact.Name, fmt.Sprint(derivedFact.Value))
 			}
 		case "goal_opened":
 			goalID, _ := continuityEvent.Payload["goal_id"].(string)
@@ -743,21 +735,89 @@ type continuityFactCandidate struct {
 	AuthorityLane int
 }
 
-func deriveContinuityFactSemanticProjection(factName string, factValue interface{}) *tclpkg.SemanticProjection {
+func deriveContinuityDistillateFact(eventSourceRef string, continuityEvent ContinuityEventInput, factName string, rawFactValue interface{}) (continuityDistillateFact, bool) {
 	normalizedFactName := strings.TrimSpace(factName)
 	if normalizedFactName == "" {
-		return nil
+		return continuityDistillateFact{}, false
 	}
 
-	return deriveMemoryCandidateSemanticProjection(tclpkg.MemoryCandidate{
+	normalizedFactValue, ok := normalizeContinuityFactValueForPersistence(rawFactValue)
+	if !ok {
+		return continuityDistillateFact{}, false
+	}
+
+	analysisResult, err := tclpkg.AnalyzeMemoryCandidate(tclpkg.MemoryCandidate{
 		Source:              tclpkg.CandidateSourceContinuity,
 		SourceChannel:       "continuity_inspection",
-		RawSourceText:       "",
 		NormalizedFactKey:   normalizedFactName,
-		NormalizedFactValue: strings.TrimSpace(fmt.Sprint(factValue)),
+		NormalizedFactValue: normalizedFactValue,
 		Trust:               tclpkg.TrustInferred,
 		Actor:               tclpkg.ObjectSystem,
 	})
+	if err != nil {
+		return continuityDistillateFact{}, false
+	}
+	if analysisResult.PolicyDecision.HardDeny || analysisResult.PolicyDecision.DISP != tclpkg.DispositionKeep {
+		return continuityDistillateFact{}, false
+	}
+
+	canonicalFactName := tclpkg.CanonicalizeExplicitMemoryFactKey(normalizedFactName)
+	if canonicalFactName == "" {
+		canonicalFactName = normalizedFactName
+	}
+
+	return continuityDistillateFact{
+		Name:               canonicalFactName,
+		Value:              normalizedFactValue,
+		SourceRef:          eventSourceRef,
+		EpistemicFlavor:    continuityEvent.EpistemicFlavor,
+		CertaintyScore:     certaintyScoreForEpistemicFlavor(continuityEvent.EpistemicFlavor),
+		SemanticProjection: cloneSemanticProjection(&analysisResult.Projection),
+	}, true
+}
+
+func normalizeContinuityFactValueForPersistence(rawFactValue interface{}) (string, bool) {
+	switch typedFactValue := rawFactValue.(type) {
+	case string:
+		normalizedFactValue := strings.TrimSpace(typedFactValue)
+		if normalizedFactValue == "" || strings.ContainsAny(normalizedFactValue, "\r\n") {
+			return "", false
+		}
+		return normalizedFactValue, true
+	case bool:
+		if typedFactValue {
+			return "true", true
+		}
+		return "false", true
+	case int:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case int8:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case int16:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case int32:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case int64:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint8:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint16:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint32:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint64:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case float32:
+		return strings.TrimSpace(fmt.Sprintf("%g", typedFactValue)), true
+	case float64:
+		return strings.TrimSpace(fmt.Sprintf("%g", typedFactValue)), true
+	default:
+		// Continuity facts remain bounded scalar context. Persisting nested payloads here
+		// would quietly turn inspect packets into an arbitrary structured storage channel.
+		return "", false
+	}
 }
 
 func deriveGoalOpSemanticProjection(action string, goalText string, sourceChannel string, trust tclpkg.Trust) *tclpkg.SemanticProjection {

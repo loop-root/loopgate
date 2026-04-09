@@ -68,6 +68,9 @@ Completed slices in the current refactor:
   `scope`, `ledger_sequence`, or `event_hash` metadata do not line up with the
   authenticated request context, so valid-looking packets cannot smuggle
   another session's continuity into durable memory
+- continuity-derived `provider_fact_observed` entries now persist only bounded
+  scalar fact values that survive TCL analysis; nested payloads and dangerous
+  candidates are dropped before they become durable memory facts
 
 Still not finished:
 
