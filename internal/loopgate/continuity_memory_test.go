@@ -59,6 +59,64 @@ func TestInspectContinuityThread_ReplayIsIdempotentAndDoesNotAuditRawContinuityT
 	}
 }
 
+func TestInspectContinuityThread_RejectsMismatchedContinuityProvenance(t *testing.T) {
+	testCases := []struct {
+		name          string
+		mutateRequest func(*ContinuityInspectRequest)
+		wantFragment  string
+	}{
+		{
+			name: "session_mismatch",
+			mutateRequest: func(inspectRequest *ContinuityInspectRequest) {
+				inspectRequest.Events[0].SessionID = "other-session"
+			},
+			wantFragment: "session_id must match authenticated session",
+		},
+		{
+			name: "thread_mismatch",
+			mutateRequest: func(inspectRequest *ContinuityInspectRequest) {
+				inspectRequest.Events[1].ThreadID = "thread_other"
+			},
+			wantFragment: "thread_id must match request thread_id",
+		},
+		{
+			name: "duplicate_event_hash",
+			mutateRequest: func(inspectRequest *ContinuityInspectRequest) {
+				inspectRequest.Events[1].EventHash = inspectRequest.Events[0].EventHash
+			},
+			wantFragment: "event_hash must be unique within an inspection",
+		},
+		{
+			name: "non_monotonic_ledger_sequence",
+			mutateRequest: func(inspectRequest *ContinuityInspectRequest) {
+				inspectRequest.Events[2].LedgerSequence = inspectRequest.Events[1].LedgerSequence
+			},
+			wantFragment: "strictly ordered by ledger_sequence",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+			inspectRequest := testContinuityInspectRequest("inspect_"+testCase.name, "thread_"+testCase.name, "monitor github status")
+			testCase.mutateRequest(&inspectRequest)
+
+			_, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+			if err == nil {
+				t.Fatal("expected malformed continuity provenance denial")
+			}
+			if !strings.Contains(err.Error(), DenialCodeMalformedRequest) || !strings.Contains(err.Error(), testCase.wantFragment) {
+				t.Fatalf("expected malformed-request denial containing %q, got %v", testCase.wantFragment, err)
+			}
+			if len(testDefaultMemoryState(t, server).Inspections) != 0 || len(testDefaultMemoryState(t, server).Distillates) != 0 || len(testDefaultMemoryState(t, server).ResonateKeys) != 0 {
+				t.Fatalf("expected failed provenance check to leave no persisted continuity artifacts, got %#v", testDefaultMemoryState(t, server))
+			}
+		})
+	}
+}
+
 func TestContinuityPendingReviewIsAbsentFromWakeDiscoverAndRecall(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgateContinuityPolicyYAML(false, true))
@@ -857,7 +915,7 @@ func TestRememberMemoryFact_ExplicitFactTakesPrecedenceOverDerivedFact(t *testin
 	inspectRequest := testContinuityInspectRequest("inspect_derived_name", "thread_derived_name", "user introduced themselves as Charlie")
 	inspectRequest.Events = append(inspectRequest.Events, ContinuityEventInput{
 		TimestampUTC:    "2026-03-12T11:59:00Z",
-		SessionID:       "session-test",
+		SessionID:       "test-session",
 		Type:            "provider_fact_observed",
 		Scope:           memoryScopeGlobal,
 		ThreadID:        "thread_derived_name",
@@ -905,7 +963,7 @@ func TestInspectContinuityThread_PersistsAnchorTupleForRecognizedDerivedFact(t *
 	inspectRequest := testContinuityInspectRequest("inspect_anchor_name", "thread_anchor_name", "user introduced themselves as Charlie")
 	inspectRequest.Events = append(inspectRequest.Events, ContinuityEventInput{
 		TimestampUTC:    "2026-03-12T11:59:00Z",
-		SessionID:       "session-test",
+		SessionID:       "test-session",
 		Type:            "provider_fact_observed",
 		Scope:           memoryScopeGlobal,
 		ThreadID:        "thread_anchor_name",
@@ -4081,6 +4139,10 @@ func assertIneligibleDiscoverKeys(t *testing.T, currentState continuityMemorySta
 }
 
 func testContinuityInspectRequest(inspectionID string, threadID string, goalText string) ContinuityInspectRequest {
+	return testContinuityInspectRequestForSession(inspectionID, threadID, goalText, "test-session")
+}
+
+func testContinuityInspectRequestForSession(inspectionID string, threadID string, goalText string, sessionID string) ContinuityInspectRequest {
 	return ContinuityInspectRequest{
 		InspectionID: inspectionID,
 		ThreadID:     threadID,
@@ -4089,7 +4151,7 @@ func testContinuityInspectRequest(inspectionID string, threadID string, goalText
 		Events: []ContinuityEventInput{
 			{
 				TimestampUTC:    "2026-03-12T11:56:00Z",
-				SessionID:       "session-test",
+				SessionID:       sessionID,
 				Type:            "goal_opened",
 				Scope:           "global",
 				ThreadID:        threadID,
@@ -4103,7 +4165,7 @@ func testContinuityInspectRequest(inspectionID string, threadID string, goalText
 			},
 			{
 				TimestampUTC:    "2026-03-12T11:57:00Z",
-				SessionID:       "session-test",
+				SessionID:       sessionID,
 				Type:            "unresolved_item_opened",
 				Scope:           "global",
 				ThreadID:        threadID,
@@ -4117,7 +4179,7 @@ func testContinuityInspectRequest(inspectionID string, threadID string, goalText
 			},
 			{
 				TimestampUTC:    "2026-03-12T11:58:00Z",
-				SessionID:       "session-test",
+				SessionID:       sessionID,
 				Type:            "provider_fact_observed",
 				Scope:           "global",
 				ThreadID:        threadID,

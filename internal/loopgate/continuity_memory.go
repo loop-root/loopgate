@@ -506,10 +506,12 @@ func normalizeContinuityInspectRequest(rawRequest ContinuityInspectRequest) (Con
 	}
 	validatedRequest.Tags = normalizeLoopgateMemoryTags(validatedRequest.Tags)
 	for eventIndex, continuityEvent := range validatedRequest.Events {
+		validatedRequest.Events[eventIndex].SessionID = strings.TrimSpace(continuityEvent.SessionID)
 		validatedRequest.Events[eventIndex].ThreadID = strings.TrimSpace(continuityEvent.ThreadID)
 		validatedRequest.Events[eventIndex].Scope = strings.TrimSpace(continuityEvent.Scope)
 		validatedRequest.Events[eventIndex].Type = strings.TrimSpace(continuityEvent.Type)
 		validatedRequest.Events[eventIndex].EpistemicFlavor = strings.TrimSpace(continuityEvent.EpistemicFlavor)
+		validatedRequest.Events[eventIndex].EventHash = strings.TrimSpace(continuityEvent.EventHash)
 	}
 	if err := validatedRequest.Validate(); err != nil {
 		return ContinuityInspectRequest{}, err

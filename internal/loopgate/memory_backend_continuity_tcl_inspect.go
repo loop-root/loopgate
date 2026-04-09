@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -8,6 +9,9 @@ import (
 func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(authenticatedSession capabilityToken, rawRequest ContinuityInspectRequest) (ContinuityInspectResponse, error) {
 	validatedRequest, err := normalizeContinuityInspectRequest(rawRequest)
 	if err != nil {
+		return ContinuityInspectResponse{}, err
+	}
+	if err := validateContinuityInspectProvenance(authenticatedSession, validatedRequest); err != nil {
 		return ContinuityInspectResponse{}, err
 	}
 
@@ -154,4 +158,73 @@ func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(auth
 		return ContinuityInspectResponse{}, err
 	}
 	return inspectResponse, nil
+}
+
+func validateContinuityInspectProvenance(authenticatedSession capabilityToken, validatedRequest ContinuityInspectRequest) error {
+	allowedSessionIDs := map[string]struct{}{}
+	if controlSessionID := strings.TrimSpace(authenticatedSession.ControlSessionID); controlSessionID != "" {
+		allowedSessionIDs[controlSessionID] = struct{}{}
+	}
+	if clientSessionLabel := strings.TrimSpace(authenticatedSession.ClientSessionLabel); clientSessionLabel != "" {
+		allowedSessionIDs[clientSessionLabel] = struct{}{}
+	}
+	if len(allowedSessionIDs) == 0 {
+		return continuityGovernanceError{
+			httpStatus:     401,
+			responseStatus: ResponseStatusDenied,
+			denialCode:     DenialCodeCapabilityTokenInvalid,
+			reason:         "continuity inspect requires authenticated session binding",
+		}
+	}
+
+	seenEventHashes := make(map[string]struct{}, len(validatedRequest.Events))
+	var previousLedgerSequence int64
+	for eventIndex, continuityEvent := range validatedRequest.Events {
+		// Keep continuity inspect pinned to the authenticated request context so a caller cannot
+		// smuggle another thread or session's events into durable memory just by shaping a valid
+		// request body. The real authority is the authenticated control session, not the packet.
+		if continuityEvent.ThreadID != validatedRequest.ThreadID {
+			return continuityGovernanceError{
+				httpStatus:     400,
+				responseStatus: ResponseStatusDenied,
+				denialCode:     DenialCodeMalformedRequest,
+				reason:         fmt.Sprintf("continuity event %d thread_id must match request thread_id", eventIndex+1),
+			}
+		}
+		if continuityEvent.Scope != validatedRequest.Scope {
+			return continuityGovernanceError{
+				httpStatus:     400,
+				responseStatus: ResponseStatusDenied,
+				denialCode:     DenialCodeMalformedRequest,
+				reason:         fmt.Sprintf("continuity event %d scope must match request scope", eventIndex+1),
+			}
+		}
+		if _, allowed := allowedSessionIDs[continuityEvent.SessionID]; !allowed {
+			return continuityGovernanceError{
+				httpStatus:     400,
+				responseStatus: ResponseStatusDenied,
+				denialCode:     DenialCodeMalformedRequest,
+				reason:         fmt.Sprintf("continuity event %d session_id must match authenticated session", eventIndex+1),
+			}
+		}
+		if _, duplicate := seenEventHashes[continuityEvent.EventHash]; duplicate {
+			return continuityGovernanceError{
+				httpStatus:     400,
+				responseStatus: ResponseStatusDenied,
+				denialCode:     DenialCodeMalformedRequest,
+				reason:         fmt.Sprintf("continuity event %d event_hash must be unique within an inspection", eventIndex+1),
+			}
+		}
+		seenEventHashes[continuityEvent.EventHash] = struct{}{}
+		if eventIndex > 0 && continuityEvent.LedgerSequence <= previousLedgerSequence {
+			return continuityGovernanceError{
+				httpStatus:     400,
+				responseStatus: ResponseStatusDenied,
+				denialCode:     DenialCodeMalformedRequest,
+				reason:         "continuity events must be strictly ordered by ledger_sequence",
+			}
+		}
+		previousLedgerSequence = continuityEvent.LedgerSequence
+	}
+	return nil
 }

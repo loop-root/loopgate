@@ -64,6 +64,10 @@ Completed slices in the current refactor:
   remains the single projection-sync hook until a narrower real storage seam is needed
 - focused retrieval-ranking tests were moved onto the real continuity backend so
   they no longer depend on a stub-only retrieval path
+- continuity `inspect` now rejects event bundles whose `session_id`, `thread_id`,
+  `scope`, `ledger_sequence`, or `event_hash` metadata do not line up with the
+  authenticated request context, so valid-looking packets cannot smuggle
+  another session's continuity into durable memory
 
 Still not finished:
 
@@ -94,6 +98,8 @@ Still not finished:
 - memory is context, not authority
 - Loopgate policy decides persistence, review, quarantine, or denial
 - append-only audit remains required for security-relevant memory mutation
+- continuity packets are not authority; authenticated session binding and
+  backend validation decide whether the packet is even admissible for inspection
 - fail closed on unsupported source lanes, invalid TCL, missing provenance, or
   ambiguous supersession
 - confidence must not become a hidden permission system

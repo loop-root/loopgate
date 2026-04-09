@@ -112,9 +112,11 @@ Next lift:
   `docs/roadmap/2026-04-08-backend-owned-memory-redesign-plan.md`
   Current state: live remember/inspect/discover/recall/review/tombstone/purge
   now cross the backend seam; explicit remember candidate prep is backend-owned
-  in the live path, and the dead per-artifact store hooks were removed.
-  Remaining gaps are test-only compatibility seams and broader TCL-informed
-  continuity derivation.
+  in the live path, the dead per-artifact store hooks were removed, and
+  continuity inspect now rejects cross-session/thread/scope packet smuggling
+  plus duplicate or non-monotonic event metadata. Remaining gaps are test-only
+  compatibility seams, stronger authoritative provenance for continuity
+  sources, and broader TCL-informed continuity derivation.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys
 - replace the current conservative attribute-anchor heuristics with richer TCL-derived conflict anchors for more preference and intent families
 - simplify the memory/TCL implementation before widening it further; a dated
