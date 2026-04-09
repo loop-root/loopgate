@@ -71,6 +71,10 @@ Completed slices in the current refactor:
 - continuity-derived `provider_fact_observed` entries now persist only bounded
   scalar fact values that survive TCL analysis; nested payloads and dangerous
   candidates are dropped before they become durable memory facts
+- stable profile-slot discover now performs exact anchored admission first for
+  `name`, `preferred_name`, `timezone`, and `locale`, so the current anchored
+  value remains discoverable even when tag overlap is weak and heuristic
+  ranking would otherwise miss it
 
 Still not finished:
 
@@ -358,6 +362,13 @@ Recall should stop depending on one generic heuristic path for everything.
 
 For stable anchored slots, the backend should do exact lookup before heuristic
 search.
+
+Current state:
+
+- discover now does exact anchored admission first for stable profile slots on
+  the existing public request path
+- recall is still keyed by resonate-key IDs, so exact slot retrieval is not yet
+  exposed as a first-class recall request shape
 
 Initial exact-slot targets:
 

@@ -13,22 +13,27 @@ func (backend *continuityTCLMemoryBackend) discoverFromBoundPartitionState(valid
 
 	type rankedDiscoverItem struct {
 		item                MemoryDiscoverItem
+		exactSlotAdmission  bool
 		slotPreferenceBoost bool
 	}
 	discoveredItems := make([]rankedDiscoverItem, 0, len(backend.partition.state.ResonateKeys))
+	exactSlotKeyID := ""
+	if exactSlotItem, found := backend.discoverExactStableProfileSlotLocked(validatedRequest, queryTags, slotPreferenceAnchorTupleKey); found {
+		exactSlotKeyID = exactSlotItem.KeyID
+		discoveredItems = append(discoveredItems, rankedDiscoverItem{
+			item:               exactSlotItem,
+			exactSlotAdmission: true,
+		})
+	}
 	for _, resonateKeyRecord := range activeLoopgateResonateKeys(backend.partition.state) {
 		if resonateKeyRecord.Scope != validatedRequest.Scope {
 			continue
 		}
-		matchCount := 0
-		for _, queryTag := range queryTags {
-			for _, keyTag := range resonateKeyRecord.Tags {
-				if keyTag == queryTag {
-					matchCount++
-					break
-				}
-			}
+		if resonateKeyRecord.KeyID == exactSlotKeyID {
+			continue
 		}
+		matchCount := 0
+		matchCount = countLoopgateMemoryTagOverlap(queryTags, resonateKeyRecord.Tags)
 		if matchCount == 0 {
 			continue
 		}
@@ -57,6 +62,11 @@ func (backend *continuityTCLMemoryBackend) discoverFromBoundPartitionState(valid
 		leftItem := discoveredItems[leftIndex]
 		rightItem := discoveredItems[rightIndex]
 		switch {
+		// Exact slot admission is intentionally limited to the small stable-profile allowlist.
+		// It keeps the current anchored value discoverable even if tag overlap is sparse or
+		// older materialization paths emitted weaker tags than newer continuity entries.
+		case leftItem.exactSlotAdmission != rightItem.exactSlotAdmission:
+			return leftItem.exactSlotAdmission && !rightItem.exactSlotAdmission
 		case leftItem.item.MatchCount != rightItem.item.MatchCount:
 			return leftItem.item.MatchCount > rightItem.item.MatchCount
 		// Slot preference only reorders already-eligible discover results. It is not an
@@ -81,6 +91,39 @@ func (backend *continuityTCLMemoryBackend) discoverFromBoundPartitionState(valid
 		Query: validatedRequest.Query,
 		Items: responseItems,
 	}, nil
+}
+
+func countLoopgateMemoryTagOverlap(queryTags []string, candidateTags []string) int {
+	matchCount := 0
+	for _, queryTag := range queryTags {
+		for _, candidateTag := range candidateTags {
+			if candidateTag == queryTag {
+				matchCount++
+				break
+			}
+		}
+	}
+	return matchCount
+}
+
+func (backend *continuityTCLMemoryBackend) discoverExactStableProfileSlotLocked(validatedRequest MemoryDiscoverRequest, queryTags []string, slotPreferenceAnchorTupleKey string) (MemoryDiscoverItem, bool) {
+	explicitProfileFact, found := activeExplicitProfileFactByAnchorTupleKey(backend.partition.state, slotPreferenceAnchorTupleKey)
+	if !found || explicitProfileFact.ResonateKeyID == "" {
+		return MemoryDiscoverItem{}, false
+	}
+	resonateKeyRecord, found := backend.partition.state.ResonateKeys[explicitProfileFact.ResonateKeyID]
+	if !found || resonateKeyRecord.Scope != validatedRequest.Scope {
+		return MemoryDiscoverItem{}, false
+	}
+	return MemoryDiscoverItem{
+		KeyID:        resonateKeyRecord.KeyID,
+		ThreadID:     resonateKeyRecord.ThreadID,
+		DistillateID: resonateKeyRecord.DistillateID,
+		Scope:        resonateKeyRecord.Scope,
+		CreatedAtUTC: resonateKeyRecord.CreatedAtUTC,
+		Tags:         append([]string(nil), resonateKeyRecord.Tags...),
+		MatchCount:   countLoopgateMemoryTagOverlap(queryTags, resonateKeyRecord.Tags),
+	}, true
 }
 
 func (backend *continuityTCLMemoryBackend) recallFromBoundPartitionState(validatedRequest MemoryRecallRequest) (MemoryRecallResponse, error) {

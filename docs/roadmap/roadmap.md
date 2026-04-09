@@ -116,7 +116,10 @@ Next lift:
   continuity inspect now rejects cross-session/thread/scope packet smuggling
   plus duplicate or non-monotonic event metadata. Continuity-derived fact
   persistence is also now bounded to scalar values that survive TCL analysis
-  instead of blindly storing arbitrary payload shapes. Remaining gaps are
+  instead of blindly storing arbitrary payload shapes. Stable profile-slot
+  discover is now exact-anchor-first for current `name`, `preferred_name`,
+  `timezone`, and `locale` values so anchored state no longer depends on
+  lexical tag overlap alone. Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys

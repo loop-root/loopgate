@@ -3768,6 +3768,60 @@ func TestDiscoverMemory_SlotSeekingQueryPrefersAnchoredTimezone(t *testing.T) {
 	}
 }
 
+func TestDiscoverMemory_ExactSlotAdmissionIncludesAnchoredTimezoneWithoutTagOverlap(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_timezone_anchor_exact_only",
+			distillateID:  "dist_timezone_anchor_exact_only",
+			keyID:         "rk_timezone_anchor_exact_only",
+			threadID:      "thread_timezone_anchor_exact_only",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "profile.timezone",
+			tags:          []string{"settings"},
+			facts: []continuityDistillateFact{{
+				Name:               "profile.timezone",
+				Value:              "PST",
+				SourceRef:          explicitProfileFactSourceKind + ":profile.timezone",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:settings:fact:timezone"),
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_timezone_preview_overlap",
+			distillateID:  "dist_timezone_preview_overlap",
+			keyID:         "rk_timezone_preview_overlap",
+			threadID:      "thread_timezone_preview_overlap",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:preview_timezone_overlap",
+			tags:          []string{"user", "profile", "current", "timezone"},
+			facts: []continuityDistillateFact{{
+				Name:            "meeting_timezone_preview",
+				Value:           "EST",
+				SourceRef:       "morph_ledger_event:ledger_sequence:preview_timezone_overlap",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "what is the user's current timezone",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) < 2 {
+		t.Fatalf("expected exact anchor admission plus overlapping preview, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_timezone_anchor_exact_only" {
+		t.Fatalf("expected anchored timezone item to remain discoverable without tag overlap, got %#v", discoverResponse.Items)
+	}
+}
+
 func TestDiscoverMemory_SlotOnlyQueryPrefersAnchoredLocale(t *testing.T) {
 	server, partition := newDiscoverMemoryTestServer(t)
 	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(

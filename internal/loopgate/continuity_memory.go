@@ -1574,6 +1574,13 @@ func activeExplicitProfileFactByAnchorTuple(currentState continuityMemoryState, 
 	if wantedAnchorTupleKey == "" {
 		return explicitProfileFactRecord{}, false
 	}
+	return activeExplicitProfileFactByAnchorTupleKey(currentState, wantedAnchorTupleKey)
+}
+
+func activeExplicitProfileFactByAnchorTupleKey(currentState continuityMemoryState, wantedAnchorTupleKey string) (explicitProfileFactRecord, bool) {
+	if strings.TrimSpace(wantedAnchorTupleKey) == "" {
+		return explicitProfileFactRecord{}, false
+	}
 	for _, distillateRecord := range activeLoopgateDistillates(currentState) {
 		explicitProfileFact, found := explicitProfileFactFromDistillate(currentState, distillateRecord)
 		if found && explicitProfileFact.AnchorTupleKey == wantedAnchorTupleKey {
