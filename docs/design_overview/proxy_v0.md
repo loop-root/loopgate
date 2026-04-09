@@ -1,6 +1,15 @@
 **Last updated:** 2026-04-08
 
-# Proxy v0
+# Proxy v0 (abandoned direction)
+
+## Status
+
+This document is retained as historical design context only.
+
+Proxy mode is no longer a planned product direction. The project concluded
+that a forwarding proxy does not provide a strong enough governed execution
+surface for the MVP. Current product work centers on the direct local control
+plane plus the Haven TUI/CLI shell.
 
 ## Purpose
 

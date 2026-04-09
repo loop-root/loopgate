@@ -19,14 +19,15 @@ This repo implements the enforcement runtime (`cmd/loopgate`, `internal/loopgate
 
 Product surfaces:
 
-- **Enterprise integration (primary target):** **HTTP-on-UDS** control plane and (when shipped) **transparent proxy** so developers keep using familiar IDEs via **native HTTP clients** or **out-of-tree** bridges. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR.
+- **Primary integration surface:** **HTTP-on-UDS** control plane for native local clients and **out-of-tree** bridges. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR.
+- **Current operator MVP:** the Haven TUI/CLI shell in the separate `haven_cli` repo.
 
 This repository centers on **Loopgate** as the governance engine.
 
 ## Current Product Shape
 
 - `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, memory continuity, morphling lifecycle.
-- The **enterprise integration surface** (current development priority): **HTTP control plane** + proxy mode (when shipped); optional **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
+- The **current product surface** is a direct local client model: **HTTP control plane** for native clients, plus the Haven TUI/CLI MVP and optional **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
 - **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile). Admin node connects via mTLS over TCP. Apple XPC is optional post-launch hardening (no committed date).
 - `Morphlings` are bounded subordinate workers governed by Loopgate, not free agents.
 - **Multi-tenancy:** `tenant_id` namespace isolation is the foundation for enterprise deployment — being added now. Every resource, audit event, and capability grant will carry a `tenant_id`.
@@ -35,7 +36,7 @@ Useful mental model (enterprise):
 
 ```text
 Developer IDE or local HTTP client
-  -> Loopgate **HTTP on UDS** / proxy (local node)
+  -> Loopgate **HTTP on UDS** (local node)
   -> Policy evaluation, audit, memory, approvals
   -> Admin node (governance, IDP, audit aggregation)
 ```
@@ -49,7 +50,7 @@ These are the rules to keep in your head before editing anything:
 - Loopgate is the authority boundary.
 - Natural language never creates authority.
 - Model output is untrusted input.
-- Unprivileged clients (IDE, MCP host, proxy-integrated editor) are not privileged just because they initiated a request.
+- Unprivileged clients (IDE, MCP host, CLI, TUI, or other local client) are not privileged just because they initiated a request.
 - Local privileged transport stays local-only by default.
 - The sandbox boundary matters. Governed workspace lives under `/morph/home`, not arbitrary host paths.
 - Host access must stay explicit, mediated, and reviewable.
@@ -78,7 +79,7 @@ If you are new to the repo, read in this order:
 Notes:
 
 - `AGENTS.md` at the repo root is the tracked security constitution; `AGENTS/` is a local-only directory (gitignored). It may not exist on every clone.
-- The enterprise pivot (**HTTP-native integrations**, proxy, multi-tenancy; **in-tree MCP deprecated**) is the current primary direction.
+- The current direction is **HTTP-native integrations**, the Haven TUI/CLI MVP, and multi-tenancy groundwork; **proxy mode is dropped** and **in-tree MCP remains deprecated**.
 
 ## Top-Level Map
 

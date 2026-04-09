@@ -29,10 +29,10 @@ The system prioritizes:
 - policy as the authority boundary — not model output, not client UI
 - auditability at every capability boundary
 - tenant isolation by design, not bolted on later
-- developer-invisible governance via **HTTP control-plane** and **proxy** integration (**in-tree MCP deprecated** — ADR 0010)
+- developer-facing governed workflows via the **HTTP control-plane** and a dedicated operator shell (**in-tree MCP deprecated** — ADR 0010)
 - transparent enforcement that fails closed
 
-**Operator clients** (IDEs via **HTTP on the Unix socket**, **proxy** when shipped, optional **out-of-tree** MCP→HTTP forwarders) connect to Loopgate; they are not authority sources. Enterprise workflows standardize on **transparent proxy** and native HTTP clients without requiring a dedicated desktop product in this repository.
+**Operator clients** (IDEs via **HTTP on the Unix socket**, the Haven TUI/CLI shell, and optional **out-of-tree** MCP→HTTP forwarders) connect to Loopgate; they are not authority sources.
 
 ---
 
@@ -40,7 +40,7 @@ The system prioritizes:
 
 ## Single-node (personal / developer)
 
-One Loopgate node per machine. The operator uses a connected IDE or other **HTTP** local clients documented in `docs/setup/` (and **proxy** when shipped). Loopgate mediates all capability execution locally.
+One Loopgate node per machine. The operator uses a connected IDE, the Haven TUI/CLI shell, or another **HTTP** local client documented in `docs/setup/`. Loopgate mediates all capability execution locally.
 
 ```
 User
@@ -55,7 +55,7 @@ Each developer machine runs a local Loopgate node. An admin node provides govern
 
 ```
 Developer IDE or local HTTP client
-  → Loopgate local node  (HTTP on UDS; transparent proxy when shipped)
+  → Loopgate local node  (HTTP on UDS)
        ↕ policy sync · audit stream · identity verification
   Loopgate admin node
        → Policy store and distribution
@@ -118,15 +118,14 @@ The admin node does not run model calls. It is a governance authority, not an ex
 
 ---
 
-## Proxy Mode
+## Haven TUI / CLI shell
 
-A transparent API proxy for IDEs that do not route model traffic through a native Loopgate HTTP client. Loopgate sits between the IDE and the model API. The developer changes one URL in their settings; nothing else changes.
+The current operator MVP lives in the separate `haven_cli` repository.
 
-```
-IDE → Loopgate (localhost:port) → Anthropic / OpenAI / local model
-```
-
-Loopgate intercepts every request: injects memory context into the system prompt, applies policy, logs to the audit trail, then forwards to the backend. Streaming and tool use pass-through must be handled correctly. Policy evaluation must not be skipped in proxy mode.
+It is an unprivileged terminal workstation that talks to Loopgate over the
+same local HTTP control plane. It does not become a second authority
+boundary; it renders Loopgate state, forwards chat and approval flows, and
+keeps the governed execution path explicit.
 
 ---
 
@@ -134,7 +133,7 @@ Loopgate intercepts every request: injects memory context into the system prompt
 
 In-repo **Wails + React** prototype only: contract tests, bindings, and parity experiments. **Not** a committed product surface; do not evolve it for new operator features.
 
-Primary integrations: **HTTP control plane** (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`) and **proxy** (when shipped). **Deprecated in-tree MCP:** `docs/setup/LOOPGATE_MCP.md`.
+Primary integrations: **HTTP control plane** (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`), Haven TUI/CLI, and optional **out-of-tree** forwarders. **Deprecated in-tree MCP:** `docs/setup/LOOPGATE_MCP.md`.
 
 ---
 
@@ -214,7 +213,7 @@ Org-level memory and user-level memory are separate namespaces within the same t
 
 ## Local client ↔ Loopgate (v1 standard)
 
-HTTP over a Unix domain socket (local control-plane binding). Local HTTP clients, proxy mode (when shipped), and any local tooling connect this way (**in-tree MCP subprocess removed** — ADR 0010).
+HTTP over a Unix domain socket (local control-plane binding). Local HTTP clients and any local tooling connect this way (**in-tree MCP subprocess removed** — ADR 0010).
 
 Layered auth:
 1. local transport binding

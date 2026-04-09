@@ -33,7 +33,7 @@ Specific problems Loopgate addresses:
 
 ## Core capabilities
 
-Loopgate ships a registered capability inventory. The Haven TUI client uses these through the governed chat surface; IDE clients use them through **HTTP on the local socket** (and **out-of-tree** bridges where operators use MCP-shaped hosts).
+Loopgate ships a registered capability inventory. The Haven TUI client uses these through the governed chat surface; other clients use them through **HTTP on the local socket** (and **out-of-tree** bridges where operators use MCP-shaped hosts).
 
 **Filesystem**
 - `fs_read` — read a file within granted paths
@@ -77,7 +77,7 @@ Loopgate ships a registered capability inventory. The Haven TUI client uses thes
 ```
 Developer tool (Claude Code, Cursor, VS Code, etc.)
         │
-        │  Out-of-tree MCP→HTTP  │  HTTP proxy  │  Unix socket (local, normative)
+        │  Out-of-tree MCP→HTTP  │  Unix socket (local, normative)
         ▼
    ┌──────────────────────────────────────────────────────────┐
    │                       Loopgate                          │
@@ -97,7 +97,7 @@ Developer tool (Claude Code, Cursor, VS Code, etc.)
    Model provider (Anthropic, etc. — credentials in Loopgate)
 ```
 
-**Transport:** Unix domain socket at `runtime/state/loopgate.sock`. **Normative v1:** HTTP clients attach directly; **proxy** (when shipped) attaches the same authority model. **In-tree MCP subprocess removed** (ADR 0010). No public TCP listener by default.
+**Transport:** Unix domain socket at `runtime/state/loopgate.sock`. **Normative v1:** HTTP clients attach directly. **In-tree MCP subprocess removed** (ADR 0010). No public TCP listener by default.
 
 **Auth model** — layered:
 1. `POST /v1/session/open` → control session + MAC key
@@ -122,7 +122,7 @@ go run ./cmd/loopgate
 
 **IDE integration:** **HTTP API** — `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`. **Deprecated in-tree MCP** — `docs/setup/LOOPGATE_MCP.md` (removal rationale, **reserved** future thin forwarder via ADR).
 
-**Haven TUI:** See the `haven_cli` repo — the terminal workstation for governed AI work.
+**Haven TUI / CLI MVP:** See the `haven_cli` repo — the terminal workstation for governed AI work and the current operator-facing shell.
 
 **Configuration:**
 - `config/runtime.yaml` — server config, logging levels, tenant config

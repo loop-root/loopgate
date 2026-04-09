@@ -4,7 +4,7 @@
 
 This repository is centered on **Loopgate**: the policy-governed **AI governance engine** and local control plane (`cmd/loopgate`, `internal/loopgate`).
 
-**Operator clients** connect over **HTTP on a Unix domain socket** (v1). **Primary direction:** native HTTP clients and proxy adapters; MCP-shaped hosts use **external forwarders** (in-tree stdio MCP removed — see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`, `docs/setup/LOOPGATE_MCP.md`). Any remaining in-repo UI shells are legacy code, not current product surfaces.
+**Operator clients** connect over **HTTP on a Unix domain socket** (v1). **Primary direction:** native HTTP clients, the Haven TUI/CLI shell, and optional external forwarders for MCP-shaped hosts (in-tree stdio MCP removed — see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`, `docs/setup/LOOPGATE_MCP.md`). Any remaining in-repo UI shells are legacy code, not current product surfaces.
 
 **Morphlings** are Loopgate-governed bounded workers (naming unchanged).
 
@@ -18,13 +18,13 @@ As of **2026-04-03**, the implemented deployment is:
 - append-only audit logging
 - deny-by-default capability execution
 
-**Enterprise surfaces** (**in-tree MCP deprecated/removed** — ADR 0010; **proxy mode**, mTLS admin transport) are **in progress** — not fully described by this “local single-node” snapshot alone.
+**Enterprise surfaces** (**in-tree MCP deprecated/removed** — ADR 0010; mTLS admin transport) are **in progress** — not fully described by this “local single-node” snapshot alone.
 
 ## 2) High-level execution model
 
 Typical **IDE / operator client** flow (v1):
 
-`developer tool → Loopgate (HTTP on UDS, or future proxy) → validation / policy / approval / tool execution → structured result → Loopgate durable memory / audit`
+`developer tool → Loopgate (HTTP on UDS) → validation / policy / approval / tool execution → structured result → Loopgate durable memory / audit`
 
 **MCP:** deprecated and removed in-tree; **reserved** for a possible future thin forwarder (new ADR). External MCP hosts use **out-of-tree** forwarders to this HTTP API today.
 
@@ -34,7 +34,7 @@ Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/mo
 
 ### Unprivileged operator clients
 
-- **Shipped integrations:** **HTTP-on-UDS** local clients; proxy mode when shipped. **In-tree MCP removed** — see `docs/setup/LOOPGATE_MCP.md` (deprecation) and `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative wire).
+- **Shipped integrations:** **HTTP-on-UDS** local clients and the Haven TUI/CLI shell. **In-tree MCP removed** — see `docs/setup/LOOPGATE_MCP.md` (deprecation) and `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative wire).
 - Persona loading, prompt compilation, model runtime configuration (non-secret), local session state, continuity thread projection, local ledger, approval UX — on the **unprivileged** side of the boundary (same pattern any client must follow).
 
 ### Loopgate
@@ -45,7 +45,7 @@ Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/mo
 
 ## 4) Trust boundaries
 
-**Trusted:** Loopgate binary, policy enforcement inside Loopgate, any local client **binary** (IDE bridge, MCP host, proxy client) as a transport — but **not** model output routed through it.
+**Trusted:** Loopgate binary, policy enforcement inside Loopgate, any local client **binary** (IDE bridge, CLI/TUI shell, MCP host) as a transport — but **not** model output routed through it.
 
 **Untrusted:** model output, user input, tool arguments/output, config until validated, external integration responses.
 
@@ -67,13 +67,13 @@ Loopgate supports provider-auth paths (`client_credentials`, `pkce`), YAML conne
 
 See `docs/design_overview/loopgate.md` and `docs/roadmap/roadmap.md` for a feature-level list.
 
-**Remaining gaps** (non-exhaustive): authorization code without PKCE, full refresh-token rotation story, generic external HTTP capability, externally anchored audit signatures, and explicit proxy/admin-node implementation as product priorities land.
+**Remaining gaps** (non-exhaustive): authorization code without PKCE, full refresh-token rotation story, generic external HTTP capability, externally anchored audit signatures, and explicit admin-node implementation as product priorities land.
 
 ## 7) Planned expansion
 
 ### Loopgate (product)
 
-- Enterprise: **transparent proxy**, **`tenant_id` isolation**, **mTLS** to governance authority — with the same policy and audit invariants as today’s HTTP handlers. (**In-tree MCP** removed; any future IDE protocol adapter is **out of scope** until a new ADR — see ADR 0010.)
+- Enterprise: **`tenant_id` isolation**, **mTLS** to governance authority, and direct governed clients with the same policy and audit invariants as today’s HTTP handlers. (**In-tree MCP** removed; any future IDE protocol adapter is **out of scope** until a new ADR — see ADR 0010.)
 - OAuth and integration expansion, additional secret backends, typed integrations, deny-by-default secret export.
 
 ### Skills / manifests
@@ -82,4 +82,4 @@ See `docs/design_overview/loopgate.md` and `docs/roadmap/roadmap.md` for a featu
 
 ### APIs
 
-- Loopgate APIs for capability execution, connection flows, denial introspection, and future proxy mediation.
+- Loopgate APIs for capability execution, connection flows, and denial introspection.

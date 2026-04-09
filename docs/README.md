@@ -2,7 +2,7 @@
 
 # Docs Index
 
-**Product:** **Loopgate** — policy-governed control plane and enforcement runtime in this repository. **Integrations:** **HTTP on the local Unix socket** (v1); proxy mode when shipped. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR. IDEs may still attach via **out-of-tree** bridges. **Morphlings** are Loopgate-governed workers (not optional desktop products).
+**Product:** **Loopgate** — policy-governed control plane and enforcement runtime in this repository. **Integrations:** **HTTP on the local Unix socket** (v1), the Haven TUI/CLI operator shell, and optional **out-of-tree** bridges. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR. **Morphlings** are Loopgate-governed workers (not optional desktop products).
 
 **Public vs local-only:** [DOCUMENTATION_SCOPE.md](./DOCUMENTATION_SCOPE.md) — including gitignored **`AGENTS.md`**, **`docs/superpowers/`**, and optional **`context_map.md` / `*_map.md`** copies maintained locally for GitHub hygiene.
 
@@ -14,7 +14,7 @@
 - [**Loopgate HTTP API (local clients)**](./setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) — Unix-socket HTTP, session open, signing, route inventory
 - [Tool Usage](./setup/TOOL_USAGE.md)
 - [Secrets](./setup/SECRETS.md)
-- **Priorities:** enterprise integration (proxy, `tenant_id`, HTTP-native clients; MCP only if reintroduced by ADR) — root `AGENTS.md` and [Roadmap](./roadmap/roadmap.md)
+- **Priorities:** Haven TUI/CLI MVP, `tenant_id` groundwork, and HTTP-native clients; MCP only if reintroduced by ADR — root `AGENTS.md` and [Roadmap](./roadmap/roadmap.md)
 
 ## Architecture
 

@@ -10,7 +10,7 @@ Use it when changing:
 
 ## Core Role
 
-`cmd/` contains small binaries. **Loopgate** (`cmd/loopgate/`) is the primary shipped server from this repository. The active product-facing surfaces are Loopgate itself, **HTTP-on-UDS** control plane, proxy work (when shipped), and typed local APIs. **In-tree MCP removed** (ADR 0010).
+`cmd/` contains small binaries. **Loopgate** (`cmd/loopgate/`) is the primary shipped server from this repository. The active product-facing surfaces are Loopgate itself, the **HTTP-on-UDS** control plane, and typed local APIs used by direct clients such as Haven. **In-tree MCP removed** (ADR 0010).
 
 ## `cmd/loopgate/`
 

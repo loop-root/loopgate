@@ -238,7 +238,7 @@ If yes, high priority.
 
 ### Does it require building a new UI that developers use every day?
 
-If yes, question whether **HTTP client**, **proxy**, or **out-of-tree** bridge integration can solve it instead.
+If yes, question whether the existing **Haven TUI/CLI**, a direct **HTTP client**, or an **out-of-tree** bridge can solve it instead.
 
 ### Does it increase backend complexity without improving the enterprise story?
 

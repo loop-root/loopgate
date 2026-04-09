@@ -2,7 +2,7 @@
 
 # How it works (operator client and Loopgate)
 
-**Primary operator experience:** developer tools via **HTTP on the local Unix socket** and, when shipped, **proxy** mode. **In-tree MCP is deprecated and removed** (see `docs/setup/LOOPGATE_MCP.md`, ADR 0010); use native HTTP clients or **out-of-tree** forwarders.
+**Primary operator experience:** developer tools and the Haven shell via **HTTP on the local Unix socket**. **In-tree MCP is deprecated and removed** (see `docs/setup/LOOPGATE_MCP.md`, ADR 0010); use native HTTP clients or **out-of-tree** forwarders.
 
 There is **no separate product CLI** in the supported path for new integrations. Privileged work goes through **Loopgate** on a local Unix socket.
 

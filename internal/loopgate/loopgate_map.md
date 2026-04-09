@@ -1,6 +1,6 @@
 # Loopgate Map
 
-This file maps the main Loopgate package files. **Loopgate** is the authority and enforcement runtime in this repository. **Operator clients** attach over **HTTP on the local control-plane socket** (and may use **out-of-tree** proxy or MCP→HTTP forwarders). **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface; **reserved** for a possible future thin forwarder via new ADR). Any remaining legacy client shells in the repo are deletion candidates, not active product surfaces.
+This file maps the main Loopgate package files. **Loopgate** is the authority and enforcement runtime in this repository. **Operator clients** attach over **HTTP on the local control-plane socket** (and may use **out-of-tree** MCP→HTTP forwarders). **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface; **reserved** for a possible future thin forwarder via new ADR). Any remaining legacy client shells in the repo are deletion candidates, not active product surfaces.
 
 Use it when changing:
 
@@ -26,7 +26,7 @@ For integrators it matters in four ways:
 - it exposes the memory APIs **local clients** must call (not optional side channels)
 - it produces the status data **Security / Activity / continuity UIs** render from projections
 - it owns the authoritative bridge between explicit host-folder grants and **client-visible** mirrored folders
-- it centralizes tasks, approvals, memory, and host-action state so **every client** (IDE, CLI, proxy-integrated client) shares one auditable substrate
+- it centralizes tasks, approvals, memory, and host-action state so **every client** (IDE, CLI, TUI, or other local client) shares one auditable substrate
 
 ## Key Files
 
