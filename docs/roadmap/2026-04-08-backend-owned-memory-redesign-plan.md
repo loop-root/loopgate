@@ -58,15 +58,17 @@ Completed slices in the current refactor:
   backend seam before memory logic runs
 - live review, tombstone, and purge mutations now cross the backend seam before
   continuity-governance logic runs
+- explicit remember request normalization and validated-candidate analysis now
+  run through backend-owned helpers in the live path
+- the dead per-artifact backend store hooks were removed; `SyncAuthoritativeState`
+  remains the single projection-sync hook until a narrower real storage seam is needed
 - focused retrieval-ranking tests were moved onto the real continuity backend so
   they no longer depend on a stub-only retrieval path
 
 Still not finished:
 
 - candidate normalization and TCL analysis are still split between backend
-  methods and `Server` helpers
-- `StoreInspection`, `StoreDistillate`, and `StoreExplicitRememberedFact`
-  remain unwired and should either become real storage hooks or be removed
+  methods and `Server`-owned injectable seams for test fault injection
 - diagnostic wake and some partition-state helpers still exist as compatibility
   seams for tests and should not become new production authority paths
 

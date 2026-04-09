@@ -1,81 +1,19 @@
 package loopgate
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
-
-	tclpkg "morph/internal/tcl"
 )
 
 func (backend *continuityTCLMemoryBackend) rememberFactAuthoritatively(authenticatedSession capabilityToken, rawRequest MemoryRememberRequest) (MemoryRememberResponse, error) {
-	validatedRequest, err := backend.server.normalizeMemoryRememberRequest(rawRequest)
+	analyzedCandidate, err := backend.analyzeRememberFactCandidate(authenticatedSession, rawRequest)
 	if err != nil {
-		var governanceError continuityGovernanceError
-		if errors.As(err, &governanceError) && governanceError.denialCode == DenialCodeMemoryCandidateInvalid {
-			auditRequest := sanitizeDeniedMemoryRememberRequest(rawRequest)
-			if auditErr := backend.server.logDeniedMemoryRememberCandidate(authenticatedSession.ControlSessionID, auditRequest, governanceError.denialCode, governanceError.denialCode, map[string]interface{}{
-				"tcl_source_channel":   auditRequest.SourceChannel,
-				"tcl_candidate_source": auditRequest.CandidateSource,
-				"tcl_reason_code":      governanceError.denialCode,
-			}); auditErr != nil {
-				return MemoryRememberResponse{}, continuityGovernanceError{
-					httpStatus:     503,
-					responseStatus: ResponseStatusError,
-					denialCode:     DenialCodeAuditUnavailable,
-					reason:         "control-plane audit is unavailable",
-				}
-			}
-		}
 		return MemoryRememberResponse{}, err
 	}
-	validatedCandidateResult, err := backend.server.buildValidatedMemoryRememberCandidate(validatedRequest)
-	if err != nil {
-		auditRequest := sanitizeDeniedMemoryRememberRequest(validatedRequest)
-		if auditErr := backend.server.logDeniedMemoryRememberCandidate(authenticatedSession.ControlSessionID, auditRequest, DenialCodeMemoryCandidateInvalid, DenialCodeMemoryCandidateInvalid, map[string]interface{}{
-			"tcl_source_channel":   auditRequest.SourceChannel,
-			"tcl_candidate_source": auditRequest.CandidateSource,
-			"tcl_reason_code":      DenialCodeMemoryCandidateInvalid,
-		}); auditErr != nil {
-			return MemoryRememberResponse{}, continuityGovernanceError{
-				httpStatus:     503,
-				responseStatus: ResponseStatusError,
-				denialCode:     DenialCodeAuditUnavailable,
-				reason:         "control-plane audit is unavailable",
-			}
-		}
-		return MemoryRememberResponse{}, continuityGovernanceError{
-			httpStatus:     400,
-			responseStatus: ResponseStatusDenied,
-			denialCode:     DenialCodeMemoryCandidateInvalid,
-			reason:         "explicit memory write could not be analyzed safely and was not stored",
-		}
-	}
-	if err := tclpkg.ValidateMemoryCandidateContract(validatedCandidateResult.ValidatedCandidate); err != nil {
-		auditRequest := sanitizeDeniedMemoryRememberRequest(validatedRequest)
-		if auditErr := backend.server.logDeniedMemoryRememberCandidate(authenticatedSession.ControlSessionID, auditRequest, DenialCodeMemoryCandidateInvalid, DenialCodeMemoryCandidateInvalid, map[string]interface{}{
-			"tcl_source_channel":   auditRequest.SourceChannel,
-			"tcl_candidate_source": auditRequest.CandidateSource,
-			"tcl_reason_code":      DenialCodeMemoryCandidateInvalid,
-		}); auditErr != nil {
-			return MemoryRememberResponse{}, continuityGovernanceError{
-				httpStatus:     503,
-				responseStatus: ResponseStatusError,
-				denialCode:     DenialCodeAuditUnavailable,
-				reason:         "control-plane audit is unavailable",
-			}
-		}
-		return MemoryRememberResponse{}, continuityGovernanceError{
-			httpStatus:     400,
-			responseStatus: ResponseStatusDenied,
-			denialCode:     DenialCodeMemoryCandidateInvalid,
-			reason:         "explicit memory write could not be validated safely and was not stored",
-		}
-	}
-	// Revalidate the seam result so tests, shims, and future adapters cannot bypass the contract by
-	// returning a half-populated candidate after the legacy request has already been accepted.
-	validatedCandidate := validatedCandidateResult.ValidatedCandidate
+	validatedRequest := analyzedCandidate.ValidatedRequest
+	validatedCandidateResult := analyzedCandidate.ValidatedCandidateResult
+	validatedCandidate := analyzedCandidate.ValidatedCandidate
 
 	denialCode, safeReason, shouldPersist := memoryRememberGovernanceDecision(validatedCandidate.Decision)
 	if !shouldPersist {

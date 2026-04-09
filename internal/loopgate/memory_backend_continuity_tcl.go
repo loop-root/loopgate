@@ -50,18 +50,6 @@ func (backend *continuityTCLMemoryBackend) SyncAuthoritativeState(ctx context.Co
 	return backend.store.replaceProjectedNodes(authoritativeState)
 }
 
-func (backend *continuityTCLMemoryBackend) StoreInspection(ctx context.Context, inspectionRecord continuityInspectionRecord) error {
-	return fmt.Errorf("memory backend %q store inspection is not wired yet", backend.Name())
-}
-
-func (backend *continuityTCLMemoryBackend) StoreDistillate(ctx context.Context, distillateRecord continuityDistillateRecord) error {
-	return fmt.Errorf("memory backend %q store distillate is not wired yet", backend.Name())
-}
-
-func (backend *continuityTCLMemoryBackend) StoreExplicitRememberedFact(ctx context.Context, distillateRecord continuityDistillateRecord) error {
-	return fmt.Errorf("memory backend %q store explicit remembered fact is not wired yet", backend.Name())
-}
-
 func (backend *continuityTCLMemoryBackend) RememberFact(ctx context.Context, authenticatedSession capabilityToken, request MemoryRememberRequest) (MemoryRememberResponse, error) {
 	_ = ctx
 	if err := backend.ensureAuthenticatedSessionMatchesBoundPartition(authenticatedSession); err != nil {

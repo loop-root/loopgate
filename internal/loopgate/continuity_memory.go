@@ -1456,51 +1456,6 @@ type explicitProfileFactRecord struct {
 	CreatedAtUTC   string
 }
 
-func (server *Server) normalizeMemoryRememberRequest(rawRequest MemoryRememberRequest) (MemoryRememberRequest, error) {
-	validatedRequest := rawRequest
-	validatedRequest.Scope = strings.TrimSpace(validatedRequest.Scope)
-	if validatedRequest.Scope == "" {
-		validatedRequest.Scope = memoryScopeGlobal
-	}
-	validatedRequest.FactKey = strings.TrimSpace(validatedRequest.FactKey)
-	validatedRequest.FactValue = strings.TrimSpace(validatedRequest.FactValue)
-	validatedRequest.Reason = strings.TrimSpace(validatedRequest.Reason)
-	validatedRequest.SourceText = strings.TrimSpace(validatedRequest.SourceText)
-	validatedRequest.CandidateSource = strings.TrimSpace(validatedRequest.CandidateSource)
-	validatedRequest.SourceChannel = strings.TrimSpace(validatedRequest.SourceChannel)
-	if err := validatedRequest.Validate(); err != nil {
-		return MemoryRememberRequest{}, err
-	}
-	if validatedRequest.Scope != memoryScopeGlobal {
-		return MemoryRememberRequest{}, fmt.Errorf("scope must be %q", memoryScopeGlobal)
-	}
-	if len([]byte(validatedRequest.FactValue)) > server.runtimeConfig.Memory.ExplicitFactWrites.MaxValueBytes {
-		return MemoryRememberRequest{}, fmt.Errorf("fact_value exceeds max_value_bytes")
-	}
-	return validatedRequest, nil
-}
-
-func sanitizeDeniedMemoryRememberRequest(rawRequest MemoryRememberRequest) MemoryRememberRequest {
-	sanitizedRequest := rawRequest
-	sanitizedRequest.Scope = strings.TrimSpace(sanitizedRequest.Scope)
-	if sanitizedRequest.Scope == "" {
-		sanitizedRequest.Scope = memoryScopeGlobal
-	}
-	sanitizedRequest.FactKey = strings.TrimSpace(sanitizedRequest.FactKey)
-	sanitizedRequest.CandidateSource = strings.TrimSpace(sanitizedRequest.CandidateSource)
-	if sanitizedRequest.CandidateSource == "" {
-		sanitizedRequest.CandidateSource = memoryCandidateSourceExplicitFact
-	}
-	sanitizedRequest.SourceChannel = strings.TrimSpace(sanitizedRequest.SourceChannel)
-	if sanitizedRequest.SourceChannel == "" {
-		sanitizedRequest.SourceChannel = memorySourceChannelUnknown
-	}
-	sanitizedRequest.FactValue = ""
-	sanitizedRequest.SourceText = ""
-	sanitizedRequest.Reason = ""
-	return sanitizedRequest
-}
-
 func (server *Server) consumeMemoryFactWriteBudgetLocked(controlSessionID string, peerUID uint32, nowUTC time.Time) error {
 	windowSeconds := server.runtimeConfig.Memory.ExplicitFactWrites.WindowSeconds
 	if windowSeconds <= 0 {

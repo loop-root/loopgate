@@ -504,11 +504,12 @@ func TestRememberMemoryFact_PersistsValidatedCandidateFields(t *testing.T) {
 		FactValue:     "Ada",
 		SourceChannel: memorySourceChannelUserInput,
 	}
-	validatedRequest, err := server.normalizeMemoryRememberRequest(rawRequest)
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
+	validatedRequest, err := continuityBackend.normalizeRememberRequest(rawRequest)
 	if err != nil {
 		t.Fatalf("normalize remember request: %v", err)
 	}
-	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	validatedCandidateResult, err := continuityBackend.buildValidatedRememberCandidate(validatedRequest)
 	if err != nil {
 		t.Fatalf("build validated candidate: %v", err)
 	}
@@ -550,11 +551,12 @@ func TestRememberMemoryFact_PersistsTimezoneValidatedCandidateFields(t *testing.
 		FactValue:     "America/Denver",
 		SourceChannel: memorySourceChannelUserInput,
 	}
-	validatedRequest, err := server.normalizeMemoryRememberRequest(rawRequest)
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
+	validatedRequest, err := continuityBackend.normalizeRememberRequest(rawRequest)
 	if err != nil {
 		t.Fatalf("normalize remember request: %v", err)
 	}
-	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	validatedCandidateResult, err := continuityBackend.buildValidatedRememberCandidate(validatedRequest)
 	if err != nil {
 		t.Fatalf("build validated candidate: %v", err)
 	}
@@ -596,11 +598,12 @@ func TestRememberMemoryFact_PersistsLocaleValidatedCandidateFields(t *testing.T)
 		FactValue:     "en-US",
 		SourceChannel: memorySourceChannelUserInput,
 	}
-	validatedRequest, err := server.normalizeMemoryRememberRequest(rawRequest)
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
+	validatedRequest, err := continuityBackend.normalizeRememberRequest(rawRequest)
 	if err != nil {
 		t.Fatalf("normalize remember request: %v", err)
 	}
-	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	validatedCandidateResult, err := continuityBackend.buildValidatedRememberCandidate(validatedRequest)
 	if err != nil {
 		t.Fatalf("build validated candidate: %v", err)
 	}
@@ -787,7 +790,8 @@ func TestRememberMemoryFact_InvalidValidatedCandidateLeavesNoArtifacts(t *testin
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	validatedRequest, err := server.normalizeMemoryRememberRequest(MemoryRememberRequest{
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
+	validatedRequest, err := continuityBackend.normalizeRememberRequest(MemoryRememberRequest{
 		FactKey:       "name",
 		FactValue:     "Ada",
 		SourceChannel: memorySourceChannelUserInput,

@@ -15,10 +15,6 @@ type MemoryBackend interface {
 	Name() string
 	SyncAuthoritativeState(ctx context.Context, authoritativeState continuityMemoryState) error
 
-	StoreInspection(ctx context.Context, inspectionRecord continuityInspectionRecord) error
-	StoreDistillate(ctx context.Context, distillateRecord continuityDistillateRecord) error
-	StoreExplicitRememberedFact(ctx context.Context, distillateRecord continuityDistillateRecord) error
-
 	// Write-side commands receive an already-authenticated control-session context.
 	// The backend owns memory mutation from this seam downward; transport auth and
 	// capability checks stay outside the backend.

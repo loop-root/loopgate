@@ -52,18 +52,6 @@ func (backend *stubMemoryBackend) SyncAuthoritativeState(ctx context.Context, au
 	return nil
 }
 
-func (backend *stubMemoryBackend) StoreInspection(ctx context.Context, inspectionRecord continuityInspectionRecord) error {
-	return nil
-}
-
-func (backend *stubMemoryBackend) StoreDistillate(ctx context.Context, distillateRecord continuityDistillateRecord) error {
-	return nil
-}
-
-func (backend *stubMemoryBackend) StoreExplicitRememberedFact(ctx context.Context, distillateRecord continuityDistillateRecord) error {
-	return nil
-}
-
 func (backend *stubMemoryBackend) BuildWakeState(ctx context.Context, request MemoryWakeStateRequest) (MemoryWakeStateResponse, error) {
 	backend.wakeStateCalls++
 	return cloneMemoryWakeStateResponse(backend.wakeStateResponse), nil
