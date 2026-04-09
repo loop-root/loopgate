@@ -335,6 +335,10 @@ func TestClientExecuteCapability_RequiresApproval(t *testing.T) {
 func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForHaven(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	resolvedRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		t.Fatalf("eval symlinks: %v", err)
+	}
 
 	controlSessionID := "cs-operator-mount-write"
 	server.mu.Lock()
@@ -342,8 +346,8 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForHaven(t *
 		ID:                       controlSessionID,
 		ActorLabel:               "haven",
 		ClientSessionLabel:       "haven-session",
-		OperatorMountPaths:       []string{repoRoot},
-		PrimaryOperatorMountPath: repoRoot,
+		OperatorMountPaths:       []string{resolvedRepoRoot},
+		PrimaryOperatorMountPath: resolvedRepoRoot,
 		RequestedCapabilities:    capabilitySet([]string{"operator_mount.fs_write"}),
 		ExpiresAt:                time.Now().UTC().Add(time.Hour),
 		CreatedAt:                time.Now().UTC(),
@@ -382,6 +386,18 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForHaven(t *
 	}
 	if approvalClass, _ := response.Metadata["approval_class"].(string); approvalClass != ApprovalClassWriteHostFolder {
 		t.Fatalf("expected approval_class %q, got %#v", ApprovalClassWriteHostFolder, response.Metadata)
+	}
+	if approvalReason, _ := response.Metadata["approval_reason"].(string); approvalReason != fmt.Sprintf("Grant write access to %s for 8 hours", resolvedRepoRoot) {
+		t.Fatalf("expected approval_reason for root grant, got %#v", response.Metadata)
+	}
+	server.mu.Lock()
+	pendingApproval, found := server.approvals[response.ApprovalRequestID]
+	server.mu.Unlock()
+	if !found {
+		t.Fatalf("pending approval %q not found", response.ApprovalRequestID)
+	}
+	if pendingApproval.Reason != fmt.Sprintf("Grant write access to %s for 8 hours", resolvedRepoRoot) {
+		t.Fatalf("pending approval reason = %q", pendingApproval.Reason)
 	}
 	if _, err := os.Stat(filepath.Join(repoRoot, "test.md")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected file to remain unwritten before approval, stat err=%v", err)
@@ -534,6 +550,85 @@ func TestExecuteCapabilityRequest_ExpiredOperatorMountWriteGrantRequiresApproval
 	)
 	if !response.ApprovalRequired {
 		t.Fatalf("expected approval required after grant expiry, got %#v", response)
+	}
+}
+
+func TestNewServer_IgnoresStalePolicyJSONForOperatorMountWriteApproval(t *testing.T) {
+	repoRoot := t.TempDir()
+	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
+	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(policyPath, []byte(loopgatePolicyYAML(true)), 0o600); err != nil {
+		t.Fatalf("write policy yaml: %v", err)
+	}
+	configStateDir := filepath.Join(repoRoot, "runtime", "state", "config")
+	if err := os.MkdirAll(configStateDir, 0o700); err != nil {
+		t.Fatalf("mkdir config state dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configStateDir, "policy.json"), []byte(`{
+  "version": "0.1.0",
+  "tools": {
+    "filesystem": {
+      "read_enabled": true,
+      "write_enabled": true,
+      "write_requires_approval": false,
+      "allowed_roots": ["."],
+      "denied_paths": ["runtime/state", "runtime/audit", "runtime/tmp", "core/policy", "config/runtime.yaml", "config/goal_aliases.yaml"]
+    }
+  }
+}`), 0o600); err != nil {
+		t.Fatalf("write stale policy json: %v", err)
+	}
+	writeTestMorphlingClassPolicy(t, repoRoot)
+
+	server, err := NewServer(repoRoot, filepath.Join(t.TempDir(), "loopgate.sock"))
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	if !server.policy.Tools.Filesystem.WriteRequiresApproval {
+		t.Fatal("expected repository policy yaml to remain authoritative over stale policy.json")
+	}
+
+	nowUTC := time.Date(2026, 4, 8, 1, 0, 0, 0, time.UTC)
+	server.SetNowForTest(func() time.Time { return nowUTC })
+
+	controlSessionID := "cs-stale-policy-json"
+	server.mu.Lock()
+	server.sessions[controlSessionID] = controlSession{
+		ID:                       controlSessionID,
+		ActorLabel:               "haven",
+		ClientSessionLabel:       "haven-session",
+		OperatorMountPaths:       []string{repoRoot},
+		PrimaryOperatorMountPath: repoRoot,
+		RequestedCapabilities:    capabilitySet([]string{"operator_mount.fs_write"}),
+		ExpiresAt:                nowUTC.Add(time.Hour),
+		CreatedAt:                nowUTC,
+	}
+	server.mu.Unlock()
+
+	response := server.executeCapabilityRequest(
+		withOperatorMountControlSession(context.Background(), controlSessionID),
+		capabilityToken{
+			TokenID:             "tok-stale-policy-json",
+			ControlSessionID:    controlSessionID,
+			ActorLabel:          "haven",
+			ClientSessionLabel:  "haven-session",
+			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
+			ExpiresAt:           nowUTC.Add(time.Hour),
+		},
+		CapabilityRequest{
+			RequestID:  "req-stale-policy-json",
+			Capability: "operator_mount.fs_write",
+			Arguments: map[string]string{
+				"path":    "stale.json.md",
+				"content": "# stale json\n",
+			},
+		},
+		true,
+	)
+	if !response.ApprovalRequired {
+		t.Fatalf("expected first mounted write to require approval under repository yaml, got %#v", response)
 	}
 }
 
@@ -2202,6 +2297,104 @@ func TestUIStatusIncludesActiveOperatorMountWriteGrants(t *testing.T) {
 	}
 	if strings.TrimSpace(uiStatus.OperatorMountWriteGrants[0].ExpiresAtUTC) == "" {
 		t.Fatalf("expected expiry in ui status grant, got %#v", uiStatus.OperatorMountWriteGrants[0])
+	}
+}
+
+func TestUpdateUIOperatorMountWriteGrantRevokesAndRenews(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	resolvedRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		t.Fatalf("eval symlinks: %v", err)
+	}
+
+	server.mu.Lock()
+	controlSession := server.sessions[client.controlSessionID]
+	controlSession.OperatorMountPaths = []string{resolvedRepoRoot}
+	controlSession.OperatorMountWriteGrants = map[string]time.Time{
+		resolvedRepoRoot: server.now().UTC().Add(time.Hour),
+	}
+	server.sessions[client.controlSessionID] = controlSession
+	server.mu.Unlock()
+
+	revokedResponse, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+		RootPath: resolvedRepoRoot,
+		Action:   OperatorMountWriteGrantActionRevoke,
+	})
+	if err != nil {
+		t.Fatalf("revoke write grant: %v", err)
+	}
+	if len(revokedResponse.Grants) != 0 {
+		t.Fatalf("expected no grants after revoke, got %#v", revokedResponse.Grants)
+	}
+
+	server.mu.Lock()
+	controlSession = server.sessions[client.controlSessionID]
+	controlSession.OperatorMountWriteGrants[resolvedRepoRoot] = server.now().UTC().Add(time.Hour)
+	server.sessions[client.controlSessionID] = controlSession
+	server.mu.Unlock()
+
+	renewedResponse, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+		RootPath: resolvedRepoRoot,
+		Action:   OperatorMountWriteGrantActionRenew,
+	})
+	if err != nil {
+		t.Fatalf("renew write grant: %v", err)
+	}
+	if len(renewedResponse.Grants) != 1 {
+		t.Fatalf("expected one grant after renew, got %#v", renewedResponse.Grants)
+	}
+	if renewedResponse.Grants[0].RootPath != resolvedRepoRoot {
+		t.Fatalf("renewed root = %q want %q", renewedResponse.Grants[0].RootPath, resolvedRepoRoot)
+	}
+}
+
+func TestUpdateUIOperatorMountWriteGrantFailsClosedWhenAuditUnavailable(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	resolvedRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		t.Fatalf("eval symlinks: %v", err)
+	}
+
+	server.mu.Lock()
+	controlSession := server.sessions[client.controlSessionID]
+	originalExpiresAtUTC := server.now().UTC().Add(time.Hour)
+	controlSession.OperatorMountPaths = []string{resolvedRepoRoot}
+	controlSession.OperatorMountWriteGrants = map[string]time.Time{
+		resolvedRepoRoot: originalExpiresAtUTC,
+	}
+	server.sessions[client.controlSessionID] = controlSession
+	server.mu.Unlock()
+
+	appendAuditEvent := server.appendAuditEvent
+	server.appendAuditEvent = func(path string, ledgerEvent ledger.Event) error {
+		if ledgerEvent.Type == "operator_mount.write_grant.updated" {
+			return errors.New("audit append unavailable")
+		}
+		return appendAuditEvent(path, ledgerEvent)
+	}
+
+	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+		RootPath: resolvedRepoRoot,
+		Action:   OperatorMountWriteGrantActionRevoke,
+	}); err == nil {
+		t.Fatal("expected revoke error when audit unavailable")
+	}
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	controlSession = server.sessions[client.controlSessionID]
+	if got := controlSession.OperatorMountWriteGrants[resolvedRepoRoot]; !got.Equal(originalExpiresAtUTC) {
+		t.Fatalf("grant expiry changed on audit failure: got %v want %v", got, originalExpiresAtUTC)
 	}
 }
 
@@ -5124,7 +5317,7 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 	if err != nil {
 		t.Fatalf("bootstrap status after session: %v", err)
 	}
-	client.ConfigureSession("test-actor", "test-session", capabilityNames(status.Capabilities))
+	client.ConfigureSession("test-actor", "test-session", advertisedSessionCapabilityNames(status))
 	// Bootstrap performed two session opens; clear open-spacing state so tests that tighten
 	// sessionOpenMinInterval observe only their own opens.
 	server.mu.Lock()
@@ -5358,6 +5551,15 @@ func capabilityNames(capabilities []CapabilitySummary) []string {
 		names = append(names, capability.Name)
 	}
 	return names
+}
+
+func advertisedSessionCapabilityNames(status StatusResponse) []string {
+	advertisedCapabilities := capabilityNames(status.Capabilities)
+	// Control-plane routes are scoped separately from executable tools.
+	// Tests that want a full control session need both sets or they silently miss
+	// control-only surfaces such as governed memory operations.
+	advertisedCapabilities = append(advertisedCapabilities, capabilityNames(status.ControlCapabilities)...)
+	return advertisedCapabilities
 }
 
 func containsCapability(capabilities []CapabilitySummary, capabilityName string) bool {

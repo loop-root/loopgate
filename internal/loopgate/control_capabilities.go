@@ -1,10 +1,16 @@
 package loopgate
 
+import "sort"
+
 const (
-	controlCapabilityConfigRead  = "config.read"
-	controlCapabilityConfigWrite = "config.write"
-	controlCapabilityGoalSet     = "goal.set"
-	controlCapabilityGoalClose   = "goal.close"
+	controlCapabilityConfigRead    = "config.read"
+	controlCapabilityConfigWrite   = "config.write"
+	controlCapabilityGoalSet       = "goal.set"
+	controlCapabilityGoalClose     = "goal.close"
+	controlCapabilityMemoryRead    = "memory.read"
+	controlCapabilityMemoryWrite   = "memory.write"
+	controlCapabilityMemoryReview  = "memory.review"
+	controlCapabilityMemoryLineage = "memory.lineage"
 )
 
 var internalControlCapabilityCatalog = map[string]CapabilitySummary{
@@ -32,6 +38,30 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Operation:   "write",
 		Description: "Close a goal when the objective has been achieved or is no longer relevant.",
 	},
+	controlCapabilityMemoryRead: {
+		Name:        controlCapabilityMemoryRead,
+		Category:    "memory",
+		Operation:   "read",
+		Description: "Read Loopgate wake state, discovery results, and recall outputs through the local control plane.",
+	},
+	controlCapabilityMemoryWrite: {
+		Name:        controlCapabilityMemoryWrite,
+		Category:    "memory",
+		Operation:   "write",
+		Description: "Submit explicit or continuity-derived memory candidates for governed persistence through the local control plane.",
+	},
+	controlCapabilityMemoryReview: {
+		Name:        controlCapabilityMemoryReview,
+		Category:    "memory",
+		Operation:   "review",
+		Description: "Review a pending memory inspection lineage decision through the local control plane.",
+	},
+	controlCapabilityMemoryLineage: {
+		Name:        controlCapabilityMemoryLineage,
+		Category:    "memory",
+		Operation:   "write",
+		Description: "Apply lineage transitions such as tombstone or purge to governed memory artifacts through the local control plane.",
+	},
 }
 
 func isInternalControlCapability(capabilityName string) bool {
@@ -52,4 +82,18 @@ func capabilityScopeAllowed(tokenClaims capabilityToken, capabilityName string) 
 	}
 	_, allowed := tokenClaims.AllowedCapabilities[capabilityName]
 	return allowed
+}
+
+func controlCapabilitySummaries() []CapabilitySummary {
+	capabilityNames := make([]string, 0, len(internalControlCapabilityCatalog))
+	for capabilityName := range internalControlCapabilityCatalog {
+		capabilityNames = append(capabilityNames, capabilityName)
+	}
+	sort.Strings(capabilityNames)
+
+	summaries := make([]CapabilitySummary, 0, len(capabilityNames))
+	for _, capabilityName := range capabilityNames {
+		summaries = append(summaries, internalControlCapabilityCatalog[capabilityName])
+	}
+	return summaries
 }

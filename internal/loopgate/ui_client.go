@@ -50,6 +50,19 @@ func (client *Client) UIStatus(ctx context.Context) (UIStatusResponse, error) {
 	return response, nil
 }
 
+func (client *Client) UpdateUIOperatorMountWriteGrant(ctx context.Context, request UIOperatorMountWriteGrantUpdateRequest) (UIOperatorMountWriteGrantStatusResponse, error) {
+	token, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		return UIOperatorMountWriteGrantStatusResponse{}, err
+	}
+
+	var response UIOperatorMountWriteGrantStatusResponse
+	if err := client.doJSON(ctx, http.MethodPut, "/v1/ui/operator-mount-write-grants", token, request, &response, nil); err != nil {
+		return UIOperatorMountWriteGrantStatusResponse{}, err
+	}
+	return response, nil
+}
+
 func (client *Client) UIApprovals(ctx context.Context) (UIApprovalsResponse, error) {
 	approvalToken, err := client.ensureApprovalToken(ctx)
 	if err != nil {

@@ -18,6 +18,9 @@ func (server *Server) handleContinuityInspect(writer http.ResponseWriter, reques
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryWrite) {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -52,6 +55,9 @@ func (server *Server) handleMemoryWakeState(writer http.ResponseWriter, request 
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryRead) {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -75,6 +81,9 @@ func (server *Server) handleMemoryDiagnosticWake(writer http.ResponseWriter, req
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryRead) {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -91,6 +100,9 @@ func (server *Server) handleMemoryDiscover(writer http.ResponseWriter, request *
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryRead) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
@@ -126,6 +138,9 @@ func (server *Server) handleMemoryRecall(writer http.ResponseWriter, request *ht
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryRead) {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -157,6 +172,9 @@ func (server *Server) handleMemoryRemember(writer http.ResponseWriter, request *
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryWrite) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
@@ -193,11 +211,6 @@ func (server *Server) handleMemoryInspectionGovernance(writer http.ResponseWrite
 	if !ok {
 		return
 	}
-	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
-	if !ok {
-		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
-		return
-	}
 
 	memoryPath := strings.TrimPrefix(request.URL.Path, "/v1/memory/inspections/")
 	pathParts := strings.Split(memoryPath, "/")
@@ -217,6 +230,23 @@ func (server *Server) handleMemoryInspectionGovernance(writer http.ResponseWrite
 			DenialReason: err.Error(),
 			DenialCode:   DenialCodeMalformedRequest,
 		})
+		return
+	}
+	requiredControlCapability, err := memoryInspectionControlCapability(action)
+	if err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, requiredControlCapability) {
+		return
+	}
+	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
+	if !ok {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
 
@@ -275,6 +305,17 @@ func (server *Server) handleMemoryInspectionGovernance(writer http.ResponseWrite
 			DenialReason: "unknown continuity governance action",
 			DenialCode:   DenialCodeMalformedRequest,
 		})
+	}
+}
+
+func memoryInspectionControlCapability(action string) (string, error) {
+	switch action {
+	case "review":
+		return controlCapabilityMemoryReview, nil
+	case "tombstone", "purge":
+		return controlCapabilityMemoryLineage, nil
+	default:
+		return "", errors.New("unknown continuity governance action")
 	}
 }
 

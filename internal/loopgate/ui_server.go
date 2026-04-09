@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -37,6 +38,8 @@ type uiEventSubscriber struct {
 	events           chan UIEventEnvelope
 }
 
+var errOperatorMountWriteGrantNotFound = errors.New("operator mount write grant not found")
+
 func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
@@ -66,25 +69,7 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 		}
 	}
 	if controlSession, found := server.sessions[tokenClaims.ControlSessionID]; found {
-		for grantRootPath, grantExpiresAtUTC := range controlSession.OperatorMountWriteGrants {
-			if strings.TrimSpace(grantRootPath) == "" {
-				continue
-			}
-			if !grantExpiresAtUTC.IsZero() && !grantExpiresAtUTC.After(nowUTC) {
-				delete(controlSession.OperatorMountWriteGrants, grantRootPath)
-				continue
-			}
-			writeGrant := UIOperatorMountWriteGrant{
-				RootPath: strings.TrimSpace(grantRootPath),
-			}
-			if !grantExpiresAtUTC.IsZero() {
-				writeGrant.ExpiresAtUTC = grantExpiresAtUTC.UTC().Format(time.RFC3339Nano)
-			}
-			writeGrants = append(writeGrants, writeGrant)
-		}
-		sort.Slice(writeGrants, func(leftIndex, rightIndex int) bool {
-			return writeGrants[leftIndex].RootPath < writeGrants[rightIndex].RootPath
-		})
+		writeGrants = uiOperatorMountWriteGrantsLocked(controlSession, nowUTC)
 	}
 	server.mu.Unlock()
 
@@ -112,6 +97,151 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 		},
 	}
 	server.writeJSON(writer, http.StatusOK, response)
+}
+
+func (server *Server) handleUIOperatorMountWriteGrants(writer http.ResponseWriter, request *http.Request) {
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+
+	switch request.Method {
+	case http.MethodPut:
+		requestBodyBytes, denialResponse, verified := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
+		if !verified {
+			server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+			return
+		}
+		var updateRequest UIOperatorMountWriteGrantUpdateRequest
+		if err := decodeJSONBytes(requestBodyBytes, &updateRequest); err != nil {
+			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+				Status:       ResponseStatusError,
+				DenialReason: err.Error(),
+				DenialCode:   DenialCodeMalformedRequest,
+			})
+			return
+		}
+		if err := updateRequest.Validate(); err != nil {
+			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+				Status:       ResponseStatusError,
+				DenialReason: err.Error(),
+				DenialCode:   DenialCodeMalformedRequest,
+			})
+			return
+		}
+		statusResponse, err := server.updateOperatorMountWriteGrant(tokenClaims, updateRequest)
+		if err != nil {
+			statusCode := http.StatusServiceUnavailable
+			denialCode := DenialCodeExecutionFailed
+			if errors.Is(err, errOperatorMountWriteGrantNotFound) {
+				statusCode = http.StatusNotFound
+				denialCode = DenialCodeMalformedRequest
+			}
+			server.writeJSON(writer, statusCode, CapabilityResponse{
+				Status:       ResponseStatusError,
+				DenialReason: err.Error(),
+				DenialCode:   denialCode,
+			})
+			return
+		}
+		server.writeJSON(writer, http.StatusOK, statusResponse)
+	default:
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func uiOperatorMountWriteGrantsLocked(controlSession controlSession, nowUTC time.Time) []UIOperatorMountWriteGrant {
+	writeGrants := make([]UIOperatorMountWriteGrant, 0, len(controlSession.OperatorMountWriteGrants))
+	for grantRootPath, grantExpiresAtUTC := range controlSession.OperatorMountWriteGrants {
+		if strings.TrimSpace(grantRootPath) == "" {
+			continue
+		}
+		if !grantExpiresAtUTC.IsZero() && !grantExpiresAtUTC.After(nowUTC) {
+			delete(controlSession.OperatorMountWriteGrants, grantRootPath)
+			continue
+		}
+		writeGrant := UIOperatorMountWriteGrant{
+			RootPath: strings.TrimSpace(grantRootPath),
+		}
+		if !grantExpiresAtUTC.IsZero() {
+			writeGrant.ExpiresAtUTC = grantExpiresAtUTC.UTC().Format(time.RFC3339Nano)
+		}
+		writeGrants = append(writeGrants, writeGrant)
+	}
+	sort.Slice(writeGrants, func(leftIndex, rightIndex int) bool {
+		return writeGrants[leftIndex].RootPath < writeGrants[rightIndex].RootPath
+	})
+	return writeGrants
+}
+
+func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken, updateRequest UIOperatorMountWriteGrantUpdateRequest) (UIOperatorMountWriteGrantStatusResponse, error) {
+	nowUTC := server.now().UTC()
+	normalizedRootPath := filepath.Clean(strings.TrimSpace(updateRequest.RootPath))
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	server.pruneExpiredLocked()
+	controlSession, found := server.sessions[tokenClaims.ControlSessionID]
+	if !found {
+		return UIOperatorMountWriteGrantStatusResponse{}, errOperatorMountWriteGrantNotFound
+	}
+
+	mountedRootFound := false
+	for _, mountedRootPath := range controlSession.OperatorMountPaths {
+		if mountedRootPath == normalizedRootPath {
+			mountedRootFound = true
+			break
+		}
+	}
+	if !mountedRootFound {
+		return UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("%w: %s", errOperatorMountWriteGrantNotFound, normalizedRootPath)
+	}
+
+	currentGrantExpiresAtUTC, grantFound := controlSession.OperatorMountWriteGrants[normalizedRootPath]
+	if !grantFound || (!currentGrantExpiresAtUTC.IsZero() && !currentGrantExpiresAtUTC.After(nowUTC)) {
+		delete(controlSession.OperatorMountWriteGrants, normalizedRootPath)
+		return UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("%w: %s", errOperatorMountWriteGrantNotFound, normalizedRootPath)
+	}
+
+	updatedGrantExpiresAtUTC := currentGrantExpiresAtUTC
+	switch strings.TrimSpace(updateRequest.Action) {
+	case OperatorMountWriteGrantActionRevoke:
+		delete(controlSession.OperatorMountWriteGrants, normalizedRootPath)
+	case OperatorMountWriteGrantActionRenew:
+		updatedGrantExpiresAtUTC = nowUTC.Add(operatorMountWriteGrantTTL)
+		controlSession.OperatorMountWriteGrants[normalizedRootPath] = updatedGrantExpiresAtUTC
+	default:
+		return UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("unsupported operator mount write grant action %q", updateRequest.Action)
+	}
+
+	auditData := map[string]interface{}{
+		"root_path":            normalizedRootPath,
+		"action":               strings.TrimSpace(updateRequest.Action),
+		"previous_expires_at":  currentGrantExpiresAtUTC.UTC().Format(time.RFC3339Nano),
+		"control_session_id":   tokenClaims.ControlSessionID,
+		"actor_label":          tokenClaims.ActorLabel,
+		"client_session_label": tokenClaims.ClientSessionLabel,
+		"tenant_id":            controlSession.TenantID,
+		"user_id":              controlSession.UserID,
+	}
+	if strings.TrimSpace(updateRequest.Action) == OperatorMountWriteGrantActionRenew {
+		auditData["expires_at_utc"] = updatedGrantExpiresAtUTC.UTC().Format(time.RFC3339Nano)
+	}
+	if err := server.logEvent("operator_mount.write_grant.updated", tokenClaims.ControlSessionID, auditData); err != nil {
+		if strings.TrimSpace(updateRequest.Action) == OperatorMountWriteGrantActionRevoke {
+			controlSession.OperatorMountWriteGrants[normalizedRootPath] = currentGrantExpiresAtUTC
+		} else {
+			controlSession.OperatorMountWriteGrants[normalizedRootPath] = currentGrantExpiresAtUTC
+		}
+		server.sessions[tokenClaims.ControlSessionID] = controlSession
+		return UIOperatorMountWriteGrantStatusResponse{}, err
+	}
+
+	server.sessions[tokenClaims.ControlSessionID] = controlSession
+	return UIOperatorMountWriteGrantStatusResponse{
+		Grants: uiOperatorMountWriteGrantsLocked(controlSession, nowUTC),
+	}, nil
 }
 
 func (server *Server) handleUIApprovals(writer http.ResponseWriter, request *http.Request) {

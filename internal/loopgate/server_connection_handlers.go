@@ -62,12 +62,15 @@ func (server *Server) handleStatus(writer http.ResponseWriter, request *http.Req
 	server.mu.Unlock()
 
 	response := StatusResponse{
-		Version:          statusVersion,
-		Policy:           server.policy,
-		Capabilities:     server.capabilitySummaries(),
-		PendingApprovals: pendingCount,
-		ActiveMorphlings: server.activeMorphlingCount(server.now().UTC()),
-		Connections:      server.connectionStatuses(),
+		Version: statusVersion,
+		Policy:  server.policy,
+		// Keep control-plane route scopes separate from executable tool capabilities.
+		// Mixing them together makes session bootstrap and operator inspection harder to reason about.
+		Capabilities:        server.capabilitySummaries(),
+		ControlCapabilities: controlCapabilitySummaries(),
+		PendingApprovals:    pendingCount,
+		ActiveMorphlings:    server.activeMorphlingCount(server.now().UTC()),
+		Connections:         server.connectionStatuses(),
 	}
 	server.writeJSON(writer, http.StatusOK, response)
 }

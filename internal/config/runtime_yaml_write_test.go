@@ -45,6 +45,45 @@ func TestWriteRuntimeConfigYAMLRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWritePolicyYAMLRoundTrip(t *testing.T) {
+	repoRoot := t.TempDir()
+	policy := Policy{}
+	policy.Tools.Filesystem.ReadEnabled = true
+	policy.Tools.Filesystem.WriteEnabled = true
+	policy.Tools.Filesystem.WriteRequiresApproval = true
+	policy.Tools.Filesystem.AllowedRoots = []string{"."}
+	policy.Tools.Filesystem.DeniedPaths = []string{"runtime/state"}
+	if err := WritePolicyYAML(repoRoot, policy); err != nil {
+		t.Fatalf("WritePolicyYAML: %v", err)
+	}
+	loaded, err := LoadPolicy(repoRoot)
+	if err != nil {
+		t.Fatalf("LoadPolicy after write: %v", err)
+	}
+	if !loaded.Tools.Filesystem.WriteRequiresApproval {
+		t.Fatal("expected write_requires_approval true after round trip")
+	}
+	if len(loaded.Tools.Filesystem.AllowedRoots) != 1 {
+		t.Fatalf("unexpected allowed roots: %#v", loaded.Tools.Filesystem.AllowedRoots)
+	}
+	staleDir := filepath.Join(repoRoot, "runtime", "state", "config")
+	if err := os.MkdirAll(staleDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(staleDir, "policy.json")
+	if err := os.WriteFile(stale, []byte(`{"version":"0.1.0","tools":{"filesystem":{"write_requires_approval":false}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePolicyYAML(repoRoot, loaded); err != nil {
+		t.Fatalf("second policy write: %v", err)
+	}
+	if _, err := os.Stat(stale); err == nil {
+		t.Fatal("expected stale policy.json removed after WritePolicyYAML")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat stale policy json: %v", err)
+	}
+}
+
 func TestWriteGoalAliasesYAMLRoundTrip(t *testing.T) {
 	repoRoot := t.TempDir()
 	ga := DefaultGoalAliases()

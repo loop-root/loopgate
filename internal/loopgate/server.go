@@ -323,19 +323,15 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 
 	configStateDir := filepath.Join(repoRoot, "runtime", "state", "config")
 
-	// Load policy: JSON state → YAML seed → fail.
-	policy, err := config.LoadOrSeed(configStateDir, "policy",
-		filepath.Join(repoRoot, "core", "policy", "policy.yaml"),
-		func(_ string) (config.Policy, error) {
-			return config.LoadPolicy(repoRoot)
-		},
-		nil,
-	)
+	// Load policy directly from the repository YAML. Do not use
+	// runtime/state/config/policy.json — a stale frozen copy can silently weaken
+	// mounted-write approval semantics and other security boundaries.
+	policy, err := config.LoadPolicy(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("load policy: %w", err)
 	}
 
-	// Verify policy hash integrity (hash of JSON state content).
+	// Verify policy hash integrity against the repository policy content.
 	policyJSON, hashErr := config.PolicyToJSON(policy)
 	if hashErr != nil {
 		return nil, fmt.Errorf("serialize policy for hash: %w", hashErr)
@@ -526,6 +522,7 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	mux.HandleFunc("/v1/health", server.handleHealth)
 	mux.HandleFunc("/v1/status", server.handleStatus)
 	mux.HandleFunc("/v1/ui/status", server.handleUIStatus)
+	mux.HandleFunc("/v1/ui/operator-mount-write-grants", server.handleUIOperatorMountWriteGrants)
 	mux.HandleFunc("/v1/ui/events", server.handleUIEvents)
 	mux.HandleFunc("/v1/ui/approvals", server.handleUIApprovals)
 	mux.HandleFunc("/v1/ui/approvals/", server.handleUIApprovalDecision)
@@ -975,6 +972,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 
 		metadata := server.approvalMetadata(tokenClaims.ControlSessionID, capabilityRequest)
+		approvalReason := approvalReasonForCapability(policyDecision, metadata, capabilityRequest)
 		expiresAt := server.now().UTC().Add(approvalTTL)
 		manifestSHA256, bodySHA256, manifestErr := buildCapabilityApprovalManifest(capabilityRequest, expiresAt.UnixMilli())
 		if manifestErr != nil {
@@ -1037,7 +1035,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			CreatedAt:        server.now().UTC(),
 			ExpiresAt:        expiresAt,
 			Metadata:         metadata,
-			Reason:           policyDecision.Reason,
+			Reason:           approvalReason,
 			ControlSessionID: tokenClaims.ControlSessionID,
 			DecisionNonce:    decisionNonce,
 			ExecutionContext: approvalExecutionContext{
@@ -1081,7 +1079,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			}
 		}
 
-		metadata["approval_reason"] = policyDecision.Reason
+		metadata["approval_reason"] = approvalReason
 		metadata["approval_expires_at_utc"] = expiresAt.Format(time.RFC3339Nano)
 		metadata["approval_decision_nonce"] = decisionNonce
 		// Include the manifest SHA256 in the response so the operator UI can display and
@@ -1101,7 +1099,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			Request:          cloneCapabilityRequest(capabilityRequest),
 			ExpiresAt:        server.now().UTC().Add(approvalTTL),
 			Metadata:         metadata,
-			Reason:           policyDecision.Reason,
+			Reason:           approvalReason,
 			ControlSessionID: tokenClaims.ControlSessionID,
 		})
 		return pendingResponse
@@ -2090,6 +2088,19 @@ func (server *Server) approvalMetadata(controlSessionID string, capabilityReques
 		}
 	}
 	return metadata
+}
+
+func approvalReasonForCapability(policyDecision policypkg.CheckResult, metadata map[string]interface{}, capabilityRequest CapabilityRequest) string {
+	grantRootPath := strings.TrimSpace(stringMetadataValue(metadata, "grant_root"))
+	if grantRootPath == "" {
+		return policyDecision.Reason
+	}
+	switch capabilityRequest.Capability {
+	case "operator_mount.fs_write", "operator_mount.fs_mkdir":
+		return fmt.Sprintf("Grant write access to %s for 8 hours", grantRootPath)
+	default:
+		return policyDecision.Reason
+	}
 }
 
 func classifyCapabilityResult(capability string) (ResultClassification, string) {

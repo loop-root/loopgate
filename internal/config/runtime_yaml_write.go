@@ -39,6 +39,36 @@ func WriteRuntimeConfigYAML(repoRoot string, runtimeConfig RuntimeConfig) error 
 	return nil
 }
 
+// WritePolicyYAML writes core/policy/policy.yaml atomically after defaults and validation.
+// It removes runtime/state/config/policy.json if present so a stale frozen copy cannot override
+// the repository policy on the next startup.
+func WritePolicyYAML(repoRoot string, policy Policy) error {
+	if err := applyPolicyDefaults(&policy); err != nil {
+		return fmt.Errorf("validate policy: %w", err)
+	}
+	destPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return fmt.Errorf("create policy dir: %w", err)
+	}
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&policy); err != nil {
+		return fmt.Errorf("marshal policy yaml: %w", err)
+	}
+	if err := encoder.Close(); err != nil {
+		return fmt.Errorf("close yaml encoder: %w", err)
+	}
+	if err := atomicWriteFile(destPath, buf.Bytes(), 0o600); err != nil {
+		return err
+	}
+	staleJSON := filepath.Join(repoRoot, "runtime", "state", "config", "policy.json")
+	if rmErr := os.Remove(staleJSON); rmErr != nil && !os.IsNotExist(rmErr) {
+		return fmt.Errorf("remove stale %s: %w", staleJSON, rmErr)
+	}
+	return nil
+}
+
 // WriteGoalAliasesYAML writes config/goal_aliases.yaml atomically after validation.
 // It removes runtime/state/config/goal_aliases.json if present.
 func WriteGoalAliasesYAML(repoRoot string, goalAliases GoalAliases) error {

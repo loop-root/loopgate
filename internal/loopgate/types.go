@@ -254,12 +254,13 @@ type HealthResponse struct {
 }
 
 type StatusResponse struct {
-	Version          string              `json:"version"`
-	Policy           config.Policy       `json:"policy"`
-	Capabilities     []CapabilitySummary `json:"capabilities"`
-	PendingApprovals int                 `json:"pending_approvals"`
-	ActiveMorphlings int                 `json:"active_morphlings"`
-	Connections      []ConnectionStatus  `json:"connections"`
+	Version             string              `json:"version"`
+	Policy              config.Policy       `json:"policy"`
+	Capabilities        []CapabilitySummary `json:"capabilities"`
+	ControlCapabilities []CapabilitySummary `json:"control_capabilities,omitempty"`
+	PendingApprovals    int                 `json:"pending_approvals"`
+	ActiveMorphlings    int                 `json:"active_morphlings"`
+	Connections         []ConnectionStatus  `json:"connections"`
 }
 
 type ConnectionsStatusResponse struct {

@@ -135,21 +135,26 @@ func (server *Server) handleConfigPutPolicy(w http.ResponseWriter, body []byte) 
 		http.Error(w, "invalid policy: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := config.SaveJSONConfig(server.configStateDir, "policy", pol); err != nil {
+	if err := config.WritePolicyYAML(server.repoRoot, pol); err != nil {
 		http.Error(w, "save policy: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	reloaded, err := config.LoadPolicy(server.repoRoot)
+	if err != nil {
+		http.Error(w, "reload policy: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Hot-reload: update policy, recreate checker and registry.
-	registry, err := toolspkg.NewDefaultRegistry(server.repoRoot, pol)
+	registry, err := toolspkg.NewDefaultRegistry(server.repoRoot, reloaded)
 	if err != nil {
 		http.Error(w, "recreate registry: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	server.mu.Lock()
-	server.policy = pol
-	server.checker = policypkg.NewChecker(pol)
+	server.policy = reloaded
+	server.checker = policypkg.NewChecker(reloaded)
 	server.registry = registry
 	server.mu.Unlock()
 

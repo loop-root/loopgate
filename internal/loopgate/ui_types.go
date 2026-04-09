@@ -24,9 +24,35 @@ type UIStatusPolicySummary struct {
 	HavenTrustedSandboxAllowlistMode string `json:"haven_trusted_sandbox_allowlist_mode"`
 }
 
+const (
+	OperatorMountWriteGrantActionRevoke = "revoke"
+	OperatorMountWriteGrantActionRenew  = "renew"
+)
+
 type UIOperatorMountWriteGrant struct {
 	RootPath     string `json:"root_path"`
 	ExpiresAtUTC string `json:"expires_at_utc,omitempty"`
+}
+
+type UIOperatorMountWriteGrantStatusResponse struct {
+	Grants []UIOperatorMountWriteGrant `json:"grants,omitempty"`
+}
+
+type UIOperatorMountWriteGrantUpdateRequest struct {
+	RootPath string `json:"root_path"`
+	Action   string `json:"action"`
+}
+
+func (uiOperatorMountWriteGrantUpdateRequest UIOperatorMountWriteGrantUpdateRequest) Validate() error {
+	if strings.TrimSpace(uiOperatorMountWriteGrantUpdateRequest.RootPath) == "" {
+		return fmt.Errorf("root_path must not be blank")
+	}
+	switch strings.TrimSpace(uiOperatorMountWriteGrantUpdateRequest.Action) {
+	case OperatorMountWriteGrantActionRevoke, OperatorMountWriteGrantActionRenew:
+		return nil
+	default:
+		return fmt.Errorf("action must be one of %q or %q", OperatorMountWriteGrantActionRevoke, OperatorMountWriteGrantActionRenew)
+	}
 }
 
 type UIStatusResponse struct {
