@@ -15,15 +15,33 @@ import (
 )
 
 type stubMemoryBackend struct {
-	name                string
-	wakeStateResponse   MemoryWakeStateResponse
-	discoverResponse    MemoryDiscoverResponse
-	recallResponse      MemoryRecallResponse
-	wakeStateCalls      int
-	discoverCalls       int
-	recallCalls         int
-	lastDiscoverRequest MemoryDiscoverRequest
-	lastRecallRequest   MemoryRecallRequest
+	name                      string
+	wakeStateResponse         MemoryWakeStateResponse
+	discoverResponse          MemoryDiscoverResponse
+	recallResponse            MemoryRecallResponse
+	rememberResponse          MemoryRememberResponse
+	inspectResponse           ContinuityInspectResponse
+	reviewResponse            MemoryInspectionGovernanceResponse
+	tombstoneResponse         MemoryInspectionGovernanceResponse
+	purgeResponse             MemoryInspectionGovernanceResponse
+	wakeStateCalls            int
+	discoverCalls             int
+	recallCalls               int
+	rememberCalls             int
+	inspectCalls              int
+	reviewCalls               int
+	tombstoneCalls            int
+	purgeCalls                int
+	lastDiscoverRequest       MemoryDiscoverRequest
+	lastRecallRequest         MemoryRecallRequest
+	lastRememberRequest       MemoryRememberRequest
+	lastInspectRequest        ContinuityInspectRequest
+	lastReviewInspectionID    string
+	lastReviewRequest         MemoryInspectionReviewRequest
+	lastTombstoneInspectionID string
+	lastTombstoneRequest      MemoryInspectionLineageRequest
+	lastPurgeInspectionID     string
+	lastPurgeRequest          MemoryInspectionLineageRequest
 }
 
 func (backend *stubMemoryBackend) Name() string {
@@ -63,6 +81,39 @@ func (backend *stubMemoryBackend) Recall(ctx context.Context, request MemoryReca
 	return backend.recallResponse, nil
 }
 
+func (backend *stubMemoryBackend) RememberFact(ctx context.Context, authenticatedSession capabilityToken, request MemoryRememberRequest) (MemoryRememberResponse, error) {
+	backend.rememberCalls++
+	backend.lastRememberRequest = request
+	return backend.rememberResponse, nil
+}
+
+func (backend *stubMemoryBackend) InspectContinuity(ctx context.Context, authenticatedSession capabilityToken, request ContinuityInspectRequest) (ContinuityInspectResponse, error) {
+	backend.inspectCalls++
+	backend.lastInspectRequest = request
+	return backend.inspectResponse, nil
+}
+
+func (backend *stubMemoryBackend) ReviewContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionReviewRequest) (MemoryInspectionGovernanceResponse, error) {
+	backend.reviewCalls++
+	backend.lastReviewInspectionID = inspectionID
+	backend.lastReviewRequest = request
+	return backend.reviewResponse, nil
+}
+
+func (backend *stubMemoryBackend) TombstoneContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error) {
+	backend.tombstoneCalls++
+	backend.lastTombstoneInspectionID = inspectionID
+	backend.lastTombstoneRequest = request
+	return backend.tombstoneResponse, nil
+}
+
+func (backend *stubMemoryBackend) PurgeContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error) {
+	backend.purgeCalls++
+	backend.lastPurgeInspectionID = inspectionID
+	backend.lastPurgeRequest = request
+	return backend.purgeResponse, nil
+}
+
 func TestLoadMemoryWakeState_UsesConfiguredBackend(t *testing.T) {
 	expectedWakeState := MemoryWakeStateResponse{
 		Scope:       memoryScopeGlobal,
@@ -89,6 +140,273 @@ func TestLoadMemoryWakeState_UsesConfiguredBackend(t *testing.T) {
 	server.memoryMu.Unlock()
 	if stubBackend.wakeStateCalls != 1 {
 		t.Fatalf("expected one backend wake-state call, got %d", stubBackend.wakeStateCalls)
+	}
+}
+
+func TestRememberMemoryFact_UsesConfiguredBackend(t *testing.T) {
+	expectedResponse := MemoryRememberResponse{
+		Scope:           memoryScopeGlobal,
+		FactKey:         "name",
+		FactValue:       "Ada",
+		RememberedAtUTC: "2026-04-08T00:00:00Z",
+	}
+	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{
+		name:             "stub_backend",
+		rememberResponse: expectedResponse,
+	})
+
+	actualResponse, err := server.rememberMemoryFact(capabilityToken{TenantID: "", ControlSessionID: "cs-test"}, MemoryRememberRequest{
+		Scope:     memoryScopeGlobal,
+		FactKey:   "name",
+		FactValue: "Ada",
+	})
+	if err != nil {
+		t.Fatalf("remember memory fact: %v", err)
+	}
+	if actualResponse != expectedResponse {
+		t.Fatalf("unexpected remember response: got %#v want %#v", actualResponse, expectedResponse)
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	stubBackend := partition.backend.(*stubMemoryBackend)
+	server.memoryMu.Unlock()
+	if stubBackend.rememberCalls != 1 {
+		t.Fatalf("expected one backend remember call, got %d", stubBackend.rememberCalls)
+	}
+	if stubBackend.lastRememberRequest.FactKey != "name" || stubBackend.lastRememberRequest.FactValue != "Ada" {
+		t.Fatalf("unexpected remember request recorded by backend: %#v", stubBackend.lastRememberRequest)
+	}
+}
+
+func TestInspectContinuityThread_UsesConfiguredBackend(t *testing.T) {
+	expectedResponse := ContinuityInspectResponse{
+		InspectionID:      "inspect_backend_seam",
+		ThreadID:          "thread_backend_seam",
+		DerivationOutcome: continuityInspectionOutcomeDerived,
+	}
+	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{
+		name:            "stub_backend",
+		inspectResponse: expectedResponse,
+	})
+
+	actualResponse, err := server.inspectContinuityThread(capabilityToken{TenantID: "", ControlSessionID: "cs-test"}, ContinuityInspectRequest{
+		InspectionID: "inspect_backend_seam",
+		ThreadID:     "thread_backend_seam",
+		Scope:        memoryScopeGlobal,
+		Events: []ContinuityEventInput{{
+			TimestampUTC:    "2026-04-08T00:00:00Z",
+			SessionID:       "session-test",
+			Type:            "provider_fact_observed",
+			Scope:           memoryScopeGlobal,
+			ThreadID:        "thread_backend_seam",
+			EpistemicFlavor: "remembered",
+			LedgerSequence:  1,
+			EventHash:       strings.Repeat("a", 64),
+			Payload: map[string]interface{}{
+				"fact_key":   "name",
+				"fact_value": "Ada",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("inspect continuity thread: %v", err)
+	}
+	if actualResponse.InspectionID != expectedResponse.InspectionID || actualResponse.ThreadID != expectedResponse.ThreadID || actualResponse.DerivationOutcome != expectedResponse.DerivationOutcome {
+		t.Fatalf("unexpected inspect response: got %#v want %#v", actualResponse, expectedResponse)
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	stubBackend := partition.backend.(*stubMemoryBackend)
+	server.memoryMu.Unlock()
+	if stubBackend.inspectCalls != 1 {
+		t.Fatalf("expected one backend inspect call, got %d", stubBackend.inspectCalls)
+	}
+	if stubBackend.lastInspectRequest.InspectionID != "inspect_backend_seam" {
+		t.Fatalf("unexpected inspect request recorded by backend: %#v", stubBackend.lastInspectRequest)
+	}
+}
+
+func TestContinuityTCLRememberFact_DeniesTenantPartitionMismatch(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
+	_, err := continuityBackend.RememberFact(context.Background(), capabilityToken{
+		TenantID:         "other-tenant",
+		ControlSessionID: client.controlSessionID,
+	}, MemoryRememberRequest{
+		FactKey:   "name",
+		FactValue: "Ada",
+	})
+	if err == nil || !strings.Contains(err.Error(), "tenant does not match") {
+		t.Fatalf("expected tenant mismatch denial, got %v", err)
+	}
+}
+
+func TestContinuityTCLInspectContinuity_DeniesTenantPartitionMismatch(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
+	_, err := continuityBackend.InspectContinuity(context.Background(), capabilityToken{
+		TenantID:         "other-tenant",
+		ControlSessionID: client.controlSessionID,
+	}, testContinuityInspectRequest("inspect_tenant_mismatch", "thread_tenant_mismatch", "monitor github status"))
+	if err == nil || !strings.Contains(err.Error(), "tenant does not match") {
+		t.Fatalf("expected tenant mismatch denial, got %v", err)
+	}
+}
+
+func TestReviewContinuityInspection_UsesConfiguredBackend(t *testing.T) {
+	expectedResponse := MemoryInspectionGovernanceResponse{
+		InspectionID:      "inspect_review_backend_seam",
+		ThreadID:          "thread_review_backend_seam",
+		DerivationOutcome: continuityInspectionOutcomeDerived,
+		ReviewStatus:      continuityReviewStatusAccepted,
+		LineageStatus:     continuityLineageStatusEligible,
+	}
+	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{
+		name:           "stub_backend",
+		reviewResponse: expectedResponse,
+	})
+
+	actualResponse, err := server.reviewContinuityInspection(capabilityToken{TenantID: "", ControlSessionID: "cs-test"}, "inspect_review_backend_seam", MemoryInspectionReviewRequest{
+		Decision:    continuityReviewStatusAccepted,
+		OperationID: "review_backend_seam",
+		Reason:      "operator accepted lineage",
+	})
+	if err != nil {
+		t.Fatalf("review continuity inspection: %v", err)
+	}
+	if !reflect.DeepEqual(actualResponse, expectedResponse) {
+		t.Fatalf("unexpected review response: got %#v want %#v", actualResponse, expectedResponse)
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	stubBackend := partition.backend.(*stubMemoryBackend)
+	server.memoryMu.Unlock()
+	if stubBackend.reviewCalls != 1 {
+		t.Fatalf("expected one backend review call, got %d", stubBackend.reviewCalls)
+	}
+	if stubBackend.lastReviewInspectionID != "inspect_review_backend_seam" {
+		t.Fatalf("unexpected inspection id recorded by backend review: %q", stubBackend.lastReviewInspectionID)
+	}
+	if stubBackend.lastReviewRequest.OperationID != "review_backend_seam" {
+		t.Fatalf("unexpected review request recorded by backend: %#v", stubBackend.lastReviewRequest)
+	}
+}
+
+func TestTombstoneContinuityInspection_UsesConfiguredBackend(t *testing.T) {
+	expectedResponse := MemoryInspectionGovernanceResponse{
+		InspectionID:      "inspect_tombstone_backend_seam",
+		ThreadID:          "thread_tombstone_backend_seam",
+		DerivationOutcome: continuityInspectionOutcomeDerived,
+		ReviewStatus:      continuityReviewStatusAccepted,
+		LineageStatus:     continuityLineageStatusTombstoned,
+	}
+	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{
+		name:              "stub_backend",
+		tombstoneResponse: expectedResponse,
+	})
+
+	actualResponse, err := server.tombstoneContinuityInspection(capabilityToken{TenantID: "", ControlSessionID: "cs-test"}, "inspect_tombstone_backend_seam", MemoryInspectionLineageRequest{
+		OperationID: "tombstone_backend_seam",
+		Reason:      "operator tombstoned lineage",
+	})
+	if err != nil {
+		t.Fatalf("tombstone continuity inspection: %v", err)
+	}
+	if !reflect.DeepEqual(actualResponse, expectedResponse) {
+		t.Fatalf("unexpected tombstone response: got %#v want %#v", actualResponse, expectedResponse)
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	stubBackend := partition.backend.(*stubMemoryBackend)
+	server.memoryMu.Unlock()
+	if stubBackend.tombstoneCalls != 1 {
+		t.Fatalf("expected one backend tombstone call, got %d", stubBackend.tombstoneCalls)
+	}
+	if stubBackend.lastTombstoneInspectionID != "inspect_tombstone_backend_seam" {
+		t.Fatalf("unexpected inspection id recorded by backend tombstone: %q", stubBackend.lastTombstoneInspectionID)
+	}
+	if stubBackend.lastTombstoneRequest.OperationID != "tombstone_backend_seam" {
+		t.Fatalf("unexpected tombstone request recorded by backend: %#v", stubBackend.lastTombstoneRequest)
+	}
+}
+
+func TestPurgeContinuityInspection_UsesConfiguredBackend(t *testing.T) {
+	expectedResponse := MemoryInspectionGovernanceResponse{
+		InspectionID:      "inspect_purge_backend_seam",
+		ThreadID:          "thread_purge_backend_seam",
+		DerivationOutcome: continuityInspectionOutcomeDerived,
+		ReviewStatus:      continuityReviewStatusAccepted,
+		LineageStatus:     continuityLineageStatusPurged,
+	}
+	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{
+		name:          "stub_backend",
+		purgeResponse: expectedResponse,
+	})
+
+	actualResponse, err := server.purgeContinuityInspection(capabilityToken{TenantID: "", ControlSessionID: "cs-test"}, "inspect_purge_backend_seam", MemoryInspectionLineageRequest{
+		OperationID: "purge_backend_seam",
+		Reason:      "operator purged lineage",
+	})
+	if err != nil {
+		t.Fatalf("purge continuity inspection: %v", err)
+	}
+	if !reflect.DeepEqual(actualResponse, expectedResponse) {
+		t.Fatalf("unexpected purge response: got %#v want %#v", actualResponse, expectedResponse)
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	stubBackend := partition.backend.(*stubMemoryBackend)
+	server.memoryMu.Unlock()
+	if stubBackend.purgeCalls != 1 {
+		t.Fatalf("expected one backend purge call, got %d", stubBackend.purgeCalls)
+	}
+	if stubBackend.lastPurgeInspectionID != "inspect_purge_backend_seam" {
+		t.Fatalf("unexpected inspection id recorded by backend purge: %q", stubBackend.lastPurgeInspectionID)
+	}
+	if stubBackend.lastPurgeRequest.OperationID != "purge_backend_seam" {
+		t.Fatalf("unexpected purge request recorded by backend: %#v", stubBackend.lastPurgeRequest)
+	}
+}
+
+func TestContinuityTCLReviewContinuityInspection_DeniesTenantPartitionMismatch(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgateContinuityPolicyYAML(false, true))
+
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
+	_, err := continuityBackend.ReviewContinuityInspection(context.Background(), capabilityToken{
+		TenantID:         "other-tenant",
+		ControlSessionID: client.controlSessionID,
+	}, "inspect_tenant_mismatch", MemoryInspectionReviewRequest{
+		Decision:    continuityReviewStatusAccepted,
+		OperationID: "review_tenant_mismatch",
+	})
+	if err == nil || !strings.Contains(err.Error(), "tenant does not match") {
+		t.Fatalf("expected tenant mismatch denial, got %v", err)
+	}
+}
+
+func TestContinuityTCLPurgeContinuityInspection_DeniesTenantPartitionMismatch(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
+	_, err := continuityBackend.PurgeContinuityInspection(context.Background(), capabilityToken{
+		TenantID:         "other-tenant",
+		ControlSessionID: client.controlSessionID,
+	}, "inspect_tenant_mismatch", MemoryInspectionLineageRequest{
+		OperationID: "purge_tenant_mismatch",
+	})
+	if err == nil || !strings.Contains(err.Error(), "tenant does not match") {
+		t.Fatalf("expected tenant mismatch denial, got %v", err)
 	}
 }
 

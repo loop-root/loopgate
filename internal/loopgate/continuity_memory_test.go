@@ -3972,11 +3972,14 @@ type discoverMemoryTestEntry struct {
 
 func newDiscoverMemoryTestServer(t *testing.T) (*Server, *memoryPartition) {
 	t.Helper()
-	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{name: "stub"})
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	partition := server.memoryPartitions[memoryPartitionKey("")]
 	if partition == nil {
 		t.Fatal("missing default memory partition")
 	}
+	// Use the real continuity backend here so discovery-ranking tests stay aligned
+	// with the live retrieval path instead of a stub-only helper path.
 	return server, partition
 }
 

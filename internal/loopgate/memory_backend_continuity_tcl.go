@@ -62,6 +62,46 @@ func (backend *continuityTCLMemoryBackend) StoreExplicitRememberedFact(ctx conte
 	return fmt.Errorf("memory backend %q store explicit remembered fact is not wired yet", backend.Name())
 }
 
+func (backend *continuityTCLMemoryBackend) RememberFact(ctx context.Context, authenticatedSession capabilityToken, request MemoryRememberRequest) (MemoryRememberResponse, error) {
+	_ = ctx
+	if err := backend.ensureAuthenticatedSessionMatchesBoundPartition(authenticatedSession); err != nil {
+		return MemoryRememberResponse{}, err
+	}
+	return backend.rememberFactAuthoritatively(authenticatedSession, request)
+}
+
+func (backend *continuityTCLMemoryBackend) InspectContinuity(ctx context.Context, authenticatedSession capabilityToken, request ContinuityInspectRequest) (ContinuityInspectResponse, error) {
+	_ = ctx
+	if err := backend.ensureAuthenticatedSessionMatchesBoundPartition(authenticatedSession); err != nil {
+		return ContinuityInspectResponse{}, err
+	}
+	return backend.inspectContinuityAuthoritatively(authenticatedSession, request)
+}
+
+func (backend *continuityTCLMemoryBackend) ReviewContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionReviewRequest) (MemoryInspectionGovernanceResponse, error) {
+	_ = ctx
+	if err := backend.ensureAuthenticatedSessionMatchesBoundPartition(authenticatedSession); err != nil {
+		return MemoryInspectionGovernanceResponse{}, err
+	}
+	return backend.reviewContinuityInspectionAuthoritatively(authenticatedSession, inspectionID, request)
+}
+
+func (backend *continuityTCLMemoryBackend) TombstoneContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error) {
+	_ = ctx
+	if err := backend.ensureAuthenticatedSessionMatchesBoundPartition(authenticatedSession); err != nil {
+		return MemoryInspectionGovernanceResponse{}, err
+	}
+	return backend.updateContinuityLineageStatusAuthoritatively(authenticatedSession, inspectionID, continuityLineageStatusTombstoned, request, "memory.continuity.tombstoned")
+}
+
+func (backend *continuityTCLMemoryBackend) PurgeContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error) {
+	_ = ctx
+	if err := backend.ensureAuthenticatedSessionMatchesBoundPartition(authenticatedSession); err != nil {
+		return MemoryInspectionGovernanceResponse{}, err
+	}
+	return backend.updateContinuityLineageStatusAuthoritatively(authenticatedSession, inspectionID, continuityLineageStatusPurged, request, "memory.continuity.purged")
+}
+
 func (backend *continuityTCLMemoryBackend) BuildWakeState(ctx context.Context, request MemoryWakeStateRequest) (MemoryWakeStateResponse, error) {
 	if backend.partition == nil {
 		return MemoryWakeStateResponse{}, fmt.Errorf("memory backend partition is not bound")
@@ -75,14 +115,14 @@ func (backend *continuityTCLMemoryBackend) Discover(ctx context.Context, request
 	if backend.partition == nil {
 		return MemoryDiscoverResponse{}, fmt.Errorf("memory backend partition is not bound")
 	}
-	return backend.server.discoverMemoryFromPartitionState(backend.partition, request)
+	return backend.discoverFromBoundPartitionState(request)
 }
 
 func (backend *continuityTCLMemoryBackend) Recall(ctx context.Context, request MemoryRecallRequest) (MemoryRecallResponse, error) {
 	if backend.partition == nil {
 		return MemoryRecallResponse{}, fmt.Errorf("memory backend partition is not bound")
 	}
-	return backend.server.recallMemoryFromPartitionState(backend.partition, request)
+	return backend.recallFromBoundPartitionState(request)
 }
 
 func (backend *continuityTCLMemoryBackend) DiscoverProjectedNodes(ctx context.Context, rawRequest ProjectedNodeDiscoverRequest) ([]ProjectedNodeDiscoverItem, error) {

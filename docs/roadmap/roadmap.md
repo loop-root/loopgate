@@ -7,7 +7,7 @@
 **Snapshot from:** 2026-03-12 (feature list). **Doc reviewed:** 2026-03-24.
 
 The repo ships the **Loopgate** control plane with a real security boundary.
-**Primary integration targets** are **HTTP-on-UDS local clients** and, when shipped, **proxy-capable** toolchains. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR; **out-of-tree** MCP→HTTP bridges remain an operator choice. The in-repo **`cmd/haven/`** Wails tree is **reference-only** (contracts/tests).
+**Primary integration targets** are **HTTP-on-UDS local clients** and the separate **Haven TUI/CLI** operator shell. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR; **out-of-tree** MCP→HTTP bridges remain an operator choice. The in-repo **`cmd/haven/`** Wails tree is **reference-only** (contracts/tests).
 
 Implemented:
 
@@ -108,6 +108,11 @@ Next lift:
 
 - broader candidate ingestion from non-workflow memory-like artifacts
 - richer signature-registry coverage across wording variants and operator-readable risk tiers
+- backend-owned memory authority consolidation plan:
+  `docs/roadmap/2026-04-08-backend-owned-memory-redesign-plan.md`
+  Current state: live remember/inspect/discover/recall/review/tombstone/purge
+  now cross the backend seam; candidate analysis and unwired storage hooks are
+  the main remaining backend-boundary gaps.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys
 - replace the current conservative attribute-anchor heuristics with richer TCL-derived conflict anchors for more preference and intent families
 - simplify the memory/TCL implementation before widening it further; a dated
@@ -149,11 +154,10 @@ Next lift:
 
 ## What is still missing
 
-The control plane is real, but **enterprise integration** and **multi-tenancy** are still landing.
+The control plane is real, but **multi-tenancy** and broader enterprise deployment are still landing.
 
 Not yet implemented (non-exhaustive):
 
-- **Transparent proxy** as a primary developer integration surface; **normative local control plane** remains **HTTP on the Unix socket**. (**In-tree MCP removed** — see ADR 0010; optional **future** thin MCP layer only with a new ADR.)
 - **`tenant_id` namespace** across remaining resources (memory partitions and core audit paths are in progress; grants and other state may still be global per instance)
 - **Enterprise identity layer:** customer **IdP** via **OIDC/OAuth** (and SAML where required) for admin and/or node identity — RFC-first; config-sourced tenancy until then (`docs/setup/TENANCY.md`)
 - **Enterprise secrets layer:** pluggable backends for **Vault**, **cloud KMS**, **HSM**-backed stores, **TPM**/platform identity for bootstrap — RFC-first; see `docs/setup/SECRETS.md` § *Enterprise integration layer*
@@ -216,7 +220,6 @@ Lift: medium-large
 
 ## Phase 5: Enterprise / remote profile (RFC-first, in progress)
 
-- Proxy mode (and any **future** MCP-shaped adapter introduced by ADR) with **policy parity** to HTTP handlers — **no alternate trust boundary**
 - `tenant_id` isolation and admin-node governance (mTLS)
 - define remote transport profiles that preserve the Loopgate authority model
 - replace local peer binding with deployment identity where required

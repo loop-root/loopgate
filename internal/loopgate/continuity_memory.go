@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -14,7 +13,6 @@ import (
 
 	"morph/internal/config"
 	"morph/internal/identifiers"
-	"morph/internal/secrets"
 	tclpkg "morph/internal/tcl"
 )
 
@@ -520,157 +518,11 @@ func normalizeContinuityInspectRequest(rawRequest ContinuityInspectRequest) (Con
 }
 
 func (server *Server) inspectContinuityThread(tokenClaims capabilityToken, rawRequest ContinuityInspectRequest) (ContinuityInspectResponse, error) {
-	validatedRequest, err := normalizeContinuityInspectRequest(rawRequest)
+	backend, err := server.memoryBackendForTenant(tokenClaims.TenantID)
 	if err != nil {
 		return ContinuityInspectResponse{}, err
 	}
-
-	server.memoryMu.Lock()
-	partition, partitionErr := server.ensureMemoryPartitionLocked(tokenClaims.TenantID)
-	if partitionErr != nil {
-		server.memoryMu.Unlock()
-		return ContinuityInspectResponse{}, partitionErr
-	}
-	existingInspection, found := partition.state.Inspections[validatedRequest.InspectionID]
-	if found {
-		existingInspection = normalizeContinuityInspectionRecordMust(existingInspection)
-		_ = server.inspectionLineageSelectionDecisionLocked(partition.state, existingInspection.InspectionID)
-		server.memoryMu.Unlock()
-		return buildContinuityInspectResponse(existingInspection), nil
-	}
-	server.memoryMu.Unlock()
-
-	var inspectResponse ContinuityInspectResponse
-	err = server.mutateContinuityMemory(tokenClaims.TenantID, tokenClaims.ControlSessionID, "memory.continuity.inspected", func(workingState continuityMemoryState, nowUTC time.Time) (continuityMemoryState, map[string]interface{}, continuityMutationEvents, error) {
-		if existingInspection, found := workingState.Inspections[validatedRequest.InspectionID]; found {
-			existingInspection = normalizeContinuityInspectionRecordMust(existingInspection)
-			_ = server.inspectionLineageSelectionDecisionLocked(workingState, existingInspection.InspectionID)
-			inspectResponse = buildContinuityInspectResponse(existingInspection)
-			return workingState, nil, continuityMutationEvents{}, nil
-		}
-
-		inspectionRecord := continuityInspectionRecord{
-			InspectionID:       validatedRequest.InspectionID,
-			ThreadID:           validatedRequest.ThreadID,
-			Scope:              validatedRequest.Scope,
-			SubmittedAtUTC:     nowUTC.Format(time.RFC3339Nano),
-			CompletedAtUTC:     nowUTC.Format(time.RFC3339Nano),
-			EventCount:         len(validatedRequest.Events),
-			ApproxPayloadBytes: actualContinuityPayloadBytes(validatedRequest.Events),
-			ApproxPromptTokens: actualContinuityPromptTokens(validatedRequest.Events),
-			Lineage: continuityInspectionLineage{
-				Status:       continuityLineageStatusEligible,
-				ChangedAtUTC: nowUTC.Format(time.RFC3339Nano),
-				OperationID:  validatedRequest.InspectionID,
-			},
-		}
-		inspectionRecord.DerivationOutcome = continuityInspectionOutcomeDerived
-		if !server.continuityThresholdReached(inspectionRecord) {
-			inspectionRecord.DerivationOutcome = continuityInspectionOutcomeSkippedThreshold
-		}
-
-		var derivedDistillate continuityDistillateRecord
-		var derivedResonateKey continuityResonateKeyRecord
-		var hasDerivedArtifacts bool
-		if inspectionRecord.DerivationOutcome == continuityInspectionOutcomeDerived {
-			derivedDistillate = deriveContinuityDistillate(validatedRequest, inspectionRecord, nowUTC, server.runtimeConfig, server.goalAliases)
-			if len(derivedDistillate.Facts) == 0 && len(derivedDistillate.GoalOps) == 0 && len(derivedDistillate.UnresolvedItemOps) == 0 {
-				inspectionRecord.DerivationOutcome = continuityInspectionOutcomeNoArtifacts
-			} else {
-				derivedResonateKey = deriveContinuityResonateKey(derivedDistillate, nowUTC)
-				hasDerivedArtifacts = true
-			}
-		}
-
-		switch inspectionRecord.DerivationOutcome {
-		case continuityInspectionOutcomeDerived:
-			if server.policy.Memory.ContinuityReviewRequired {
-				inspectionRecord.Review = continuityInspectionReview{
-					Status: continuityReviewStatusPendingReview,
-				}
-			} else {
-				inspectionRecord.Review = continuityInspectionReview{
-					Status:         continuityReviewStatusAccepted,
-					DecisionSource: continuityReviewDecisionSourceAuto,
-					ReviewedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-					OperationID:    validatedRequest.InspectionID,
-				}
-			}
-		default:
-			inspectionRecord.Review = continuityInspectionReview{
-				Status:         continuityReviewStatusAccepted,
-				DecisionSource: continuityReviewDecisionSourceAuto,
-				ReviewedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				OperationID:    validatedRequest.InspectionID,
-			}
-		}
-
-		inspectionRecord.Outcome = inspectionRecord.DerivationOutcome
-		if hasDerivedArtifacts {
-			inspectionRecord.DerivedDistillateIDs = []string{derivedDistillate.DistillateID}
-			inspectionRecord.DerivedResonateKeyIDs = []string{derivedResonateKey.KeyID}
-			workingState.Distillates[derivedDistillate.DistillateID] = derivedDistillate
-			workingState.ResonateKeys[derivedResonateKey.KeyID] = derivedResonateKey
-		}
-		workingState.Inspections[inspectionRecord.InspectionID] = inspectionRecord
-		inspectResponse = buildContinuityInspectResponse(inspectionRecord)
-		mutationEvents := continuityMutationEvents{
-			Continuity: []continuityAuthoritativeEvent{{
-				SchemaVersion: continuityMemorySchemaVersion,
-				EventID:       "continuity_inspection_" + inspectionRecord.InspectionID,
-				EventType:     "continuity_inspection_recorded",
-				CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Actor:         tokenClaims.ControlSessionID,
-				Scope:         inspectionRecord.Scope,
-				InspectionID:  inspectionRecord.InspectionID,
-				ThreadID:      inspectionRecord.ThreadID,
-				GoalType:      derivedDistillate.GoalType,
-				GoalFamilyID:  derivedDistillate.GoalFamilyID,
-				Request:       &validatedRequest,
-				Inspection:    ptrContinuityInspectionRecord(cloneContinuityInspectionRecord(inspectionRecord)),
-				Distillate:    ptrContinuityDistillateRecord(cloneContinuityDistillateRecord(derivedDistillate)),
-				ResonateKey:   ptrContinuityResonateKeyRecord(cloneContinuityResonateKeyRecord(derivedResonateKey)),
-			}},
-		}
-		if !hasDerivedArtifacts {
-			mutationEvents.Continuity[0].Distillate = nil
-			mutationEvents.Continuity[0].ResonateKey = nil
-			mutationEvents.Continuity[0].GoalType = ""
-			mutationEvents.Continuity[0].GoalFamilyID = ""
-		}
-		if hasDerivedArtifacts {
-			mutationEvents.Goal = append(mutationEvents.Goal, continuityGoalEvent{
-				SchemaVersion:      continuityMemorySchemaVersion,
-				EventID:            "goal_projection_" + inspectionRecord.InspectionID,
-				EventType:          "goal_projection_updated",
-				CreatedAtUTC:       nowUTC.Format(time.RFC3339Nano),
-				Actor:              tokenClaims.ControlSessionID,
-				InspectionID:       inspectionRecord.InspectionID,
-				ThreadID:           inspectionRecord.ThreadID,
-				GoalType:           derivedDistillate.GoalType,
-				GoalFamilyID:       derivedDistillate.GoalFamilyID,
-				NeedsAliasCuration: strings.Contains(derivedDistillate.GoalFamilyID, ":fallback_"),
-				GoalOps:            append([]continuityGoalOp(nil), derivedDistillate.GoalOps...),
-				UnresolvedItemOps:  append([]continuityUnresolvedItemOp(nil), derivedDistillate.UnresolvedItemOps...),
-			})
-		}
-		return workingState, map[string]interface{}{
-			"inspection_id":          inspectionRecord.InspectionID,
-			"thread_id":              inspectionRecord.ThreadID,
-			"derivation_outcome":     inspectionRecord.DerivationOutcome,
-			"review_status":          inspectionRecord.Review.Status,
-			"lineage_status":         inspectionRecord.Lineage.Status,
-			"event_count":            inspectionRecord.EventCount,
-			"approx_payload_bytes":   inspectionRecord.ApproxPayloadBytes,
-			"approx_prompt_tokens":   inspectionRecord.ApproxPromptTokens,
-			"derived_distillate_ids": append([]string(nil), inspectionRecord.DerivedDistillateIDs...),
-			"derived_resonate_keys":  append([]string(nil), inspectionRecord.DerivedResonateKeyIDs...),
-		}, mutationEvents, nil
-	})
-	if err != nil {
-		return ContinuityInspectResponse{}, err
-	}
-	return inspectResponse, nil
+	return backend.InspectContinuity(context.Background(), tokenClaims, rawRequest)
 }
 
 func buildContinuityInspectResponse(inspectionRecord continuityInspectionRecord) ContinuityInspectResponse {
@@ -1411,18 +1263,25 @@ trimLoop:
 }
 
 func (server *Server) loadMemoryWakeState(tenantID string) (MemoryWakeStateResponse, error) {
-	server.memoryMu.Lock()
-	partition, err := server.ensureMemoryPartitionLocked(tenantID)
+	backend, err := server.memoryBackendForTenant(tenantID)
 	if err != nil {
-		server.memoryMu.Unlock()
 		return MemoryWakeStateResponse{}, err
 	}
-	backend := partition.backend
-	server.memoryMu.Unlock()
-	if backend == nil {
-		return MemoryWakeStateResponse{}, fmt.Errorf("memory backend is not configured")
-	}
 	return backend.BuildWakeState(context.Background(), MemoryWakeStateRequest{Scope: memoryScopeGlobal})
+}
+
+func (server *Server) memoryBackendForTenant(rawTenantID string) (MemoryBackend, error) {
+	server.memoryMu.Lock()
+	defer server.memoryMu.Unlock()
+
+	partition, err := server.ensureMemoryPartitionLocked(rawTenantID)
+	if err != nil {
+		return nil, err
+	}
+	if partition.backend == nil {
+		return nil, fmt.Errorf("memory backend is not configured")
+	}
+	return partition.backend, nil
 }
 
 func (server *Server) loadMemoryDiagnosticWake(tenantID string) MemoryDiagnosticWakeResponse {
@@ -1436,81 +1295,17 @@ func (server *Server) loadMemoryDiagnosticWake(tenantID string) MemoryDiagnostic
 }
 
 func (server *Server) discoverMemoryFromPartitionState(partition *memoryPartition, validatedRequest MemoryDiscoverRequest) (MemoryDiscoverResponse, error) {
-	queryTags := tokenizeLoopgateMemoryText(validatedRequest.Query)
-	slotPreferenceAnchorTupleKey := detectDiscoverSlotPreference(validatedRequest.Query)
-	server.memoryMu.Lock()
-	defer server.memoryMu.Unlock()
-
-	type rankedDiscoverItem struct {
-		item                MemoryDiscoverItem
-		slotPreferenceBoost bool
+	continuityBackend, ok := partition.backend.(*continuityTCLMemoryBackend)
+	if !ok {
+		if partition.backend == nil {
+			return MemoryDiscoverResponse{}, fmt.Errorf("memory backend is not configured")
+		}
+		return MemoryDiscoverResponse{}, fmt.Errorf("memory backend %q does not support continuity_tcl discover helpers", partition.backend.Name())
 	}
-	discoveredItems := make([]rankedDiscoverItem, 0, len(partition.state.ResonateKeys))
-	for _, resonateKeyRecord := range activeLoopgateResonateKeys(partition.state) {
-		if resonateKeyRecord.Scope != validatedRequest.Scope {
-			continue
-		}
-		matchCount := 0
-		for _, queryTag := range queryTags {
-			for _, keyTag := range resonateKeyRecord.Tags {
-				if keyTag == queryTag {
-					matchCount++
-					break
-				}
-			}
-		}
-		if matchCount == 0 {
-			continue
-		}
-		slotPreferenceBoost := false
-		if slotPreferenceAnchorTupleKey != "" {
-			if distillateRecord, found := partition.state.Distillates[resonateKeyRecord.DistillateID]; found {
-				if explicitProfileFact, found := explicitProfileFactFromDistillate(partition.state, distillateRecord); found && explicitProfileFact.AnchorTupleKey == slotPreferenceAnchorTupleKey {
-					slotPreferenceBoost = true
-				}
-			}
-		}
-		discoveredItems = append(discoveredItems, rankedDiscoverItem{
-			item: MemoryDiscoverItem{
-				KeyID:        resonateKeyRecord.KeyID,
-				ThreadID:     resonateKeyRecord.ThreadID,
-				DistillateID: resonateKeyRecord.DistillateID,
-				Scope:        resonateKeyRecord.Scope,
-				CreatedAtUTC: resonateKeyRecord.CreatedAtUTC,
-				Tags:         append([]string(nil), resonateKeyRecord.Tags...),
-				MatchCount:   matchCount,
-			},
-			slotPreferenceBoost: slotPreferenceBoost,
-		})
-	}
-	sort.Slice(discoveredItems, func(leftIndex int, rightIndex int) bool {
-		leftItem := discoveredItems[leftIndex]
-		rightItem := discoveredItems[rightIndex]
-		switch {
-		case leftItem.item.MatchCount != rightItem.item.MatchCount:
-			return leftItem.item.MatchCount > rightItem.item.MatchCount
-		// Slot preference only reorders already-eligible discover results. It is not an
-		// admission path, and it stays bounded to a boolean tie-break rather than a score rewrite.
-		case leftItem.slotPreferenceBoost != rightItem.slotPreferenceBoost:
-			return leftItem.slotPreferenceBoost && !rightItem.slotPreferenceBoost
-		case leftItem.item.CreatedAtUTC != rightItem.item.CreatedAtUTC:
-			return leftItem.item.CreatedAtUTC > rightItem.item.CreatedAtUTC
-		default:
-			return leftItem.item.KeyID < rightItem.item.KeyID
-		}
-	})
-	if len(discoveredItems) > validatedRequest.MaxItems {
-		discoveredItems = append([]rankedDiscoverItem(nil), discoveredItems[:validatedRequest.MaxItems]...)
-	}
-	responseItems := make([]MemoryDiscoverItem, 0, len(discoveredItems))
-	for _, discoveredItem := range discoveredItems {
-		responseItems = append(responseItems, discoveredItem.item)
-	}
-	return MemoryDiscoverResponse{
-		Scope: validatedRequest.Scope,
-		Query: validatedRequest.Query,
-		Items: responseItems,
-	}, nil
+	// Retain the partition-state helper for focused tests while the live discover path
+	// routes through the backend interface. This keeps test setup small without letting
+	// production traffic bypass the backend seam.
+	return continuityBackend.discoverFromBoundPartitionState(validatedRequest)
 }
 
 type discoverSlotPreferenceRule struct {
@@ -1601,380 +1396,33 @@ func (server *Server) discoverMemory(tenantID string, rawRequest MemoryDiscoverR
 	if err := validatedRequest.Validate(); err != nil {
 		return MemoryDiscoverResponse{}, err
 	}
-	server.memoryMu.Lock()
-	partition, err := server.ensureMemoryPartitionLocked(tenantID)
+	backend, err := server.memoryBackendForTenant(tenantID)
 	if err != nil {
-		server.memoryMu.Unlock()
 		return MemoryDiscoverResponse{}, err
-	}
-	backend := partition.backend
-	server.memoryMu.Unlock()
-	if backend == nil {
-		return MemoryDiscoverResponse{}, fmt.Errorf("memory backend is not configured")
 	}
 	return backend.Discover(context.Background(), validatedRequest)
 }
 
 func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest MemoryRememberRequest) (MemoryRememberResponse, error) {
-	validatedRequest, err := server.normalizeMemoryRememberRequest(rawRequest)
-	if err != nil {
-		var governanceError continuityGovernanceError
-		if errors.As(err, &governanceError) && governanceError.denialCode == DenialCodeMemoryCandidateInvalid {
-			auditRequest := sanitizeDeniedMemoryRememberRequest(rawRequest)
-			if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, auditRequest, governanceError.denialCode, governanceError.denialCode, map[string]interface{}{
-				"tcl_source_channel":   auditRequest.SourceChannel,
-				"tcl_candidate_source": auditRequest.CandidateSource,
-				"tcl_reason_code":      governanceError.denialCode,
-			}); auditErr != nil {
-				return MemoryRememberResponse{}, continuityGovernanceError{
-					httpStatus:     503,
-					responseStatus: ResponseStatusError,
-					denialCode:     DenialCodeAuditUnavailable,
-					reason:         "control-plane audit is unavailable",
-				}
-			}
-		}
-		return MemoryRememberResponse{}, err
-	}
-	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
-	if err != nil {
-		auditRequest := sanitizeDeniedMemoryRememberRequest(validatedRequest)
-		if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, auditRequest, DenialCodeMemoryCandidateInvalid, DenialCodeMemoryCandidateInvalid, map[string]interface{}{
-			"tcl_source_channel":   auditRequest.SourceChannel,
-			"tcl_candidate_source": auditRequest.CandidateSource,
-			"tcl_reason_code":      DenialCodeMemoryCandidateInvalid,
-		}); auditErr != nil {
-			return MemoryRememberResponse{}, continuityGovernanceError{
-				httpStatus:     503,
-				responseStatus: ResponseStatusError,
-				denialCode:     DenialCodeAuditUnavailable,
-				reason:         "control-plane audit is unavailable",
-			}
-		}
-		return MemoryRememberResponse{}, continuityGovernanceError{
-			httpStatus:     400,
-			responseStatus: ResponseStatusDenied,
-			denialCode:     DenialCodeMemoryCandidateInvalid,
-			reason:         "explicit memory write could not be analyzed safely and was not stored",
-		}
-	}
-	if err := tclpkg.ValidateMemoryCandidateContract(validatedCandidateResult.ValidatedCandidate); err != nil {
-		auditRequest := sanitizeDeniedMemoryRememberRequest(validatedRequest)
-		if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, auditRequest, DenialCodeMemoryCandidateInvalid, DenialCodeMemoryCandidateInvalid, map[string]interface{}{
-			"tcl_source_channel":   auditRequest.SourceChannel,
-			"tcl_candidate_source": auditRequest.CandidateSource,
-			"tcl_reason_code":      DenialCodeMemoryCandidateInvalid,
-		}); auditErr != nil {
-			return MemoryRememberResponse{}, continuityGovernanceError{
-				httpStatus:     503,
-				responseStatus: ResponseStatusError,
-				denialCode:     DenialCodeAuditUnavailable,
-				reason:         "control-plane audit is unavailable",
-			}
-		}
-		return MemoryRememberResponse{}, continuityGovernanceError{
-			httpStatus:     400,
-			responseStatus: ResponseStatusDenied,
-			denialCode:     DenialCodeMemoryCandidateInvalid,
-			reason:         "explicit memory write could not be validated safely and was not stored",
-		}
-	}
-	// Revalidate the seam result so tests, shims, and future adapters cannot bypass the contract by
-	// returning a half-populated candidate after the legacy request has already been accepted.
-	validatedCandidate := validatedCandidateResult.ValidatedCandidate
-
-	denialCode, safeReason, shouldPersist := memoryRememberGovernanceDecision(validatedCandidate.Decision)
-	if !shouldPersist {
-		if auditErr := server.logDeniedMemoryRememberCandidate(tokenClaims.ControlSessionID, validatedRequest, denialCode, validatedCandidate.Decision.ReasonCode, validatedCandidateResult.AuditSummary); auditErr != nil {
-			return MemoryRememberResponse{}, continuityGovernanceError{
-				httpStatus:     503,
-				responseStatus: ResponseStatusError,
-				denialCode:     DenialCodeAuditUnavailable,
-				reason:         "control-plane audit is unavailable",
-			}
-		}
-		return MemoryRememberResponse{}, continuityGovernanceError{
-			httpStatus:     403,
-			responseStatus: ResponseStatusDenied,
-			denialCode:     denialCode,
-			reason:         safeReason,
-		}
-	}
-
-	rememberedAnchorVersion := strings.TrimSpace(validatedCandidate.AnchorVersion)
-	rememberedAnchorKey := strings.TrimSpace(validatedCandidate.AnchorKey)
-	server.memoryMu.Lock()
-	partition, partitionErr := server.ensureMemoryPartitionLocked(tokenClaims.TenantID)
-	if partitionErr != nil {
-		server.memoryMu.Unlock()
-		return MemoryRememberResponse{}, partitionErr
-	}
-	existingFact, foundExisting := activeExplicitProfileFactByAnchorTuple(partition.state, rememberedAnchorVersion, rememberedAnchorKey)
-	server.memoryMu.Unlock()
-	if foundExisting && existingFact.FactValue == validatedCandidate.FactValue {
-		return MemoryRememberResponse{
-			Scope:           validatedRequest.Scope,
-			FactKey:         validatedCandidate.CanonicalKey,
-			FactValue:       existingFact.FactValue,
-			InspectionID:    existingFact.InspectionID,
-			DistillateID:    existingFact.DistillateID,
-			ResonateKeyID:   existingFact.ResonateKeyID,
-			RememberedAtUTC: existingFact.CreatedAtUTC,
-			UpdatedExisting: false,
-		}, nil
-	}
-
-	var rememberResponse MemoryRememberResponse
-	err = server.mutateContinuityMemory(tokenClaims.TenantID, tokenClaims.ControlSessionID, "memory.fact.remembered", func(workingState continuityMemoryState, nowUTC time.Time) (continuityMemoryState, map[string]interface{}, continuityMutationEvents, error) {
-		if err := server.consumeMemoryFactWriteBudgetLocked(tokenClaims.ControlSessionID, tokenClaims.PeerIdentity.UID, nowUTC); err != nil {
-			return workingState, nil, continuityMutationEvents{}, err
-		}
-
-		existingFact, foundExisting := activeExplicitProfileFactByAnchorTuple(workingState, rememberedAnchorVersion, rememberedAnchorKey)
-		var existingInspection continuityInspectionRecord
-		var foundInspection bool
-		if foundExisting {
-			existingInspection, foundInspection = workingState.Inspections[existingFact.InspectionID]
-			if !foundInspection {
-				return workingState, nil, continuityMutationEvents{}, fmt.Errorf("existing remembered fact inspection %q not found", existingFact.InspectionID)
-			}
-		}
-
-		rememberedThreadSuffix := makeEventPayloadID("memfact", struct {
-			FactKey   string `json:"fact_key"`
-			FactValue string `json:"fact_value"`
-			NowUTC    string `json:"now_utc"`
-		}{
-			FactKey:   validatedCandidate.CanonicalKey,
-			FactValue: validatedCandidate.FactValue,
-			NowUTC:    nowUTC.Format(time.RFC3339Nano),
-		})
-		threadID := "thread_" + rememberedThreadSuffix
-		inspectionID := "inspect_" + rememberedThreadSuffix
-		distillateID := "dist_" + rememberedThreadSuffix
-		resonateKeyID := "rk_" + rememberedThreadSuffix
-		if foundExisting {
-			existingInspection.Lineage = continuityInspectionLineage{
-				Status:       continuityLineageStatusTombstoned,
-				ChangedAtUTC: nowUTC.Format(time.RFC3339Nano),
-				Reason:       "superseded_by_newer_explicit_profile_fact",
-				OperationID: "remember_" + makeEventPayloadID("supersede", struct {
-					FactKey string `json:"fact_key"`
-					NowUTC  string `json:"now_utc"`
-				}{
-					FactKey: validatedCandidate.CanonicalKey,
-					NowUTC:  nowUTC.Format(time.RFC3339Nano),
-				}),
-				SupersededByInspectionID:  inspectionID,
-				SupersededByDistillateID:  distillateID,
-				SupersededByResonateKeyID: resonateKeyID,
-			}
-			stampContinuityDerivedArtifactsExcluded(&workingState, existingInspection, nowUTC)
-			workingState.Inspections[existingFact.InspectionID] = existingInspection
-		}
-		sourceRef := continuityArtifactSourceRef{
-			Kind: explicitProfileFactSourceKind,
-			Ref:  validatedCandidate.CanonicalKey,
-		}
-		userImportance := "somewhat_important"
-		retentionScore := importanceBase(server.runtimeConfig, userImportance) + server.runtimeConfig.Memory.Scoring.ExplicitUserBonus
-		effectiveHotness := hotnessBase(server.runtimeConfig, userImportance)
-		inspectionRecord := continuityInspectionRecord{
-			InspectionID:      inspectionID,
-			ThreadID:          threadID,
-			Scope:             validatedRequest.Scope,
-			SubmittedAtUTC:    nowUTC.Format(time.RFC3339Nano),
-			CompletedAtUTC:    nowUTC.Format(time.RFC3339Nano),
-			Outcome:           continuityInspectionOutcomeDerived,
-			DerivationOutcome: continuityInspectionOutcomeDerived,
-			Review: continuityInspectionReview{
-				Status:         continuityReviewStatusAccepted,
-				DecisionSource: continuityReviewDecisionSourceOperator,
-				ReviewedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Reason:         "explicit_profile_fact_write",
-				OperationID:    "remember_" + inspectionID,
-			},
-			Lineage: continuityInspectionLineage{
-				Status:                 continuityLineageStatusEligible,
-				ChangedAtUTC:           nowUTC.Format(time.RFC3339Nano),
-				Reason:                 "explicit_profile_fact_write",
-				OperationID:            "remember_" + inspectionID,
-				SupersedesInspectionID: strings.TrimSpace(existingFact.InspectionID),
-			},
-			EventCount:            1,
-			ApproxPayloadBytes:    len([]byte(validatedCandidate.FactValue)),
-			ApproxPromptTokens:    approximateLoopgateTokenCount(validatedCandidate.FactValue),
-			DerivedDistillateIDs:  []string{distillateID},
-			DerivedResonateKeyIDs: []string{resonateKeyID},
-		}
-		distillateRecord := continuityDistillateRecord{
-			SchemaVersion:        continuityMemorySchemaVersion,
-			DerivationVersion:    continuityDerivationVersion,
-			DistillateID:         distillateID,
-			InspectionID:         inspectionID,
-			ThreadID:             threadID,
-			Scope:                validatedRequest.Scope,
-			GoalType:             goalTypePreferenceOrConfigUpdate,
-			GoalFamilyID:         goalTypePreferenceOrConfigUpdate + ":preference_change",
-			NormalizationVersion: continuityNormalizationVersion,
-			UserImportance:       userImportance,
-			RetentionScore:       retentionScore,
-			EffectiveHotness:     effectiveHotness,
-			MemoryState:          deriveMemoryState(effectiveHotness, continuityLineageStatusEligible),
-			DerivationSignature: makeEventPayloadID("remember_signature", struct {
-				FactKey   string `json:"fact_key"`
-				FactValue string `json:"fact_value"`
-			}{
-				FactKey:   validatedCandidate.CanonicalKey,
-				FactValue: validatedCandidate.FactValue,
-			}),
-			CreatedAtUTC: nowUTC.Format(time.RFC3339Nano),
-			SourceRefs:   []continuityArtifactSourceRef{sourceRef},
-			Tags:         normalizeLoopgateMemoryTags([]string{validatedCandidate.CanonicalKey, validatedCandidate.FactValue}),
-			Facts: []continuityDistillateFact{{
-				Name:               validatedCandidate.CanonicalKey,
-				Value:              validatedCandidate.FactValue,
-				SourceRef:          sourceRef.Kind + ":" + sourceRef.Ref,
-				EpistemicFlavor:    "remembered",
-				CertaintyScore:     certaintyScoreForEpistemicFlavor("remembered"),
-				SemanticProjection: cloneSemanticProjection(&validatedCandidate.Projection),
-			}},
-		}
-		resonateKeyRecord := continuityResonateKeyRecord{
-			SchemaVersion:     continuityMemorySchemaVersion,
-			DerivationVersion: continuityDerivationVersion,
-			KeyID:             resonateKeyID,
-			DistillateID:      distillateID,
-			ThreadID:          threadID,
-			Scope:             validatedRequest.Scope,
-			GoalType:          distillateRecord.GoalType,
-			GoalFamilyID:      distillateRecord.GoalFamilyID,
-			RetentionScore:    distillateRecord.RetentionScore,
-			EffectiveHotness:  distillateRecord.EffectiveHotness,
-			MemoryState:       distillateRecord.MemoryState,
-			CreatedAtUTC:      nowUTC.Format(time.RFC3339Nano),
-			Tags:              append([]string(nil), distillateRecord.Tags...),
-		}
-
-		workingState.Inspections[inspectionID] = inspectionRecord
-		workingState.Distillates[distillateID] = distillateRecord
-		workingState.ResonateKeys[resonateKeyID] = resonateKeyRecord
-
-		rememberResponse = MemoryRememberResponse{
-			Scope:           validatedRequest.Scope,
-			FactKey:         validatedCandidate.CanonicalKey,
-			FactValue:       validatedCandidate.FactValue,
-			InspectionID:    inspectionID,
-			DistillateID:    distillateID,
-			ResonateKeyID:   resonateKeyID,
-			RememberedAtUTC: nowUTC.Format(time.RFC3339Nano),
-			UpdatedExisting: foundExisting,
-		}
-		if foundExisting {
-			rememberResponse.SupersededFactValue = existingFact.FactValue
-		}
-
-		mutationEvents := continuityMutationEvents{
-			Continuity: []continuityAuthoritativeEvent{{
-				SchemaVersion: continuityMemorySchemaVersion,
-				EventID:       "memory_fact_" + inspectionID,
-				EventType:     "memory_fact_remembered",
-				CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Actor:         tokenClaims.ControlSessionID,
-				Scope:         validatedRequest.Scope,
-				InspectionID:  inspectionID,
-				ThreadID:      threadID,
-				GoalType:      distillateRecord.GoalType,
-				GoalFamilyID:  distillateRecord.GoalFamilyID,
-				Inspection:    ptrContinuityInspectionRecord(cloneContinuityInspectionRecord(inspectionRecord)),
-				Distillate:    ptrContinuityDistillateRecord(cloneContinuityDistillateRecord(distillateRecord)),
-				ResonateKey:   ptrContinuityResonateKeyRecord(cloneContinuityResonateKeyRecord(resonateKeyRecord)),
-			}},
-		}
-		if foundExisting {
-			existingInspection := workingState.Inspections[existingFact.InspectionID]
-			mutationEvents.Continuity = append(mutationEvents.Continuity, continuityAuthoritativeEvent{
-				SchemaVersion: continuityMemorySchemaVersion,
-				EventID:       "memory_fact_supersede_" + existingFact.InspectionID,
-				EventType:     "continuity_inspection_lineage_updated",
-				CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Actor:         tokenClaims.ControlSessionID,
-				Scope:         existingInspection.Scope,
-				InspectionID:  existingInspection.InspectionID,
-				ThreadID:      existingInspection.ThreadID,
-				GoalType:      distillateRecord.GoalType,
-				GoalFamilyID:  distillateRecord.GoalFamilyID,
-				Lineage:       ptrContinuityInspectionLineage(existingInspection.Lineage),
-			})
-		}
-		return workingState, mergeMemoryTCLAuditSummary(map[string]interface{}{
-			"fact_key":         validatedCandidate.CanonicalKey,
-			"inspection_id":    inspectionID,
-			"distillate_id":    distillateID,
-			"resonate_key_id":  resonateKeyID,
-			"updated_existing": foundExisting,
-			"scope":            validatedRequest.Scope,
-		}, validatedCandidateResult.AuditSummary), mutationEvents, nil
-	})
+	backend, err := server.memoryBackendForTenant(tokenClaims.TenantID)
 	if err != nil {
 		return MemoryRememberResponse{}, err
 	}
-	return rememberResponse, nil
+	return backend.RememberFact(context.Background(), tokenClaims, rawRequest)
 }
 
 func (server *Server) recallMemoryFromPartitionState(partition *memoryPartition, validatedRequest MemoryRecallRequest) (MemoryRecallResponse, error) {
-	server.memoryMu.Lock()
-	defer server.memoryMu.Unlock()
-
-	recalledItems := make([]MemoryRecallItem, 0, len(validatedRequest.RequestedKeys))
-	approxTokenCount := 0
-	for _, requestedKeyID := range validatedRequest.RequestedKeys {
-		resonateKeyRecord, distillateRecord, decision, err := resolveRecallMaterial(partition.state, requestedKeyID)
-		if err != nil {
-			return MemoryRecallResponse{}, err
+	continuityBackend, ok := partition.backend.(*continuityTCLMemoryBackend)
+	if !ok {
+		if partition.backend == nil {
+			return MemoryRecallResponse{}, fmt.Errorf("memory backend is not configured")
 		}
-		if resonateKeyRecord.Scope != validatedRequest.Scope {
-			return MemoryRecallResponse{}, fmt.Errorf("resonate key %q is outside scope", requestedKeyID)
-		}
-		if !decision.Allowed {
-			return MemoryRecallResponse{}, continuityGovernanceError{
-				httpStatus:     403,
-				responseStatus: ResponseStatusDenied,
-				denialCode:     decision.DenialCode,
-				reason:         fmt.Sprintf("resonate key %q is not eligible for recall", requestedKeyID),
-			}
-		}
-
-		recalledFacts := make([]MemoryRecallFact, 0, len(distillateRecord.Facts))
-		for _, factRecord := range distillateRecord.Facts {
-			recalledFacts = append(recalledFacts, memoryRecallFactFromDistillateFact(factRecord))
-		}
-		activeGoals, unresolvedItems := loopgateRecallOpenItems(distillateRecord)
-		recalledItem := MemoryRecallItem{
-			KeyID:           resonateKeyRecord.KeyID,
-			ThreadID:        resonateKeyRecord.ThreadID,
-			DistillateID:    resonateKeyRecord.DistillateID,
-			Scope:           resonateKeyRecord.Scope,
-			CreatedAtUTC:    resonateKeyRecord.CreatedAtUTC,
-			Tags:            append([]string(nil), resonateKeyRecord.Tags...),
-			ActiveGoals:     activeGoals,
-			UnresolvedItems: unresolvedItems,
-			Facts:           recalledFacts,
-			EpistemicFlavor: "remembered",
-		}
-		approxTokenCount += approximateLoopgateRecallTokens(recalledItem)
-		recalledItems = append(recalledItems, recalledItem)
+		return MemoryRecallResponse{}, fmt.Errorf("memory backend %q does not support continuity_tcl recall helpers", partition.backend.Name())
 	}
-	if approxTokenCount > validatedRequest.MaxTokens {
-		return MemoryRecallResponse{}, fmt.Errorf("requested keys exceed max_tokens")
-	}
-	return MemoryRecallResponse{
-		Scope:            validatedRequest.Scope,
-		MaxItems:         validatedRequest.MaxItems,
-		MaxTokens:        validatedRequest.MaxTokens,
-		ApproxTokenCount: approxTokenCount,
-		Items:            recalledItems,
-	}, nil
+	// Retain the partition-state helper for focused tests while the live recall path
+	// routes through the backend interface. This keeps test setup small without letting
+	// production traffic bypass the backend seam.
+	return continuityBackend.recallFromBoundPartitionState(validatedRequest)
 }
 
 func (server *Server) recallMemory(tenantID string, rawRequest MemoryRecallRequest) (MemoryRecallResponse, error) {
@@ -1991,16 +1439,9 @@ func (server *Server) recallMemory(tenantID string, rawRequest MemoryRecallReque
 	if err := validatedRequest.Validate(); err != nil {
 		return MemoryRecallResponse{}, err
 	}
-	server.memoryMu.Lock()
-	partition, err := server.ensureMemoryPartitionLocked(tenantID)
+	backend, err := server.memoryBackendForTenant(tenantID)
 	if err != nil {
-		server.memoryMu.Unlock()
 		return MemoryRecallResponse{}, err
-	}
-	backend := partition.backend
-	server.memoryMu.Unlock()
-	if backend == nil {
-		return MemoryRecallResponse{}, fmt.Errorf("memory backend is not configured")
 	}
 	return backend.Recall(context.Background(), validatedRequest)
 }
@@ -2345,93 +1786,27 @@ func buildMemoryInspectionGovernanceResponse(inspectionRecord continuityInspecti
 }
 
 func (server *Server) reviewContinuityInspection(tokenClaims capabilityToken, inspectionID string, rawRequest MemoryInspectionReviewRequest) (MemoryInspectionGovernanceResponse, error) {
-	validatedRequest := rawRequest
-	if err := validatedRequest.Validate(); err != nil {
-		return MemoryInspectionGovernanceResponse{}, err
-	}
-
-	var governanceResponse MemoryInspectionGovernanceResponse
-	err := server.mutateContinuityMemory(tokenClaims.TenantID, tokenClaims.ControlSessionID, "memory.continuity.reviewed", func(workingState continuityMemoryState, nowUTC time.Time) (continuityMemoryState, map[string]interface{}, continuityMutationEvents, error) {
-		inspectionRecord, found := workingState.Inspections[inspectionID]
-		if !found {
-			return workingState, nil, continuityMutationEvents{}, continuityGovernanceError{
-				httpStatus:     404,
-				responseStatus: ResponseStatusDenied,
-				denialCode:     DenialCodeContinuityInspectionNotFound,
-				reason:         "continuity inspection not found",
-			}
-		}
-		inspectionRecord = normalizeContinuityInspectionRecordMust(inspectionRecord)
-		targetStatus := strings.TrimSpace(validatedRequest.Decision)
-		if inspectionRecord.Review.Status == targetStatus {
-			governanceResponse = buildMemoryInspectionGovernanceResponse(inspectionRecord)
-			return workingState, nil, continuityMutationEvents{}, nil
-		}
-		if inspectionRecord.Review.Status != continuityReviewStatusPendingReview {
-			return workingState, nil, continuityMutationEvents{}, continuityGovernanceError{
-				httpStatus:     409,
-				responseStatus: ResponseStatusDenied,
-				denialCode:     DenialCodeContinuityGovernanceStateConflict,
-				reason:         "continuity review is already terminal",
-			}
-		}
-		inspectionRecord.Review = continuityInspectionReview{
-			Status:         targetStatus,
-			DecisionSource: continuityReviewDecisionSourceOperator,
-			ReviewedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-			Reason:         secrets.RedactText(strings.TrimSpace(validatedRequest.Reason)),
-			OperationID:    validatedRequest.OperationID,
-		}
-		inspectionRecord.Outcome = inspectionRecord.DerivationOutcome
-		workingState.Inspections[inspectionID] = inspectionRecord
-		governanceResponse = buildMemoryInspectionGovernanceResponse(inspectionRecord)
-		mutationEvents := continuityMutationEvents{
-			Continuity: []continuityAuthoritativeEvent{{
-				SchemaVersion: continuityMemorySchemaVersion,
-				EventID:       "continuity_review_" + validatedRequest.OperationID,
-				EventType:     "continuity_inspection_reviewed",
-				CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Actor:         tokenClaims.ControlSessionID,
-				Scope:         inspectionRecord.Scope,
-				InspectionID:  inspectionRecord.InspectionID,
-				ThreadID:      inspectionRecord.ThreadID,
-				Review:        ptrContinuityInspectionReview(inspectionRecord.Review),
-			}},
-			Profile: []continuityProfileEvent{{
-				SchemaVersion: continuityMemorySchemaVersion,
-				EventID:       "profile_review_" + validatedRequest.OperationID,
-				EventType:     "continuity_review_recorded",
-				CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Actor:         tokenClaims.ControlSessionID,
-				InspectionID:  inspectionRecord.InspectionID,
-				ThreadID:      inspectionRecord.ThreadID,
-				GoalType:      firstDerivedGoalType(workingState, inspectionRecord),
-				GoalFamilyID:  firstDerivedGoalFamilyID(workingState, inspectionRecord),
-				Review:        ptrContinuityInspectionReview(inspectionRecord.Review),
-			}},
-		}
-		return workingState, map[string]interface{}{
-			"inspection_id":      inspectionRecord.InspectionID,
-			"thread_id":          inspectionRecord.ThreadID,
-			"review_status":      inspectionRecord.Review.Status,
-			"lineage_status":     inspectionRecord.Lineage.Status,
-			"derivation_outcome": inspectionRecord.DerivationOutcome,
-			"operation_id":       validatedRequest.OperationID,
-			"reason":             secrets.RedactText(strings.TrimSpace(validatedRequest.Reason)),
-		}, mutationEvents, nil
-	})
+	backend, err := server.memoryBackendForTenant(tokenClaims.TenantID)
 	if err != nil {
 		return MemoryInspectionGovernanceResponse{}, err
 	}
-	return governanceResponse, nil
+	return backend.ReviewContinuityInspection(context.Background(), tokenClaims, inspectionID, rawRequest)
 }
 
 func (server *Server) tombstoneContinuityInspection(tokenClaims capabilityToken, inspectionID string, rawRequest MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error) {
-	return server.updateContinuityLineageStatus(tokenClaims, inspectionID, continuityLineageStatusTombstoned, rawRequest, "memory.continuity.tombstoned")
+	backend, err := server.memoryBackendForTenant(tokenClaims.TenantID)
+	if err != nil {
+		return MemoryInspectionGovernanceResponse{}, err
+	}
+	return backend.TombstoneContinuityInspection(context.Background(), tokenClaims, inspectionID, rawRequest)
 }
 
 func (server *Server) purgeContinuityInspection(tokenClaims capabilityToken, inspectionID string, rawRequest MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error) {
-	return server.updateContinuityLineageStatus(tokenClaims, inspectionID, continuityLineageStatusPurged, rawRequest, "memory.continuity.purged")
+	backend, err := server.memoryBackendForTenant(tokenClaims.TenantID)
+	if err != nil {
+		return MemoryInspectionGovernanceResponse{}, err
+	}
+	return backend.PurgeContinuityInspection(context.Background(), tokenClaims, inspectionID, rawRequest)
 }
 
 func continuitySupersessionRetentionActive(currentLineage continuityInspectionLineage, nowUTC time.Time) bool {
@@ -2447,103 +1822,6 @@ func continuitySupersessionRetentionActive(currentLineage continuityInspectionLi
 		return true
 	}
 	return nowUTC.Before(supersededAtUTC.Add(config.DefaultSupersededLineageRetentionWindow))
-}
-
-func (server *Server) updateContinuityLineageStatus(tokenClaims capabilityToken, inspectionID string, targetStatus string, rawRequest MemoryInspectionLineageRequest, auditEventType string) (MemoryInspectionGovernanceResponse, error) {
-	validatedRequest := rawRequest
-	if err := validatedRequest.Validate(); err != nil {
-		return MemoryInspectionGovernanceResponse{}, err
-	}
-
-	var governanceResponse MemoryInspectionGovernanceResponse
-	err := server.mutateContinuityMemory(tokenClaims.TenantID, tokenClaims.ControlSessionID, auditEventType, func(workingState continuityMemoryState, nowUTC time.Time) (continuityMemoryState, map[string]interface{}, continuityMutationEvents, error) {
-		inspectionRecord, found := workingState.Inspections[inspectionID]
-		if !found {
-			return workingState, nil, continuityMutationEvents{}, continuityGovernanceError{
-				httpStatus:     404,
-				responseStatus: ResponseStatusDenied,
-				denialCode:     DenialCodeContinuityInspectionNotFound,
-				reason:         "continuity inspection not found",
-			}
-		}
-		inspectionRecord = normalizeContinuityInspectionRecordMust(inspectionRecord)
-		if inspectionRecord.Lineage.Status == targetStatus {
-			governanceResponse = buildMemoryInspectionGovernanceResponse(inspectionRecord)
-			return workingState, nil, continuityMutationEvents{}, nil
-		}
-		if inspectionRecord.Lineage.Status == continuityLineageStatusPurged {
-			return workingState, nil, continuityMutationEvents{}, continuityGovernanceError{
-				httpStatus:     409,
-				responseStatus: ResponseStatusDenied,
-				denialCode:     DenialCodeContinuityGovernanceStateConflict,
-				reason:         "purged continuity lineage is terminal",
-			}
-		}
-		if inspectionRecord.Lineage.Status == continuityLineageStatusTombstoned && targetStatus == continuityLineageStatusEligible {
-			return workingState, nil, continuityMutationEvents{}, continuityGovernanceError{
-				httpStatus:     409,
-				responseStatus: ResponseStatusDenied,
-				denialCode:     DenialCodeContinuityGovernanceStateConflict,
-				reason:         "tombstoned continuity lineage cannot become eligible",
-			}
-		}
-		if targetStatus == continuityLineageStatusPurged && inspectionRecord.Lineage.Status == continuityLineageStatusTombstoned && continuitySupersessionRetentionActive(inspectionRecord.Lineage, nowUTC) {
-			return workingState, nil, continuityMutationEvents{}, continuityGovernanceError{
-				httpStatus:     409,
-				responseStatus: ResponseStatusDenied,
-				denialCode:     DenialCodeContinuityRetentionWindowActive,
-				reason:         "superseded continuity lineage remains under retention and cannot be purged yet",
-			}
-		}
-		updatedLineage := inspectionRecord.Lineage
-		updatedLineage.Status = targetStatus
-		updatedLineage.ChangedAtUTC = nowUTC.Format(time.RFC3339Nano)
-		updatedLineage.Reason = secrets.RedactText(strings.TrimSpace(validatedRequest.Reason))
-		updatedLineage.OperationID = validatedRequest.OperationID
-		inspectionRecord.Lineage = updatedLineage
-		inspectionRecord.Outcome = inspectionRecord.DerivationOutcome
-		stampContinuityDerivedArtifactsExcluded(&workingState, inspectionRecord, nowUTC)
-		workingState.Inspections[inspectionID] = inspectionRecord
-		governanceResponse = buildMemoryInspectionGovernanceResponse(inspectionRecord)
-		mutationEvents := continuityMutationEvents{
-			Continuity: []continuityAuthoritativeEvent{{
-				SchemaVersion: continuityMemorySchemaVersion,
-				EventID:       "continuity_lineage_" + validatedRequest.OperationID,
-				EventType:     "continuity_inspection_lineage_updated",
-				CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Actor:         tokenClaims.ControlSessionID,
-				Scope:         inspectionRecord.Scope,
-				InspectionID:  inspectionRecord.InspectionID,
-				ThreadID:      inspectionRecord.ThreadID,
-				Lineage:       ptrContinuityInspectionLineage(inspectionRecord.Lineage),
-			}},
-			Profile: []continuityProfileEvent{{
-				SchemaVersion: continuityMemorySchemaVersion,
-				EventID:       "profile_lineage_" + validatedRequest.OperationID,
-				EventType:     "continuity_lineage_recorded",
-				CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Actor:         tokenClaims.ControlSessionID,
-				InspectionID:  inspectionRecord.InspectionID,
-				ThreadID:      inspectionRecord.ThreadID,
-				GoalType:      firstDerivedGoalType(workingState, inspectionRecord),
-				GoalFamilyID:  firstDerivedGoalFamilyID(workingState, inspectionRecord),
-				Lineage:       ptrContinuityInspectionLineage(inspectionRecord.Lineage),
-			}},
-		}
-		return workingState, map[string]interface{}{
-			"inspection_id":      inspectionRecord.InspectionID,
-			"thread_id":          inspectionRecord.ThreadID,
-			"review_status":      inspectionRecord.Review.Status,
-			"lineage_status":     inspectionRecord.Lineage.Status,
-			"derivation_outcome": inspectionRecord.DerivationOutcome,
-			"operation_id":       validatedRequest.OperationID,
-			"reason":             secrets.RedactText(strings.TrimSpace(validatedRequest.Reason)),
-		}, mutationEvents, nil
-	})
-	if err != nil {
-		return MemoryInspectionGovernanceResponse{}, err
-	}
-	return governanceResponse, nil
 }
 
 func stampContinuityDerivedArtifactsExcluded(workingState *continuityMemoryState, inspectionRecord continuityInspectionRecord, changedAt time.Time) {
