@@ -476,12 +476,12 @@ Rules:
   `todo` capability routes
 - supported production-parity retrieval now uses the real
   `/v1/memory/discover` and `/v1/memory/recall` routes
-- the current checked-in `61`-fixture scored set no longer needs projected-node
+- the current checked-in `70`-fixture scored set no longer needs projected-node
   fallback, so the honest continuity parity baseline now runs with
   `retrieval_path_mode=control_plane_memory_routes` and
   `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
-- the latest honest continuity rerun is now `61/61` overall with `8/8` on
-  poisoning, `34/34` on contradiction, `13/13` on task resumption, and `6/6`
+- the latest honest continuity rerun is now `70/70` overall with `14/14` on
+  poisoning, `34/34` on contradiction, `13/13` on task resumption, and `9/9`
   on safety precision
 - that recovery came from product changes behind the real control-plane path,
   not from restoring projected-node benchmark shortcuts
@@ -490,6 +490,9 @@ Rules:
 - the move from `57/61` to `61/61` came from fixing benchmark governance
   evaluation for continuity-style candidates so the scored run now reflects the
   real TCL policy decision instead of an explicit-write validator mismatch
+- the later move from the `61`-fixture snapshot to the `70`-fixture snapshot
+  came from broadening the poisoning and safety matrix, not from a retrieval
+  shortcut or a weakened fairness rule
 
 If a shortcut path remains for fixture speed, it should be labeled as such in
 code and output.

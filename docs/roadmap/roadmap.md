@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-09
+**Last updated:** 2026-04-10
 
 # Loopgate roadmap
 
@@ -146,10 +146,11 @@ Next lift:
   `todo` workflow capability execution inside isolated Loopgate runtimes
   instead of direct in-process calls into `rememberMemoryFact(...)`. Supported
   production-parity retrieval now runs through `/v1/memory/discover` and
-  `/v1/memory/recall`, and the current checked-in `61`-fixture scored set no
+  `/v1/memory/recall`, and the current checked-in `70`-fixture scored set no
   longer needs projected-node fallback.
-  The current honest continuity rerun is `61/61` overall with `8/8` on
-  poisoning, `34/34` on contradiction, and `13/13` on task resumption.
+  The current honest continuity rerun is `70/70` overall with `14/14` on
+  poisoning, `34/34` on contradiction, `13/13` on task resumption, and `9/9`
+  on safety precision.
   That gain came from product changes behind the real control-plane path,
   not from restoring projected-node benchmark shortcuts.
   The final step from `57/61` to `61/61` came from fixing benchmark candidate
@@ -158,15 +159,16 @@ Next lift:
   mismatch.
   The checked-in benchmark matrix has since expanded to `70` fixtures
   (`14` poisoning, `34` contradiction, `13` task, `9` safety precision) and
-  now tracks poisoning subfamilies explicitly. See
+  now tracks poisoning subfamilies explicitly. The preserved `61`-fixture
+  honest rerun remains useful as the pre-expansion baseline, but the current
+  scoreboard is the `2026-04-10` `70`-fixture rerun. See
   `docs/roadmap/2026-04-10-memorybench-matrix-and-relational-hints.md` for the
   executable matrix buckets and the planned RAG/hybrid evidence buckets that
   are still missing.
-  before packets enter backend-owned observed continuity state, so first-class
-  provenance refs only survive on supported server-loaded paths. Backend-owned
-  observed packets now also allowlist source-ref kinds, so new provenance
-  sources have to be added intentionally rather than arriving as arbitrary
-  strings in observed continuity state.
+  Backend-owned observed packets now also allowlist source-ref kinds, so
+  first-class provenance refs only survive on supported server-loaded paths,
+  and new provenance sources have to be added intentionally rather than
+  arriving as arbitrary strings in observed continuity state.
   Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.

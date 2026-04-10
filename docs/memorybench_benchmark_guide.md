@@ -46,15 +46,16 @@ Current skeptical fixture count:
 - `13` task resumption
 - `9` safety precision
 
-The last scored honest rerun in
+The latest scored honest rerun in
 [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
-still reflects the older `61`-fixture matrix. The checked-in fixture surface is
-ahead of the last scored rerun until the new matrix is rerun.
+now reflects the expanded `70`-fixture matrix. The preserved `61`-fixture
+snapshot remains in the same file as the last pre-expansion baseline.
 
 Current promoted running scoreboard:
 
-- the stable `61`-fixture scored matrix in
+- the current `70`-fixture scored matrix in
   [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
+- the preserved `61`-fixture honest rerun in the same file
 - the older `46`-fixture snapshot is historical only
 - maintainer-only internal notes still live in
   `maintainer documentation checkout (memorybench internal report; outside this repository)`,
@@ -74,6 +75,7 @@ The core harness logic lives in:
 The live scoreboard lives in:
 
 - [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
+- [memorybench-honest-rerun-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-honest-rerun-2026-04-10.md)
 
 The internal methodology report lives in (maintainer checkout, not in clone):
 
@@ -129,7 +131,7 @@ Do not blend scored continuity runs and debug continuity runs into one number.
   - supported seeded scenarios are retrieved through the real
     `/v1/memory/discover` and `/v1/memory/recall` routes inside isolated
     Loopgate runtimes
-  - the current checked-in `61`-fixture scored set no longer needs projected
+  - the current checked-in `70`-fixture scored set no longer needs projected
     fixture ingest, so the honest continuity parity baseline is now a pure
     control-plane memory and workflow run
   - mixed control-plane plus projected-node SQLite remains a contingency for
@@ -467,7 +469,8 @@ env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
 Current policy-matched read:
 
 - see [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
-  for the current promoted `61`-fixture policy-matched numbers
+  for the current promoted `70`-fixture policy-matched numbers and the
+  preserved `61`-fixture pre-expansion baseline
 - see `maintainer documentation checkout (memorybench internal report; outside this repository)`
   for the historical chronology, intermediate ablations, and tuned versus
   untuned continuity-control notes that are not part of the promoted scoreboard

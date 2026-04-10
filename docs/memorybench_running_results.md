@@ -6,14 +6,16 @@ This file tracks the current fair benchmark comparisons between `continuity_tcl`
 `rag_baseline`, and `rag_stronger` using the checked-in fixture set from
 `internal/memorybench/fixtures.go`.
 
-The checked-in fixture set has moved ahead of the last scored honest rerun.
-The `2026-04-09` run ids below still describe the last truthful rerun record,
-but they are a `61`-fixture snapshot rather than the current expanded
-`70`-fixture matrix.
+The current truthful baseline is the `2026-04-10` honest rerun set on the
+expanded `70`-fixture matrix. The prior `2026-04-09` honest rerun set is
+preserved below as the last `61`-fixture snapshot.
 
 These numbers are a running engineering record, not a white paper. Treat them
 as current benchmark evidence, tied to the exact fixture families and run IDs
 listed here.
+
+For the change-by-change rerun narrative, see
+[Memorybench Honest Rerun Report (2026-04-10)](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-honest-rerun-2026-04-10.md).
 
 This file is conservative on promotion. A benchmark result is headline-eligible
 only if it is a `scored_fixture_run` and its top-level `run_metadata.json`
@@ -58,24 +60,24 @@ Promotion requirements for this headline were:
 This promoted headline uses the hardened `61`-fixture scored matrix, but the
 published numbers predate both the fully control-plane continuity seeding and
 discover/recall migration and the later fixture-matrix expansion. Treat them as
-historical only. The current truthful rerun baseline is the `2026-04-09`
-honest rerun set below, which is still a `61`-fixture snapshot pending rerun on
-the expanded matrix.
+historical only. The current truthful rerun baseline is the `2026-04-10`
+honest rerun set below. The `2026-04-09` honest rerun set is preserved as the
+last `61`-fixture snapshot.
 
-## Current honest rerun set (not yet promoted)
+## Current honest rerun set (70-fixture matrix)
 
 Fresh post-hardening reruns:
 
-- continuity: `continuity_fixture_parity_20260409_honest_v7`
+- continuity: `continuity_fixture_parity_20260410_honest_v8`
   - `retrieval_path_mode=control_plane_memory_routes`
   - `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
-- continuity synthetic control: `continuity_fixture_synth_20260409_honest_v7`
+- continuity synthetic control: `continuity_fixture_synth_20260410_honest_v8`
   - `retrieval_path_mode=projected_node_sqlite_backend`
   - `seed_path_mode=synthetic_projected_nodes`
-- RAG baseline: `rag_baseline_fixture_20260409_honest_v2`
+- RAG baseline: `rag_baseline_fixture_20260410_honest_v3`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
-- stronger RAG: `rag_stronger_fixture_20260409_honest_v2`
+- stronger RAG: `rag_stronger_fixture_20260410_honest_v3`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
 
@@ -83,9 +85,9 @@ Current counts from that rerun set:
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `61/61` | `8/8` | `34/34` | `13/13` | `6/6` |
-| `rag_baseline` (`candidate_governance=continuity_tcl`) | `33/61` | `8/8` | `19/34` | `0/13` | `6/6` |
-| `rag_stronger` (`candidate_governance=continuity_tcl`) | `29/61` | `8/8` | `15/34` | `0/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`) | `70/70` | `14/14` | `34/34` | `13/13` | `9/9` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `42/70` | `14/14` | `19/34` | `0/13` | `9/9` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `38/70` | `14/14` | `15/34` | `0/13` | `9/9` |
 
 Useful read:
 
@@ -93,40 +95,74 @@ Useful read:
   moving those scenarios onto real `todo` workflow state and real discover/recall
 - the current honest control-plane continuity run is now `34/34` on
   contradiction
-- the current honest control-plane continuity run is now also `8/8` on
-  poisoning, with every poisoning candidate classified as `quarantine`
+- the current honest control-plane continuity run is now also `14/14` on
+  poisoning and `9/9` on safety precision
 - continuity answer-in-query is now `7/7`, versus `0/7` for both governed RAG
   comparators
 - continuity slot-only is now `27/27`, versus `19/27` for governed
   `rag_baseline` and `15/27` for governed `rag_stronger`
-- the continuity edge is now large again on the honest benchmark, which means
-  the recent gain came from product retrieval and supersession behavior rather
-  than from benchmark routing shortcuts
-- the jump from `57/61` to `61/61` is a benchmark-governance honesty fix, not a
-  retrieval-path change: the benchmark now evaluates continuity-style poisoning
-  candidates through TCL policy instead of misclassifying them as explicit-write
-  validator failures
-- the benchmark-local slot-preference wrapper was inert on this run because the
-  default scored fixture set stayed entirely on control-plane routes
-- this rerun set is the current truthful baseline even though it is not yet
-  promoted as the new headline
+- the fixture expansion increased the measured policy surface without changing
+  the current contradiction or task-resumption story
+- poisoning remains a tie once governance is policy-matched across all three
+  backends; the differentiator is still contradiction and task continuity
+- the synthetic control remains below the product path only on contradiction,
+  which continues to support the claim that the control-plane memory path is
+  buying real truth-maintenance behavior rather than benchmark-local lookup tricks
 
 Current rerun artifacts:
 
-- Summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/summary.csv`
-- Family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/family_summary.csv`
-- Subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/subfamily_summary.csv`
-- Synthetic summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260409_honest_v7/summary.csv`
-- Synthetic family summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260409_honest_v7/family_summary.csv`
-- Synthetic subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260409_honest_v7/subfamily_summary.csv`
-- RAG baseline summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/summary.csv`
-- RAG baseline family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/family_summary.csv`
-- RAG baseline subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/subfamily_summary.csv`
-- Stronger RAG summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v2/summary.csv`
-- Stronger RAG family summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v2/family_summary.csv`
-- Stronger RAG subfamily summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v2/subfamily_summary.csv`
+- Summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260410_honest_v8/summary.csv`
+- Family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260410_honest_v8/family_summary.csv`
+- Subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260410_honest_v8/subfamily_summary.csv`
+- Synthetic summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260410_honest_v8/summary.csv`
+- Synthetic family summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260410_honest_v8/family_summary.csv`
+- Synthetic subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260410_honest_v8/subfamily_summary.csv`
+- RAG baseline summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260410_honest_v3/summary.csv`
+- RAG baseline family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260410_honest_v3/family_summary.csv`
+- RAG baseline subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260410_honest_v3/subfamily_summary.csv`
+- Stronger RAG summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260410_honest_v3/summary.csv`
+- Stronger RAG family summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260410_honest_v3/family_summary.csv`
+- Stronger RAG subfamily summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260410_honest_v3/subfamily_summary.csv`
 
-Current live summaries:
+Previous honest `61`-fixture artifacts remain preserved:
+
+- `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/*`
+- `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260409_honest_v7/*`
+- `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/*`
+- `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v2/*`
+
+## Preserved prior honest rerun set (61-fixture matrix)
+
+The earlier honest rerun remains worth keeping because it was the last scored
+snapshot before the poisoning and safety matrix expansion. The raw `/tmp`
+artifacts may expire, so the scoreboard is preserved here in repo docs.
+
+Preserved `2026-04-09` run IDs:
+
+- continuity parity: `continuity_fixture_parity_20260409_honest_v7`
+- continuity synthetic control: `continuity_fixture_synth_20260409_honest_v7`
+- RAG baseline: `rag_baseline_fixture_20260409_honest_v2`
+- stronger RAG: `rag_stronger_fixture_20260409_honest_v2`
+
+Preserved `61`-fixture counts:
+
+| Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
+| --- | --- | --- | --- | --- | --- |
+| `continuity_tcl` (`production_write_parity`) | `61/61` | `8/8` | `34/34` | `13/13` | `6/6` |
+| `continuity_tcl` (`synthetic_projected_nodes`) | `54/61` | `8/8` | `27/34` | `13/13` | `6/6` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `33/61` | `8/8` | `19/34` | `0/13` | `6/6` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `29/61` | `8/8` | `15/34` | `0/13` | `6/6` |
+
+Read:
+
+- the `70`-fixture rerun preserved the same contradiction and task-resumption
+  shape while broadening poisoning from `8` to `14` fixtures and safety
+  precision from `6` to `9`
+- the preserved `61`-fixture snapshot remains the right before/after reference
+  when tracking what the matrix expansion changed versus what the product path
+  already proved
+
+Historical `2026-04-03` live summaries:
 
 - Continuity parity summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/summary.csv`
 - Continuity parity family summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/family_summary.csv`
@@ -143,27 +179,27 @@ Current live summaries:
 
 Policy-matched fairness reruns:
 
-- `continuity_fixture_parity_20260409_honest_v7`
-- `rag_baseline_fixture_20260409_honest_v2`
-- `rag_stronger_fixture_20260409_honest_v2`
+- `continuity_fixture_parity_20260410_honest_v8`
+- `rag_baseline_fixture_20260410_honest_v3`
+- `rag_stronger_fixture_20260410_honest_v3`
 
 Policy-matched summaries:
 
-- Continuity governed family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/family_summary.csv`
-- Continuity governed subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/subfamily_summary.csv`
-- RAG governed family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/family_summary.csv`
-- RAG governed subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/subfamily_summary.csv`
-- Stronger RAG governed family summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v2/family_summary.csv`
-- Stronger RAG governed subfamily summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v2/subfamily_summary.csv`
+- Continuity governed family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260410_honest_v8/family_summary.csv`
+- Continuity governed subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260410_honest_v8/subfamily_summary.csv`
+- RAG governed family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260410_honest_v3/family_summary.csv`
+- RAG governed subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260410_honest_v3/subfamily_summary.csv`
+- Stronger RAG governed family summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260410_honest_v3/family_summary.csv`
+- Stronger RAG governed subfamily summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260410_honest_v3/subfamily_summary.csv`
 
 ### Current policy-matched headline numbers
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`, honest control-plane baseline) | `61/61` | `8/8` | `34/34` | `13/13` | `6/6` |
-| `continuity_tcl` (`synthetic_projected_nodes`, honest retrieval-only control) | `54/61` | `8/8` | `27/34` | `13/13` | `6/6` |
-| `rag_baseline` (`candidate_governance=continuity_tcl`) | `33/61` | `8/8` | `19/34` | `0/13` | `6/6` |
-| `rag_stronger` (`candidate_governance=continuity_tcl`) | `29/61` | `8/8` | `15/34` | `0/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`, honest control-plane baseline) | `70/70` | `14/14` | `34/34` | `13/13` | `9/9` |
+| `continuity_tcl` (`synthetic_projected_nodes`, honest retrieval-only control) | `63/70` | `14/14` | `27/34` | `13/13` | `9/9` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `42/70` | `14/14` | `19/34` | `0/13` | `9/9` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `38/70` | `14/14` | `15/34` | `0/13` | `9/9` |
 
 Poisoning footnote:
 
@@ -172,7 +208,7 @@ Poisoning footnote:
   scoped retrieval over an isolated continuity store
 - the current fairness tables in this file use
   `candidate_governance=continuity_tcl` for the RAG comparators too, so the
-  `8/8` poisoning tie is the meaningful current comparison
+  `14/14` poisoning tie is the meaningful current comparison
 - historical default-RAG runs that used permissive benchmark governance remain
   useful only as harness history, not as the current fair comparison
 - read this bucket as a governance-plus-retrieval differential under the
@@ -205,9 +241,9 @@ for all compared runs:
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `61/61` | `8/8` | `34/34` | `13/13` | `6/6` |
-| `rag_baseline` | `33/61` | `8/8` | `19/34` | `0/13` | `6/6` |
-| `rag_stronger` | `29/61` | `8/8` | `15/34` | `0/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`) | `70/70` | `14/14` | `34/34` | `13/13` | `9/9` |
+| `rag_baseline` | `42/70` | `14/14` | `19/34` | `0/13` | `9/9` |
+| `rag_stronger` | `38/70` | `14/14` | `15/34` | `0/13` | `9/9` |
 
 Read:
 
@@ -239,10 +275,10 @@ Policy-matched contradiction subfamilies:
 
 | Family | Continuity | RAG baseline | Delta vs baseline | Stronger RAG | Delta vs stronger |
 | --- | --- | --- | --- | --- | --- |
-| `memory_poisoning` | `8/8` | `8/8` | `0` | `8/8` | `0` |
+| `memory_poisoning` | `14/14` | `14/14` | `0` | `14/14` | `0` |
 | `memory_contradiction` | `34/34` | `19/34` | `+15` | `15/34` | `+19` |
 | `task_resumption` | `13/13` | `0/13` | `+13` | `0/13` | `+13` |
-| `memory_safety_precision` | `6/6` | `6/6` | `0` | `6/6` | `0` |
+| `memory_safety_precision` | `9/9` | `9/9` | `0` | `9/9` | `0` |
 
 ### Headline operational snapshot
 
@@ -266,7 +302,7 @@ Task-resumption family summary with latency and prompt burden surfaced together:
 - the slot-only contradiction split is the most informative part of the current
   scoreboard:
   - continuity parity `27/27`
-  - continuity synthetic control `12/27`
+  - continuity synthetic control `20/27`
   - rag baseline `19/27`
   - rag stronger `15/27`
 - the answer-in-query split pulls the other way:
@@ -360,15 +396,15 @@ Ablation read:
   under the benchmark model.
 - The poisoning bucket is especially governance-heavy. The current policy-matched
   fairness reruns now put both continuity and RAG behind the same TCL governance
-  adapter, which is why all three backends tie at `8/8` on the current fixture
-  set. Default RAG runs still use a permissive benchmark ingest model.
+  adapter, which is why all three backends tie at `14/14` on the current
+  fixture set. Default RAG runs still use a permissive benchmark ingest model.
 - That makes poisoning a useful policy-differential measure under this harness,
   not a universal proof that all production RAG stacks would surface or block
   the same attacks after indexing.
 - The interleaved-chain slice originally exposed RAG reproducibility problems;
-  the promoted `61`-fixture snapshot uses rerun-confirmed stable results only
+  the promoted historical `61`-fixture snapshot uses rerun-confirmed stable results only
   after collection isolation, scoped retrieval, and scoped overfetch fixes.
-- The honest `2026-04-09` control-plane continuity run now clears the current
+- The honest `2026-04-10` control-plane continuity run now clears the current
   `34`-fixture contradiction family, but that does not remove the need for
   future adversarial expansion; this is still a controlled fixture set, not a
   proof against natural-history drift.
@@ -391,11 +427,21 @@ For the benchmark-history narrative and fairness-fix chronology, also see:
 - `poisoning.paraphrased_authority_bypass_family.v1`
 - `poisoning.paraphrased_secret_exfil_family.v1`
 - `poisoning.long_history_benign_malicious_interleaving.v1`
+- `poisoning.delayed_trigger_review_waiver.v1`
+- `poisoning.markdown_checklist_secret_exfil.v1`
+- `poisoning.yaml_frontmatter_authority_spoof.v1`
+- `poisoning.session_cookie_exfil_family.v1`
+- `poisoning.deferred_activation_signing_key_handoff.v1`
+- `poisoning.approval_waiver_client_secret_note.v1`
 
 Guard families:
 
 - `safety_precision.override_review_note_guard.v1`
 - `safety_precision.secret_rotation_guard.v1`
+- `safety_precision.interleaved_release_history_note.v1`
+- `safety_precision.markdown_release_checklist.v1`
+- `safety_precision.yaml_rotation_runbook.v1`
+- `safety_precision.review_waiver_denied_postmortem.v1`
 
 ### Contradiction / truth maintenance
 
@@ -463,6 +509,9 @@ fixture set.
 - `safety_precision.override_review_note_guard.v1`
 - `safety_precision.secret_rotation_guard.v1`
 - `safety_precision.interleaved_release_history_note.v1`
+- `safety_precision.markdown_release_checklist.v1`
+- `safety_precision.yaml_rotation_runbook.v1`
+- `safety_precision.review_waiver_denied_postmortem.v1`
 
 ## Reproduction commands
 
