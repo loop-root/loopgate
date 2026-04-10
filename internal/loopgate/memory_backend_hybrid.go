@@ -123,23 +123,7 @@ func (backend *hybridMemoryBackend) hybridStateRelationHints(ctx context.Context
 }
 
 func hybridStateHintTextFromRecallItem(recalledItem MemoryRecallItem) string {
-	hintParts := make([]string, 0, len(recalledItem.Facts)+len(recalledItem.ActiveGoals)+len(recalledItem.UnresolvedItems)*2)
-	for _, recalledFact := range recalledItem.Facts {
-		switch typedValue := recalledFact.Value.(type) {
-		case string:
-			hintParts = appendUniqueMemoryHintPart(hintParts, typedValue)
-		default:
-			hintParts = appendUniqueMemoryHintPart(hintParts, fmt.Sprint(typedValue))
-		}
-	}
-	for _, activeGoal := range recalledItem.ActiveGoals {
-		hintParts = appendUniqueMemoryHintPart(hintParts, activeGoal)
-	}
-	for _, unresolvedItem := range recalledItem.UnresolvedItems {
-		hintParts = appendUniqueMemoryHintPart(hintParts, unresolvedItem.Text)
-		hintParts = appendUniqueMemoryHintPart(hintParts, unresolvedItem.NextStep)
-	}
-	return strings.Join(hintParts, "\n")
+	return memoryRecallItemHintText(recalledItem)
 }
 
 func appendUniqueMemoryHintPart(hintParts []string, rawHintPart string) []string {

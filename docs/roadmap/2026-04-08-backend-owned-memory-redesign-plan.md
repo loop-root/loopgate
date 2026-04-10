@@ -113,6 +113,10 @@ Completed slices in the current refactor:
 - runtime config now accepts `memory.backend=hybrid`, which keeps
   `continuity_tcl` authoritative for writes and recall while adding bounded
   RAG evidence sidecars on discover through the same backend-owned seam
+- the read contract now has an explicit stored-artifact lane:
+  wake state stays small and current-state focused, while
+  `/v1/memory/artifacts/lookup` plus `/v1/memory/artifacts/get` expose bounded
+  stored continuity artifacts without inflating every prompt
 - the benchmark harness now has a checked-in `long_horizon_matrix` slice that
   explicitly measures over-time contradiction suppression and task resumption;
   current `2026-04-10` runs are `8/8` for continuity parity, `8/8` for

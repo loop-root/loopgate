@@ -188,6 +188,12 @@ Next lift:
   `8/8`, while both governed RAG-only comparators score `2/8`. That is strong
   evidence for long-horizon state continuity, not yet for long-horizon evidence
   retrieval or a fully productized hybrid prompt assembly policy.
+  The read-side contract is now also clearer: wake state stays compact and
+  current-state focused, while stored continuity artifacts can be reached
+  through explicit lookup/get routes instead of pre-expanding more memory into
+  every prompt. That keeps goals, tasks, deadlines, and stable profile facts in
+  the injected state while making broader stored context a deliberate second
+  read.
   Backend-owned observed packets now also allowlist source-ref kinds, so
   first-class provenance refs only survive on supported server-loaded paths,
   and new provenance sources have to be added intentionally rather than

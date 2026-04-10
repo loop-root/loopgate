@@ -629,6 +629,50 @@ func TestDiscoverMemory_UsesConfiguredBackend(t *testing.T) {
 	}
 }
 
+func TestLookupMemoryArtifacts_UsesConfiguredBackend(t *testing.T) {
+	stubBackend := &stubMemoryBackend{
+		name: "stub_backend",
+		discoverResponse: MemoryDiscoverResponse{
+			Scope: memoryScopeGlobal,
+			Query: "github",
+			Items: []MemoryDiscoverItem{{
+				KeyID: "rk_123",
+			}},
+		},
+		recallResponse: MemoryRecallResponse{
+			Scope:            memoryScopeGlobal,
+			MaxItems:         1,
+			MaxTokens:        256,
+			ApproxTokenCount: 12,
+			Items: []MemoryRecallItem{{
+				KeyID:           "rk_123",
+				Scope:           memoryScopeGlobal,
+				ThreadID:        "thread_123",
+				DistillateID:    "dist_123",
+				CreatedAtUTC:    time.Now().UTC().Format(time.RFC3339Nano),
+				Tags:            []string{"name"},
+				Facts:           []MemoryRecallFact{{Name: "preferred_name", Value: "Ada Jane", StateClass: memoryFactStateClassAuthoritative}},
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	}
+	server := newTestServerWithStubMemoryBackend(t, stubBackend)
+
+	lookupResponse, err := server.lookupMemoryArtifacts("", MemoryArtifactLookupRequest{Query: "github"})
+	if err != nil {
+		t.Fatalf("lookup memory artifacts: %v", err)
+	}
+	if len(lookupResponse.ArtifactRefs) != 1 {
+		t.Fatalf("expected one artifact ref, got %#v", lookupResponse)
+	}
+	if lookupResponse.ArtifactRefs[0].ArtifactRef != buildStateMemoryArtifactRef("rk_123") {
+		t.Fatalf("unexpected artifact ref: %#v", lookupResponse.ArtifactRefs[0])
+	}
+	if stubBackend.discoverCalls != 1 || stubBackend.recallCalls != 1 {
+		t.Fatalf("expected lookup to use backend discover+recall, got discover=%d recall=%d", stubBackend.discoverCalls, stubBackend.recallCalls)
+	}
+}
+
 func TestHybridMemoryDiscover_ReturnsEvidenceSidecar(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -686,6 +730,52 @@ func TestHybridMemoryDiscover_ReturnsEvidenceSidecar(t *testing.T) {
 	}
 }
 
+func TestGetMemoryArtifacts_UsesConfiguredBackend(t *testing.T) {
+	stubBackend := &stubMemoryBackend{
+		name: "stub_backend",
+		recallResponse: MemoryRecallResponse{
+			Scope:            memoryScopeGlobal,
+			MaxItems:         1,
+			MaxTokens:        2000,
+			ApproxTokenCount: 42,
+			Items: []MemoryRecallItem{{
+				KeyID:           "rk_123",
+				Scope:           memoryScopeGlobal,
+				ThreadID:        "thread_123",
+				DistillateID:    "dist_123",
+				CreatedAtUTC:    time.Now().UTC().Format(time.RFC3339Nano),
+				Facts:           []MemoryRecallFact{{Name: "preferred_name", Value: "Ada Jane", StateClass: memoryFactStateClassAuthoritative}},
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	}
+	server := newTestServerWithStubMemoryBackend(t, stubBackend)
+
+	getResponse, err := server.getMemoryArtifacts("", MemoryArtifactGetRequest{
+		ArtifactRefs: []string{buildStateMemoryArtifactRef("rk_123")},
+	})
+	if err != nil {
+		t.Fatalf("get memory artifacts: %v", err)
+	}
+	if len(getResponse.Items) != 1 || getResponse.Items[0].Ref.ArtifactRef != buildStateMemoryArtifactRef("rk_123") {
+		t.Fatalf("unexpected artifact get response: %#v", getResponse)
+	}
+	if stubBackend.recallCalls != 1 {
+		t.Fatalf("expected one backend recall call, got %d", stubBackend.recallCalls)
+	}
+}
+
+func TestGetMemoryArtifacts_RejectsUnsupportedArtifactRef(t *testing.T) {
+	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{name: "stub_backend"})
+
+	_, err := server.getMemoryArtifacts("", MemoryArtifactGetRequest{
+		ArtifactRefs: []string{"memory://evidence/ev_123"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "not a supported state artifact ref") {
+		t.Fatalf("expected unsupported artifact ref error, got %v", err)
+	}
+}
+
 func TestHybridMemoryDiscover_FailsClosedWhenEvidenceRetrievalFails(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -713,6 +803,50 @@ func TestHybridMemoryDiscover_FailsClosedWhenEvidenceRetrievalFails(t *testing.T
 	})
 	if err == nil || !strings.Contains(err.Error(), "hybrid evidence retrieval failed") {
 		t.Fatalf("expected hybrid evidence failure, got %v", err)
+	}
+}
+
+func TestMemoryArtifactLookupAndGet_ExposeRememberedFact(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	if _, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "preferred_name",
+		FactValue: "Ada Jane",
+	}); err != nil {
+		t.Fatalf("remember preferred name: %v", err)
+	}
+
+	lookupResponse, err := client.LookupMemoryArtifacts(context.Background(), MemoryArtifactLookupRequest{
+		Query: "current user profile name",
+	})
+	if err != nil {
+		t.Fatalf("lookup memory artifacts: %v", err)
+	}
+	if len(lookupResponse.ArtifactRefs) == 0 {
+		t.Fatalf("expected artifact refs from lookup, got %#v", lookupResponse)
+	}
+	if lookupResponse.ArtifactRefs[0].Kind != memoryArtifactKindState || lookupResponse.ArtifactRefs[0].StateClass != memoryFactStateClassAuthoritative {
+		t.Fatalf("expected authoritative state artifact ref, got %#v", lookupResponse.ArtifactRefs[0])
+	}
+	if !strings.Contains(lookupResponse.ArtifactRefs[0].Summary, "Ada Jane") {
+		t.Fatalf("expected summary to include remembered value, got %#v", lookupResponse.ArtifactRefs[0])
+	}
+
+	getResponse, err := client.GetMemoryArtifacts(context.Background(), MemoryArtifactGetRequest{
+		ArtifactRefs: []string{lookupResponse.ArtifactRefs[0].ArtifactRef},
+	})
+	if err != nil {
+		t.Fatalf("get memory artifacts: %v", err)
+	}
+	if len(getResponse.Items) != 1 {
+		t.Fatalf("expected one materialized artifact, got %#v", getResponse)
+	}
+	if !strings.Contains(getResponse.Items[0].ContentText, "Ada Jane") {
+		t.Fatalf("expected content text to include remembered value, got %#v", getResponse.Items[0])
+	}
+	if len(getResponse.Items[0].Facts) != 1 || getResponse.Items[0].Facts[0].Name != "preferred_name" {
+		t.Fatalf("expected remembered fact in materialized artifact, got %#v", getResponse.Items[0])
 	}
 }
 

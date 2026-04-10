@@ -409,6 +409,18 @@ func (client *Client) DiscoverMemory(ctx context.Context, request MemoryDiscover
 	return response, nil
 }
 
+func (client *Client) LookupMemoryArtifacts(ctx context.Context, request MemoryArtifactLookupRequest) (MemoryArtifactLookupResponse, error) {
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		return MemoryArtifactLookupResponse{}, err
+	}
+	var response MemoryArtifactLookupResponse
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/memory/artifacts/lookup", capabilityToken, request, &response, nil); err != nil {
+		return MemoryArtifactLookupResponse{}, err
+	}
+	return response, nil
+}
+
 func (client *Client) RecallMemory(ctx context.Context, request MemoryRecallRequest) (MemoryRecallResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
@@ -417,6 +429,18 @@ func (client *Client) RecallMemory(ctx context.Context, request MemoryRecallRequ
 	var response MemoryRecallResponse
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/memory/recall", capabilityToken, request, &response, nil); err != nil {
 		return MemoryRecallResponse{}, err
+	}
+	return response, nil
+}
+
+func (client *Client) GetMemoryArtifacts(ctx context.Context, request MemoryArtifactGetRequest) (MemoryArtifactGetResponse, error) {
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		return MemoryArtifactGetResponse{}, err
+	}
+	var response MemoryArtifactGetResponse
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/memory/artifacts/get", capabilityToken, request, &response, nil); err != nil {
+		return MemoryArtifactGetResponse{}, err
 	}
 	return response, nil
 }

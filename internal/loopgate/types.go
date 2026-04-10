@@ -160,7 +160,9 @@ type ControlPlaneClient interface {
 	LoadHavenMemoryInventory(ctx context.Context) (HavenMemoryInventoryResponse, error)
 	ResetHavenMemory(ctx context.Context, request HavenMemoryResetRequest) (HavenMemoryResetResponse, error)
 	DiscoverMemory(ctx context.Context, request MemoryDiscoverRequest) (MemoryDiscoverResponse, error)
+	LookupMemoryArtifacts(ctx context.Context, request MemoryArtifactLookupRequest) (MemoryArtifactLookupResponse, error)
 	RecallMemory(ctx context.Context, request MemoryRecallRequest) (MemoryRecallResponse, error)
+	GetMemoryArtifacts(ctx context.Context, request MemoryArtifactGetRequest) (MemoryArtifactGetResponse, error)
 	RememberMemoryFact(ctx context.Context, request MemoryRememberRequest) (MemoryRememberResponse, error)
 	SpawnMorphling(ctx context.Context, request MorphlingSpawnRequest) (MorphlingSpawnResponse, error)
 	MorphlingStatus(ctx context.Context, request MorphlingStatusRequest) (MorphlingStatusResponse, error)
@@ -1015,6 +1017,36 @@ type MemoryDiscoverResponse struct {
 	Evidence      []MemoryEvidenceItem `json:"evidence,omitempty"`
 }
 
+// MemoryArtifactRef is a bounded handle to a stored continuity artifact. It is
+// a lookup handle, not an authority grant: callers still need normal memory.read
+// access and must resolve the ref through the control plane.
+type MemoryArtifactRef struct {
+	ArtifactRef  string   `json:"artifact_ref"`
+	Kind         string   `json:"kind"`
+	StateClass   string   `json:"state_class,omitempty"`
+	Scope        string   `json:"scope,omitempty"`
+	KeyID        string   `json:"key_id,omitempty"`
+	ThreadID     string   `json:"thread_id,omitempty"`
+	DistillateID string   `json:"distillate_id,omitempty"`
+	CreatedAtUTC string   `json:"created_at_utc,omitempty"`
+	Title        string   `json:"title,omitempty"`
+	Summary      string   `json:"summary,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
+}
+
+type MemoryArtifactLookupRequest struct {
+	Scope    string `json:"scope,omitempty"`
+	Query    string `json:"query"`
+	MaxItems int    `json:"max_items,omitempty"`
+}
+
+type MemoryArtifactLookupResponse struct {
+	Scope         string              `json:"scope"`
+	Query         string              `json:"query"`
+	RetrievalMode string              `json:"retrieval_mode,omitempty"`
+	ArtifactRefs  []MemoryArtifactRef `json:"artifact_refs,omitempty"`
+}
+
 type MemoryRecallRequest struct {
 	Scope         string   `json:"scope,omitempty"`
 	Reason        string   `json:"reason,omitempty"`
@@ -1054,6 +1086,30 @@ type MemoryRecallResponse struct {
 	MaxTokens        int                `json:"max_tokens"`
 	ApproxTokenCount int                `json:"approx_token_count"`
 	Items            []MemoryRecallItem `json:"items,omitempty"`
+}
+
+type MemoryArtifactGetRequest struct {
+	Scope        string   `json:"scope,omitempty"`
+	MaxItems     int      `json:"max_items,omitempty"`
+	MaxTokens    int      `json:"max_tokens,omitempty"`
+	ArtifactRefs []string `json:"artifact_refs"`
+}
+
+type MemoryArtifactGetItem struct {
+	Ref             MemoryArtifactRef         `json:"ref"`
+	ContentText     string                    `json:"content_text,omitempty"`
+	ActiveGoals     []string                  `json:"active_goals,omitempty"`
+	UnresolvedItems []MemoryWakeStateOpenItem `json:"unresolved_items,omitempty"`
+	Facts           []MemoryRecallFact        `json:"facts,omitempty"`
+	EpistemicFlavor string                    `json:"epistemic_flavor,omitempty"`
+}
+
+type MemoryArtifactGetResponse struct {
+	Scope            string                  `json:"scope"`
+	MaxItems         int                     `json:"max_items"`
+	MaxTokens        int                     `json:"max_tokens"`
+	ApproxTokenCount int                     `json:"approx_token_count"`
+	Items            []MemoryArtifactGetItem `json:"items,omitempty"`
 }
 
 type MemoryRememberRequest struct {
@@ -1391,6 +1447,58 @@ func (memoryRecallRequest *MemoryRecallRequest) Validate() error {
 	}
 	if len(memoryRecallRequest.RequestedKeys) > memoryRecallRequest.MaxItems {
 		return fmt.Errorf("requested_keys exceeds max_items")
+	}
+	return nil
+}
+
+func (memoryArtifactLookupRequest *MemoryArtifactLookupRequest) Validate() error {
+	if strings.TrimSpace(memoryArtifactLookupRequest.Scope) == "" {
+		memoryArtifactLookupRequest.Scope = memoryScopeGlobal
+	}
+	if strings.TrimSpace(memoryArtifactLookupRequest.Query) == "" {
+		return fmt.Errorf("query is required")
+	}
+	if memoryArtifactLookupRequest.MaxItems == 0 {
+		memoryArtifactLookupRequest.MaxItems = 5
+	}
+	if memoryArtifactLookupRequest.MaxItems < 1 || memoryArtifactLookupRequest.MaxItems > 10 {
+		return fmt.Errorf("max_items must be between 1 and 10")
+	}
+	return nil
+}
+
+func (memoryArtifactGetRequest *MemoryArtifactGetRequest) Validate() error {
+	if strings.TrimSpace(memoryArtifactGetRequest.Scope) == "" {
+		memoryArtifactGetRequest.Scope = memoryScopeGlobal
+	}
+	if memoryArtifactGetRequest.MaxItems == 0 {
+		memoryArtifactGetRequest.MaxItems = 10
+	}
+	if memoryArtifactGetRequest.MaxTokens == 0 {
+		memoryArtifactGetRequest.MaxTokens = 2000
+	}
+	if memoryArtifactGetRequest.MaxItems < 1 || memoryArtifactGetRequest.MaxItems > 10 {
+		return fmt.Errorf("max_items must be between 1 and 10")
+	}
+	if memoryArtifactGetRequest.MaxTokens < 1 || memoryArtifactGetRequest.MaxTokens > 8000 {
+		return fmt.Errorf("max_tokens must be between 1 and 8000")
+	}
+	if len(memoryArtifactGetRequest.ArtifactRefs) == 0 {
+		return fmt.Errorf("artifact_refs is required")
+	}
+	seenArtifactRefs := make(map[string]struct{}, len(memoryArtifactGetRequest.ArtifactRefs))
+	for _, rawArtifactRef := range memoryArtifactGetRequest.ArtifactRefs {
+		validatedArtifactRef := strings.TrimSpace(rawArtifactRef)
+		if validatedArtifactRef == "" {
+			return fmt.Errorf("artifact_refs entries must be non-empty")
+		}
+		if _, duplicate := seenArtifactRefs[validatedArtifactRef]; duplicate {
+			return fmt.Errorf("artifact_refs contains duplicate %q", validatedArtifactRef)
+		}
+		seenArtifactRefs[validatedArtifactRef] = struct{}{}
+	}
+	if len(memoryArtifactGetRequest.ArtifactRefs) > memoryArtifactGetRequest.MaxItems {
+		return fmt.Errorf("artifact_refs exceeds max_items")
 	}
 	return nil
 }

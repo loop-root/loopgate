@@ -91,6 +91,42 @@ func (server *Server) handleMemoryDiscover(writer http.ResponseWriter, request *
 	server.writeJSON(writer, http.StatusOK, discoverResponse)
 }
 
+func (server *Server) handleMemoryArtifactLookup(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryRead) {
+		return
+	}
+	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
+	if !ok {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	var lookupRequest MemoryArtifactLookupRequest
+	if err := decodeJSONBytes(requestBodyBytes, &lookupRequest); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+	lookupResponse, err := server.lookupMemoryArtifactsForAuthenticatedSession(request.Context(), tokenClaims, lookupRequest)
+	if err != nil {
+		server.writeMemoryOperationError(writer, err)
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, lookupResponse)
+}
+
 func (server *Server) handleMemoryRecall(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
@@ -125,6 +161,42 @@ func (server *Server) handleMemoryRecall(writer http.ResponseWriter, request *ht
 		return
 	}
 	server.writeJSON(writer, http.StatusOK, recallResponse)
+}
+
+func (server *Server) handleMemoryArtifactGet(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryRead) {
+		return
+	}
+	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
+	if !ok {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	var getRequest MemoryArtifactGetRequest
+	if err := decodeJSONBytes(requestBodyBytes, &getRequest); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
+		return
+	}
+	getResponse, err := server.getMemoryArtifactsForAuthenticatedSession(request.Context(), tokenClaims, getRequest)
+	if err != nil {
+		server.writeMemoryOperationError(writer, err)
+		return
+	}
+	server.writeJSON(writer, http.StatusOK, getResponse)
 }
 
 func (server *Server) handleMemoryRemember(writer http.ResponseWriter, request *http.Request) {

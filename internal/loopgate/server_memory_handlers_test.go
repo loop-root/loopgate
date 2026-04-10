@@ -64,6 +64,12 @@ func TestMemoryReadRoutesRequireMemoryReadScope(t *testing.T) {
 	if _, err := deniedClient.DiscoverMemory(context.Background(), MemoryDiscoverRequest{Query: "name"}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected memory.read scope denial for discovery, got %v", err)
 	}
+	if _, err := deniedClient.LookupMemoryArtifacts(context.Background(), MemoryArtifactLookupRequest{Query: "name"}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected memory.read scope denial for artifact lookup, got %v", err)
+	}
+	if _, err := deniedClient.GetMemoryArtifacts(context.Background(), MemoryArtifactGetRequest{ArtifactRefs: []string{buildStateMemoryArtifactRef("rk_test")}}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected memory.read scope denial for artifact get, got %v", err)
+	}
 
 	allowedClient := NewClient(client.socketPath)
 	allowedClient.ConfigureSession("memory-reader", "memory-read-allowed", []string{"memory.read"})
@@ -75,6 +81,9 @@ func TestMemoryReadRoutesRequireMemoryReadScope(t *testing.T) {
 	}
 	if _, err := allowedClient.DiscoverMemory(context.Background(), MemoryDiscoverRequest{Query: "name"}); err != nil {
 		t.Fatalf("discover memory with memory.read: %v", err)
+	}
+	if _, err := allowedClient.LookupMemoryArtifacts(context.Background(), MemoryArtifactLookupRequest{Query: "name"}); err != nil {
+		t.Fatalf("lookup memory artifacts with memory.read: %v", err)
 	}
 }
 
