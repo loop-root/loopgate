@@ -264,6 +264,15 @@ func normalizeObservedContinuityEventRecord(observedEvent continuityObservedEven
 	return observedEvent
 }
 
+func isAllowedObservedContinuitySourceRefKind(rawSourceRefKind string) bool {
+	switch strings.TrimSpace(rawSourceRefKind) {
+	case havenThreadEventSourceKind:
+		return true
+	default:
+		return false
+	}
+}
+
 func validateObservedContinuityInspectRequest(validatedRequest ObservedContinuityInspectRequest) error {
 	if err := identifiers.ValidateSafeIdentifier("inspection_id", validatedRequest.InspectionID); err != nil {
 		return err
@@ -337,6 +346,9 @@ func validateObservedContinuityInspectRequest(validatedRequest ObservedContinuit
 		for _, sourceRef := range observedEvent.SourceRefs {
 			if strings.TrimSpace(sourceRef.Kind) == "" || strings.TrimSpace(sourceRef.Ref) == "" {
 				return fmt.Errorf("observed continuity event source_refs require kind and ref")
+			}
+			if !isAllowedObservedContinuitySourceRefKind(sourceRef.Kind) {
+				return fmt.Errorf("observed continuity event source_refs kind %q is not supported", strings.TrimSpace(sourceRef.Kind))
 			}
 		}
 	}
@@ -474,16 +486,6 @@ func buildObservedContinuityEventRecord(rawEvent ContinuityEventInput) continuit
 		EpistemicFlavor: strings.TrimSpace(rawEvent.EpistemicFlavor),
 		LedgerSequence:  rawEvent.LedgerSequence,
 		EventHash:       strings.TrimSpace(rawEvent.EventHash),
-	}
-	if len(rawEvent.SourceRefs) != 0 {
-		observedEvent.SourceRefs = make([]continuityArtifactSourceRef, 0, len(rawEvent.SourceRefs))
-		for _, rawSourceRef := range rawEvent.SourceRefs {
-			observedEvent.SourceRefs = append(observedEvent.SourceRefs, continuityArtifactSourceRef{
-				Kind:   strings.TrimSpace(rawSourceRef.Kind),
-				Ref:    strings.TrimSpace(rawSourceRef.Ref),
-				SHA256: strings.TrimSpace(rawSourceRef.SHA256),
-			})
-		}
 	}
 	if observedPayload := buildObservedContinuityEventPayload(rawEvent.Payload); observedPayload != nil {
 		observedEvent.Payload = observedPayload

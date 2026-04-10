@@ -100,6 +100,12 @@ Completed slices in the current refactor:
 - wake-state and recall facts now carry an explicit `state_class`
   (`authoritative_state` vs `derived_context`) so clients and future prompt
   assembly do not have to infer hard-vs-soft memory from source-ref heuristics
+- the raw compatibility inspect route now drops caller-supplied `source_refs`
+  before packets enter backend-owned observed continuity state, so only the
+  supported server-loaded path can persist first-class provenance refs
+- backend-owned observed packets now allowlist source-ref kinds, so any new
+  provenance source has to be added intentionally instead of arriving as an
+  arbitrary string in observed continuity state
 
 Still not finished:
 

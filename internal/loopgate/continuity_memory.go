@@ -512,6 +512,10 @@ func normalizeContinuityInspectRequest(rawRequest ContinuityInspectRequest) (Con
 		validatedRequest.Events[eventIndex].Type = strings.TrimSpace(continuityEvent.Type)
 		validatedRequest.Events[eventIndex].EpistemicFlavor = strings.TrimSpace(continuityEvent.EpistemicFlavor)
 		validatedRequest.Events[eventIndex].EventHash = strings.TrimSpace(continuityEvent.EventHash)
+		// Raw /v1/continuity/inspect is compatibility-only. Caller-supplied source_refs
+		// are not authoritative provenance, so drop them before the packet crosses into
+		// backend-owned observed continuity state.
+		validatedRequest.Events[eventIndex].SourceRefs = nil
 	}
 	if err := validatedRequest.Validate(); err != nil {
 		return ContinuityInspectRequest{}, err

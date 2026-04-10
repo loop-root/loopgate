@@ -1320,11 +1320,6 @@ func (continuityEvent ContinuityEventInput) Validate() error {
 	if strings.TrimSpace(continuityEvent.EventHash) == "" {
 		return fmt.Errorf("continuity event event_hash is required")
 	}
-	for _, sourceRef := range continuityEvent.SourceRefs {
-		if strings.TrimSpace(sourceRef.Kind) == "" || strings.TrimSpace(sourceRef.Ref) == "" {
-			return fmt.Errorf("continuity event source_refs require kind and ref")
-		}
-	}
 	return nil
 }
 

@@ -115,6 +115,52 @@ func TestInspectContinuityThread_PersistsObservedPacketInsteadOfRawRequest(t *te
 	}
 }
 
+func TestInspectContinuityThread_IgnoresCallerSuppliedSourceRefs(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	inspectRequest := testContinuityInspectRequest("inspect_ignores_raw_source_refs", "thread_ignores_raw_source_refs", "Goal text")
+	inspectRequest.Events[2].SourceRefs = []ContinuitySourceRefInput{{
+		Kind: explicitProfileFactSourceKind,
+		Ref:  "name",
+	}}
+
+	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	if err != nil {
+		t.Fatalf("inspect continuity thread: %v", err)
+	}
+	if len(inspectResponse.DerivedDistillateIDs) != 1 {
+		t.Fatalf("expected one derived distillate, got %#v", inspectResponse)
+	}
+
+	authoritativeEvents := readContinuityAuthoritativeEventsForTests(t, server)
+	if len(authoritativeEvents) != 1 {
+		t.Fatalf("expected one continuity authoritative event, got %#v", authoritativeEvents)
+	}
+	if gotSourceRefs := authoritativeEvents[0].ObservedPacket.Events[2].SourceRefs; len(gotSourceRefs) != 0 {
+		t.Fatalf("expected raw continuity source refs to be ignored before observed packet persistence, got %#v", gotSourceRefs)
+	}
+
+	derivedDistillate := testDefaultMemoryState(t, server).Distillates[inspectResponse.DerivedDistillateIDs[0]]
+	expectedFallbackRef := continuityArtifactSourceRef{
+		Kind:   "morph_ledger_event",
+		Ref:    "ledger_sequence:3",
+		SHA256: "eventhash_fact_thread_ignores_raw_source_refs",
+	}
+	var foundFallbackRef bool
+	for _, sourceRef := range derivedDistillate.SourceRefs {
+		if sourceRef.Kind == explicitProfileFactSourceKind {
+			t.Fatalf("expected caller-supplied raw source refs to stay out of derived distillate provenance, got %#v", derivedDistillate.SourceRefs)
+		}
+		if reflect.DeepEqual(sourceRef, expectedFallbackRef) {
+			foundFallbackRef = true
+		}
+	}
+	if !foundFallbackRef {
+		t.Fatalf("expected fallback ledger provenance after dropping raw source refs, got %#v", derivedDistillate.SourceRefs)
+	}
+}
+
 func TestInspectContinuityThread_RejectsMismatchedContinuityProvenance(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -1233,6 +1279,40 @@ func TestInspectObservedContinuity_PreservesProvidedFactSourceRef(t *testing.T) 
 	}
 	if derivedDistillate.Facts[0].SourceRef != havenThreadEventSourceKind+":thread_observed_fact_source_ref:3" {
 		t.Fatalf("expected provided observed source ref to persist on fact, got %#v", derivedDistillate.Facts[0])
+	}
+}
+
+func TestNormalizeObservedContinuityInspectRequest_RejectsUnsupportedSourceRefKind(t *testing.T) {
+	_, err := normalizeObservedContinuityInspectRequest(ObservedContinuityInspectRequest{
+		InspectionID: "inspect_unsupported_source_ref_kind",
+		ThreadID:     "thread_unsupported_source_ref_kind",
+		Scope:        memoryScopeGlobal,
+		SealedAtUTC:  "2026-04-09T12:00:00Z",
+		ObservedPacket: continuityObservedPacket{
+			ThreadID:    "thread_unsupported_source_ref_kind",
+			Scope:       memoryScopeGlobal,
+			SealedAtUTC: "2026-04-09T12:00:00Z",
+			Events: []continuityObservedEventRecord{{
+				TimestampUTC:    "2026-04-09T12:00:00Z",
+				SessionID:       "control-session-test",
+				Type:            "user_message",
+				Scope:           memoryScopeGlobal,
+				ThreadID:        "thread_unsupported_source_ref_kind",
+				EpistemicFlavor: "freshly_checked",
+				LedgerSequence:  1,
+				EventHash:       "unsupported_source_ref_kind_hash",
+				SourceRefs: []continuityArtifactSourceRef{{
+					Kind: "caller_claimed_ref",
+					Ref:  "thread_unsupported_source_ref_kind:1",
+				}},
+				Payload: &continuityObservedEventPayload{
+					Text: "hello there",
+				},
+			}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "source_refs kind") {
+		t.Fatalf("expected unsupported observed source ref kind denial, got %v", err)
 	}
 }
 
