@@ -913,14 +913,14 @@ func TestRememberMemoryFact_InvalidValidatedCandidateLeavesNoArtifacts(t *testin
 	if err != nil {
 		t.Fatalf("normalize remember request: %v", err)
 	}
-	validatedCandidateResult, err := server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	validatedCandidateResult, err := continuityBackend.buildValidatedRememberCandidate(validatedRequest)
 	if err != nil {
 		t.Fatalf("build validated candidate: %v", err)
 	}
 	invalidCandidateResult := validatedCandidateResult
 	invalidCandidateResult.ValidatedCandidate.AnchorKey = ""
 
-	server.buildValidatedMemoryRememberCandidate = func(MemoryRememberRequest) (memoryValidatedCandidate, error) {
+	continuityBackend.buildValidatedRememberCandidateFn = func(MemoryRememberRequest) (memoryValidatedCandidate, error) {
 		return invalidCandidateResult, nil
 	}
 

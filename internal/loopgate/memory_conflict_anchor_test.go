@@ -89,8 +89,9 @@ func TestRememberMemoryFact_CoexistsWhenTCLReturnsNoAnchor(t *testing.T) {
 func TestRememberMemoryFact_FailsClosedWhenTCLValidationFails(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
 
-	server.buildValidatedMemoryRememberCandidate = func(MemoryRememberRequest) (memoryValidatedCandidate, error) {
+	continuityBackend.buildValidatedRememberCandidateFn = func(MemoryRememberRequest) (memoryValidatedCandidate, error) {
 		return memoryValidatedCandidate{}, fmt.Errorf("synthetic validated candidate build failure")
 	}
 

@@ -30,9 +30,13 @@ func (backend *continuityTCLMemoryBackend) normalizeRememberRequest(rawRequest M
 }
 
 func (backend *continuityTCLMemoryBackend) buildValidatedRememberCandidate(validatedRequest MemoryRememberRequest) (memoryValidatedCandidate, error) {
-	// Keep the injectable builder seam for targeted TCL-failure tests, but route the
-	// live path through the backend so candidate analysis no longer depends on Server ownership.
-	return backend.server.buildValidatedMemoryRememberCandidate(validatedRequest)
+	if backend.buildValidatedRememberCandidateFn == nil {
+		return memoryValidatedCandidate{}, fmt.Errorf("continuity backend validated remember candidate builder is not configured")
+	}
+	// Keep the injectable builder seam for targeted TCL-failure tests, but keep
+	// the seam backend-owned so the live memory authority path does not depend on
+	// a Server-level hook.
+	return backend.buildValidatedRememberCandidateFn(validatedRequest)
 }
 
 func (backend *continuityTCLMemoryBackend) analyzeRememberFactCandidate(authenticatedSession capabilityToken, rawRequest MemoryRememberRequest) (analyzedRememberFactCandidate, error) {

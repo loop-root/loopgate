@@ -142,6 +142,9 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - explicit-memory denials for unsupported key families are audited with stable `memory_candidate_invalid` fields instead of falling through as silent persistence misses
   - current preference supersession still depends on a narrow secondary fallback facet table for `preference.stated_preference`; see ADR 0007
   - explicit profile/settings writes now feed `profile.timezone` and `profile.locale` through the same validated contract instead of synthetic retrieval-only anchors
+- `memory_backend_continuity_tcl_candidate.go`
+  - continuity backend now owns the explicit remember candidate-builder seam, so targeted TCL failure injection no longer depends on a `Server` hook
+  - explicit remember normalization, denial audit, and continuity fact candidate analysis live together on the backend side of the memory authority boundary
 
 - `memory_conflict_anchor_test.go`
   - Phase 1 anchor persistence and fail-closed TCL failures: `TestRememberMemoryFact_SupersedesOnlyWhenAnchorTupleMatches`, `TestRememberMemoryFact_CoexistsWhenTCLReturnsNoAnchor`, `TestRememberMemoryFact_FailsClosedWhenTCLValidationFails`

@@ -94,6 +94,9 @@ Completed slices in the current refactor:
 - the supported Haven `inspect-thread` path now binds observed event
   `session_id` to the authoritative control session id and carries the stable
   threadstore event hash on each server-owned source ref
+- the explicit remember TCL candidate-builder seam is now backend-owned instead
+  of hanging off `Server`, so targeted test injection no longer leaves server
+  ownership in the live candidate-analysis path
 
 Still not finished:
 

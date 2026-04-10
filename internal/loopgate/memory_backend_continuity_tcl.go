@@ -10,10 +10,11 @@ import (
 )
 
 type continuityTCLMemoryBackend struct {
-	server                          *Server
-	partition                       *memoryPartition
-	store                           *continuitySQLiteStore
-	productionParityMaterialization []productionParityMaterializedFactDebugRecord
+	server                            *Server
+	partition                         *memoryPartition
+	store                             *continuitySQLiteStore
+	buildValidatedRememberCandidateFn func(MemoryRememberRequest) (memoryValidatedCandidate, error)
+	productionParityMaterialization   []productionParityMaterializedFactDebugRecord
 }
 
 const continuityTCLStoreFilename = "continuity_tcl.sqlite"
@@ -31,9 +32,10 @@ func newMemoryBackendForPartition(server *Server, partition *memoryPartition) (M
 			return nil, fmt.Errorf("open continuity sqlite store: %w", err)
 		}
 		return &continuityTCLMemoryBackend{
-			server:    server,
-			partition: partition,
-			store:     sqliteStore,
+			server:                            server,
+			partition:                         partition,
+			store:                             sqliteStore,
+			buildValidatedRememberCandidateFn: buildValidatedMemoryRememberCandidate,
 		}, nil
 	case memoryBackendRAGBaseline, memoryBackendHybrid:
 		return nil, fmt.Errorf("memory backend %q is configured but not implemented yet", selectedBackendName)

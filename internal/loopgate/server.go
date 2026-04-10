@@ -47,38 +47,37 @@ type peerIdentity struct {
 }
 
 type Server struct {
-	repoRoot                              string
-	socketPath                            string
-	auditPath                             string
-	noncePath                             string
-	quarantineDir                         string
-	derivedArtifactDir                    string
-	connectionPath                        string
-	modelConnectionPath                   string
-	morphlingPath                         string
-	memoryBasePath                        string
-	memoryLegacyPath                      string
-	memoryPartitions                      map[string]*memoryPartition
-	sandboxPaths                          sandbox.Paths
-	policy                                config.Policy
-	runtimeConfig                         config.RuntimeConfig
-	goalAliases                           config.GoalAliases
-	morphlingClassPolicy                  morphlingClassPolicy
-	registry                              *toolspkg.Registry
-	checker                               *policypkg.Checker
-	now                                   func() time.Time
-	buildValidatedMemoryRememberCandidate func(MemoryRememberRequest) (memoryValidatedCandidate, error)
-	appendAuditEvent                      func(string, ledger.Event) error
-	saveMemoryState                       func(string, continuityMemoryState, config.RuntimeConfig) error
-	resolveSecretStore                    func(secrets.SecretRef) (secrets.SecretStore, error)
-	reportResponseWriteError              func(httpStatus int, cause error)
-	reportSecurityWarning                 func(eventCode string, cause error)
-	resolvePeerIdentity                   func(net.Conn) (peerIdentity, error)
-	resolveExePath                        func(int) (string, error)
-	resolveUserHomeDir                    func() (string, error)
-	expectedClientPath                    string
-	newModelClientFromConfig              func(modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error)
-	server                                *http.Server
+	repoRoot                 string
+	socketPath               string
+	auditPath                string
+	noncePath                string
+	quarantineDir            string
+	derivedArtifactDir       string
+	connectionPath           string
+	modelConnectionPath      string
+	morphlingPath            string
+	memoryBasePath           string
+	memoryLegacyPath         string
+	memoryPartitions         map[string]*memoryPartition
+	sandboxPaths             sandbox.Paths
+	policy                   config.Policy
+	runtimeConfig            config.RuntimeConfig
+	goalAliases              config.GoalAliases
+	morphlingClassPolicy     morphlingClassPolicy
+	registry                 *toolspkg.Registry
+	checker                  *policypkg.Checker
+	now                      func() time.Time
+	appendAuditEvent         func(string, ledger.Event) error
+	saveMemoryState          func(string, continuityMemoryState, config.RuntimeConfig) error
+	resolveSecretStore       func(secrets.SecretRef) (secrets.SecretStore, error)
+	reportResponseWriteError func(httpStatus int, cause error)
+	reportSecurityWarning    func(eventCode string, cause error)
+	resolvePeerIdentity      func(net.Conn) (peerIdentity, error)
+	resolveExePath           func(int) (string, error)
+	resolveUserHomeDir       func() (string, error)
+	expectedClientPath       string
+	newModelClientFromConfig func(modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error)
+	server                   *http.Server
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
 	diagnostic *loopdiag.Manager
 
@@ -384,31 +383,30 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		return nil, fmt.Errorf("load configured connections: %w", err)
 	}
 	server := &Server{
-		repoRoot:                              repoRoot,
-		socketPath:                            socketPath,
-		configStateDir:                        configStateDir,
-		auditPath:                             filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
-		noncePath:                             filepath.Join(repoRoot, "runtime", "state", "nonce_replay.json"),
-		quarantineDir:                         filepath.Join(repoRoot, "runtime", "state", "quarantine"),
-		derivedArtifactDir:                    filepath.Join(repoRoot, "runtime", "state", "derived_artifacts"),
-		connectionPath:                        filepath.Join(repoRoot, "runtime", "state", "loopgate_connections.json"),
-		modelConnectionPath:                   filepath.Join(repoRoot, "runtime", "state", "loopgate_model_connections.json"),
-		morphlingPath:                         filepath.Join(repoRoot, "runtime", "state", "loopgate_morphlings.json"),
-		morphlingKeyPath:                      filepath.Join(repoRoot, "runtime", "state", "morphling_state_key"),
-		memoryBasePath:                        filepath.Join(repoRoot, "runtime", "state", "memory"),
-		memoryPartitions:                      make(map[string]*memoryPartition),
-		memoryLegacyPath:                      filepath.Join(repoRoot, "runtime", "state", "loopgate_memory.json"),
-		sandboxPaths:                          sandbox.PathsForRepo(repoRoot),
-		policy:                                policy,
-		runtimeConfig:                         runtimeConfig,
-		goalAliases:                           goalAliases,
-		morphlingClassPolicy:                  morphlingClassPolicy,
-		registry:                              registry,
-		checker:                               policypkg.NewChecker(policy),
-		now:                                   time.Now,
-		buildValidatedMemoryRememberCandidate: buildValidatedMemoryRememberCandidate,
-		saveMemoryState:                       nil,
-		resolveSecretStore:                    secrets.NewStoreForRef,
+		repoRoot:             repoRoot,
+		socketPath:           socketPath,
+		configStateDir:       configStateDir,
+		auditPath:            filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
+		noncePath:            filepath.Join(repoRoot, "runtime", "state", "nonce_replay.json"),
+		quarantineDir:        filepath.Join(repoRoot, "runtime", "state", "quarantine"),
+		derivedArtifactDir:   filepath.Join(repoRoot, "runtime", "state", "derived_artifacts"),
+		connectionPath:       filepath.Join(repoRoot, "runtime", "state", "loopgate_connections.json"),
+		modelConnectionPath:  filepath.Join(repoRoot, "runtime", "state", "loopgate_model_connections.json"),
+		morphlingPath:        filepath.Join(repoRoot, "runtime", "state", "loopgate_morphlings.json"),
+		morphlingKeyPath:     filepath.Join(repoRoot, "runtime", "state", "morphling_state_key"),
+		memoryBasePath:       filepath.Join(repoRoot, "runtime", "state", "memory"),
+		memoryPartitions:     make(map[string]*memoryPartition),
+		memoryLegacyPath:     filepath.Join(repoRoot, "runtime", "state", "loopgate_memory.json"),
+		sandboxPaths:         sandbox.PathsForRepo(repoRoot),
+		policy:               policy,
+		runtimeConfig:        runtimeConfig,
+		goalAliases:          goalAliases,
+		morphlingClassPolicy: morphlingClassPolicy,
+		registry:             registry,
+		checker:              policypkg.NewChecker(policy),
+		now:                  time.Now,
+		saveMemoryState:      nil,
+		resolveSecretStore:   secrets.NewStoreForRef,
 		reportResponseWriteError: func(httpStatus int, cause error) {
 			fmt.Fprintf(os.Stderr, "ERROR: response_write status=%d class=%s\n", httpStatus, secrets.LoopgateOperatorErrorClass(cause))
 		},

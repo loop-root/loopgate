@@ -132,7 +132,9 @@ Next lift:
   Haven-backed observed packets now also stamp the authoritative control
   session id and carry the stable threadstore event hash on each source ref,
   so supported continuity provenance is stronger than a bare `thread:index`
-  pointer.
+  pointer. The explicit remember TCL candidate-builder seam has also moved
+  behind the continuity backend, so the live memory-analysis path no longer
+  depends on a `Server` test hook.
   Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.
