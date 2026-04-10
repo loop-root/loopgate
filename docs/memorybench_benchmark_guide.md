@@ -134,9 +134,20 @@ Every run now writes top-level metadata:
 Before trusting a continuity result, inspect `run_metadata.json` and confirm:
 
 - `backend_name`
+- `retrieval_path_mode`
+- `seed_path_mode`
 - `continuity_seeding_mode`
 - `comparison_class`
 - `scored`
+
+Current expected values:
+
+- continuity scored runs currently use `retrieval_path_mode=projected_node_sqlite_backend`
+- `production_write_parity` should pair with `seed_path_mode=mixed_validated_writes_and_fixture_ingest`
+- `synthetic_projected_nodes` should pair with `seed_path_mode=synthetic_projected_node_seed`
+- `debug_ambient_repo` should pair with `seed_path_mode=ambient_repo_authoritative_state`
+- seeded RAG runs should pair with `retrieval_path_mode=rag_search_helper` and
+  `seed_path_mode=python_rag_fixture_seed`
 
 For production-parity continuity runs, inspect `seed_manifest.json` and confirm:
 

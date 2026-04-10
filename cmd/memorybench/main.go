@@ -178,10 +178,13 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	retrievalPathMode, seedPathMode := benchmarkPathModes(normalizedBackendName, validatedContinuitySeedingMode, ragSeedFixtures)
 	runnerConfig := memorybench.RunnerConfig{
 		RunID:                                  runID,
 		StartedAtUTC:                           nowUTC.Format(time.RFC3339Nano),
 		BackendName:                            normalizedBackendName,
+		RetrievalPathMode:                      retrievalPathMode,
+		SeedPathMode:                           seedPathMode,
 		CandidateGovernanceMode:                validatedCandidateGovernanceMode,
 		BenchmarkProfile:                       benchmarkProfile,
 		ContinuitySeedingMode:                  validatedContinuitySeedingMode,
@@ -233,6 +236,29 @@ func normalizeContinuityAblation(rawAblation string) (string, error) {
 		return trimmedAblation, nil
 	default:
 		return "", fmt.Errorf("unknown continuity ablation %q", rawAblation)
+	}
+}
+
+func benchmarkPathModes(normalizedBackendName string, continuitySeedingMode string, ragSeedFixtures bool) (string, string) {
+	switch normalizedBackendName {
+	case memorybench.BackendContinuityTCL:
+		switch continuitySeedingMode {
+		case memorybench.ContinuitySeedingModeSyntheticProjectedNodes:
+			return memorybench.RetrievalPathProjectedNodeSQLite, memorybench.SeedPathSyntheticProjectedNodes
+		case memorybench.ContinuitySeedingModeProductionWriteParity:
+			return memorybench.RetrievalPathProjectedNodeSQLite, memorybench.SeedPathMixedValidatedWritesAndFixtures
+		case memorybench.ContinuitySeedingModeDebugAmbientRepo:
+			return memorybench.RetrievalPathProjectedNodeSQLite, memorybench.SeedPathAmbientRepoState
+		default:
+			return memorybench.RetrievalPathProjectedNodeSQLite, ""
+		}
+	case memorybench.BackendRAGBaseline, memorybench.BackendRAGStronger:
+		if ragSeedFixtures {
+			return memorybench.RetrievalPathRAGSearchHelper, memorybench.SeedPathRAGFixtureCorpus
+		}
+		return memorybench.RetrievalPathRAGSearchHelper, ""
+	default:
+		return "", ""
 	}
 }
 

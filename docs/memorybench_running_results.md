@@ -12,9 +12,9 @@ listed here.
 
 This file is conservative on promotion. A benchmark result is headline-eligible
 only if it is a `scored_fixture_run` and its top-level `run_metadata.json`
-confirms the expected backend and seeding mode. `targeted_debug_run` and
-`unscored_debug_run` results are useful investigation artifacts, but they are
-not headline evidence.
+confirms the expected backend, retrieval path, and seeding mode.
+`targeted_debug_run` and `unscored_debug_run` results are useful investigation
+artifacts, but they are not headline evidence.
 
 ## Current headline run
 
@@ -30,9 +30,13 @@ Fair-run requirements:
 - `continuity_tcl` must use an explicit scored seeding mode:
   - `synthetic_projected_nodes` for the synthetic retrieval microbench
   - `production_write_parity` for authenticated write-path continuity seeding
+- continuity headline runs currently also require
+  `retrieval_path_mode=projected_node_sqlite_backend`
 - `debug_ambient_repo` is never eligible for headline comparison.
 - `rag_baseline` and `rag_stronger` must use `-rag-seed-fixtures` so they index
   the same checked-in fixture corpus before the run.
+- seeded RAG headline runs currently require
+  `retrieval_path_mode=rag_search_helper`
 - the current headline runs use `-candidate-governance backend_default`
   (continuity resolves to TCL governance; RAG resolves to permissive benchmark ingest)
 

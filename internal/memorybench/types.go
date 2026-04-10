@@ -17,6 +17,14 @@ const (
 	ContinuityAuthorityValidatedWrite     = "validated_explicit_write"
 	ContinuityAuthorityFixtureIngest      = "fixture_ingest_non_authoritative"
 	ContinuityAuthoritySyntheticProjected = "synthetic_projected_node"
+
+	RetrievalPathProjectedNodeSQLite = "projected_node_sqlite_backend"
+	RetrievalPathRAGSearchHelper     = "rag_search_helper"
+
+	SeedPathSyntheticProjectedNodes         = "synthetic_projected_node_seed"
+	SeedPathMixedValidatedWritesAndFixtures = "mixed_validated_writes_and_fixture_ingest"
+	SeedPathAmbientRepoState                = "ambient_repo_authoritative_state"
+	SeedPathRAGFixtureCorpus                = "python_rag_fixture_seed"
 )
 
 type ScenarioFilter struct {
@@ -41,6 +49,8 @@ type RunMetadata struct {
 	BenchmarkVersion                             string         `json:"benchmark_version"`
 	GitCommit                                    string         `json:"git_commit,omitempty"`
 	BackendName                                  string         `json:"backend_name"`
+	RetrievalPathMode                            string         `json:"retrieval_path_mode,omitempty"`
+	SeedPathMode                                 string         `json:"seed_path_mode,omitempty"`
 	CandidateGovernanceMode                      string         `json:"candidate_governance_mode,omitempty"`
 	BenchmarkProfile                             string         `json:"benchmark_profile,omitempty"`
 	ContinuitySeedingMode                        string         `json:"continuity_seeding_mode,omitempty"`

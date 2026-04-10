@@ -46,6 +46,8 @@ func TestFilesystemObserver_WritesStructuredArtifacts(t *testing.T) {
 		FinishedAtUTC:                          "2026-03-26T12:01:00Z",
 		BenchmarkVersion:                       "v0",
 		BackendName:                            "continuity_tcl",
+		RetrievalPathMode:                      RetrievalPathProjectedNodeSQLite,
+		SeedPathMode:                           SeedPathSyntheticProjectedNodes,
 		CandidateGovernanceMode:                CandidateGovernanceBackendDefault,
 		ContinuitySeedingMode:                  ContinuitySeedingModeSyntheticProjectedNodes,
 		ComparisonClass:                        ComparisonClassScoredFixtureRun,

@@ -13,6 +13,8 @@ type RunnerConfig struct {
 	RunID                                        string
 	StartedAtUTC                                 string
 	BackendName                                  string
+	RetrievalPathMode                            string
+	SeedPathMode                                 string
 	CandidateGovernanceMode                      string
 	BenchmarkProfile                             string
 	ContinuitySeedingMode                        string
@@ -80,6 +82,8 @@ func buildRunMetadataAndObserver(runnerConfig RunnerConfig) (RunMetadata, Observ
 		BenchmarkVersion:                       BenchmarkVersion,
 		GitCommit:                              runnerConfig.GitCommit,
 		BackendName:                            nonEmptyString(runnerConfig.BackendName, "synthetic_smoke"),
+		RetrievalPathMode:                      runnerConfig.RetrievalPathMode,
+		SeedPathMode:                           runnerConfig.SeedPathMode,
 		CandidateGovernanceMode:                nonEmptyString(runnerConfig.CandidateGovernanceMode, CandidateGovernanceBackendDefault),
 		BenchmarkProfile:                       nonEmptyString(runnerConfig.BenchmarkProfile, "smoke"),
 		ContinuitySeedingMode:                  runnerConfig.ContinuitySeedingMode,

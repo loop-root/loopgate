@@ -437,6 +437,61 @@ func TestBuildContinuityProductionParitySeeds_ManifestAuthorityInvariants(t *tes
 	}
 }
 
+func TestBenchmarkPathModes(t *testing.T) {
+	testCases := []struct {
+		name              string
+		backendName       string
+		continuitySeeding string
+		ragSeedFixtures   bool
+		wantRetrievalPath string
+		wantSeedPath      string
+	}{
+		{
+			name:              "continuity_synthetic",
+			backendName:       memorybench.BackendContinuityTCL,
+			continuitySeeding: memorybench.ContinuitySeedingModeSyntheticProjectedNodes,
+			wantRetrievalPath: memorybench.RetrievalPathProjectedNodeSQLite,
+			wantSeedPath:      memorybench.SeedPathSyntheticProjectedNodes,
+		},
+		{
+			name:              "continuity_write_parity",
+			backendName:       memorybench.BackendContinuityTCL,
+			continuitySeeding: memorybench.ContinuitySeedingModeProductionWriteParity,
+			wantRetrievalPath: memorybench.RetrievalPathProjectedNodeSQLite,
+			wantSeedPath:      memorybench.SeedPathMixedValidatedWritesAndFixtures,
+		},
+		{
+			name:              "continuity_debug_ambient",
+			backendName:       memorybench.BackendContinuityTCL,
+			continuitySeeding: memorybench.ContinuitySeedingModeDebugAmbientRepo,
+			wantRetrievalPath: memorybench.RetrievalPathProjectedNodeSQLite,
+			wantSeedPath:      memorybench.SeedPathAmbientRepoState,
+		},
+		{
+			name:              "rag_seeded",
+			backendName:       memorybench.BackendRAGBaseline,
+			ragSeedFixtures:   true,
+			wantRetrievalPath: memorybench.RetrievalPathRAGSearchHelper,
+			wantSeedPath:      memorybench.SeedPathRAGFixtureCorpus,
+		},
+		{
+			name:              "rag_unseeded",
+			backendName:       memorybench.BackendRAGStronger,
+			wantRetrievalPath: memorybench.RetrievalPathRAGSearchHelper,
+			wantSeedPath:      "",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			gotRetrievalPath, gotSeedPath := benchmarkPathModes(testCase.backendName, testCase.continuitySeeding, testCase.ragSeedFixtures)
+			if gotRetrievalPath != testCase.wantRetrievalPath || gotSeedPath != testCase.wantSeedPath {
+				t.Fatalf("benchmarkPathModes() = (%q, %q), want (%q, %q)", gotRetrievalPath, gotSeedPath, testCase.wantRetrievalPath, testCase.wantSeedPath)
+			}
+		})
+	}
+}
+
 func TestContinuitySyntheticAndProductionParityPlansAreDistinct(t *testing.T) {
 	selectedScenarioFixtures, err := memorybench.SelectScenarioFixtures(memorybench.DefaultScenarioFixtures(), memorybench.ScenarioFilter{
 		ScenarioIDs: []string{"contradiction.profile_timezone_same_entity_wrong_current_probe.v1"},

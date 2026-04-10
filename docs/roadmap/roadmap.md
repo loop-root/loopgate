@@ -137,8 +137,10 @@ Next lift:
   depends on a `Server` test hook. Wake-state and recall facts now carry an
   explicit `state_class` (`authoritative_state` vs `derived_context`) so hard
   and soft memory no longer need to be inferred from precedence heuristics.
-  Raw compatibility inspect now also drops caller-supplied `source_refs`
-  outright, and the continuity memory benchmark’s `production_write_parity`
+  The removed raw continuity-inspect route used to drop caller-supplied
+  `source_refs` outright; continuity proposal provenance now only enters
+  through the supported server-loaded path. The continuity memory benchmark’s
+  `production_write_parity`
   seeding path now uses real authenticated `memory.remember` HTTP-over-UDS
   writes inside isolated Loopgate runtimes instead of direct in-process calls
   into `rememberMemoryFact(...)`. That makes the write-path benchmark claim much
