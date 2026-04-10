@@ -110,6 +110,13 @@ Completed slices in the current refactor:
   `output` tags alongside the derived value so retrieval has some context for
   same-key preview-label and different-entity disambiguation instead of
   reducing everything to value-only overlap
+- discover ranking now treats generic profile-name slot queries as
+  `preferred_name`, keeps preview-targeted queries separate from canonical slot
+  queries, and suppresses other-entity distractors when a user-scoped
+  remembered candidate is present
+- explicit preference supersession now covers the current benchmarked theme and
+  indentation wording families, so stale older values stop coexisting with the
+  latest explicit preference write
 
 Still not finished:
 
@@ -470,12 +477,13 @@ Rules:
   fallback, so the honest continuity parity baseline now runs with
   `retrieval_path_mode=control_plane_memory_routes` and
   `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
-- that more honest baseline is also harsher: the latest continuity rerun is
-  `43/61` overall with only `20/34` on contradiction, which means benchmark
-  routing is no longer the main problem
-- the remaining gap is product behavior, especially preview-label vs
-  canonical-slot separation and different-entity contamination inside derived
-  continuity state
+- the latest honest continuity rerun is now `57/61` overall with `34/34` on
+  contradiction, `13/13` on task resumption, and `6/6` on safety precision
+- that recovery came from product changes behind the real control-plane path,
+  not from restoring projected-node benchmark shortcuts
+- the benchmark-local slot-preference wrapper was inert on that run because the
+  checked-in scored fixture set used no projected-node fallback scopes
+- the remaining gap on the current fixture set is governed poisoning at `4/8`
 
 If a shortcut path remains for fixture speed, it should be labeled as such in
 code and output.

@@ -59,7 +59,7 @@ baseline is the `2026-04-09` honest rerun set below.
 
 Fresh post-hardening reruns:
 
-- continuity: `continuity_fixture_parity_20260409_honest_v4`
+- continuity: `continuity_fixture_parity_20260409_honest_v6`
   - `retrieval_path_mode=control_plane_memory_routes`
   - `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
 - RAG baseline: `rag_baseline_fixture_20260409_honest_v1`
@@ -73,7 +73,7 @@ Current counts from that rerun set:
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `43/61` | `4/8` | `20/34` | `13/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`) | `57/61` | `4/8` | `34/34` | `13/13` | `6/6` |
 | `rag_baseline` (`candidate_governance=continuity_tcl`) | `29/61` | `4/8` | `19/34` | `0/13` | `6/6` |
 | `rag_stronger` (`candidate_governance=continuity_tcl`) | `25/61` | `4/8` | `15/34` | `0/13` | `6/6` |
 
@@ -81,26 +81,25 @@ Useful read:
 
 - the honest continuity path still holds `13/13` on task resumption after
   moving those scenarios onto real `todo` workflow state and real discover/recall
-- once the contradiction family stopped using projected-node fallback, the
-  continuity contradiction score fell to `20/34`
-- continuity answer-in-query is now `3/7`, versus `0/7` for both governed RAG
+- the current honest control-plane continuity run is now `34/34` on
+  contradiction
+- continuity answer-in-query is now `7/7`, versus `0/7` for both governed RAG
   comparators
-- continuity slot-only is now `17/27`, versus `19/27` for governed
+- continuity slot-only is now `27/27`, versus `19/27` for governed
   `rag_baseline` and `15/27` for governed `rag_stronger`
-- the remaining continuity edge is real but narrower than earlier claims:
-  continuity is only `+1` over governed `rag_baseline` on contradiction while
-  still winning decisively on task resumption
-- the current contradiction misses are concentrated in preview-label vs
-  canonical-slot separation, same-entity stale preview resurfacing, and
-  different-entity contamination rather than in the old benchmark routing gap
+- the continuity edge is now large again on the honest benchmark, which means
+  the recent gain came from product retrieval and supersession behavior rather
+  than from benchmark routing shortcuts
+- the benchmark-local slot-preference wrapper was inert on this run because the
+  default scored fixture set stayed entirely on control-plane routes
 - this rerun set is the current truthful baseline even though it is not yet
   promoted as the new headline
 
 Current rerun artifacts:
 
-- Summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/summary.csv`
-- Family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/family_summary.csv`
-- Subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/subfamily_summary.csv`
+- Summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v6/summary.csv`
+- Family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v6/family_summary.csv`
+- Subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v6/subfamily_summary.csv`
 - RAG baseline summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/summary.csv`
 - RAG baseline family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/family_summary.csv`
 - RAG baseline subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/subfamily_summary.csv`
@@ -125,14 +124,14 @@ Current live summaries:
 
 Policy-matched fairness reruns:
 
-- `continuity_fixture_parity_20260409_honest_v4`
+- `continuity_fixture_parity_20260409_honest_v6`
 - `rag_baseline_fixture_20260409_honest_v1`
 - `rag_stronger_fixture_20260409_honest_v1`
 
 Policy-matched summaries:
 
-- Continuity governed family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/family_summary.csv`
-- Continuity governed subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/subfamily_summary.csv`
+- Continuity governed family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v6/family_summary.csv`
+- Continuity governed subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v6/subfamily_summary.csv`
 - RAG governed family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/family_summary.csv`
 - RAG governed subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/subfamily_summary.csv`
 - Stronger RAG governed family summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v1/family_summary.csv`
@@ -142,7 +141,7 @@ Policy-matched summaries:
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`, honest control-plane baseline) | `43/61` | `4/8` | `20/34` | `13/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`, honest control-plane baseline) | `57/61` | `4/8` | `34/34` | `13/13` | `6/6` |
 | `continuity_tcl` (`synthetic_projected_nodes`, retrieval-only control) | `42/61` | `4/8` | `19/34` | `13/13` | `6/6` |
 | `rag_baseline` (`candidate_governance=continuity_tcl`) | `29/61` | `4/8` | `19/34` | `0/13` | `6/6` |
 | `rag_stronger` (`candidate_governance=continuity_tcl`) | `25/61` | `4/8` | `15/34` | `0/13` | `6/6` |
@@ -168,30 +167,28 @@ for all compared runs:
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `43/61` | `4/8` | `20/34` | `13/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`) | `57/61` | `4/8` | `34/34` | `13/13` | `6/6` |
 | `rag_baseline` | `29/61` | `4/8` | `19/34` | `0/13` | `6/6` |
 | `rag_stronger` | `25/61` | `4/8` | `15/34` | `0/13` | `6/6` |
 
 Read:
 
 - once governance is policy-matched, poisoning becomes a tie in this harness
-- the surviving gap is mostly task resumption, not contradiction dominance
-- the honest continuity run is now only `+1` over governed `rag_baseline` on
+- the surviving gap is now contradiction plus task resumption, not just task
+  resumption
+- the honest continuity run is now `+15` over governed `rag_baseline` on
   contradiction
-- the old mixed-path contradiction headline overstated the product edge; the
-  current control-plane run exposes real product weakness rather than benchmark
-  routing noise
+- the current control-plane run recovered that gap through product changes,
+  not through benchmark routing shortcuts
 - synthetic continuity still remains retrieval-only control evidence rather
   than benchmark truth
-- remaining contradiction misses are still concentrated in preview-label vs
-  canonical-slot resolution, same-entity stale preview resurfacing, and
-  different-entity contamination
+- the only family still below perfect on continuity is poisoning at `4/8`
 
 Policy-matched contradiction subfamilies:
 
 | Backend | `answer_in_query` | `slot_only` |
 | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `3/7` | `17/27` |
+| `continuity_tcl` (`production_write_parity`) | `7/7` | `27/27` |
 | `rag_baseline` | `0/7` | `19/27` |
 | `rag_stronger` | `0/7` | `15/27` |
 
@@ -200,7 +197,7 @@ Policy-matched contradiction subfamilies:
 | Family | Continuity | RAG baseline | Delta vs baseline | Stronger RAG | Delta vs stronger |
 | --- | --- | --- | --- | --- | --- |
 | `memory_poisoning` | `4/8` | `4/8` | `0` | `4/8` | `0` |
-| `memory_contradiction` | `20/34` | `19/34` | `+1` | `15/34` | `+5` |
+| `memory_contradiction` | `34/34` | `19/34` | `+15` | `15/34` | `+19` |
 | `task_resumption` | `13/13` | `0/13` | `+13` | `0/13` | `+13` |
 | `memory_safety_precision` | `6/6` | `6/6` | `0` | `6/6` | `0` |
 
@@ -216,25 +213,21 @@ Task-resumption family summary with latency and prompt burden surfaced together:
 
 ### Current early read
 
-- `continuity_tcl` is no longer winning decisively on contradiction under the
-  honest control-plane run; it is only narrowly ahead of governed
-  `rag_baseline`
-- the benchmark is now materially more honest than the older mixed-path story,
-  which means the lower continuity score should be treated as product signal,
-  not benchmark lossage
-- the strongest continuity differentiator is still task resumption, not broad
-  contradiction superiority
-- the current contradiction misses are concentrated in preview-label vs
-  canonical-slot recovery, same-entity stale preview resurfacing, and
-  different-entity separation
+- `continuity_tcl` is now winning decisively on contradiction under the honest
+  control-plane run
+- the benchmark is still materially more honest than the older mixed-path
+  story, which means the contradiction recovery should be treated as product
+  signal rather than harness inflation
+- the strongest continuity differentiators are now contradiction plus task
+  resumption together
 - the slot-only contradiction split is the most informative part of the current
   scoreboard:
-  - continuity parity `17/27`
+  - continuity parity `27/27`
   - continuity synthetic control `12/27`
   - rag baseline `19/27`
   - rag stronger `15/27`
 - the answer-in-query split pulls the other way:
-  - continuity parity `3/7`
+  - continuity parity `7/7`
   - both RAG comparators `0/7`
 - the RAG integrity fixes made the task-resumption story harsher but more
   believable: both RAG comparators now fail the entire task-resumption family
@@ -242,8 +235,8 @@ Task-resumption family summary with latency and prompt burden surfaced together:
 - the interleaved-chain slice is promoted only after rerun-confirmed stability
   on continuity parity and both RAG comparators
 - the largest remaining differentiator is now:
-  - continuity still keeps the task-resumption edge
-  - contradiction is now closer to a tie with governed `rag_baseline`
+  - continuity keeps the contradiction edge
+  - continuity keeps the task-resumption edge
   - RAG remains much more expensive on resume-like retrieval and still does not
     recover the answer-in-query contradiction family
 
@@ -332,9 +325,10 @@ Ablation read:
 - The interleaved-chain slice originally exposed RAG reproducibility problems;
   the promoted `61`-fixture snapshot uses rerun-confirmed stable results only
   after collection isolation, scoped retrieval, and scoped overfetch fixes.
-- The honest `2026-04-09` control-plane continuity run still exposes product
-  weakness inside the `34`-fixture contradiction family, especially around
-  preview-label vs canonical-slot separation and different-entity contamination.
+- The honest `2026-04-09` control-plane continuity run now clears the current
+  `34`-fixture contradiction family, but that does not remove the need for
+  future adversarial expansion; this is still a controlled fixture set, not a
+  proof against natural-history drift.
 - Current operational metrics focus on retrieval-side burden and benchmark
   latency, not full end-to-end product runtime cost.
 

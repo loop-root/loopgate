@@ -1234,6 +1234,14 @@ func detectDiscoverSlotPreference(rawQuery string) string {
 		}
 	}
 	if len(matchedAnchorTupleKeys) == 1 {
+		if matchedAnchorTupleKeys[0] == "v1:usr_profile:identity:fact:name" &&
+			containsAnyLoopgateMemoryTag(queryTagSet, "user", "profile", "identity") &&
+			!containsAnyLoopgateMemoryTag(queryTagSet, "legal", "formal", "given", "full") {
+			// In operator-facing profile queries, "name" normally means the display/current
+			// identity slot, not a stricter legal-name field. Prefer `preferred_name` when the
+			// query stays generic, then let exact-slot lookup fall back to `name` if needed.
+			return "v1:usr_profile:identity:fact:preferred_name"
+		}
 		return matchedAnchorTupleKeys[0]
 	}
 	if len(matchedAnchorTupleKeys) == 2 &&

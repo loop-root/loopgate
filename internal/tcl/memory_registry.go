@@ -135,10 +135,17 @@ func deriveExplicitPreferenceFacet(normalizedFactValue string) string {
 	switch {
 	case strings.Contains(analysisText, "dark mode"), strings.Contains(analysisText, "light mode"):
 		return "ui_theme"
+	case strings.Contains(analysisText, "sepia mode"),
+		strings.Contains(analysisText, "theme preference"):
+		return "ui_theme"
 	case strings.Contains(analysisText, "bullet"),
 		strings.Contains(analysisText, "list"),
 		strings.Contains(analysisText, "numbered"):
 		return "response_format"
+	case strings.Contains(analysisText, "tabs for indentation"),
+		strings.Contains(analysisText, "spaces for indentation"),
+		strings.Contains(analysisText, "indentation in code blocks"):
+		return "indentation"
 	case strings.Contains(analysisText, "concise"),
 		strings.Contains(analysisText, "brief"),
 		strings.Contains(analysisText, "short"),

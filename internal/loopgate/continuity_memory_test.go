@@ -2044,6 +2044,81 @@ func TestRememberMemoryFact_SameFacetPreferenceSupersedes(t *testing.T) {
 	}
 }
 
+func TestRememberMemoryFact_ExpandedPreferenceFacetsSupersede(t *testing.T) {
+	testCases := []struct {
+		name               string
+		firstValue         string
+		secondValue        string
+		wantAnchorTupleKey string
+	}{
+		{
+			name:               "ui theme",
+			firstValue:         "light mode",
+			secondValue:        "use sepia mode as my theme preference",
+			wantAnchorTupleKey: "v1:usr_preference:stated:fact:preference:ui_theme",
+		},
+		{
+			name:               "indentation",
+			firstValue:         "tabs for indentation",
+			secondValue:        "spaces for indentation in code blocks",
+			wantAnchorTupleKey: "v1:usr_preference:stated:fact:preference:indentation",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+			firstResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+				FactKey:   "preference.stated_preference",
+				FactValue: testCase.firstValue,
+			})
+			if err != nil {
+				t.Fatalf("remember first preference: %v", err)
+			}
+			secondResponse, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+				FactKey:   "preference.stated_preference",
+				FactValue: testCase.secondValue,
+			})
+			if err != nil {
+				t.Fatalf("remember second preference: %v", err)
+			}
+			if !secondResponse.UpdatedExisting {
+				t.Fatalf("expected expanded same-facet preference to supersede, got %#v", secondResponse)
+			}
+
+			afterState := testDefaultMemoryState(t, server)
+			replacementDistillate, found := afterState.Distillates[secondResponse.DistillateID]
+			if !found {
+				t.Fatalf("expected replacement distillate %q", secondResponse.DistillateID)
+			}
+			if len(replacementDistillate.Facts) != 1 {
+				t.Fatalf("expected one fact on replacement distillate, got %#v", replacementDistillate.Facts)
+			}
+			gotAnchorVersion, gotAnchorKey := continuityFactAnchorTuple(replacementDistillate.Facts[0])
+			gotAnchorTupleKey := anchorTupleKey(gotAnchorVersion, gotAnchorKey)
+			if gotAnchorTupleKey != testCase.wantAnchorTupleKey {
+				t.Fatalf("expected anchor tuple %q, got %q fact=%#v", testCase.wantAnchorTupleKey, gotAnchorTupleKey, replacementDistillate.Facts[0])
+			}
+
+			supersededInspection := afterState.Inspections[firstResponse.InspectionID]
+			if supersededInspection.Lineage.Status != continuityLineageStatusTombstoned {
+				t.Fatalf("expected superseded inspection to be tombstoned, got %#v", supersededInspection.Lineage)
+			}
+
+			wakeState, err := client.LoadMemoryWakeState(context.Background())
+			if err != nil {
+				t.Fatalf("load wake state: %v", err)
+			}
+			preferenceValues := memoryWakeFactValues(wakeState, "preference.stated_preference")
+			if len(preferenceValues) != 1 || preferenceValues[0] != testCase.secondValue {
+				t.Fatalf("expected only replacement preference in wake state, got %#v", wakeState.RecentFacts)
+			}
+		})
+	}
+}
+
 func TestRememberMemoryFact_DifferentFacetPreferencesCoexist(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -4152,6 +4227,173 @@ func TestDetectDiscoverSlotPreference_AmbiguousQueryReturnsNoSlot(t *testing.T) 
 func TestDetectDiscoverSlotPreference_MultiSlotQueryReturnsNoSlot(t *testing.T) {
 	if gotAnchorTupleKey := detectDiscoverSlotPreference("what is the user's name and timezone"); gotAnchorTupleKey != "" {
 		t.Fatalf("expected multi-slot query to resolve no slot, got %q", gotAnchorTupleKey)
+	}
+}
+
+func TestDetectDiscoverSlotPreference_ProfileNameDefaultsToPreferredName(t *testing.T) {
+	if gotAnchorTupleKey := detectDiscoverSlotPreference("Retrieve the current user profile name from the identity slot."); gotAnchorTupleKey != "v1:usr_profile:identity:fact:preferred_name" {
+		t.Fatalf("expected generic profile-name query to prefer preferred_name, got %q", gotAnchorTupleKey)
+	}
+}
+
+func TestDiscoverMemory_ProfileNameSlotQueryPrefersAnchoredPreferredNameOverPreviewAlias(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_profile_name_anchor",
+			distillateID:  "dist_profile_name_anchor",
+			keyID:         "rk_profile_name_anchor",
+			threadID:      "thread_profile_name_anchor",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "preferred_name",
+			tags:          []string{"identity"},
+			facts: []continuityDistillateFact{{
+				Name:               "preferred_name",
+				Value:              "Ada Jane",
+				SourceRef:          explicitProfileFactSourceKind + ":preferred_name",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:identity:fact:preferred_name"),
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_profile_name_preview",
+			distillateID:  "dist_profile_name_preview",
+			keyID:         "rk_profile_name_preview",
+			threadID:      "thread_profile_name_preview",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:profile_name_preview",
+			tags:          []string{"current", "user", "profile", "preview", "display", "name", "label"},
+			facts: []continuityDistillateFact{{
+				Name:            "profile.display_name_preview_label",
+				Value:           "AJ",
+				SourceRef:       "morph_ledger_event:ledger_sequence:profile_name_preview",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "Retrieve the current user profile name from the identity slot.",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) < 2 {
+		t.Fatalf("expected anchored preferred-name and preview alias results, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_profile_name_anchor" {
+		t.Fatalf("expected anchored preferred name to rank first, got %#v", discoverResponse.Items)
+	}
+}
+
+func TestDiscoverMemory_SlotQueryPrefersNonPreviewPronounsOverPreviewBadge(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_pronouns_slot",
+			distillateID:  "dist_pronouns_slot",
+			keyID:         "rk_pronouns_slot",
+			threadID:      "thread_pronouns_slot",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:pronouns_slot",
+			tags:          []string{"current", "user", "profile", "pronouns"},
+			facts: []continuityDistillateFact{{
+				Name:            "profile.pronouns",
+				Value:           "they/them",
+				SourceRef:       "morph_ledger_event:ledger_sequence:pronouns_slot",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_pronouns_preview",
+			distillateID:  "dist_pronouns_preview",
+			keyID:         "rk_pronouns_preview",
+			threadID:      "thread_pronouns_preview",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:pronouns_preview",
+			tags:          []string{"current", "user", "profile", "preview", "badge", "pronouns"},
+			facts: []continuityDistillateFact{{
+				Name:            "profile.preview_pronouns_badge",
+				Value:           "neutral pronouns badge",
+				SourceRef:       "morph_ledger_event:ledger_sequence:pronouns_preview",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "Retrieve the current user profile pronouns from the profile slot.",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) < 2 {
+		t.Fatalf("expected pronouns slot and preview badge results, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_pronouns_slot" {
+		t.Fatalf("expected non-preview pronouns slot to outrank preview badge, got %#v", discoverResponse.Items)
+	}
+}
+
+func TestDiscoverMemory_RememberedNameQuerySuppressesOtherEntityDistractor(t *testing.T) {
+	server, partition := newDiscoverMemoryTestServer(t)
+	testSetDiscoverPartitionState(t, server, buildDiscoverMemoryTestState(
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_user_name",
+			distillateID:  "dist_user_name",
+			keyID:         "rk_user_name",
+			threadID:      "thread_user_name",
+			createdAtUTC:  "2026-03-23T12:00:00Z",
+			sourceRefKind: explicitProfileFactSourceKind,
+			sourceRefRef:  "name",
+			tags:          []string{"remembered", "current", "name"},
+			facts: []continuityDistillateFact{{
+				Name:               "name",
+				Value:              "Grace",
+				SourceRef:          explicitProfileFactSourceKind + ":name",
+				EpistemicFlavor:    "remembered",
+				SemanticProjection: testSemanticProjection("v1", "usr_profile:identity:fact:name"),
+			}},
+		},
+		discoverMemoryTestEntry{
+			inspectionID:  "inspect_other_entity_name",
+			distillateID:  "dist_other_entity_name",
+			keyID:         "rk_other_entity_name",
+			threadID:      "thread_other_entity_name",
+			createdAtUTC:  "2026-03-23T12:05:00Z",
+			sourceRefKind: "morph_ledger_event",
+			sourceRefRef:  "ledger_sequence:cat_name",
+			tags:          []string{"remembered", "current", "name", "cat", "pet"},
+			facts: []continuityDistillateFact{{
+				Name:            "name",
+				Value:           "Ada",
+				SourceRef:       "morph_ledger_event:ledger_sequence:cat_name",
+				EpistemicFlavor: "remembered",
+			}},
+		},
+	))
+
+	discoverResponse, err := server.discoverMemoryFromPartitionState(partition, MemoryDiscoverRequest{
+		Scope:    memoryScopeGlobal,
+		Query:    "Retrieve the current remembered name.",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover memory: %v", err)
+	}
+	if len(discoverResponse.Items) != 1 {
+		t.Fatalf("expected user-scoped remembered-name query to suppress other-entity distractors, got %#v", discoverResponse.Items)
+	}
+	if discoverResponse.Items[0].KeyID != "rk_user_name" {
+		t.Fatalf("expected user name to remain after distractor suppression, got %#v", discoverResponse.Items)
 	}
 }
 

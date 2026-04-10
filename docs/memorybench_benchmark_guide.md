@@ -157,6 +157,10 @@ Current expected values:
 - `production_write_parity` mixed modes remain valid only when a future fixture
   cannot yet be expressed through real `memory.remember`,
   `/v1/continuity/inspect-thread`, or `todo` workflow routes
+- the benchmark-local slot-preference wrapper applies only to synthetic
+  projected-node control runs or projected-node fallback scopes
+- when `production_write_parity` stays on pure control-plane routes with no
+  projected-node fallback scopes, that benchmark-local preference flag is inert
 - `synthetic_projected_nodes` should pair with `seed_path_mode=synthetic_projected_node_seed`
 - `debug_ambient_repo` should pair with `seed_path_mode=ambient_repo_authoritative_state`
 - seeded RAG runs should pair with `retrieval_path_mode=rag_search_helper` and
