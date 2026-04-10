@@ -85,6 +85,9 @@ Completed slices in the current refactor:
 - raw `/v1/continuity/inspect` is now an explicit compatibility path controlled
   by policy instead of a silent production default; the supported operator path
   remains server-loaded `/v1/continuity/inspect-thread`
+- server-loaded `/v1/continuity/inspect-thread` now sends a backend-owned
+  observed packet directly instead of first fabricating a raw client-style
+  continuity request
 
 Still not finished:
 

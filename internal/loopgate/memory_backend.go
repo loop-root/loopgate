@@ -20,6 +20,7 @@ type MemoryBackend interface {
 	// capability checks stay outside the backend.
 	RememberFact(ctx context.Context, authenticatedSession capabilityToken, request MemoryRememberRequest) (MemoryRememberResponse, error)
 	InspectContinuity(ctx context.Context, authenticatedSession capabilityToken, request ContinuityInspectRequest) (ContinuityInspectResponse, error)
+	InspectObservedContinuity(ctx context.Context, authenticatedSession capabilityToken, request ObservedContinuityInspectRequest) (ContinuityInspectResponse, error)
 	ReviewContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionReviewRequest) (MemoryInspectionGovernanceResponse, error)
 	TombstoneContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error)
 	PurgeContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error)
@@ -34,6 +35,19 @@ type MemoryBackend interface {
 // shape while still returning the public Loopgate wake-state response.
 type MemoryWakeStateRequest struct {
 	Scope string
+}
+
+// ObservedContinuityInspectRequest is the backend-owned request shape for continuity
+// proposals whose source packet has already been canonicalized by Loopgate. Unlike the
+// public raw continuity route, this carries a typed observed packet rather than a
+// caller-supplied event bundle.
+type ObservedContinuityInspectRequest struct {
+	InspectionID   string
+	ThreadID       string
+	Scope          string
+	SealedAtUTC    string
+	Tags           []string
+	ObservedPacket continuityObservedPacket
 }
 
 type ProjectedNodeDiscoverRequest struct {

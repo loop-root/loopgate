@@ -527,6 +527,14 @@ func (server *Server) inspectContinuityThread(tokenClaims capabilityToken, rawRe
 	return backend.InspectContinuity(context.Background(), tokenClaims, rawRequest)
 }
 
+func (server *Server) inspectObservedContinuity(tokenClaims capabilityToken, observedRequest ObservedContinuityInspectRequest) (ContinuityInspectResponse, error) {
+	backend, err := server.memoryBackendForTenant(tokenClaims.TenantID)
+	if err != nil {
+		return ContinuityInspectResponse{}, err
+	}
+	return backend.InspectObservedContinuity(context.Background(), tokenClaims, observedRequest)
+}
+
 func buildContinuityInspectResponse(inspectionRecord continuityInspectionRecord) ContinuityInspectResponse {
 	return ContinuityInspectResponse{
 		InspectionID:          inspectionRecord.InspectionID,
@@ -1758,6 +1766,24 @@ func actualContinuityPayloadBytes(events []ContinuityEventInput) int {
 }
 
 func actualContinuityPromptTokens(events []ContinuityEventInput) int {
+	tokenCount := 0
+	for _, continuityEvent := range events {
+		payloadBytes, _ := json.Marshal(continuityEvent)
+		tokenCount += approximateLoopgateTokenCount(string(payloadBytes))
+	}
+	return tokenCount
+}
+
+func actualObservedContinuityPayloadBytes(events []continuityObservedEventRecord) int {
+	totalBytes := 0
+	for _, continuityEvent := range events {
+		payloadBytes, _ := json.Marshal(continuityEvent)
+		totalBytes += len(payloadBytes)
+	}
+	return totalBytes
+}
+
+func actualObservedContinuityPromptTokens(events []continuityObservedEventRecord) int {
 	tokenCount := 0
 	for _, continuityEvent := range events {
 		payloadBytes, _ := json.Marshal(continuityEvent)

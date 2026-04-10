@@ -300,7 +300,7 @@ These routes let a client using **actor label `haven`** create or complete **Tas
 
 - **Auth:** Actor label **`haven`** + **signed body** (same pattern as `POST /v1/chat` for the current compatibility gate).
 - **Body:** `{ "thread_id": "<required>" }` — must match a thread in Loopgate’s threadstore for the session workspace (on-disk implementation under `internal/threadstore`; default paths may use a **`.haven`** segment as a historical directory name—treat as an implementation detail, not a product name).
-- **Behavior:** Maps persisted thread events to continuity inspection input server-side and runs the same inspection pipeline as other continuity proposals. If the thread has no mappable continuity rows, returns **200** with `submit_status: "skipped_no_continuity_events"`.
+- **Behavior:** Loads persisted thread events, canonicalizes them into a Loopgate-owned observed packet server-side, and runs the same inspection pipeline as other continuity proposals. If the thread has no mappable continuity rows, returns **200** with `submit_status: "skipped_no_continuity_events"`.
 - **Success (200):** `HavenContinuityInspectThreadResponse` in `internal/loopgate/types.go` (`submit_status`, optional `inspection_id`, derivation/review fields; Go identifier retained for compatibility).
 - **Product:** Clients may call this **best-effort after a completed chat turn** when the turn did **not** stop for `approval_required`, so operators get continuity proposals without shipping raw transcripts over HTTP.
 

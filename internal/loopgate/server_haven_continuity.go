@@ -20,6 +20,7 @@ const (
 
 	havenContinuitySubmitStatusSubmitted       = "submitted"
 	havenContinuitySubmitStatusSkippedNoEvents = "skipped_no_continuity_events"
+	havenThreadEventSourceKind                 = "haven_thread_event"
 )
 
 func (server *Server) handleHavenContinuityInspectThread(writer http.ResponseWriter, request *http.Request) {
@@ -118,8 +119,9 @@ func (server *Server) handleHavenContinuityInspectThread(writer http.ResponseWri
 		sessionLabel = strings.TrimSpace(tokenClaims.ControlSessionID)
 	}
 
-	continuityEvents := havenThreadstoreEventsToContinuityInputs(events, sessionLabel)
-	if len(continuityEvents) == 0 {
+	sealedAtUTC := server.now().UTC().Format(time.RFC3339Nano)
+	observedInspectRequest := buildObservedContinuityInspectRequestFromHavenThread(threadID, sessionLabel, makeHavenContinuityInspectionID(), sealedAtUTC, events)
+	if len(observedInspectRequest.ObservedPacket.Events) == 0 {
 		server.writeJSON(writer, http.StatusOK, HavenContinuityInspectThreadResponse{
 			ThreadID:     threadID,
 			SubmitStatus: havenContinuitySubmitStatusSkippedNoEvents,
@@ -127,69 +129,82 @@ func (server *Server) handleHavenContinuityInspectThread(writer http.ResponseWri
 		return
 	}
 
-	inspectionID := makeHavenContinuityInspectionID()
-	approxBytes := estimateHavenThreadPayloadBytes(events)
-	approxTokens := approxBytes / 4
-	if approxTokens < 1 {
-		approxTokens = 1
-	}
-
-	sealedAt := server.now().UTC().Format(time.RFC3339Nano)
-	inspectRequest := ContinuityInspectRequest{
-		InspectionID:       inspectionID,
-		ThreadID:           threadID,
-		Scope:              memoryScopeGlobal,
-		SealedAtUTC:        sealedAt,
-		EventCount:         len(continuityEvents),
-		ApproxPayloadBytes: approxBytes,
-		ApproxPromptTokens: approxTokens,
-		Tags:               []string{"haven", "conversation", "swift_submit"},
-		Events:             continuityEvents,
-	}
-
-	inspectResponse, inspectErr := server.inspectContinuityThread(tokenClaims, inspectRequest)
+	inspectResponse, inspectErr := server.inspectObservedContinuity(tokenClaims, observedInspectRequest)
 	if inspectErr != nil {
 		server.writeMemoryOperationError(writer, inspectErr)
 		return
 	}
 
 	server.writeJSON(writer, http.StatusOK, HavenContinuityInspectThreadResponse{
-		ThreadID:                  threadID,
-		SubmitStatus:              havenContinuitySubmitStatusSubmitted,
-		InspectionID:              inspectResponse.InspectionID,
-		Outcome:                   inspectResponse.Outcome,
-		DerivationOutcome:         inspectResponse.DerivationOutcome,
-		ReviewStatus:              inspectResponse.ReviewStatus,
-		LineageStatus:             inspectResponse.LineageStatus,
-		DerivedDistillateIDs:      inspectResponse.DerivedDistillateIDs,
-		DerivedResonateKeyIDs:     inspectResponse.DerivedResonateKeyIDs,
+		ThreadID:              threadID,
+		SubmitStatus:          havenContinuitySubmitStatusSubmitted,
+		InspectionID:          inspectResponse.InspectionID,
+		Outcome:               inspectResponse.Outcome,
+		DerivationOutcome:     inspectResponse.DerivationOutcome,
+		ReviewStatus:          inspectResponse.ReviewStatus,
+		LineageStatus:         inspectResponse.LineageStatus,
+		DerivedDistillateIDs:  inspectResponse.DerivedDistillateIDs,
+		DerivedResonateKeyIDs: inspectResponse.DerivedResonateKeyIDs,
 	})
 }
 
-func havenThreadstoreEventsToContinuityInputs(events []threadstore.ConversationEvent, sessionID string) []ContinuityEventInput {
-	result := make([]ContinuityEventInput, 0, len(events))
+func buildObservedContinuityInspectRequestFromHavenThread(threadID string, sessionID string, inspectionID string, sealedAtUTC string, events []threadstore.ConversationEvent) ObservedContinuityInspectRequest {
+	return ObservedContinuityInspectRequest{
+		InspectionID:   inspectionID,
+		ThreadID:       strings.TrimSpace(threadID),
+		Scope:          memoryScopeGlobal,
+		SealedAtUTC:    strings.TrimSpace(sealedAtUTC),
+		Tags:           []string{"haven", "conversation", "swift_submit"},
+		ObservedPacket: buildObservedContinuityPacketFromHavenThread(threadID, sessionID, sealedAtUTC, events),
+	}
+}
+
+func buildObservedContinuityPacketFromHavenThread(threadID string, sessionID string, sealedAtUTC string, events []threadstore.ConversationEvent) continuityObservedPacket {
+	result := continuityObservedPacket{
+		ThreadID:    strings.TrimSpace(threadID),
+		Scope:       memoryScopeGlobal,
+		SealedAtUTC: strings.TrimSpace(sealedAtUTC),
+		Tags:        []string{"haven", "conversation", "swift_submit"},
+		Events:      make([]continuityObservedEventRecord, 0, len(events)),
+	}
 	for eventIndex, event := range events {
-		continuityType := havenThreadstoreTypeToContinuityType(event.Type)
-		if continuityType == "" {
+		observedEvent, ok := buildObservedContinuityEventFromHavenThread(event, sessionID, eventIndex+1, threadID)
+		if !ok {
 			continue
 		}
-		payload := make(map[string]interface{}, len(event.Data))
-		for k, v := range event.Data {
-			payload[k] = v
-		}
-		result = append(result, ContinuityEventInput{
-			TimestampUTC:    event.TS,
-			SessionID:       sessionID,
-			Type:            continuityType,
-			Scope:           memoryScopeGlobal,
-			ThreadID:        event.ThreadID,
-			EpistemicFlavor: "freshly_checked",
-			LedgerSequence:  int64(eventIndex + 1),
-			EventHash:       hashHavenThreadstoreEvent(event),
-			Payload:         payload,
-		})
+		result.Events = append(result.Events, observedEvent)
 	}
 	return result
+}
+
+func buildObservedContinuityEventFromHavenThread(event threadstore.ConversationEvent, sessionID string, ledgerSequence int, threadID string) (continuityObservedEventRecord, bool) {
+	continuityType := havenThreadstoreTypeToContinuityType(event.Type)
+	if continuityType == "" {
+		return continuityObservedEventRecord{}, false
+	}
+
+	eventThreadID := strings.TrimSpace(event.ThreadID)
+	if eventThreadID == "" {
+		eventThreadID = strings.TrimSpace(threadID)
+	}
+
+	// Threadstore JSONL files are append-only, so the event index is a stable local
+	// provenance handle until Loopgate grows first-class thread event IDs.
+	return continuityObservedEventRecord{
+		TimestampUTC:    strings.TrimSpace(event.TS),
+		SessionID:       strings.TrimSpace(sessionID),
+		Type:            continuityType,
+		Scope:           memoryScopeGlobal,
+		ThreadID:        eventThreadID,
+		EpistemicFlavor: "freshly_checked",
+		LedgerSequence:  int64(ledgerSequence),
+		EventHash:       hashHavenThreadstoreEvent(event),
+		SourceRefs: []continuityArtifactSourceRef{{
+			Kind: havenThreadEventSourceKind,
+			Ref:  fmt.Sprintf("%s:%d", strings.TrimSpace(threadID), ledgerSequence),
+		}},
+		Payload: buildObservedContinuityEventPayload(event.Data),
+	}, true
 }
 
 func havenThreadstoreTypeToContinuityType(eventType string) string {
@@ -209,22 +224,6 @@ func hashHavenThreadstoreEvent(event threadstore.ConversationEvent) string {
 	data, _ := json.Marshal(event)
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:16])
-}
-
-func estimateHavenThreadPayloadBytes(events []threadstore.ConversationEvent) int {
-	total := 0
-	for _, event := range events {
-		if text, ok := event.Data["text"].(string); ok {
-			total += len(text)
-		}
-		if output, ok := event.Data["output"].(string); ok {
-			total += len(output)
-		}
-	}
-	if total < 1 {
-		total = 1
-	}
-	return total
 }
 
 func makeHavenContinuityInspectionID() string {

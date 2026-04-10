@@ -15,33 +15,36 @@ import (
 )
 
 type stubMemoryBackend struct {
-	name                      string
-	wakeStateResponse         MemoryWakeStateResponse
-	discoverResponse          MemoryDiscoverResponse
-	recallResponse            MemoryRecallResponse
-	rememberResponse          MemoryRememberResponse
-	inspectResponse           ContinuityInspectResponse
-	reviewResponse            MemoryInspectionGovernanceResponse
-	tombstoneResponse         MemoryInspectionGovernanceResponse
-	purgeResponse             MemoryInspectionGovernanceResponse
-	wakeStateCalls            int
-	discoverCalls             int
-	recallCalls               int
-	rememberCalls             int
-	inspectCalls              int
-	reviewCalls               int
-	tombstoneCalls            int
-	purgeCalls                int
-	lastDiscoverRequest       MemoryDiscoverRequest
-	lastRecallRequest         MemoryRecallRequest
-	lastRememberRequest       MemoryRememberRequest
-	lastInspectRequest        ContinuityInspectRequest
-	lastReviewInspectionID    string
-	lastReviewRequest         MemoryInspectionReviewRequest
-	lastTombstoneInspectionID string
-	lastTombstoneRequest      MemoryInspectionLineageRequest
-	lastPurgeInspectionID     string
-	lastPurgeRequest          MemoryInspectionLineageRequest
+	name                       string
+	wakeStateResponse          MemoryWakeStateResponse
+	discoverResponse           MemoryDiscoverResponse
+	recallResponse             MemoryRecallResponse
+	rememberResponse           MemoryRememberResponse
+	inspectResponse            ContinuityInspectResponse
+	inspectObservedResponse    ContinuityInspectResponse
+	reviewResponse             MemoryInspectionGovernanceResponse
+	tombstoneResponse          MemoryInspectionGovernanceResponse
+	purgeResponse              MemoryInspectionGovernanceResponse
+	wakeStateCalls             int
+	discoverCalls              int
+	recallCalls                int
+	rememberCalls              int
+	inspectCalls               int
+	inspectObservedCalls       int
+	reviewCalls                int
+	tombstoneCalls             int
+	purgeCalls                 int
+	lastDiscoverRequest        MemoryDiscoverRequest
+	lastRecallRequest          MemoryRecallRequest
+	lastRememberRequest        MemoryRememberRequest
+	lastInspectRequest         ContinuityInspectRequest
+	lastInspectObservedRequest ObservedContinuityInspectRequest
+	lastReviewInspectionID     string
+	lastReviewRequest          MemoryInspectionReviewRequest
+	lastTombstoneInspectionID  string
+	lastTombstoneRequest       MemoryInspectionLineageRequest
+	lastPurgeInspectionID      string
+	lastPurgeRequest           MemoryInspectionLineageRequest
 }
 
 func (backend *stubMemoryBackend) Name() string {
@@ -79,6 +82,12 @@ func (backend *stubMemoryBackend) InspectContinuity(ctx context.Context, authent
 	backend.inspectCalls++
 	backend.lastInspectRequest = request
 	return backend.inspectResponse, nil
+}
+
+func (backend *stubMemoryBackend) InspectObservedContinuity(ctx context.Context, authenticatedSession capabilityToken, request ObservedContinuityInspectRequest) (ContinuityInspectResponse, error) {
+	backend.inspectObservedCalls++
+	backend.lastInspectObservedRequest = request
+	return backend.inspectObservedResponse, nil
 }
 
 func (backend *stubMemoryBackend) ReviewContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionReviewRequest) (MemoryInspectionGovernanceResponse, error) {
@@ -213,6 +222,57 @@ func TestInspectContinuityThread_UsesConfiguredBackend(t *testing.T) {
 	}
 	if stubBackend.lastInspectRequest.InspectionID != "inspect_backend_seam" {
 		t.Fatalf("unexpected inspect request recorded by backend: %#v", stubBackend.lastInspectRequest)
+	}
+}
+
+func TestInspectObservedContinuity_UsesConfiguredBackend(t *testing.T) {
+	expectedResponse := ContinuityInspectResponse{
+		InspectionID:      "inspect_observed_backend_seam",
+		ThreadID:          "thread_observed_backend_seam",
+		DerivationOutcome: continuityInspectionOutcomeDerived,
+	}
+	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{
+		name:                    "stub_backend",
+		inspectObservedResponse: expectedResponse,
+	})
+
+	actualResponse, err := server.inspectObservedContinuity(capabilityToken{TenantID: "", ControlSessionID: "cs-test"}, ObservedContinuityInspectRequest{
+		InspectionID: "inspect_observed_backend_seam",
+		ThreadID:     "thread_observed_backend_seam",
+		Scope:        memoryScopeGlobal,
+		SealedAtUTC:  "2026-04-09T00:00:00Z",
+		ObservedPacket: continuityObservedPacket{
+			ThreadID:    "thread_observed_backend_seam",
+			Scope:       memoryScopeGlobal,
+			SealedAtUTC: "2026-04-09T00:00:00Z",
+			Events: []continuityObservedEventRecord{{
+				TimestampUTC:    "2026-04-09T00:00:00Z",
+				SessionID:       "session-test",
+				Type:            "user_message",
+				Scope:           memoryScopeGlobal,
+				ThreadID:        "thread_observed_backend_seam",
+				EpistemicFlavor: "freshly_checked",
+				LedgerSequence:  1,
+				EventHash:       strings.Repeat("b", 32),
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("inspect observed continuity: %v", err)
+	}
+	if actualResponse.InspectionID != expectedResponse.InspectionID || actualResponse.ThreadID != expectedResponse.ThreadID || actualResponse.DerivationOutcome != expectedResponse.DerivationOutcome {
+		t.Fatalf("unexpected observed inspect response: got %#v want %#v", actualResponse, expectedResponse)
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	stubBackend := partition.backend.(*stubMemoryBackend)
+	server.memoryMu.Unlock()
+	if stubBackend.inspectObservedCalls != 1 {
+		t.Fatalf("expected one backend observed inspect call, got %d", stubBackend.inspectObservedCalls)
+	}
+	if stubBackend.lastInspectObservedRequest.InspectionID != "inspect_observed_backend_seam" {
+		t.Fatalf("unexpected observed inspect request recorded by backend: %#v", stubBackend.lastInspectObservedRequest)
 	}
 }
 

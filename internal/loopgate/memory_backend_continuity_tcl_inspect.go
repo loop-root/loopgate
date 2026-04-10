@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"morph/internal/identifiers"
 	tclpkg "morph/internal/tcl"
 )
 
@@ -17,7 +18,20 @@ func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(auth
 	if err := validateContinuityInspectProvenance(authenticatedSession, validatedRequest); err != nil {
 		return ContinuityInspectResponse{}, err
 	}
-	observedPacket := buildObservedContinuityPacket(validatedRequest)
+	return backend.inspectObservedContinuityAuthoritatively(authenticatedSession, buildObservedContinuityInspectRequest(validatedRequest))
+}
+
+func (backend *continuityTCLMemoryBackend) inspectObservedContinuityAuthoritatively(authenticatedSession capabilityToken, rawRequest ObservedContinuityInspectRequest) (ContinuityInspectResponse, error) {
+	validatedRequest, err := normalizeObservedContinuityInspectRequest(rawRequest)
+	if err != nil {
+		return ContinuityInspectResponse{}, continuityGovernanceError{
+			httpStatus:     500,
+			responseStatus: ResponseStatusError,
+			denialCode:     DenialCodeExecutionFailed,
+			reason:         "observed continuity packet failed internal validation",
+		}
+	}
+	observedPacket := validatedRequest.ObservedPacket
 
 	backend.server.memoryMu.Lock()
 	existingInspection, foundExisting := backend.partition.state.Inspections[validatedRequest.InspectionID]
@@ -46,9 +60,9 @@ func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(auth
 			Scope:              validatedRequest.Scope,
 			SubmittedAtUTC:     nowUTC.Format(time.RFC3339Nano),
 			CompletedAtUTC:     nowUTC.Format(time.RFC3339Nano),
-			EventCount:         len(validatedRequest.Events),
-			ApproxPayloadBytes: actualContinuityPayloadBytes(validatedRequest.Events),
-			ApproxPromptTokens: actualContinuityPromptTokens(validatedRequest.Events),
+			EventCount:         len(observedPacket.Events),
+			ApproxPayloadBytes: actualObservedContinuityPayloadBytes(observedPacket.Events),
+			ApproxPromptTokens: actualObservedContinuityPromptTokens(observedPacket.Events),
 			Lineage: continuityInspectionLineage{
 				Status:       continuityLineageStatusEligible,
 				ChangedAtUTC: nowUTC.Format(time.RFC3339Nano),
@@ -162,6 +176,171 @@ func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(auth
 		return ContinuityInspectResponse{}, err
 	}
 	return inspectResponse, nil
+}
+
+func buildObservedContinuityInspectRequest(validatedRequest ContinuityInspectRequest) ObservedContinuityInspectRequest {
+	return ObservedContinuityInspectRequest{
+		InspectionID:   validatedRequest.InspectionID,
+		ThreadID:       validatedRequest.ThreadID,
+		Scope:          validatedRequest.Scope,
+		SealedAtUTC:    validatedRequest.SealedAtUTC,
+		Tags:           append([]string(nil), validatedRequest.Tags...),
+		ObservedPacket: buildObservedContinuityPacket(validatedRequest),
+	}
+}
+
+func normalizeObservedContinuityInspectRequest(rawRequest ObservedContinuityInspectRequest) (ObservedContinuityInspectRequest, error) {
+	validatedRequest := rawRequest
+	validatedRequest.InspectionID = strings.TrimSpace(validatedRequest.InspectionID)
+	validatedRequest.ThreadID = strings.TrimSpace(validatedRequest.ThreadID)
+	validatedRequest.Scope = strings.TrimSpace(validatedRequest.Scope)
+	if validatedRequest.Scope == "" {
+		validatedRequest.Scope = memoryScopeGlobal
+	}
+	validatedRequest.SealedAtUTC = strings.TrimSpace(validatedRequest.SealedAtUTC)
+	validatedRequest.Tags = normalizeLoopgateMemoryTags(validatedRequest.Tags)
+	validatedRequest.ObservedPacket = normalizeObservedContinuityPacket(validatedRequest.ObservedPacket)
+	if strings.TrimSpace(validatedRequest.ObservedPacket.ThreadID) == "" {
+		validatedRequest.ObservedPacket.ThreadID = validatedRequest.ThreadID
+	}
+	if strings.TrimSpace(validatedRequest.ObservedPacket.Scope) == "" {
+		validatedRequest.ObservedPacket.Scope = validatedRequest.Scope
+	}
+	if strings.TrimSpace(validatedRequest.ObservedPacket.SealedAtUTC) == "" {
+		validatedRequest.ObservedPacket.SealedAtUTC = validatedRequest.SealedAtUTC
+	}
+	if err := validateObservedContinuityInspectRequest(validatedRequest); err != nil {
+		return ObservedContinuityInspectRequest{}, err
+	}
+	return validatedRequest, nil
+}
+
+func normalizeObservedContinuityPacket(observedPacket continuityObservedPacket) continuityObservedPacket {
+	observedPacket.ThreadID = strings.TrimSpace(observedPacket.ThreadID)
+	observedPacket.Scope = strings.TrimSpace(observedPacket.Scope)
+	observedPacket.SealedAtUTC = strings.TrimSpace(observedPacket.SealedAtUTC)
+	observedPacket.Tags = normalizeLoopgateMemoryTags(observedPacket.Tags)
+	for eventIndex, observedEvent := range observedPacket.Events {
+		observedPacket.Events[eventIndex] = normalizeObservedContinuityEventRecord(observedEvent)
+	}
+	return observedPacket
+}
+
+func normalizeObservedContinuityEventRecord(observedEvent continuityObservedEventRecord) continuityObservedEventRecord {
+	observedEvent.TimestampUTC = strings.TrimSpace(observedEvent.TimestampUTC)
+	observedEvent.SessionID = strings.TrimSpace(observedEvent.SessionID)
+	observedEvent.Type = strings.TrimSpace(observedEvent.Type)
+	observedEvent.Scope = strings.TrimSpace(observedEvent.Scope)
+	observedEvent.ThreadID = strings.TrimSpace(observedEvent.ThreadID)
+	observedEvent.EpistemicFlavor = strings.TrimSpace(observedEvent.EpistemicFlavor)
+	observedEvent.EventHash = strings.TrimSpace(observedEvent.EventHash)
+	for sourceRefIndex, rawSourceRef := range observedEvent.SourceRefs {
+		observedEvent.SourceRefs[sourceRefIndex] = continuityArtifactSourceRef{
+			Kind:   strings.TrimSpace(rawSourceRef.Kind),
+			Ref:    strings.TrimSpace(rawSourceRef.Ref),
+			SHA256: strings.TrimSpace(rawSourceRef.SHA256),
+		}
+	}
+	if observedEvent.Payload != nil {
+		normalizedPayload := *observedEvent.Payload
+		normalizedPayload.Text = strings.TrimSpace(normalizedPayload.Text)
+		normalizedPayload.Output = strings.TrimSpace(normalizedPayload.Output)
+		normalizedPayload.GoalID = strings.TrimSpace(normalizedPayload.GoalID)
+		normalizedPayload.ItemID = strings.TrimSpace(normalizedPayload.ItemID)
+		normalizedPayload.Capability = strings.TrimSpace(normalizedPayload.Capability)
+		normalizedPayload.Status = strings.TrimSpace(normalizedPayload.Status)
+		normalizedPayload.Reason = strings.TrimSpace(normalizedPayload.Reason)
+		normalizedPayload.DenialCode = strings.TrimSpace(normalizedPayload.DenialCode)
+		normalizedPayload.CallID = strings.TrimSpace(normalizedPayload.CallID)
+		normalizedPayload.ApprovalRequestID = strings.TrimSpace(normalizedPayload.ApprovalRequestID)
+		for factIndex, observedFact := range normalizedPayload.Facts {
+			normalizedPayload.Facts[factIndex] = continuityObservedFactRecord{
+				Name:  strings.TrimSpace(observedFact.Name),
+				Value: strings.TrimSpace(observedFact.Value),
+			}
+		}
+		observedEvent.Payload = &normalizedPayload
+	}
+	return observedEvent
+}
+
+func validateObservedContinuityInspectRequest(validatedRequest ObservedContinuityInspectRequest) error {
+	if err := identifiers.ValidateSafeIdentifier("inspection_id", validatedRequest.InspectionID); err != nil {
+		return err
+	}
+	if err := identifiers.ValidateSafeIdentifier("thread_id", validatedRequest.ThreadID); err != nil {
+		return err
+	}
+	if strings.TrimSpace(validatedRequest.Scope) == "" {
+		return fmt.Errorf("scope is required")
+	}
+	if strings.TrimSpace(validatedRequest.SealedAtUTC) == "" {
+		return fmt.Errorf("sealed_at_utc is required")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, validatedRequest.SealedAtUTC); err != nil {
+		return fmt.Errorf("sealed_at_utc is invalid: %w", err)
+	}
+	if strings.TrimSpace(validatedRequest.ObservedPacket.ThreadID) != validatedRequest.ThreadID {
+		return fmt.Errorf("observed_packet thread_id must match request thread_id")
+	}
+	if strings.TrimSpace(validatedRequest.ObservedPacket.Scope) != validatedRequest.Scope {
+		return fmt.Errorf("observed_packet scope must match request scope")
+	}
+	if strings.TrimSpace(validatedRequest.ObservedPacket.SealedAtUTC) != validatedRequest.SealedAtUTC {
+		return fmt.Errorf("observed_packet sealed_at_utc must match request sealed_at_utc")
+	}
+	if len(validatedRequest.ObservedPacket.Events) == 0 {
+		return fmt.Errorf("observed_packet events is required")
+	}
+	if len(validatedRequest.ObservedPacket.Events) > maxContinuityEventsPerInspection {
+		return fmt.Errorf("observed_packet events exceeds maximum allowed (%d)", maxContinuityEventsPerInspection)
+	}
+	if actualObservedContinuityPayloadBytes(validatedRequest.ObservedPacket.Events) > maxContinuityInspectApproxPayloadBytes {
+		return fmt.Errorf("observed continuity event payload size exceeds maximum allowed (%d bytes)", maxContinuityInspectApproxPayloadBytes)
+	}
+
+	seenEventHashes := make(map[string]struct{}, len(validatedRequest.ObservedPacket.Events))
+	var previousLedgerSequence int64
+	for eventIndex, observedEvent := range validatedRequest.ObservedPacket.Events {
+		if strings.TrimSpace(observedEvent.TimestampUTC) == "" {
+			return fmt.Errorf("observed continuity event ts_utc is required")
+		}
+		if _, err := time.Parse(time.RFC3339Nano, observedEvent.TimestampUTC); err != nil {
+			return fmt.Errorf("observed continuity event ts_utc is invalid: %w", err)
+		}
+		if strings.TrimSpace(observedEvent.SessionID) == "" {
+			return fmt.Errorf("observed continuity event session_id is required")
+		}
+		if strings.TrimSpace(observedEvent.Type) == "" {
+			return fmt.Errorf("observed continuity event type is required")
+		}
+		if strings.TrimSpace(observedEvent.Scope) != validatedRequest.Scope {
+			return fmt.Errorf("observed continuity event %d scope must match request scope", eventIndex+1)
+		}
+		if strings.TrimSpace(observedEvent.ThreadID) != validatedRequest.ThreadID {
+			return fmt.Errorf("observed continuity event %d thread_id must match request thread_id", eventIndex+1)
+		}
+		if observedEvent.LedgerSequence < 0 {
+			return fmt.Errorf("observed continuity event ledger_sequence must be non-negative")
+		}
+		if strings.TrimSpace(observedEvent.EventHash) == "" {
+			return fmt.Errorf("observed continuity event event_hash is required")
+		}
+		if _, duplicate := seenEventHashes[observedEvent.EventHash]; duplicate {
+			return fmt.Errorf("observed continuity event %d event_hash must be unique within an inspection", eventIndex+1)
+		}
+		seenEventHashes[observedEvent.EventHash] = struct{}{}
+		if eventIndex > 0 && observedEvent.LedgerSequence <= previousLedgerSequence {
+			return fmt.Errorf("observed continuity events must be strictly ordered by ledger_sequence")
+		}
+		previousLedgerSequence = observedEvent.LedgerSequence
+		for _, sourceRef := range observedEvent.SourceRefs {
+			if strings.TrimSpace(sourceRef.Kind) == "" || strings.TrimSpace(sourceRef.Ref) == "" {
+				return fmt.Errorf("observed continuity event source_refs require kind and ref")
+			}
+		}
+	}
+	return nil
 }
 
 func validateContinuityInspectProvenance(authenticatedSession capabilityToken, validatedRequest ContinuityInspectRequest) error {

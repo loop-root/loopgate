@@ -126,7 +126,10 @@ Next lift:
   JSONL instead of the raw inspect request body, and distillation derives from
   that typed packet rather than the caller payload bundle. Raw
   `/v1/continuity/inspect` is now a compatibility-only policy-gated path rather
-  than the default production route. Remaining gaps are
+  than the default production route, and the supported server-loaded
+  `/v1/continuity/inspect-thread` path now hands the backend a Loopgate-owned
+  observed packet directly instead of fabricating a raw continuity request.
+  Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys
