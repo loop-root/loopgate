@@ -140,27 +140,27 @@ replacements for the scored `70`-fixture state-memory baseline.
 
 Final `2026-04-10` targeted evidence runs:
 
-- continuity product path: `continuity_evidence_parity_20260410_v4`
+- continuity product path: `continuity_evidence_parity_20260410_v5`
   - `retrieval_path_mode=mixed_control_plane_and_projected_node_sqlite`
   - `seed_path_mode=mixed_control_plane_memory_workflow_and_fixture_seed`
-- continuity synthetic control: `continuity_evidence_synth_20260410_v4`
+- continuity synthetic control: `continuity_evidence_synth_20260410_v5`
   - `retrieval_path_mode=projected_node_sqlite_backend`
   - `seed_path_mode=synthetic_projected_node_seed`
-- RAG baseline: `rag_baseline_evidence_20260410_v4`
+- RAG baseline: `rag_baseline_evidence_20260410_v5`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
-- stronger RAG: `rag_stronger_evidence_20260410_v4`
+- stronger RAG: `rag_stronger_evidence_20260410_v5`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
 
 Current evidence-matrix counts:
 
-| Backend | Overall | Replay root-cause paraphrase | Mount-grant design thread | Qdrant backfill incident | Preview-card authority thread |
-| --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `1/4` | `0/1` | `0/1` | `1/1` | `0/1` |
-| `continuity_tcl` (`synthetic_projected_nodes`) | `1/4` | `0/1` | `0/1` | `1/1` | `0/1` |
-| `rag_baseline` (`candidate_governance=continuity_tcl`) | `1/4` | `0/1` | `0/1` | `1/1` | `0/1` |
-| `rag_stronger` (`candidate_governance=continuity_tcl`) | `2/4` | `1/1` | `0/1` | `1/1` | `0/1` |
+| Backend | Overall | Replay root-cause paraphrase | Mount-grant design thread | Qdrant backfill incident | Preview-card authority thread | Offline policy signature cache | Resolved path virtual projection |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `continuity_tcl` (`production_write_parity`) | `3/6` | `0/1` | `0/1` | `1/1` | `0/1` | `1/1` | `1/1` |
+| `continuity_tcl` (`synthetic_projected_nodes`) | `3/6` | `0/1` | `0/1` | `1/1` | `0/1` | `1/1` | `1/1` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `3/6` | `0/1` | `0/1` | `1/1` | `0/1` | `1/1` | `1/1` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `4/6` | `1/1` | `0/1` | `1/1` | `0/1` | `1/1` | `1/1` |
 
 Read:
 
@@ -169,6 +169,9 @@ Read:
   `benchmark:evidence_working_set`
 - stronger RAG now cleanly beats both continuity paths and baseline RAG on the
   paraphrased replay root-cause lookup
+- stronger RAG also cleanly wins the new offline-policy and resolved-path
+  evidence cases, which are both broad design-context retrieval problems rather
+  than canonical current-state recall problems
 - the Qdrant backfill incident is a common win across all current backends, so
   it is not a differentiator
 - the mount-grant and preview-card design-thread cases still fail across all
@@ -180,10 +183,10 @@ Read:
 
 Evidence-matrix artifacts:
 
-- `/tmp/memorybench-live-continuity/continuity_evidence_parity_20260410_v4/*`
-- `/tmp/memorybench-live-continuity/continuity_evidence_synth_20260410_v4/*`
-- `/tmp/memorybench-live-rag/rag_baseline_evidence_20260410_v4/*`
-- `/tmp/memorybench-live-rag/rag_stronger_evidence_20260410_v4/*`
+- `/tmp/memorybench-live-continuity/continuity_evidence_parity_20260410_v5/*`
+- `/tmp/memorybench-live-continuity/continuity_evidence_synth_20260410_v5/*`
+- `/tmp/memorybench-live-rag/rag_baseline_evidence_20260410_v5/*`
+- `/tmp/memorybench-live-rag/rag_stronger_evidence_20260410_v5/*`
 
 ## Targeted hybrid recall matrix (`extended_fixtures`, not headline)
 
@@ -195,27 +198,27 @@ bucket. These fixtures intentionally require:
 
 Final `2026-04-10` hybrid runs:
 
-- continuity control: `continuity_hybrid_matrix_20260410_v2`
+- continuity control: `continuity_hybrid_matrix_20260410_v5`
   - `retrieval_path_mode=control_plane_memory_routes`
   - `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
-- RAG baseline: `rag_baseline_hybrid_matrix_20260410_v2`
+- RAG baseline: `rag_baseline_hybrid_matrix_20260410_v5`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
-- stronger RAG: `rag_stronger_hybrid_matrix_20260410_v2`
+- stronger RAG: `rag_stronger_hybrid_matrix_20260410_v5`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
-- stronger hybrid: `hybrid_stronger_hybrid_matrix_20260410_v4`
+- stronger hybrid: `hybrid_stronger_hybrid_matrix_20260410_v7`
   - `retrieval_path_mode=hybrid_continuity_state_plus_rag_evidence`
   - `seed_path_mode=control_plane_state_and_rag_fixture_corpus`
 
 Current hybrid-matrix counts:
 
-| Backend | Overall | Mount grant blocker + rationale | Replay recovery step + root cause | Preview-card follow-up + boundary rationale |
-| --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `0/3` | `0/1` | `0/1` | `0/1` |
-| `rag_baseline` (`candidate_governance=continuity_tcl`) | `0/3` | `0/1` | `0/1` | `0/1` |
-| `rag_stronger` (`candidate_governance=continuity_tcl`) | `0/3` | `0/1` | `0/1` | `0/1` |
-| `hybrid` (continuity state + stronger RAG evidence) | `2/3` | `0/1` | `1/1` | `1/1` |
+| Backend | Overall | Mount grant blocker + rationale | Replay recovery step + root cause | Preview-card follow-up + boundary rationale | Offline policy follow-up + rationale | Resolved-path follow-up + rationale |
+| --- | --- | --- | --- | --- | --- | --- |
+| `continuity_tcl` (`production_write_parity`) | `0/5` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `0/5` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `0/5` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
+| `hybrid` (continuity state + stronger RAG evidence) | `3/5` | `0/1` | `1/1` | `1/1` | `1/1` | `0/1` |
 
 Read:
 
@@ -227,18 +230,20 @@ Read:
   lacks the canonical current blocker or next-step state that continuity keeps
   current
 - the bounded hybrid combiner now uses retrieved continuity state hints to
-  shape evidence lookup and deterministic reranking instead of dumping the
-  whole related set into the prompt
-- the remaining mount-grant miss is still useful: the hybrid path found the
-  current blocker, but it still pulled the wrong supporting design thread and
-  exceeded the hint-byte budget on that scenario
+  shape evidence lookup, then greedily selects complementary evidence instead
+  of just taking the two individually highest-overlap notes
+- the new offline-policy case now passes cleanly because the hybrid path finds
+  both the current follow-up state and the signed-cache rationale
+- the remaining mount-grant and resolved-path misses are still useful: in both
+  cases the hybrid path finds the right current state, but it still picks the
+  wrong second supporting note inside a related design thread
 
 Hybrid-matrix artifacts:
 
-- `/tmp/memorybench-live-continuity/continuity_hybrid_matrix_20260410_v2/*`
-- `/tmp/memorybench-live-rag/rag_baseline_hybrid_matrix_20260410_v2/*`
-- `/tmp/memorybench-live-rag/rag_stronger_hybrid_matrix_20260410_v2/*`
-- `/tmp/memorybench-live-hybrid/hybrid_stronger_hybrid_matrix_20260410_v4/*`
+- `/tmp/memorybench-live-continuity/continuity_hybrid_matrix_20260410_v5/*`
+- `/tmp/memorybench-live-rag/rag_baseline_hybrid_matrix_20260410_v5/*`
+- `/tmp/memorybench-live-rag/rag_stronger_hybrid_matrix_20260410_v5/*`
+- `/tmp/memorybench-live-hybrid/hybrid_stronger_hybrid_matrix_20260410_v7/*`
 
 ## Preserved prior honest rerun set (61-fixture matrix)
 

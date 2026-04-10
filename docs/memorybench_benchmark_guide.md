@@ -48,10 +48,10 @@ Current skeptical fixture count:
 
 Extended targeted matrix:
 
-- `77` total fixtures in `-profile extended_fixtures`
-- the extra `7` fixtures are:
-  - `4` `memory_evidence_retrieval`
-  - `3` `memory_hybrid_recall`
+- `81` total fixtures in `-profile extended_fixtures`
+- the extra `11` fixtures are:
+  - `6` `memory_evidence_retrieval`
+  - `5` `memory_hybrid_recall`
 - those evidence fixtures share one benchmark working-set scope:
   `benchmark:evidence_working_set`
 
@@ -87,6 +87,7 @@ The live scoreboard lives in:
 - [memorybench-honest-rerun-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-honest-rerun-2026-04-10.md)
 - [memorybench-evidence-matrix-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-evidence-matrix-2026-04-10.md)
 - [memorybench-hybrid-matrix-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-hybrid-matrix-2026-04-10.md)
+- [memorybench-targeted-matrix-expansion-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-targeted-matrix-expansion-2026-04-10.md)
 
 The internal methodology report lives in (maintainer checkout, not in clone):
 

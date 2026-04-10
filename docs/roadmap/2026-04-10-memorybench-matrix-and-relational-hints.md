@@ -31,10 +31,10 @@ Current checked-in fixture counts:
 
 Extended targeted profile:
 
-- `77` fixtures in `-profile extended_fixtures`
-- the additional `7` fixtures are:
-  - `4` `memory_evidence_retrieval`
-  - `3` `memory_hybrid_recall`
+- `81` fixtures in `-profile extended_fixtures`
+- the additional `11` fixtures are:
+  - `6` `memory_evidence_retrieval`
+  - `5` `memory_hybrid_recall`
 - those evidence fixtures now share one working-set scope:
   `benchmark:evidence_working_set`
 - the hybrid fixtures use the same bounded state-plus-evidence split:
@@ -136,13 +136,15 @@ Current targeted run IDs:
 
 Current read:
 
-- stronger RAG is `2/4`
-- continuity product path is `1/4`
-- continuity synthetic is `1/4`
-- baseline RAG is `1/4`
+- stronger RAG is `4/6`
+- continuity product path is `3/6`
+- continuity synthetic is `3/6`
+- baseline RAG is `3/6`
 - the strongest current separator is the paraphrased replay root-cause fixture,
   where stronger RAG retrieves the correct evidence pair and both continuity
   paths miss the second required artifact under shared-scope retrieval
+- the new offline-policy and resolved-path fixtures give stronger RAG two more
+  clean evidence wins over the pure continuity paths
 - the mount-grant and preview-card design-thread fixtures still fail across
   every current backend, so this bucket is useful but still immature
 
@@ -172,16 +174,15 @@ Current targeted run IDs:
 
 Current read:
 
-- continuity control is `0/3`
-- baseline RAG is `0/3`
-- stronger RAG is `0/3`
-- stronger hybrid is `2/3`
-- the two hybrid wins are the replay root-cause and preview-card authority
-  boundary cases, where continuity supplies the current step or follow-up state
-  and the RAG side recovers the supporting design or incident context
-- the remaining mount-grant miss is useful because it shows the current hybrid
-  combiner still confuses a stale demo note for the real supporting renew-path
-  design rationale when the evidence set is too broad
+- continuity control is `0/5`
+- baseline RAG is `0/5`
+- stronger RAG is `0/5`
+- stronger hybrid is `3/5`
+- the current hybrid wins are the replay root-cause, preview-card authority
+  boundary, and offline-policy follow-up cases
+- the remaining mount-grant and resolved-path misses are useful because they
+  show the current hybrid combiner can still pull the wrong second supporting
+  note from an otherwise related design thread
 
 These fixtures require both:
 

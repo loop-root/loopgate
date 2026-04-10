@@ -3,7 +3,6 @@ package memorybench
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -1169,21 +1168,58 @@ func rerankHybridEvidenceItems(discoveredEvidenceItems []ProjectedNodeDiscoverIt
 	if len(discoveredEvidenceItems) == 0 {
 		return nil
 	}
-	relationTokens := tokenSetFromTexts(append([]string{evidenceQuery}, relatedStateHints...)...)
-	rerankedEvidenceItems := append([]ProjectedNodeDiscoverItem(nil), discoveredEvidenceItems...)
-	sort.SliceStable(rerankedEvidenceItems, func(leftIndex int, rightIndex int) bool {
-		leftScore := relationTokenOverlapCount(rerankedEvidenceItems[leftIndex].HintText, relationTokens)
-		rightScore := relationTokenOverlapCount(rerankedEvidenceItems[rightIndex].HintText, relationTokens)
-		if leftScore != rightScore {
-			return leftScore > rightScore
+	relationTokens := hybridRelationTokenSetFromTexts(append([]string{evidenceQuery}, relatedStateHints...)...)
+	remainingEvidenceItems := append([]ProjectedNodeDiscoverItem(nil), discoveredEvidenceItems...)
+	rerankedEvidenceItems := make([]ProjectedNodeDiscoverItem, 0, len(remainingEvidenceItems))
+	coveredRelationTokens := map[string]struct{}{}
+	for len(remainingEvidenceItems) > 0 {
+		bestIndex := 0
+		bestMarginalCoverage := -1
+		bestTotalOverlap := -1
+		bestMatchCount := -1
+		bestNodeID := ""
+		for currentIndex, currentItem := range remainingEvidenceItems {
+			currentMarginalCoverage := hybridRelationTokenMarginalCoverage(currentItem.HintText, relationTokens, coveredRelationTokens)
+			currentTotalOverlap := hybridRelationTokenOverlapCount(currentItem.HintText, relationTokens)
+			currentNodeID := strings.TrimSpace(currentItem.NodeID)
+			switch {
+			case currentMarginalCoverage > bestMarginalCoverage:
+				bestIndex = currentIndex
+				bestMarginalCoverage = currentMarginalCoverage
+				bestTotalOverlap = currentTotalOverlap
+				bestMatchCount = currentItem.MatchCount
+				bestNodeID = currentNodeID
+			case currentMarginalCoverage == bestMarginalCoverage && currentTotalOverlap > bestTotalOverlap:
+				bestIndex = currentIndex
+				bestMarginalCoverage = currentMarginalCoverage
+				bestTotalOverlap = currentTotalOverlap
+				bestMatchCount = currentItem.MatchCount
+				bestNodeID = currentNodeID
+			case currentMarginalCoverage == bestMarginalCoverage && currentTotalOverlap == bestTotalOverlap && currentItem.MatchCount > bestMatchCount:
+				bestIndex = currentIndex
+				bestMarginalCoverage = currentMarginalCoverage
+				bestTotalOverlap = currentTotalOverlap
+				bestMatchCount = currentItem.MatchCount
+				bestNodeID = currentNodeID
+			case currentMarginalCoverage == bestMarginalCoverage && currentTotalOverlap == bestTotalOverlap && currentItem.MatchCount == bestMatchCount && currentNodeID < bestNodeID:
+				bestIndex = currentIndex
+				bestMarginalCoverage = currentMarginalCoverage
+				bestTotalOverlap = currentTotalOverlap
+				bestMatchCount = currentItem.MatchCount
+				bestNodeID = currentNodeID
+			}
 		}
-		if rerankedEvidenceItems[leftIndex].MatchCount != rerankedEvidenceItems[rightIndex].MatchCount {
-			return rerankedEvidenceItems[leftIndex].MatchCount > rerankedEvidenceItems[rightIndex].MatchCount
+		bestItem := remainingEvidenceItems[bestIndex]
+		rerankedEvidenceItems = append(rerankedEvidenceItems, bestItem)
+		for coveredToken := range hybridRelationTokenSetFromTexts(bestItem.HintText) {
+			if _, relationToken := relationTokens[coveredToken]; relationToken {
+				coveredRelationTokens[coveredToken] = struct{}{}
+			}
 		}
-		return strings.TrimSpace(rerankedEvidenceItems[leftIndex].NodeID) < strings.TrimSpace(rerankedEvidenceItems[rightIndex].NodeID)
-	})
-	if maxItems > 0 && len(rerankedEvidenceItems) > maxItems {
-		rerankedEvidenceItems = rerankedEvidenceItems[:maxItems]
+		remainingEvidenceItems = append(remainingEvidenceItems[:bestIndex], remainingEvidenceItems[bestIndex+1:]...)
+		if maxItems > 0 && len(rerankedEvidenceItems) >= maxItems {
+			break
+		}
 	}
 	return rerankedEvidenceItems
 }
@@ -1639,6 +1675,27 @@ func tokenSetFromTexts(rawTexts ...string) map[string]struct{} {
 	return tokenSet
 }
 
+var hybridRelationStopTokens = map[string]struct{}{
+	"a": {}, "an": {}, "and": {}, "are": {}, "as": {}, "at": {}, "be": {}, "by": {}, "do": {}, "does": {}, "during": {},
+	"find": {}, "follow": {}, "for": {}, "from": {}, "how": {}, "in": {}, "instead": {}, "into": {}, "is": {}, "it": {},
+	"keep": {}, "next": {}, "note": {}, "of": {}, "on": {}, "or": {}, "our": {}, "so": {}, "state": {}, "step": {},
+	"stays": {}, "still": {}, "task": {}, "that": {}, "the": {}, "their": {}, "them": {}, "then": {}, "this": {},
+	"through": {}, "to": {}, "up": {}, "what": {}, "why": {}, "while": {}, "with": {}, "work": {},
+}
+
+func hybridRelationTokenSetFromTexts(rawTexts ...string) map[string]struct{} {
+	tokenSet := map[string]struct{}{}
+	for _, rawText := range rawTexts {
+		for _, normalizedToken := range tokenizeScenarioFixtureText(rawText) {
+			if _, ignoredToken := hybridRelationStopTokens[normalizedToken]; ignoredToken {
+				continue
+			}
+			tokenSet[normalizedToken] = struct{}{}
+		}
+	}
+	return tokenSet
+}
+
 func relationTokenOverlapCount(rawText string, relationTokenSet map[string]struct{}) int {
 	if len(relationTokenSet) == 0 {
 		return 0
@@ -1650,6 +1707,47 @@ func relationTokenOverlapCount(rawText string, relationTokenSet map[string]struc
 		}
 	}
 	return overlapCount
+}
+
+func hybridRelationTokenOverlapCount(rawText string, relationTokenSet map[string]struct{}) int {
+	if len(relationTokenSet) == 0 {
+		return 0
+	}
+	overlapCount := 0
+	for _, candidateToken := range tokenizeScenarioFixtureText(rawText) {
+		if _, ignoredToken := hybridRelationStopTokens[candidateToken]; ignoredToken {
+			continue
+		}
+		if _, found := relationTokenSet[candidateToken]; found {
+			overlapCount++
+		}
+	}
+	return overlapCount
+}
+
+func hybridRelationTokenMarginalCoverage(rawText string, relationTokenSet map[string]struct{}, coveredRelationTokens map[string]struct{}) int {
+	if len(relationTokenSet) == 0 {
+		return 0
+	}
+	marginalCoverageCount := 0
+	newlyCoveredTokens := map[string]struct{}{}
+	for _, candidateToken := range tokenizeScenarioFixtureText(rawText) {
+		if _, ignoredToken := hybridRelationStopTokens[candidateToken]; ignoredToken {
+			continue
+		}
+		if _, relationToken := relationTokenSet[candidateToken]; !relationToken {
+			continue
+		}
+		if _, alreadyCovered := coveredRelationTokens[candidateToken]; alreadyCovered {
+			continue
+		}
+		if _, alreadyCounted := newlyCoveredTokens[candidateToken]; alreadyCounted {
+			continue
+		}
+		newlyCoveredTokens[candidateToken] = struct{}{}
+		marginalCoverageCount++
+	}
+	return marginalCoverageCount
 }
 
 func tokenizeScenarioFixtureText(rawText string) []string {

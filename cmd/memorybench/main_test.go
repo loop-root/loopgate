@@ -1336,8 +1336,8 @@ func TestBenchmarkFixturesForProfile_ExtendedFixturesIncludesEvidenceMatrix(t *t
 	if err != nil {
 		t.Fatalf("benchmarkFixturesForProfile extended_fixtures: %v", err)
 	}
-	if len(selectedFixtures) != 4 {
-		t.Fatalf("expected four evidence fixtures in extended profile, got %d", len(selectedFixtures))
+	if len(selectedFixtures) != 6 {
+		t.Fatalf("expected six evidence fixtures in extended profile, got %d", len(selectedFixtures))
 	}
 	for _, selectedFixture := range selectedFixtures {
 		if selectedFixture.Metadata.Category != memorybench.CategoryMemoryEvidenceRetrieval {
@@ -1357,8 +1357,8 @@ func TestBenchmarkFixturesForProfile_ExtendedFixturesIncludesHybridMatrix(t *tes
 	if err != nil {
 		t.Fatalf("benchmarkFixturesForProfile extended_fixtures: %v", err)
 	}
-	if len(selectedFixtures) != 3 {
-		t.Fatalf("expected three hybrid fixtures in extended profile, got %d", len(selectedFixtures))
+	if len(selectedFixtures) != 5 {
+		t.Fatalf("expected five hybrid fixtures in extended profile, got %d", len(selectedFixtures))
 	}
 	for _, selectedFixture := range selectedFixtures {
 		if selectedFixture.Metadata.Category != memorybench.CategoryMemoryHybridRecall {

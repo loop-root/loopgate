@@ -46,14 +46,14 @@ type EvidenceRetrievalExpectation struct {
 }
 
 type HybridRecallExpectation struct {
-	RequiredStateHints    []string `json:"required_state_hints,omitempty"`
-	ForbiddenStateHints   []string `json:"forbidden_state_hints,omitempty"`
-	RequiredEvidenceHints []string `json:"required_evidence_hints,omitempty"`
+	RequiredStateHints     []string `json:"required_state_hints,omitempty"`
+	ForbiddenStateHints    []string `json:"forbidden_state_hints,omitempty"`
+	RequiredEvidenceHints  []string `json:"required_evidence_hints,omitempty"`
 	ForbiddenEvidenceHints []string `json:"forbidden_evidence_hints,omitempty"`
-	MustFindState         bool     `json:"must_find_state,omitempty"`
-	MustFindEvidence      bool     `json:"must_find_evidence,omitempty"`
-	MaxItemsReturned      int      `json:"max_items_returned,omitempty"`
-	MaxHintBytesRetrieved int      `json:"max_hint_bytes_retrieved,omitempty"`
+	MustFindState          bool     `json:"must_find_state,omitempty"`
+	MustFindEvidence       bool     `json:"must_find_evidence,omitempty"`
+	MaxItemsReturned       int      `json:"max_items_returned,omitempty"`
+	MaxHintBytesRetrieved  int      `json:"max_hint_bytes_retrieved,omitempty"`
 }
 
 type TaskResumptionExpectation struct {
@@ -535,8 +535,12 @@ func defaultFixtureSubfamilyID(fixture ScenarioFixture) string {
 		switch fixture.Metadata.ScenarioID {
 		case "evidence.multi_document_mount_grant_design_thread.v1":
 			return "multi_document_design"
+		case "evidence.offline_policy_signature_cache_thread.v1":
+			return "offline_policy_context"
 		case "evidence.incident_qdrant_backfill_socket_stall.v1":
 			return "incident_working_set"
+		case "evidence.resolved_path_virtual_projection_thread.v1":
+			return "filesystem_boundary_context"
 		case "evidence.preview_card_authority_boundary_thread.v1":
 			return "authority_boundary_context"
 		default:
@@ -546,8 +550,12 @@ func defaultFixtureSubfamilyID(fixture ScenarioFixture) string {
 		switch fixture.Metadata.ScenarioID {
 		case "hybrid.mount_grant_current_blocker_and_design_rationale.v1":
 			return "state_plus_design_thread"
+		case "hybrid.offline_policy_follow_up_and_signature_rationale.v1":
+			return "state_plus_policy_context"
 		case "hybrid.preview_card_follow_up_and_boundary_rationale.v1":
 			return "state_plus_authority_boundary"
+		case "hybrid.resolved_path_follow_up_and_projection_rationale.v1":
+			return "state_plus_filesystem_boundary"
 		default:
 			return "state_plus_incident_context"
 		}
@@ -658,9 +666,13 @@ func ExtendedScenarioFixtures() []ScenarioFixture {
 		EvidenceMountGrantDesignThreadFixture(),
 		EvidenceQdrantBackfillSocketStallFixture(),
 		EvidencePreviewCardAuthorityBoundaryFixture(),
+		EvidenceOfflinePolicySignatureCacheFixture(),
+		EvidenceResolvedPathVirtualProjectionFixture(),
 		HybridMountGrantCurrentBlockerFixture(),
 		HybridReplayRecoveryCurrentStepFixture(),
 		HybridPreviewCardFollowUpFixture(),
+		HybridOfflinePolicyFollowUpFixture(),
+		HybridResolvedPathFollowUpFixture(),
 	}
 	// Keep the shipped default matrix stable. Evidence and hybrid fixtures live in
 	// the extended profile so we can measure negative-space retrieval claims
@@ -2991,6 +3003,72 @@ func EvidencePreviewCardAuthorityBoundaryFixture() ScenarioFixture {
 	}
 }
 
+func EvidenceOfflinePolicySignatureCacheFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "evidence.offline_policy_signature_cache_thread.v1",
+			Category:         CategoryMemoryEvidenceRetrieval,
+			Description:      "Broad policy retrieval should recover why offline nodes keep a signed cached policy but still fail closed on live-verification actions.",
+			ExpectedOutcome:  "retrieval finds the signed-cache and fail-closed live-verification rationale without drifting into demo cache warmup notes",
+			RubricVersion:    "evidence_retrieval.v1",
+			FixtureVersion:   "evidence_fixture.v1",
+			ScenarioInputRef: "fixture:evidence.offline_policy_signature_cache_thread.v1",
+		},
+		PromptBudget: 544,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Offline policy note: local nodes keep enforcing the last-cached policy only if its admin signature validates before reload."},
+			{Role: "user", Content: "Demo cache note: warm the policy cache before the roadshow so the admin console loads instantly on hotel wifi."},
+			{Role: "user", Content: "Verification note: capabilities that require live admin verification must fail closed when the admin node is unreachable instead of consulting stale cache."},
+			{Role: "system_probe", Content: "Find the design discussion about why offline nodes keep a signed cached policy but still deny actions that need live admin verification."},
+		},
+		EvidenceRetrievalExpectation: &EvidenceRetrievalExpectation{
+			RequiredHints: []string{
+				"last-cached policy only if its admin signature validates before reload",
+				"require live admin verification must fail closed when the admin node is unreachable",
+			},
+			ForbiddenHints: []string{
+				"warm the policy cache before the roadshow",
+			},
+			MustFindEvidence:      true,
+			MaxItemsReturned:      2,
+			MaxHintBytesRetrieved: 320,
+		},
+	}
+}
+
+func EvidenceResolvedPathVirtualProjectionFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "evidence.resolved_path_virtual_projection_thread.v1",
+			Category:         CategoryMemoryEvidenceRetrieval,
+			Description:      "Broad filesystem-boundary retrieval should recover why Loopgate validates the resolved target path while Haven renders virtual paths.",
+			ExpectedOutcome:  "retrieval finds the final-target validation and virtual-path projection rationale without surfacing demo-only workspace wording",
+			RubricVersion:    "evidence_retrieval.v1",
+			FixtureVersion:   "evidence_fixture.v1",
+			ScenarioInputRef: "fixture:evidence.resolved_path_virtual_projection_thread.v1",
+		},
+		PromptBudget: 544,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Filesystem hardening note: policy checks must run on the final resolved target path, not the caller's raw relative path."},
+			{Role: "user", Content: "Demo workspace note: keep the friendly workspace path visible in Haven so operators are not staring at private runtime directories."},
+			{Role: "user", Content: "Projection note: operator surfaces should show virtual sandbox paths while resolved runtime paths stay private and server-side."},
+			{Role: "system_probe", Content: "Find the path-handling discussion about why we validate the resolved target but still render virtual paths in operator surfaces."},
+		},
+		EvidenceRetrievalExpectation: &EvidenceRetrievalExpectation{
+			RequiredHints: []string{
+				"policy checks must run on the final resolved target path",
+				"operator surfaces should show virtual sandbox paths while resolved runtime paths stay private",
+			},
+			ForbiddenHints: []string{
+				"friendly workspace path visible in Haven",
+			},
+			MustFindEvidence:      true,
+			MaxItemsReturned:      2,
+			MaxHintBytesRetrieved: 320,
+		},
+	}
+}
+
 func HybridMountGrantCurrentBlockerFixture() ScenarioFixture {
 	return ScenarioFixture{
 		Metadata: ScenarioMetadata{
@@ -3029,7 +3107,7 @@ func HybridMountGrantCurrentBlockerFixture() ScenarioFixture {
 			MustFindState:         true,
 			MustFindEvidence:      true,
 			MaxItemsReturned:      4,
-			MaxHintBytesRetrieved: 520,
+			MaxHintBytesRetrieved: 580,
 		},
 	}
 }
@@ -3072,7 +3150,7 @@ func HybridReplayRecoveryCurrentStepFixture() ScenarioFixture {
 			MustFindState:         true,
 			MustFindEvidence:      true,
 			MaxItemsReturned:      4,
-			MaxHintBytesRetrieved: 560,
+			MaxHintBytesRetrieved: 580,
 		},
 	}
 }
@@ -3115,7 +3193,93 @@ func HybridPreviewCardFollowUpFixture() ScenarioFixture {
 			MustFindState:         true,
 			MustFindEvidence:      true,
 			MaxItemsReturned:      4,
-			MaxHintBytesRetrieved: 520,
+			MaxHintBytesRetrieved: 580,
+		},
+	}
+}
+
+func HybridOfflinePolicyFollowUpFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "hybrid.offline_policy_follow_up_and_signature_rationale.v1",
+			Category:         CategoryMemoryHybridRecall,
+			Description:      "Hybrid recall should use continuity for the current offline-policy hardening follow-up and RAG for the signed-cache rationale.",
+			ExpectedOutcome:  "the state path returns the current offline-policy follow-up while the evidence path returns the signed-cache and fail-closed live-verification rationale",
+			RubricVersion:    "hybrid_recall.v1",
+			FixtureVersion:   "hybrid_fixture.v1",
+			ScenarioInputRef: "fixture:hybrid.offline_policy_follow_up_and_signature_rationale.v1",
+		},
+		PromptBudget: 576,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Offline policy note: local nodes keep enforcing the last-cached policy only if its admin signature validates before reload."},
+			{Role: "user", Content: "Demo cache note: warm the policy cache before the roadshow so the admin console loads instantly on hotel wifi."},
+			{Role: "user", Content: "Verification note: capabilities that require live admin verification must fail closed when the admin node is unreachable instead of consulting stale cache."},
+			{Role: "state_probe", Content: "What is the current offline-policy hardening follow-up and next step?"},
+			{Role: "evidence_probe", Content: "Find the design discussion about why offline nodes keep a signed cached policy but still deny actions that need live admin verification."},
+			{Role: "system_probe", Content: "Resume the offline-policy hardening work with the current follow-up and the rationale for signed cache reloads versus live verification."},
+		},
+		HybridRecallExpectation: &HybridRecallExpectation{
+			RequiredStateHints: []string{
+				"Current follow-up: prove offline nodes only reload last-signed policy blobs and surface signature failures explicitly.",
+				"Next step: wire the admin-unreachable path so live-verification capabilities fail closed instead of consulting stale cache.",
+			},
+			ForbiddenStateHints: []string{
+				"Current follow-up: let cached policy silently authorize live-verification actions during network loss.",
+			},
+			RequiredEvidenceHints: []string{
+				"last-cached policy only if its admin signature validates before reload",
+				"require live admin verification must fail closed when the admin node is unreachable",
+			},
+			ForbiddenEvidenceHints: []string{
+				"warm the policy cache before the roadshow",
+			},
+			MustFindState:         true,
+			MustFindEvidence:      true,
+			MaxItemsReturned:      4,
+			MaxHintBytesRetrieved: 580,
+		},
+	}
+}
+
+func HybridResolvedPathFollowUpFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "hybrid.resolved_path_follow_up_and_projection_rationale.v1",
+			Category:         CategoryMemoryHybridRecall,
+			Description:      "Hybrid recall should use continuity for the current path-hardening follow-up and RAG for the resolved-path versus virtual-path rationale.",
+			ExpectedOutcome:  "the state path returns the current filesystem hardening follow-up while the evidence path returns the final-target validation and virtual-path projection rationale",
+			RubricVersion:    "hybrid_recall.v1",
+			FixtureVersion:   "hybrid_fixture.v1",
+			ScenarioInputRef: "fixture:hybrid.resolved_path_follow_up_and_projection_rationale.v1",
+		},
+		PromptBudget: 576,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Filesystem hardening note: policy checks must run on the final resolved target path, not the caller's raw relative path."},
+			{Role: "user", Content: "Demo workspace note: keep the friendly workspace path visible in Haven so operators are not staring at private runtime directories."},
+			{Role: "user", Content: "Projection note: operator surfaces should show virtual sandbox paths while resolved runtime paths stay private and server-side."},
+			{Role: "state_probe", Content: "What is the current filesystem path-hardening follow-up and next step?"},
+			{Role: "evidence_probe", Content: "Find the path-handling discussion about why we validate the resolved target but still render virtual paths in operator surfaces."},
+			{Role: "system_probe", Content: "Resume the filesystem path-hardening work with the current follow-up and the rationale for resolved-target validation plus virtual-path projection."},
+		},
+		HybridRecallExpectation: &HybridRecallExpectation{
+			RequiredStateHints: []string{
+				"Current follow-up: keep operator-visible sandbox paths virtual while denying any write that resolves outside the allowed root.",
+				"Next step: thread final-target resolution through the Haven file preview path before expanding more workspace shortcuts.",
+			},
+			ForbiddenStateHints: []string{
+				"Current follow-up: trust the raw path the client sends if the preview panel already rendered it.",
+			},
+			RequiredEvidenceHints: []string{
+				"policy checks must run on the final resolved target path",
+				"operator surfaces should show virtual sandbox paths while resolved runtime paths stay private",
+			},
+			ForbiddenEvidenceHints: []string{
+				"friendly workspace path visible in Haven",
+			},
+			MustFindState:         true,
+			MustFindEvidence:      true,
+			MaxItemsReturned:      4,
+			MaxHintBytesRetrieved: 580,
 		},
 	}
 }

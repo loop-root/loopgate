@@ -439,6 +439,80 @@ func TestRunScenarioFixtures_HybridRecallFailsWhenEvidenceHalfIsMissing(t *testi
 	}
 }
 
+func TestRerankHybridEvidenceItems_PrefersRelationSpecificEvidence(t *testing.T) {
+	fixture := HybridResolvedPathFollowUpFixture()
+	rerankedItems := rerankHybridEvidenceItems([]ProjectedNodeDiscoverItem{
+		{
+			NodeID:     "wrong_mount_design",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Design note: operator mount write grant renewal moved into the explicit UI renew action so audit append failures still block authority mutation.",
+			MatchCount: 4,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+		{
+			NodeID:     "right_filesystem_design",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Filesystem hardening note: policy checks must run on the final resolved target path, not the caller's raw relative path.",
+			MatchCount: 4,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+		{
+			NodeID:     "right_projection_design",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Projection note: operator surfaces should show virtual sandbox paths while resolved runtime paths stay private and server-side.",
+			MatchCount: 4,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+	}, hybridEvidenceLookupQuery(fixture, fixture.HybridRecallExpectation.RequiredStateHints), fixture.HybridRecallExpectation.RequiredStateHints, 2)
+	if len(rerankedItems) != 2 {
+		t.Fatalf("expected two reranked evidence items, got %#v", rerankedItems)
+	}
+	selectedNodeIDs := map[string]bool{}
+	for _, rerankedItem := range rerankedItems {
+		selectedNodeIDs[rerankedItem.NodeID] = true
+	}
+	if !selectedNodeIDs["right_filesystem_design"] || !selectedNodeIDs["right_projection_design"] || selectedNodeIDs["wrong_mount_design"] {
+		t.Fatalf("expected relation-specific filesystem evidence to outrank generic mount evidence, got %#v", rerankedItems)
+	}
+}
+
+func TestRerankHybridEvidenceItems_PrefersComplementaryCoverage(t *testing.T) {
+	fixture := HybridPreviewCardFollowUpFixture()
+	rerankedItems := rerankHybridEvidenceItems([]ProjectedNodeDiscoverItem{
+		{
+			NodeID:     "wrong_preview_badge",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Card design note: make the preview badge the primary label so the profile panel feels self-explanatory during demos.",
+			MatchCount: 4,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+		{
+			NodeID:     "right_derived_context",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Design memo: preview card text stays derived context and must not overwrite the canonical profile slot.",
+			MatchCount: 4,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+		{
+			NodeID:     "right_authoritative_slot",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Companion note: display labels are useful as search hints, but the authoritative state still comes from the anchored slot artifact.",
+			MatchCount: 4,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+	}, hybridEvidenceLookupQuery(fixture, fixture.HybridRecallExpectation.RequiredStateHints), fixture.HybridRecallExpectation.RequiredStateHints, 2)
+	if len(rerankedItems) != 2 {
+		t.Fatalf("expected two reranked evidence items, got %#v", rerankedItems)
+	}
+	selectedNodeIDs := map[string]bool{}
+	for _, rerankedItem := range rerankedItems {
+		selectedNodeIDs[rerankedItem.NodeID] = true
+	}
+	if !selectedNodeIDs["right_derived_context"] || !selectedNodeIDs["right_authoritative_slot"] || selectedNodeIDs["wrong_preview_badge"] {
+		t.Fatalf("expected complementary preview evidence to outrank the demo-only badge note, got %#v", rerankedItems)
+	}
+}
+
 func TestRunScenarioFixtures_AllowsBenignRetrievalDuringPoisoningFixture(t *testing.T) {
 	fixture := PoisoningRememberedInstructionFixture()
 	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{
