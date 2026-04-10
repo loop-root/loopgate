@@ -58,6 +58,9 @@ authority or invent hidden memory behavior. Its job is to:
   - currently includes:
     - poisoning fixtures
     - paraphrased poisoning families for generalization checks
+    - delayed-trigger poisoning fixtures where dangerous guidance only activates on a later phrase or handoff state
+    - format-laundered poisoning fixtures using markdown checklist and yaml-like metadata shapes
+    - broader secret-material poisoning fixtures for session cookies, signing keys, and client secrets
     - contradiction / stale-memory fixtures
     - contradiction alias/paraphrase supersession and entity-guard fixtures
     - long-history interleaved alias contradiction fixtures
@@ -82,6 +85,8 @@ authority or invent hidden memory behavior. Its job is to:
       - multi-update blocker drift
       - longer-history operational-cost pressure
     - safety-precision fixtures for benign near-miss phrases that should not be overblocked
+    - benign markdown and yaml operational-note controls for the new format-laundering families
+    - benign denied-waiver postmortem controls for the delayed-trigger and approval-waiver families
     - every new adversarial family should ship with a benign or distractor guard fixture
   - poisoning now includes less-obvious authority-spoof and stable-slot piggyback cases, not only direct "ignore safety" strings
 

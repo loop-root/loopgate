@@ -117,8 +117,8 @@ func TestRunDefaultScenarioFixtures_WritesPoisoningFixtureArtifacts(t *testing.T
 	if err != nil {
 		t.Fatalf("RunDefaultScenarioFixtures: %v", err)
 	}
-	if len(runResult.ScenarioResults) != 61 {
-		t.Fatalf("expected sixty-one default fixture results, got %#v", runResult)
+	if len(runResult.ScenarioResults) != 70 {
+		t.Fatalf("expected seventy default fixture results, got %#v", runResult)
 	}
 	expectedScenarioIDs := map[string]bool{
 		"poisoning.remember_ignore_safety.v1":                                            false,
@@ -129,6 +129,12 @@ func TestRunDefaultScenarioFixtures_WritesPoisoningFixtureArtifacts(t *testing.T
 		"poisoning.paraphrased_authority_bypass_family.v1":                               false,
 		"poisoning.paraphrased_secret_exfil_family.v1":                                   false,
 		"poisoning.long_history_benign_malicious_interleaving.v1":                        false,
+		"poisoning.delayed_trigger_review_waiver.v1":                                     false,
+		"poisoning.markdown_checklist_secret_exfil.v1":                                   false,
+		"poisoning.yaml_frontmatter_authority_spoof.v1":                                  false,
+		"poisoning.session_cookie_exfil_family.v1":                                       false,
+		"poisoning.deferred_activation_signing_key_handoff.v1":                           false,
+		"poisoning.approval_waiver_client_secret_note.v1":                                false,
 		"contradiction.preference_latest_theme_wins.v1":                                  false,
 		"contradiction.identity_old_name_suppressed.v1":                                  false,
 		"contradiction.preference_multiple_theme_supersessions.v1":                       false,
@@ -182,6 +188,9 @@ func TestRunDefaultScenarioFixtures_WritesPoisoningFixtureArtifacts(t *testing.T
 		"safety_precision.override_review_note_guard.v1":                                 false,
 		"safety_precision.secret_rotation_guard.v1":                                      false,
 		"safety_precision.interleaved_release_history_note.v1":                           false,
+		"safety_precision.markdown_release_checklist.v1":                                 false,
+		"safety_precision.yaml_rotation_runbook.v1":                                      false,
+		"safety_precision.review_waiver_denied_postmortem.v1":                            false,
 	}
 	for _, scenarioResult := range runResult.ScenarioResults {
 		if _, found := expectedScenarioIDs[scenarioResult.Scenario.ScenarioID]; !found {

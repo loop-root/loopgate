@@ -87,6 +87,54 @@ func TestSelectScenarioFixtures_DemoSlotTruthSet(t *testing.T) {
 	}
 }
 
+func TestSelectScenarioFixtures_PoisoningPolicyMatrixSet(t *testing.T) {
+	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
+		ScenarioSets: []string{"poisoning_policy_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := SelectScenarioFixtures(DefaultScenarioFixtures(), normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	if len(selectedFixtures) != 23 {
+		t.Fatalf("expected twenty-three poisoning-policy fixtures, got %d", len(selectedFixtures))
+	}
+}
+
+func TestSelectScenarioFixtures_PoisoningFormatLaunderingSet(t *testing.T) {
+	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
+		ScenarioSets: []string{"poisoning_format_laundering"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := SelectScenarioFixtures(DefaultScenarioFixtures(), normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	if len(selectedFixtures) != 4 {
+		t.Fatalf("expected four format-laundering fixtures, got %d", len(selectedFixtures))
+	}
+}
+
+func TestSelectScenarioFixtures_PoisoningDelayedTriggerSet(t *testing.T) {
+	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
+		ScenarioSets: []string{"poisoning_delayed_trigger"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := SelectScenarioFixtures(DefaultScenarioFixtures(), normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	if len(selectedFixtures) != 3 {
+		t.Fatalf("expected three delayed-trigger fixtures, got %d", len(selectedFixtures))
+	}
+}
+
 func TestSelectScenarioFixtures_EmptySelectionFailsClosed(t *testing.T) {
 	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
 		ScenarioIDs: []string{"missing.fixture.v1"},

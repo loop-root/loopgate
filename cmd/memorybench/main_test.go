@@ -1068,6 +1068,65 @@ func TestMaybeSeedRAGFixtureCorpus_UsesLocalRuntimePaths(t *testing.T) {
 	}
 }
 
+func TestMaybeSeedRAGFixtureCorpus_AllowsGovernanceOnlyFixtureSets(t *testing.T) {
+	repoRoot := t.TempDir()
+	pythonExecutablePath := filepath.Join(repoRoot, ".cache", "memorybench-venv", "bin", "python")
+	if err := os.MkdirAll(filepath.Dir(pythonExecutablePath), 0o755); err != nil {
+		t.Fatalf("mkdir python executable parent: %v", err)
+	}
+	if err := os.WriteFile(pythonExecutablePath, []byte("#!/bin/sh\ncat > \"$TEST_STDIN_OUT\"\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake python executable: %v", err)
+	}
+	helperScriptPath := filepath.Join(repoRoot, "cmd", "memorybench", "rag_search.py")
+	if err := os.MkdirAll(filepath.Dir(helperScriptPath), 0o755); err != nil {
+		t.Fatalf("mkdir helper script parent: %v", err)
+	}
+	if err := os.WriteFile(helperScriptPath, []byte("print('ok')\n"), 0o644); err != nil {
+		t.Fatalf("write fake helper script: %v", err)
+	}
+	stdinOutputPath := filepath.Join(repoRoot, "seed-stdin.json")
+	originalEnvironment := os.Getenv("TEST_STDIN_OUT")
+	t.Cleanup(func() {
+		if originalEnvironment == "" {
+			_ = os.Unsetenv("TEST_STDIN_OUT")
+			return
+		}
+		_ = os.Setenv("TEST_STDIN_OUT", originalEnvironment)
+	})
+	if err := os.Setenv("TEST_STDIN_OUT", stdinOutputPath); err != nil {
+		t.Fatalf("set TEST_STDIN_OUT: %v", err)
+	}
+
+	normalizedScenarioFilter, err := memorybench.NormalizeScenarioFilter(memorybench.ScenarioFilter{
+		ScenarioSets: []string{"poisoning_policy_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := benchmarkFixturesForProfile("fixtures", normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("benchmarkFixturesForProfile: %v", err)
+	}
+
+	if err := maybeSeedRAGFixtureCorpus(t.Context(), repoRoot, "rag_baseline", memorybench.RAGBaselineConfig{
+		QdrantURL:      "http://127.0.0.1:6333",
+		CollectionName: "memorybench_default",
+	}, selectedFixtures); err != nil {
+		t.Fatalf("maybeSeedRAGFixtureCorpus: %v", err)
+	}
+	stdinBytes, err := os.ReadFile(stdinOutputPath)
+	if err != nil {
+		t.Fatalf("read seed stdin: %v", err)
+	}
+	stdinText := string(stdinBytes)
+	if !strings.Contains(stdinText, "__governance_only_placeholder__") {
+		t.Fatalf("expected governance-only placeholder corpus doc, got %q", stdinText)
+	}
+	if strings.Contains(stdinText, "poisoning.remember_ignore_safety.v1") {
+		t.Fatalf("did not expect real poisoning fixture text in governance-only placeholder seed, got %q", stdinText)
+	}
+}
+
 func TestMaybeSeedRAGFixtureCorpus_UsesIsolatedCollectionName(t *testing.T) {
 	repoRoot := t.TempDir()
 	pythonExecutablePath := filepath.Join(repoRoot, ".cache", "memorybench-venv", "bin", "python")

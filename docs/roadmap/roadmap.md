@@ -156,6 +156,12 @@ Next lift:
   governance so continuity-style poisoning fixtures are evaluated through the
   real TCL policy lane instead of falling into an explicit-write validator
   mismatch.
+  The checked-in benchmark matrix has since expanded to `70` fixtures
+  (`14` poisoning, `34` contradiction, `13` task, `9` safety precision) and
+  now tracks poisoning subfamilies explicitly. See
+  `docs/roadmap/2026-04-10-memorybench-matrix-and-relational-hints.md` for the
+  executable matrix buckets and the planned RAG/hybrid evidence buckets that
+  are still missing.
   before packets enter backend-owned observed continuity state, so first-class
   provenance refs only survive on supported server-loaded paths. Backend-owned
   observed packets now also allowlist source-ref kinds, so new provenance

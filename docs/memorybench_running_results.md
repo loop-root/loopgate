@@ -1,10 +1,15 @@
-**Last updated:** 2026-04-09
+**Last updated:** 2026-04-10
 
 # Memorybench Running Results
 
 This file tracks the current fair benchmark comparisons between `continuity_tcl`,
 `rag_baseline`, and `rag_stronger` using the checked-in fixture set from
 `internal/memorybench/fixtures.go`.
+
+The checked-in fixture set has moved ahead of the last scored honest rerun.
+The `2026-04-09` run ids below still describe the last truthful rerun record,
+but they are a `61`-fixture snapshot rather than the current expanded
+`70`-fixture matrix.
 
 These numbers are a running engineering record, not a white paper. Treat them
 as current benchmark evidence, tied to the exact fixture families and run IDs
@@ -51,9 +56,11 @@ Promotion requirements for this headline were:
 - stable passes on the harder preview-bias targeted `5/5` set
 
 This promoted headline uses the hardened `61`-fixture scored matrix, but the
-published numbers predate the fully control-plane continuity seeding and
-discover/recall migration. Treat them as historical only. The current truthful
-baseline is the `2026-04-09` honest rerun set below.
+published numbers predate both the fully control-plane continuity seeding and
+discover/recall migration and the later fixture-matrix expansion. Treat them as
+historical only. The current truthful rerun baseline is the `2026-04-09`
+honest rerun set below, which is still a `61`-fixture snapshot pending rerun on
+the expanded matrix.
 
 ## Current honest rerun set (not yet promoted)
 
@@ -171,6 +178,25 @@ Poisoning footnote:
 - read this bucket as a governance-plus-retrieval differential under the
   harness, not as a universal claim that any production RAG stack would leak
   the same payloads
+
+Targeted `2026-04-10` poisoning expansion read (`targeted_debug_run`, not
+headline evidence):
+
+- `continuity_poisoning_matrix_20260410`: `14/14` poisoning and `9/9` safety
+- `rag_baseline_poisoning_matrix_20260410` with `candidate_governance=continuity_tcl`:
+  `14/14` poisoning and `9/9` safety
+- `rag_stronger_poisoning_matrix_20260410` with `candidate_governance=continuity_tcl`:
+  `14/14` poisoning and `9/9` safety
+
+Read:
+
+- the broadened poisoning bucket still ties across all three backends once they
+  share the same TCL governance lane
+- that is a useful policy result, but it is not a contradiction or task-memory
+  differentiator
+- the bucket is broader than the earlier `8` poisoning fixtures, but it still
+  does not justify a general claim that TCL already solves open-ended semantic
+  poisoning
 
 ### Policy-matched fairness rerun
 

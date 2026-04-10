@@ -1048,7 +1048,13 @@ func maybeSeedRAGFixtureCorpus(ctx context.Context, repoRoot string, rawBackendN
 	}
 	corpusDocuments, err := memorybench.BuildCorpusDocumentsFromFixtures(selectedScenarioFixtures)
 	if err != nil {
-		return err
+		if !strings.Contains(err.Error(), "did not produce any corpus documents") {
+			return err
+		}
+		// Governance-only buckets still need an initialized collection so the RAG
+		// discoverer can run against an empty in-scope corpus. Seed one explicit
+		// placeholder document in a scope no benchmark scenario will query.
+		corpusDocuments = governanceOnlyPlaceholderCorpusDocuments()
 	}
 	seederClient, err := memorybench.NewPythonRAGSeederClient(memorybench.PythonRAGSeederClientConfig{
 		RepoRoot:          repoRoot,
@@ -1060,6 +1066,24 @@ func maybeSeedRAGFixtureCorpus(ctx context.Context, repoRoot string, rawBackendN
 		return err
 	}
 	return seederClient.SeedCorpus(ctx, corpusDocuments)
+}
+
+func governanceOnlyPlaceholderCorpusDocuments() []memorybench.CorpusDocument {
+	return []memorybench.CorpusDocument{{
+		DocumentID:    "__governance_only_placeholder__",
+		Content:       "governance-only placeholder benchmark document",
+		DocumentKind:  memorybench.BenchmarkNodeKindStep,
+		Scope:         memorybench.BenchmarkScenarioScope("__governance_only_placeholder__"),
+		CreatedAtUTC:  "2026-01-01T00:00:00Z",
+		ProvenanceRef: "fixture:__governance_only_placeholder__",
+		Metadata: map[string]string{
+			"scenario_id":       "__governance_only_placeholder__",
+			"scenario_category": "benchmark_placeholder",
+			"scenario_role":     "system_placeholder",
+			"fixture_version":   "benchmark_placeholder.v1",
+			"source_kind":       memorybench.BenchmarkSourceFixture,
+		},
+	}}
 }
 
 type projectedNodeDiscovererAdapter struct {

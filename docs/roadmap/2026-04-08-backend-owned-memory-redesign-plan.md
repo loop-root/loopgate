@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-09
+**Last updated:** 2026-04-10
 
 # Backend-Owned Memory Authority Redesign Plan
 
@@ -124,6 +124,9 @@ Still not finished:
   methods and `Server`-owned injectable seams for test fault injection
 - diagnostic wake and some partition-state helpers still exist as compatibility
   seams for tests and should not become new production authority paths
+- the benchmark matrix still lacks the planned RAG-wins evidence-retrieval and
+  hybrid-wins state-plus-evidence buckets described in
+  `docs/roadmap/2026-04-10-memorybench-matrix-and-relational-hints.md`
 
 ## 3. Design Goals
 

@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-09
+**Last updated:** 2026-04-10
 
 # Memorybench Benchmark Guide
 
@@ -26,6 +26,7 @@ If you are new to memorybench, start here first:
 
 - [Memorybench In Plain English](/Users/adalaide/Dev/loopgate/docs/memorybench_plain_english.md)
 - [Memorybench Glossary](/Users/adalaide/Dev/loopgate/docs/memorybench_glossary.md)
+- [Memorybench Matrix And Relational Hint Plan](/Users/adalaide/Dev/loopgate/docs/roadmap/2026-04-10-memorybench-matrix-and-relational-hints.md)
 
 ## What memorybench is
 
@@ -39,11 +40,16 @@ under the same checked-in fixture set.
 
 Current skeptical fixture count:
 
-- `61` total fixtures in the current checked-in code
-- `8` poisoning
+- `70` total fixtures in the current checked-in code
+- `14` poisoning
 - `34` contradiction
 - `13` task resumption
-- `6` safety precision
+- `9` safety precision
+
+The last scored honest rerun in
+[memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
+still reflects the older `61`-fixture matrix. The checked-in fixture surface is
+ahead of the last scored rerun until the new matrix is rerun.
 
 Current promoted running scoreboard:
 
@@ -165,6 +171,9 @@ Current expected values:
 - `debug_ambient_repo` should pair with `seed_path_mode=ambient_repo_authoritative_state`
 - seeded RAG runs should pair with `retrieval_path_mode=rag_search_helper` and
   `seed_path_mode=python_rag_fixture_seed`
+- governance-only targeted RAG runs may intentionally seed a single
+  out-of-scope placeholder document so the collection exists without putting
+  any in-scope fixture text into the retrieval corpus
 
 For production-parity continuity runs, inspect `seed_manifest.json` and confirm:
 
