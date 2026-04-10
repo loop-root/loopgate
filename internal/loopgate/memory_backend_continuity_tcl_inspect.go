@@ -426,6 +426,44 @@ func buildObservedContinuityPacket(validatedRequest ContinuityInspectRequest) co
 	return observedPacket
 }
 
+func fallbackObservedContinuityEventSourceRef(continuityEvent continuityObservedEventRecord) continuityArtifactSourceRef {
+	return continuityArtifactSourceRef{
+		// Legacy/raw continuity replay still derives provenance from the synthetic
+		// ledger sequence ref. Keep the event hash attached so operators can still
+		// correlate fallback-derived artifacts to the observed event that produced them.
+		Kind:   "morph_ledger_event",
+		Ref:    fmt.Sprintf("ledger_sequence:%d", continuityEvent.LedgerSequence),
+		SHA256: continuityEvent.EventHash,
+	}
+}
+
+func observedContinuityEventSourceRefs(continuityEvent continuityObservedEventRecord) []continuityArtifactSourceRef {
+	if len(continuityEvent.SourceRefs) != 0 {
+		return append([]continuityArtifactSourceRef(nil), continuityEvent.SourceRefs...)
+	}
+	return []continuityArtifactSourceRef{fallbackObservedContinuityEventSourceRef(continuityEvent)}
+}
+
+func observedContinuityEventPrimaryFactSourceRef(continuityEvent continuityObservedEventRecord) string {
+	if len(continuityEvent.SourceRefs) == 0 {
+		return fallbackObservedContinuityEventSourceRef(continuityEvent).Ref
+	}
+	return formatContinuityArtifactSourceRef(continuityEvent.SourceRefs[0])
+}
+
+func formatContinuityArtifactSourceRef(sourceRef continuityArtifactSourceRef) string {
+	trimmedKind := strings.TrimSpace(sourceRef.Kind)
+	trimmedRef := strings.TrimSpace(sourceRef.Ref)
+	switch {
+	case trimmedKind == "":
+		return trimmedRef
+	case trimmedRef == "":
+		return trimmedKind
+	default:
+		return trimmedKind + ":" + trimmedRef
+	}
+}
+
 func buildObservedContinuityEventRecord(rawEvent ContinuityEventInput) continuityObservedEventRecord {
 	observedEvent := continuityObservedEventRecord{
 		TimestampUTC:    rawEvent.TimestampUTC,
@@ -532,19 +570,19 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(observedPa
 	}
 	sourceRefSeen := map[string]struct{}{}
 	for _, continuityEvent := range observedPacket.Events {
-		eventSourceRef := continuityArtifactSourceRef{
-			Kind:   "morph_ledger_event",
-			Ref:    fmt.Sprintf("ledger_sequence:%d", continuityEvent.LedgerSequence),
-			SHA256: continuityEvent.EventHash,
-		}
-		if _, seen := sourceRefSeen[eventSourceRef.Ref]; !seen {
-			sourceRefSeen[eventSourceRef.Ref] = struct{}{}
+		eventSourceRefs := observedContinuityEventSourceRefs(continuityEvent)
+		for _, eventSourceRef := range eventSourceRefs {
+			sourceRefKey := formatContinuityArtifactSourceRef(eventSourceRef)
+			if _, seen := sourceRefSeen[sourceRefKey]; seen {
+				continue
+			}
+			sourceRefSeen[sourceRefKey] = struct{}{}
 			distillateRecord.SourceRefs = append(distillateRecord.SourceRefs, eventSourceRef)
 		}
 		switch continuityEvent.Type {
 		case "provider_fact_observed":
 			for _, observedFact := range continuityEvent.payloadFacts() {
-				derivedFact, ok := backend.deriveContinuityDistillateFact(eventSourceRef.Ref, continuityEvent, observedFact)
+				derivedFact, ok := backend.deriveContinuityDistillateFact(observedContinuityEventPrimaryFactSourceRef(continuityEvent), continuityEvent, observedFact)
 				if !ok {
 					continue
 				}

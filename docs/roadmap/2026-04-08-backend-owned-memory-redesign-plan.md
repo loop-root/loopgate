@@ -88,6 +88,9 @@ Completed slices in the current refactor:
 - server-loaded `/v1/continuity/inspect-thread` now sends a backend-owned
   observed packet directly instead of first fabricating a raw client-style
   continuity request
+- when the supported observed packet path carries server-owned source refs,
+  derived distillates and fact provenance now preserve those refs instead of
+  collapsing back to synthetic `ledger_sequence:*` placeholders
 
 Still not finished:
 

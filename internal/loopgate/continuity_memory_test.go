@@ -1120,6 +1120,141 @@ func TestInspectContinuityThread_PersistsAnalyzedContinuityFactCandidateFields(t
 	}
 }
 
+func TestInspectObservedContinuity_PreservesProvidedFactSourceRef(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	inspectResponse, err := server.inspectObservedContinuity(capabilityToken{
+		TenantID:         "",
+		ControlSessionID: client.controlSessionID,
+	}, ObservedContinuityInspectRequest{
+		InspectionID: "inspect_observed_fact_source_ref",
+		ThreadID:     "thread_observed_fact_source_ref",
+		Scope:        memoryScopeGlobal,
+		SealedAtUTC:  "2026-04-09T12:00:00Z",
+		Tags:         []string{"haven", "conversation"},
+		ObservedPacket: continuityObservedPacket{
+			ThreadID:    "thread_observed_fact_source_ref",
+			Scope:       memoryScopeGlobal,
+			SealedAtUTC: "2026-04-09T12:00:00Z",
+			Events: []continuityObservedEventRecord{
+				{
+					TimestampUTC:    "2026-04-09T12:00:00Z",
+					SessionID:       client.controlSessionID,
+					Type:            "user_message",
+					Scope:           memoryScopeGlobal,
+					ThreadID:        "thread_observed_fact_source_ref",
+					EpistemicFlavor: "freshly_checked",
+					LedgerSequence:  1,
+					EventHash:       "observed_fact_source_ref_intro",
+					SourceRefs: []continuityArtifactSourceRef{{
+						Kind: havenThreadEventSourceKind,
+						Ref:  "thread_observed_fact_source_ref:1",
+					}},
+					Payload: &continuityObservedEventPayload{
+						Text: "hello there",
+					},
+				},
+				{
+					TimestampUTC:    "2026-04-09T12:00:01Z",
+					SessionID:       client.controlSessionID,
+					Type:            "assistant_response",
+					Scope:           memoryScopeGlobal,
+					ThreadID:        "thread_observed_fact_source_ref",
+					EpistemicFlavor: "freshly_checked",
+					LedgerSequence:  2,
+					EventHash:       "observed_fact_source_ref_ack",
+					SourceRefs: []continuityArtifactSourceRef{{
+						Kind: havenThreadEventSourceKind,
+						Ref:  "thread_observed_fact_source_ref:2",
+					}},
+					Payload: &continuityObservedEventPayload{
+						Text: "noted",
+					},
+				},
+				{
+					TimestampUTC:    "2026-04-09T12:00:02Z",
+					SessionID:       client.controlSessionID,
+					Type:            "provider_fact_observed",
+					Scope:           memoryScopeGlobal,
+					ThreadID:        "thread_observed_fact_source_ref",
+					EpistemicFlavor: "freshly_checked",
+					LedgerSequence:  3,
+					EventHash:       "observed_fact_source_ref_event",
+					SourceRefs: []continuityArtifactSourceRef{{
+						Kind: havenThreadEventSourceKind,
+						Ref:  "thread_observed_fact_source_ref:3",
+					}},
+					Payload: &continuityObservedEventPayload{
+						Facts: []continuityObservedFactRecord{{
+							Name:  "user.name",
+							Value: "Ada",
+						}},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("inspect observed continuity: %v", err)
+	}
+	if len(inspectResponse.DerivedDistillateIDs) != 1 {
+		t.Fatalf("expected one derived distillate, got %#v", inspectResponse)
+	}
+
+	derivedDistillate := testDefaultMemoryState(t, server).Distillates[inspectResponse.DerivedDistillateIDs[0]]
+	var foundProvidedDistillateSourceRef bool
+	for _, sourceRef := range derivedDistillate.SourceRefs {
+		if sourceRef.Kind == havenThreadEventSourceKind && sourceRef.Ref == "thread_observed_fact_source_ref:3" {
+			foundProvidedDistillateSourceRef = true
+			break
+		}
+	}
+	if !foundProvidedDistillateSourceRef {
+		t.Fatalf("expected provided observed source ref to persist on distillate, got %#v", derivedDistillate.SourceRefs)
+	}
+	if len(derivedDistillate.Facts) != 1 {
+		t.Fatalf("expected one derived fact, got %#v", derivedDistillate.Facts)
+	}
+	if derivedDistillate.Facts[0].SourceRef != havenThreadEventSourceKind+":thread_observed_fact_source_ref:3" {
+		t.Fatalf("expected provided observed source ref to persist on fact, got %#v", derivedDistillate.Facts[0])
+	}
+}
+
+func TestInspectContinuityThread_FallbackSourceRefRetainsEventHash(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	inspectRequest := testContinuityInspectRequest("inspect_fallback_source_ref_hash", "thread_fallback_source_ref_hash", "monitor github status")
+	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	if err != nil {
+		t.Fatalf("inspect continuity thread: %v", err)
+	}
+	if len(inspectResponse.DerivedDistillateIDs) != 1 {
+		t.Fatalf("expected one derived distillate, got %#v", inspectResponse)
+	}
+
+	derivedDistillate := testDefaultMemoryState(t, server).Distillates[inspectResponse.DerivedDistillateIDs[0]]
+	expectedFallbackRef := continuityArtifactSourceRef{
+		Kind:   "morph_ledger_event",
+		Ref:    "ledger_sequence:3",
+		SHA256: "eventhash_fact_thread_fallback_source_ref_hash",
+	}
+	var foundFallbackRef bool
+	for _, sourceRef := range derivedDistillate.SourceRefs {
+		if reflect.DeepEqual(sourceRef, expectedFallbackRef) {
+			foundFallbackRef = true
+			break
+		}
+	}
+	if !foundFallbackRef {
+		t.Fatalf("expected fallback source ref to retain event hash, got %#v", derivedDistillate.SourceRefs)
+	}
+}
+
 func TestInspectContinuityThread_UnsupportedDerivedFactRemainsUnanchored(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
