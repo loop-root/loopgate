@@ -78,6 +78,10 @@ Completed slices in the current refactor:
 - continuity-derived fact analysis now runs through a backend-owned typed
   continuity candidate helper before persistence, so `inspect` no longer
   hand-assembles persisted facts from inline TCL analysis results
+- continuity inspection writes now persist a Loopgate-owned canonical
+  `observed_packet` record instead of storing the raw inspect request body in
+  continuity JSONL, and distillation now derives from that typed packet rather
+  than the caller-supplied payload bundle
 
 Still not finished:
 

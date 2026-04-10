@@ -17,6 +17,7 @@ func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(auth
 	if err := validateContinuityInspectProvenance(authenticatedSession, validatedRequest); err != nil {
 		return ContinuityInspectResponse{}, err
 	}
+	observedPacket := buildObservedContinuityPacket(validatedRequest)
 
 	backend.server.memoryMu.Lock()
 	existingInspection, foundExisting := backend.partition.state.Inspections[validatedRequest.InspectionID]
@@ -63,7 +64,7 @@ func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(auth
 		var derivedResonateKey continuityResonateKeyRecord
 		var hasDerivedArtifacts bool
 		if inspectionRecord.DerivationOutcome == continuityInspectionOutcomeDerived {
-			derivedDistillate = backend.deriveContinuityDistillate(validatedRequest, inspectionRecord, nowUTC)
+			derivedDistillate = backend.deriveContinuityDistillate(observedPacket, inspectionRecord, nowUTC)
 			if len(derivedDistillate.Facts) == 0 && len(derivedDistillate.GoalOps) == 0 && len(derivedDistillate.UnresolvedItemOps) == 0 {
 				inspectionRecord.DerivationOutcome = continuityInspectionOutcomeNoArtifacts
 			} else {
@@ -106,20 +107,20 @@ func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(auth
 		inspectResponse = buildContinuityInspectResponse(inspectionRecord)
 		mutationEvents := continuityMutationEvents{
 			Continuity: []continuityAuthoritativeEvent{{
-				SchemaVersion: continuityMemorySchemaVersion,
-				EventID:       "continuity_inspection_" + inspectionRecord.InspectionID,
-				EventType:     "continuity_inspection_recorded",
-				CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
-				Actor:         authenticatedSession.ControlSessionID,
-				Scope:         inspectionRecord.Scope,
-				InspectionID:  inspectionRecord.InspectionID,
-				ThreadID:      inspectionRecord.ThreadID,
-				GoalType:      derivedDistillate.GoalType,
-				GoalFamilyID:  derivedDistillate.GoalFamilyID,
-				Request:       &validatedRequest,
-				Inspection:    ptrContinuityInspectionRecord(cloneContinuityInspectionRecord(inspectionRecord)),
-				Distillate:    ptrContinuityDistillateRecord(cloneContinuityDistillateRecord(derivedDistillate)),
-				ResonateKey:   ptrContinuityResonateKeyRecord(cloneContinuityResonateKeyRecord(derivedResonateKey)),
+				SchemaVersion:  continuityMemorySchemaVersion,
+				EventID:        "continuity_inspection_" + inspectionRecord.InspectionID,
+				EventType:      "continuity_inspection_recorded",
+				CreatedAtUTC:   nowUTC.Format(time.RFC3339Nano),
+				Actor:          authenticatedSession.ControlSessionID,
+				Scope:          inspectionRecord.Scope,
+				InspectionID:   inspectionRecord.InspectionID,
+				ThreadID:       inspectionRecord.ThreadID,
+				GoalType:       derivedDistillate.GoalType,
+				GoalFamilyID:   derivedDistillate.GoalFamilyID,
+				ObservedPacket: ptrContinuityObservedPacket(cloneContinuityObservedPacket(observedPacket)),
+				Inspection:     ptrContinuityInspectionRecord(cloneContinuityInspectionRecord(inspectionRecord)),
+				Distillate:     ptrContinuityDistillateRecord(cloneContinuityDistillateRecord(derivedDistillate)),
+				ResonateKey:    ptrContinuityResonateKeyRecord(cloneContinuityResonateKeyRecord(derivedResonateKey)),
 			}},
 		}
 		if !hasDerivedArtifacts {
@@ -232,27 +233,126 @@ func validateContinuityInspectProvenance(authenticatedSession capabilityToken, v
 	return nil
 }
 
-func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(validatedRequest ContinuityInspectRequest, inspectionRecord continuityInspectionRecord, now time.Time) continuityDistillateRecord {
-	distillateID := "dist_" + strings.TrimPrefix(validatedRequest.ThreadID, "thread_")
+func buildObservedContinuityPacket(validatedRequest ContinuityInspectRequest) continuityObservedPacket {
+	observedPacket := continuityObservedPacket{
+		ThreadID:    validatedRequest.ThreadID,
+		Scope:       validatedRequest.Scope,
+		SealedAtUTC: validatedRequest.SealedAtUTC,
+		Tags:        normalizeLoopgateMemoryTags(validatedRequest.Tags),
+		Events:      make([]continuityObservedEventRecord, 0, len(validatedRequest.Events)),
+	}
+	for _, rawEvent := range validatedRequest.Events {
+		observedPacket.Events = append(observedPacket.Events, buildObservedContinuityEventRecord(rawEvent))
+	}
+	return observedPacket
+}
+
+func buildObservedContinuityEventRecord(rawEvent ContinuityEventInput) continuityObservedEventRecord {
+	observedEvent := continuityObservedEventRecord{
+		TimestampUTC:    rawEvent.TimestampUTC,
+		SessionID:       strings.TrimSpace(rawEvent.SessionID),
+		Type:            strings.TrimSpace(rawEvent.Type),
+		Scope:           strings.TrimSpace(rawEvent.Scope),
+		ThreadID:        strings.TrimSpace(rawEvent.ThreadID),
+		EpistemicFlavor: strings.TrimSpace(rawEvent.EpistemicFlavor),
+		LedgerSequence:  rawEvent.LedgerSequence,
+		EventHash:       strings.TrimSpace(rawEvent.EventHash),
+	}
+	if len(rawEvent.SourceRefs) != 0 {
+		observedEvent.SourceRefs = make([]continuityArtifactSourceRef, 0, len(rawEvent.SourceRefs))
+		for _, rawSourceRef := range rawEvent.SourceRefs {
+			observedEvent.SourceRefs = append(observedEvent.SourceRefs, continuityArtifactSourceRef{
+				Kind:   strings.TrimSpace(rawSourceRef.Kind),
+				Ref:    strings.TrimSpace(rawSourceRef.Ref),
+				SHA256: strings.TrimSpace(rawSourceRef.SHA256),
+			})
+		}
+	}
+	if observedPayload := buildObservedContinuityEventPayload(rawEvent.Payload); observedPayload != nil {
+		observedEvent.Payload = observedPayload
+	}
+	return observedEvent
+}
+
+func buildObservedContinuityEventPayload(rawPayload map[string]interface{}) *continuityObservedEventPayload {
+	if len(rawPayload) == 0 {
+		return nil
+	}
+	observedPayload := continuityObservedEventPayload{
+		Text:              continuityPayloadStringField(rawPayload, "text"),
+		Output:            continuityPayloadStringField(rawPayload, "output"),
+		GoalID:            continuityPayloadStringField(rawPayload, "goal_id"),
+		ItemID:            continuityPayloadStringField(rawPayload, "item_id"),
+		Capability:        continuityPayloadStringField(rawPayload, "capability"),
+		Status:            continuityPayloadStringField(rawPayload, "status"),
+		Reason:            continuityPayloadStringField(rawPayload, "reason"),
+		DenialCode:        continuityPayloadStringField(rawPayload, "denial_code"),
+		CallID:            continuityPayloadStringField(rawPayload, "call_id"),
+		ApprovalRequestID: continuityPayloadStringField(rawPayload, "approval_request_id"),
+	}
+	if rawFacts, ok := rawPayload["facts"].(map[string]interface{}); ok && len(rawFacts) != 0 {
+		factNames := make([]string, 0, len(rawFacts))
+		for factName := range rawFacts {
+			factNames = append(factNames, factName)
+		}
+		sort.Strings(factNames)
+		for _, factName := range factNames {
+			normalizedFactName := strings.TrimSpace(factName)
+			if normalizedFactName == "" {
+				continue
+			}
+			normalizedFactValue, ok := normalizeContinuityFactValueForPersistence(rawFacts[factName])
+			if !ok {
+				continue
+			}
+			observedPayload.Facts = append(observedPayload.Facts, continuityObservedFactRecord{
+				Name:  normalizedFactName,
+				Value: normalizedFactValue,
+			})
+		}
+	}
+	if strings.TrimSpace(observedPayload.Text) == "" &&
+		strings.TrimSpace(observedPayload.Output) == "" &&
+		strings.TrimSpace(observedPayload.GoalID) == "" &&
+		strings.TrimSpace(observedPayload.ItemID) == "" &&
+		strings.TrimSpace(observedPayload.Capability) == "" &&
+		strings.TrimSpace(observedPayload.Status) == "" &&
+		strings.TrimSpace(observedPayload.Reason) == "" &&
+		strings.TrimSpace(observedPayload.DenialCode) == "" &&
+		strings.TrimSpace(observedPayload.CallID) == "" &&
+		strings.TrimSpace(observedPayload.ApprovalRequestID) == "" &&
+		len(observedPayload.Facts) == 0 {
+		return nil
+	}
+	return &observedPayload
+}
+
+func continuityPayloadStringField(rawPayload map[string]interface{}, fieldName string) string {
+	fieldValue, _ := rawPayload[fieldName].(string)
+	return strings.TrimSpace(fieldValue)
+}
+
+func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(observedPacket continuityObservedPacket, inspectionRecord continuityInspectionRecord, now time.Time) continuityDistillateRecord {
+	distillateID := "dist_" + strings.TrimPrefix(observedPacket.ThreadID, "thread_")
 	distillateRecord := continuityDistillateRecord{
 		SchemaVersion:       continuityMemorySchemaVersion,
 		DerivationVersion:   continuityDerivationVersion,
 		DistillateID:        distillateID,
 		InspectionID:        inspectionRecord.InspectionID,
-		ThreadID:            validatedRequest.ThreadID,
-		Scope:               validatedRequest.Scope,
+		ThreadID:            observedPacket.ThreadID,
+		Scope:               observedPacket.Scope,
 		UserImportance:      "somewhat_important",
 		CreatedAtUTC:        now.UTC().Format(time.RFC3339Nano),
-		Tags:                append([]string(nil), validatedRequest.Tags...),
-		DerivationSignature: buildDerivationSignature(validatedRequest),
+		Tags:                append([]string(nil), observedPacket.Tags...),
+		DerivationSignature: buildDerivationSignature(observedPacket),
 	}
 
-	discoveredTags := make(map[string]struct{}, len(validatedRequest.Tags))
-	for _, initialTag := range validatedRequest.Tags {
+	discoveredTags := make(map[string]struct{}, len(observedPacket.Tags))
+	for _, initialTag := range observedPacket.Tags {
 		discoveredTags[initialTag] = struct{}{}
 	}
 	sourceRefSeen := map[string]struct{}{}
-	for _, continuityEvent := range validatedRequest.Events {
+	for _, continuityEvent := range observedPacket.Events {
 		eventSourceRef := continuityArtifactSourceRef{
 			Kind:   "morph_ledger_event",
 			Ref:    fmt.Sprintf("ledger_sequence:%d", continuityEvent.LedgerSequence),
@@ -264,14 +364,8 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(validatedR
 		}
 		switch continuityEvent.Type {
 		case "provider_fact_observed":
-			candidateFacts, _ := continuityEvent.Payload["facts"].(map[string]interface{})
-			factNames := make([]string, 0, len(candidateFacts))
-			for factName := range candidateFacts {
-				factNames = append(factNames, factName)
-			}
-			sort.Strings(factNames)
-			for _, factName := range factNames {
-				derivedFact, ok := backend.deriveContinuityDistillateFact(eventSourceRef.Ref, continuityEvent, factName, candidateFacts[factName])
+			for _, observedFact := range continuityEvent.payloadFacts() {
+				derivedFact, ok := backend.deriveContinuityDistillateFact(eventSourceRef.Ref, continuityEvent, observedFact)
 				if !ok {
 					continue
 				}
@@ -279,8 +373,8 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(validatedR
 				recordLoopgateMemoryTags(discoveredTags, derivedFact.Name, fmt.Sprint(derivedFact.Value))
 			}
 		case "goal_opened":
-			goalID, _ := continuityEvent.Payload["goal_id"].(string)
-			goalText, _ := continuityEvent.Payload["text"].(string)
+			goalID := continuityEvent.payloadGoalID()
+			goalText := continuityEvent.payloadText()
 			if strings.TrimSpace(goalID) != "" {
 				distillateRecord.GoalOps = append(distillateRecord.GoalOps, continuityGoalOp{
 					GoalID:             strings.TrimSpace(goalID),
@@ -297,7 +391,7 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(validatedR
 				recordLoopgateMemoryTags(discoveredTags, goalID, goalText)
 			}
 		case "goal_closed":
-			goalID, _ := continuityEvent.Payload["goal_id"].(string)
+			goalID := continuityEvent.payloadGoalID()
 			if strings.TrimSpace(goalID) != "" {
 				distillateRecord.GoalOps = append(distillateRecord.GoalOps, continuityGoalOp{
 					GoalID:             strings.TrimSpace(goalID),
@@ -307,8 +401,8 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(validatedR
 				recordLoopgateMemoryTags(discoveredTags, goalID)
 			}
 		case "unresolved_item_opened":
-			itemID, _ := continuityEvent.Payload["item_id"].(string)
-			itemText, _ := continuityEvent.Payload["text"].(string)
+			itemID := continuityEvent.payloadItemID()
+			itemText := continuityEvent.payloadText()
 			if strings.TrimSpace(itemID) != "" {
 				distillateRecord.UnresolvedItemOps = append(distillateRecord.UnresolvedItemOps, continuityUnresolvedItemOp{
 					ItemID:             strings.TrimSpace(itemID),
@@ -319,7 +413,7 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(validatedR
 				recordLoopgateMemoryTags(discoveredTags, itemID, itemText)
 			}
 		case "unresolved_item_resolved":
-			itemID, _ := continuityEvent.Payload["item_id"].(string)
+			itemID := continuityEvent.payloadItemID()
 			if strings.TrimSpace(itemID) != "" {
 				distillateRecord.UnresolvedItemOps = append(distillateRecord.UnresolvedItemOps, continuityUnresolvedItemOp{
 					ItemID:             strings.TrimSpace(itemID),
@@ -347,8 +441,36 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(validatedR
 	return distillateRecord
 }
 
-func (backend *continuityTCLMemoryBackend) deriveContinuityDistillateFact(eventSourceRef string, continuityEvent ContinuityEventInput, rawFactName string, rawFactValue interface{}) (continuityDistillateFact, bool) {
-	analyzedCandidate, ok := backend.analyzeContinuityFactCandidate(rawFactName, rawFactValue)
+func (continuityEvent continuityObservedEventRecord) payloadFacts() []continuityObservedFactRecord {
+	if continuityEvent.Payload == nil {
+		return nil
+	}
+	return append([]continuityObservedFactRecord(nil), continuityEvent.Payload.Facts...)
+}
+
+func (continuityEvent continuityObservedEventRecord) payloadGoalID() string {
+	if continuityEvent.Payload == nil {
+		return ""
+	}
+	return strings.TrimSpace(continuityEvent.Payload.GoalID)
+}
+
+func (continuityEvent continuityObservedEventRecord) payloadItemID() string {
+	if continuityEvent.Payload == nil {
+		return ""
+	}
+	return strings.TrimSpace(continuityEvent.Payload.ItemID)
+}
+
+func (continuityEvent continuityObservedEventRecord) payloadText() string {
+	if continuityEvent.Payload == nil {
+		return ""
+	}
+	return strings.TrimSpace(continuityEvent.Payload.Text)
+}
+
+func (backend *continuityTCLMemoryBackend) deriveContinuityDistillateFact(eventSourceRef string, continuityEvent continuityObservedEventRecord, observedFact continuityObservedFactRecord) (continuityDistillateFact, bool) {
+	analyzedCandidate, ok := backend.analyzeContinuityFactCandidate(observedFact.Name, observedFact.Value)
 	if !ok {
 		return continuityDistillateFact{}, false
 	}

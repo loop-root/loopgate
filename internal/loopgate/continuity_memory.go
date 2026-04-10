@@ -1932,6 +1932,10 @@ func ptrContinuityInspectionLineage(lineage continuityInspectionLineage) *contin
 	return &lineage
 }
 
+func ptrContinuityObservedPacket(observedPacket continuityObservedPacket) *continuityObservedPacket {
+	return &observedPacket
+}
+
 func memoryWakeRecentFactFromDistillateFact(factRecord continuityDistillateFact) MemoryWakeStateRecentFact {
 	conflictAnchorVersion, conflictAnchorKey := continuityFactAnchorTuple(factRecord)
 	return MemoryWakeStateRecentFact{
@@ -1983,6 +1987,25 @@ func cloneSemanticProjection(semanticProjection *tclpkg.SemanticProjection) *tcl
 	clonedProjection.FamilySignature = strings.TrimSpace(clonedProjection.FamilySignature)
 	clonedProjection.RiskMotifs = append([]tclpkg.RiskMotif(nil), semanticProjection.RiskMotifs...)
 	return &clonedProjection
+}
+
+func cloneContinuityObservedPacket(observedPacket continuityObservedPacket) continuityObservedPacket {
+	observedPacket.Tags = append([]string(nil), observedPacket.Tags...)
+	observedPacket.Events = append([]continuityObservedEventRecord(nil), observedPacket.Events...)
+	for eventIndex := range observedPacket.Events {
+		observedPacket.Events[eventIndex] = cloneContinuityObservedEventRecord(observedPacket.Events[eventIndex])
+	}
+	return observedPacket
+}
+
+func cloneContinuityObservedEventRecord(observedEvent continuityObservedEventRecord) continuityObservedEventRecord {
+	observedEvent.SourceRefs = append([]continuityArtifactSourceRef(nil), observedEvent.SourceRefs...)
+	if observedEvent.Payload != nil {
+		clonedPayload := *observedEvent.Payload
+		clonedPayload.Facts = append([]continuityObservedFactRecord(nil), observedEvent.Payload.Facts...)
+		observedEvent.Payload = &clonedPayload
+	}
+	return observedEvent
 }
 
 func normalizeContinuityGoalOpForValidation(goalOp continuityGoalOp) continuityGoalOp {

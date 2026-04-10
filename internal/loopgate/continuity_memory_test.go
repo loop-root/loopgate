@@ -59,6 +59,62 @@ func TestInspectContinuityThread_ReplayIsIdempotentAndDoesNotAuditRawContinuityT
 	}
 }
 
+func TestInspectContinuityThread_PersistsObservedPacketInsteadOfRawRequest(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	inspectRequest := testContinuityInspectRequest("inspect_observed_packet", "thread_observed_packet", "Goal text")
+	inspectRequest.Events[2].Payload = map[string]interface{}{
+		"facts": map[string]interface{}{
+			"status_indicator": map[string]interface{}{
+				"state": "green",
+			},
+		},
+		"untrusted_blob": "should_not_persist",
+	}
+
+	if _, err := client.InspectContinuityThread(context.Background(), inspectRequest); err != nil {
+		t.Fatalf("inspect continuity thread: %v", err)
+	}
+
+	continuityEventsPath := newContinuityMemoryPaths(testDefaultPartitionRoot(t, server), server.memoryLegacyPath).ContinuityEventsPath
+	continuityEventBytes, err := os.ReadFile(continuityEventsPath)
+	if err != nil {
+		t.Fatalf("read continuity events: %v", err)
+	}
+	continuityEventText := string(continuityEventBytes)
+	if strings.Contains(continuityEventText, "\"request\":") {
+		t.Fatalf("expected new continuity events to omit raw request payloads, got %s", continuityEventText)
+	}
+	if !strings.Contains(continuityEventText, "\"observed_packet\":") {
+		t.Fatalf("expected continuity event log to persist observed_packet, got %s", continuityEventText)
+	}
+	if strings.Contains(continuityEventText, "\"state\":\"green\"") || strings.Contains(continuityEventText, "should_not_persist") {
+		t.Fatalf("expected observed packet canonicalization to drop nested and arbitrary payload fields, got %s", continuityEventText)
+	}
+
+	authoritativeEvents := readContinuityAuthoritativeEventsForTests(t, server)
+	if len(authoritativeEvents) != 1 {
+		t.Fatalf("expected one continuity authoritative event, got %#v", authoritativeEvents)
+	}
+	authoritativeEvent := authoritativeEvents[0]
+	if authoritativeEvent.Request != nil {
+		t.Fatalf("expected new continuity authoritative event to omit deprecated request field, got %#v", authoritativeEvent.Request)
+	}
+	if authoritativeEvent.ObservedPacket == nil {
+		t.Fatalf("expected continuity authoritative event to persist observed packet, got %#v", authoritativeEvent)
+	}
+	if authoritativeEvent.ObservedPacket.ThreadID != inspectRequest.ThreadID || authoritativeEvent.ObservedPacket.Scope != inspectRequest.Scope {
+		t.Fatalf("expected observed packet thread/scope to match inspect request, got %#v", authoritativeEvent.ObservedPacket)
+	}
+	if len(authoritativeEvent.ObservedPacket.Events) != len(inspectRequest.Events) {
+		t.Fatalf("expected observed packet to preserve event count, got %#v", authoritativeEvent.ObservedPacket)
+	}
+	if gotFacts := authoritativeEvent.ObservedPacket.Events[2].payloadFacts(); len(gotFacts) != 0 {
+		t.Fatalf("expected nested fact payload to be removed from observed packet, got %#v", gotFacts)
+	}
+}
+
 func TestInspectContinuityThread_RejectsMismatchedContinuityProvenance(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -4332,6 +4388,23 @@ func assertIneligibleDiscoverKeys(t *testing.T, currentState continuityMemorySta
 			t.Fatalf("expected key %q to remain ineligible, active keys=%#v", deniedKeyID, activeKeySet)
 		}
 	}
+}
+
+func readContinuityAuthoritativeEventsForTests(t *testing.T, server *Server) []continuityAuthoritativeEvent {
+	t.Helper()
+	continuityEventsPath := newContinuityMemoryPaths(testDefaultPartitionRoot(t, server), server.memoryLegacyPath).ContinuityEventsPath
+	recordedEvents := make([]continuityAuthoritativeEvent, 0, 1)
+	if err := replayJSONL(continuityEventsPath, func(rawLine []byte) error {
+		var authoritativeEvent continuityAuthoritativeEvent
+		if err := json.Unmarshal(rawLine, &authoritativeEvent); err != nil {
+			return err
+		}
+		recordedEvents = append(recordedEvents, authoritativeEvent)
+		return nil
+	}); err != nil {
+		t.Fatalf("replay continuity authoritative events: %v", err)
+	}
+	return recordedEvents
 }
 
 func testContinuityInspectRequest(inspectionID string, threadID string, goalText string) ContinuityInspectRequest {

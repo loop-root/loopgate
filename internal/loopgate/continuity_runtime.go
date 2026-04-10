@@ -199,22 +199,66 @@ type continuityRankingCacheEntry struct {
 }
 
 type continuityAuthoritativeEvent struct {
-	SchemaVersion string                       `json:"schema_version"`
-	EventID       string                       `json:"event_id"`
-	EventType     string                       `json:"event_type"`
-	CreatedAtUTC  string                       `json:"created_at_utc"`
-	Actor         string                       `json:"actor"`
-	Scope         string                       `json:"scope,omitempty"`
-	InspectionID  string                       `json:"inspection_id,omitempty"`
-	ThreadID      string                       `json:"thread_id,omitempty"`
-	GoalType      string                       `json:"goal_type,omitempty"`
-	GoalFamilyID  string                       `json:"goal_family_id,omitempty"`
-	Request       *ContinuityInspectRequest    `json:"request,omitempty"`
-	Inspection    *continuityInspectionRecord  `json:"inspection,omitempty"`
-	Distillate    *continuityDistillateRecord  `json:"distillate,omitempty"`
-	ResonateKey   *continuityResonateKeyRecord `json:"resonate_key,omitempty"`
-	Review        *continuityInspectionReview  `json:"review,omitempty"`
-	Lineage       *continuityInspectionLineage `json:"lineage,omitempty"`
+	SchemaVersion string `json:"schema_version"`
+	EventID       string `json:"event_id"`
+	EventType     string `json:"event_type"`
+	CreatedAtUTC  string `json:"created_at_utc"`
+	Actor         string `json:"actor"`
+	Scope         string `json:"scope,omitempty"`
+	InspectionID  string `json:"inspection_id,omitempty"`
+	ThreadID      string `json:"thread_id,omitempty"`
+	GoalType      string `json:"goal_type,omitempty"`
+	GoalFamilyID  string `json:"goal_family_id,omitempty"`
+	// Request is decode-compat only for older continuity JSONL entries.
+	// New writes should populate ObservedPacket instead of persisting the raw
+	// inspect request body as the authoritative continuity source record.
+	Request        *ContinuityInspectRequest    `json:"request,omitempty"`
+	ObservedPacket *continuityObservedPacket    `json:"observed_packet,omitempty"`
+	Inspection     *continuityInspectionRecord  `json:"inspection,omitempty"`
+	Distillate     *continuityDistillateRecord  `json:"distillate,omitempty"`
+	ResonateKey    *continuityResonateKeyRecord `json:"resonate_key,omitempty"`
+	Review         *continuityInspectionReview  `json:"review,omitempty"`
+	Lineage        *continuityInspectionLineage `json:"lineage,omitempty"`
+}
+
+type continuityObservedPacket struct {
+	ThreadID    string                          `json:"thread_id"`
+	Scope       string                          `json:"scope"`
+	SealedAtUTC string                          `json:"sealed_at_utc"`
+	Tags        []string                        `json:"tags,omitempty"`
+	Events      []continuityObservedEventRecord `json:"events,omitempty"`
+}
+
+type continuityObservedEventRecord struct {
+	TimestampUTC    string                          `json:"ts_utc"`
+	SessionID       string                          `json:"session_id"`
+	Type            string                          `json:"type"`
+	Scope           string                          `json:"scope"`
+	ThreadID        string                          `json:"thread_id"`
+	EpistemicFlavor string                          `json:"epistemic_flavor"`
+	LedgerSequence  int64                           `json:"ledger_sequence"`
+	EventHash       string                          `json:"event_hash"`
+	SourceRefs      []continuityArtifactSourceRef   `json:"source_refs,omitempty"`
+	Payload         *continuityObservedEventPayload `json:"payload,omitempty"`
+}
+
+type continuityObservedEventPayload struct {
+	Text              string                         `json:"text,omitempty"`
+	Output            string                         `json:"output,omitempty"`
+	GoalID            string                         `json:"goal_id,omitempty"`
+	ItemID            string                         `json:"item_id,omitempty"`
+	Capability        string                         `json:"capability,omitempty"`
+	Status            string                         `json:"status,omitempty"`
+	Reason            string                         `json:"reason,omitempty"`
+	DenialCode        string                         `json:"denial_code,omitempty"`
+	CallID            string                         `json:"call_id,omitempty"`
+	ApprovalRequestID string                         `json:"approval_request_id,omitempty"`
+	Facts             []continuityObservedFactRecord `json:"facts,omitempty"`
+}
+
+type continuityObservedFactRecord struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type continuityGoalEvent struct {
@@ -808,18 +852,8 @@ func buildReviewsCurrentSnapshot(currentState continuityMemoryState) map[string]
 	}
 }
 
-func buildDerivationSignature(inspectRequest ContinuityInspectRequest) string {
-	return hashStableJSONIdentifier(struct {
-		ThreadID string                 `json:"thread_id"`
-		Scope    string                 `json:"scope"`
-		Tags     []string               `json:"tags"`
-		Events   []ContinuityEventInput `json:"events"`
-	}{
-		ThreadID: inspectRequest.ThreadID,
-		Scope:    inspectRequest.Scope,
-		Tags:     inspectRequest.Tags,
-		Events:   inspectRequest.Events,
-	})
+func buildDerivationSignature(observedPacket continuityObservedPacket) string {
+	return hashStableJSONIdentifier(observedPacket)
 }
 
 func importanceBase(runtimeConfig config.RuntimeConfig, userImportance string) int {

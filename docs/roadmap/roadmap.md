@@ -121,7 +121,10 @@ Next lift:
   `timezone`, and `locale` values so anchored state no longer depends on
   lexical tag overlap alone. Continuity-derived fact persistence now also
   routes through a backend-owned typed candidate helper instead of hand-building
-  persisted facts directly from inline TCL analysis results. Remaining gaps are
+  persisted facts directly from inline TCL analysis results. New continuity
+  writes persist a Loopgate-owned canonical `observed_packet` in continuity
+  JSONL instead of the raw inspect request body, and distillation derives from
+  that typed packet rather than the caller payload bundle. Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys
