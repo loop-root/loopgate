@@ -29,7 +29,7 @@ Fair-run requirements:
 
 - `continuity_tcl` must use an explicit scored seeding mode:
   - `synthetic_projected_nodes` for the synthetic retrieval microbench
-  - `production_write_parity` for product-faithful continuity seeding
+  - `production_write_parity` for authenticated write-path continuity seeding
 - `debug_ambient_repo` is never eligible for headline comparison.
 - `rag_baseline` and `rag_stronger` must use `-rag-seed-fixtures` so they index
   the same checked-in fixture corpus before the run.
@@ -42,9 +42,12 @@ Promotion requirements for this headline were:
 - stable passes on the old timezone/locale `4/4` regression guard
 - stable passes on the harder preview-bias targeted `5/5` set
 
-This promoted headline uses the hardened `61`-fixture scored matrix. Treat
-`production_write_parity` continuity as the benchmark truth and
-`synthetic_projected_nodes` continuity as retrieval-only control evidence.
+This promoted headline uses the hardened `61`-fixture scored matrix. These
+published numbers predate the route-authenticated seeding rewrite and should be
+treated as historical until the matrix is rerun. The next promoted continuity
+headline should come from `production_write_parity` after the authenticated
+write-path seeding change. `synthetic_projected_nodes` remains retrieval-only
+control evidence.
 
 Current live summaries:
 

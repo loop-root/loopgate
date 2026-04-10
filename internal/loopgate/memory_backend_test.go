@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1224,6 +1225,50 @@ func TestOpenContinuityTCLProductionParityProjectedNodeDiscoverBackend_IsDistinc
 	}
 	if !foundExplicitRememberedFact || !foundFixtureIngestNode {
 		t.Fatalf("expected production parity backend to mix explicit remembered facts with fixture-ingest noise, got %#v", productionParityItems)
+	}
+}
+
+func TestSeedBenchmarkRememberedFactsOverControlPlane_UsesAuthenticatedControlSession(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, _ = startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	seededState, err := seedBenchmarkRememberedFactsOverControlPlane(repoRoot, []BenchmarkRememberedFactSeed{{
+		FactKey:       "profile.timezone",
+		FactValue:     "America/Denver",
+		SourceText:    "Current profile record: timezone is America/Denver for my own profile.",
+		SourceChannel: "benchmark_fixture",
+		Scope:         "scenario:authenticated-route",
+	}})
+	if err != nil {
+		t.Fatalf("seed benchmark remembered facts through control plane: %v", err)
+	}
+	defer seededState.cleanup()
+
+	if strings.TrimSpace(seededState.controlSessionID) == "" {
+		t.Fatalf("expected benchmark seeding to open a control session, got %#v", seededState)
+	}
+
+	defaultPartitionRoot := filepath.Join(seededState.isolatedRepoRoot, "runtime", "state", "memory", memoryPartitionsDirName, memoryPartitionKey(""))
+	continuityPaths := newContinuityMemoryPaths(defaultPartitionRoot, filepath.Join(seededState.isolatedRepoRoot, "runtime", "state", "loopgate_memory.json"))
+	recordedEvents := make([]continuityAuthoritativeEvent, 0, 1)
+	if err := replayJSONL(continuityPaths.ContinuityEventsPath, func(rawLine []byte) error {
+		var authoritativeEvent continuityAuthoritativeEvent
+		if err := json.Unmarshal(rawLine, &authoritativeEvent); err != nil {
+			return err
+		}
+		recordedEvents = append(recordedEvents, authoritativeEvent)
+		return nil
+	}); err != nil {
+		t.Fatalf("replay benchmark continuity authoritative events: %v", err)
+	}
+	if len(recordedEvents) == 0 {
+		t.Fatalf("expected production parity seeding to record continuity events, got %#v", recordedEvents)
+	}
+	if recordedEvents[0].Actor != seededState.controlSessionID {
+		t.Fatalf("expected remembered fact event actor to match benchmark control session, got %#v", recordedEvents[0])
+	}
+	if recordedEvents[0].Inspection == nil || recordedEvents[0].Inspection.Scope != memoryScopeGlobal {
+		t.Fatalf("expected route-seeded remembered fact to preserve product-valid global scope before benchmark rewriting, got %#v", recordedEvents[0])
 	}
 }
 

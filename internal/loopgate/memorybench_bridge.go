@@ -99,45 +99,37 @@ func OpenContinuityTCLProductionParityProjectedNodeDiscoverBackend(repoRoot stri
 	if len(rememberedFactSeeds) == 0 && len(fixtureSeedNodes) == 0 {
 		return nil, fmt.Errorf("at least one production-parity continuity seed is required")
 	}
-	isolatedBenchmarkRepoRoot, err := prepareIsolatedBenchmarkServerRepoRoot(repoRoot)
-	if err != nil {
-		return nil, fmt.Errorf("prepare isolated benchmark repo root: %w", err)
+	mergedAuthoritativeState := continuityMemoryState{
+		SchemaVersion: continuityMemorySchemaVersion,
+		Inspections:   make(map[string]continuityInspectionRecord),
+		Distillates:   make(map[string]continuityDistillateRecord),
+		ResonateKeys:  make(map[string]continuityResonateKeyRecord),
 	}
-	benchmarkServer, err := NewServer(isolatedBenchmarkRepoRoot, filepath.Join(isolatedBenchmarkRepoRoot, "runtime", "memorybench-loopgate.sock"))
-	if err != nil {
-		return nil, fmt.Errorf("open loopgate server for benchmark production-parity discovery: %w", err)
-	}
-	seededTenantScopes := make(map[string]string, len(rememberedFactSeeds))
-	baseRememberedSeedTimeUTC := time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
-	for rememberedFactSeedIndex, rememberedFactSeed := range rememberedFactSeeds {
+	scopeOrder := make([]string, 0, len(rememberedFactSeeds))
+	rememberedFactSeedsByScope := make(map[string][]BenchmarkRememberedFactSeed, len(rememberedFactSeeds))
+	for _, rememberedFactSeed := range rememberedFactSeeds {
 		validatedRememberScope := strings.TrimSpace(rememberedFactSeed.Scope)
 		if validatedRememberScope == "" {
 			return nil, fmt.Errorf("benchmark remembered fact seed %q requires a non-empty scope", strings.TrimSpace(rememberedFactSeed.FactKey))
 		}
-		rememberedSeedTimeUTC := baseRememberedSeedTimeUTC.Add(time.Duration(rememberedFactSeedIndex) * time.Second)
-		benchmarkServer.SetNowForTest(func() time.Time {
-			return rememberedSeedTimeUTC
-		})
-		benchmarkTenantID := benchmarkProductionParityTenantID(validatedRememberScope)
-		validatedRememberRequest := MemoryRememberRequest{
-			Scope:           memoryScopeGlobal,
-			FactKey:         strings.TrimSpace(rememberedFactSeed.FactKey),
-			FactValue:       strings.TrimSpace(rememberedFactSeed.FactValue),
-			SourceText:      strings.TrimSpace(rememberedFactSeed.SourceText),
-			CandidateSource: memoryCandidateSourceExplicitFact,
-			SourceChannel:   strings.TrimSpace(rememberedFactSeed.SourceChannel),
+		if _, found := rememberedFactSeedsByScope[validatedRememberScope]; !found {
+			scopeOrder = append(scopeOrder, validatedRememberScope)
 		}
-		if validatedRememberRequest.SourceChannel == "" {
-			validatedRememberRequest.SourceChannel = memorySourceChannelUnknown
-		}
-		if _, err := benchmarkServer.rememberMemoryFact(capabilityToken{TenantID: benchmarkTenantID}, validatedRememberRequest); err != nil {
-			return nil, fmt.Errorf("seed benchmark remembered fact %q: %w", validatedRememberRequest.FactKey, err)
-		}
-		seededTenantScopes[benchmarkTenantID] = validatedRememberScope
+		rememberedFactSeedsByScope[validatedRememberScope] = append(rememberedFactSeedsByScope[validatedRememberScope], rememberedFactSeed)
 	}
-	mergedAuthoritativeState, err := mergeBenchmarkProductionParityState(benchmarkServer, seededTenantScopes)
-	if err != nil {
-		return nil, fmt.Errorf("merge production-parity authoritative state: %w", err)
+	for _, benchmarkScope := range scopeOrder {
+		seededState, err := seedBenchmarkRememberedFactsOverControlPlane(repoRoot, rememberedFactSeedsByScope[benchmarkScope])
+		if err != nil {
+			return nil, err
+		}
+		func() {
+			defer seededState.cleanup()
+			rewrittenState := rewriteContinuityMemoryStateScope(seededState.authoritativeState, benchmarkScope)
+			err = mergeContinuityMemoryStateRecords(&mergedAuthoritativeState, rewrittenState)
+		}()
+		if err != nil {
+			return nil, fmt.Errorf("merge route-seeded production-parity state for scope %q: %w", benchmarkScope, err)
+		}
 	}
 	materializedFactDebugRecords := buildProductionParityMaterializedFactDebugRecords(mergedAuthoritativeState)
 
@@ -159,6 +151,13 @@ func OpenContinuityTCLProductionParityProjectedNodeDiscoverBackend(repoRoot stri
 		store:                           sqliteStore,
 		productionParityMaterialization: materializedFactDebugRecords,
 	}, nil
+}
+
+type benchmarkProductionParitySeedState struct {
+	isolatedRepoRoot   string
+	controlSessionID   string
+	authoritativeState continuityMemoryState
+	cleanup            func()
 }
 
 func openBenchmarkContinuitySQLiteStore(repoRoot string, filenamePattern string) (*continuitySQLiteStore, error) {
@@ -223,28 +222,116 @@ func linkBenchmarkRepoSubtree(sourceRepoRoot string, benchmarkRepoRoot string, r
 	return nil
 }
 
-func benchmarkProductionParityTenantID(scope string) string {
-	return "memorybench_production_parity:" + strings.TrimSpace(scope)
+func seedBenchmarkRememberedFactsOverControlPlane(repoRoot string, rememberedFactSeeds []BenchmarkRememberedFactSeed) (benchmarkProductionParitySeedState, error) {
+	isolatedBenchmarkRepoRoot, err := prepareIsolatedBenchmarkServerRepoRoot(repoRoot)
+	if err != nil {
+		return benchmarkProductionParitySeedState{}, fmt.Errorf("prepare isolated benchmark repo root: %w", err)
+	}
+
+	benchmarkServer, benchmarkClient, stopBenchmarkServer, err := startBenchmarkControlPlaneServer(isolatedBenchmarkRepoRoot)
+	if err != nil {
+		_ = os.RemoveAll(isolatedBenchmarkRepoRoot)
+		return benchmarkProductionParitySeedState{}, fmt.Errorf("open loopgate server for benchmark production-parity discovery: %w", err)
+	}
+	cleanup := func() {
+		stopBenchmarkServer()
+		_ = os.RemoveAll(isolatedBenchmarkRepoRoot)
+	}
+
+	// Keep relative ordering deterministic while staying inside the real signed-request
+	// skew window. Route-authenticated benchmark seeding must obey the same integrity
+	// binding as product traffic, so seeding cannot freeze the control-plane clock far
+	// away from wall time.
+	baseRememberedSeedTimeUTC := time.Now().UTC().Truncate(time.Second)
+	for rememberedFactSeedIndex, rememberedFactSeed := range rememberedFactSeeds {
+		rememberedSeedTimeUTC := baseRememberedSeedTimeUTC.Add(time.Duration(rememberedFactSeedIndex) * time.Second)
+		benchmarkServer.SetNowForTest(func() time.Time {
+			return rememberedSeedTimeUTC
+		})
+		validatedRememberRequest := MemoryRememberRequest{
+			Scope:           memoryScopeGlobal,
+			FactKey:         strings.TrimSpace(rememberedFactSeed.FactKey),
+			FactValue:       strings.TrimSpace(rememberedFactSeed.FactValue),
+			SourceText:      strings.TrimSpace(rememberedFactSeed.SourceText),
+			CandidateSource: memoryCandidateSourceExplicitFact,
+			SourceChannel:   strings.TrimSpace(rememberedFactSeed.SourceChannel),
+		}
+		if validatedRememberRequest.SourceChannel == "" {
+			validatedRememberRequest.SourceChannel = memorySourceChannelUnknown
+		}
+		if _, err := benchmarkClient.RememberMemoryFact(context.Background(), validatedRememberRequest); err != nil {
+			cleanup()
+			return benchmarkProductionParitySeedState{}, fmt.Errorf("seed benchmark remembered fact %q through control plane: %w", validatedRememberRequest.FactKey, err)
+		}
+	}
+
+	authoritativeState, err := cloneBenchmarkPartitionState(benchmarkServer, "")
+	if err != nil {
+		cleanup()
+		return benchmarkProductionParitySeedState{}, fmt.Errorf("clone production-parity authoritative state: %w", err)
+	}
+	return benchmarkProductionParitySeedState{
+		isolatedRepoRoot:   isolatedBenchmarkRepoRoot,
+		controlSessionID:   benchmarkClient.controlSessionID,
+		authoritativeState: authoritativeState,
+		cleanup:            cleanup,
+	}, nil
 }
 
-func mergeBenchmarkProductionParityState(benchmarkServer *Server, seededTenantScopes map[string]string) (continuityMemoryState, error) {
-	mergedState := continuityMemoryState{
-		SchemaVersion: continuityMemorySchemaVersion,
-		Inspections:   make(map[string]continuityInspectionRecord),
-		Distillates:   make(map[string]continuityDistillateRecord),
-		ResonateKeys:  make(map[string]continuityResonateKeyRecord),
+func startBenchmarkControlPlaneServer(repoRoot string) (*Server, *Client, func(), error) {
+	socketFile, err := os.CreateTemp("", "memorybench-loopgate-*.sock")
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("create benchmark socket path: %w", err)
 	}
-	for tenantID, benchmarkScope := range seededTenantScopes {
-		partitionState, err := cloneBenchmarkPartitionState(benchmarkServer, tenantID)
-		if err != nil {
-			return continuityMemoryState{}, err
-		}
-		partitionState = rewriteContinuityMemoryStateScope(partitionState, benchmarkScope)
-		if err := mergeContinuityMemoryStateRecords(&mergedState, partitionState); err != nil {
-			return continuityMemoryState{}, err
-		}
+	socketPath := socketFile.Name()
+	if err := socketFile.Close(); err != nil {
+		_ = os.Remove(socketPath)
+		return nil, nil, nil, fmt.Errorf("close benchmark socket placeholder: %w", err)
 	}
-	return mergedState, nil
+	_ = os.Remove(socketPath)
+
+	benchmarkServer, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	benchmarkServer.sessionOpenMinInterval = 0
+	benchmarkServer.maxActiveSessionsPerUID = 64
+	benchmarkServer.expirySweepMaxInterval = 0
+
+	serverContext, cancelServer := context.WithCancel(context.Background())
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		_ = benchmarkServer.Serve(serverContext)
+	}()
+
+	benchmarkClient := NewClient(socketPath)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		_, healthErr := benchmarkClient.Health(context.Background())
+		if healthErr == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancelServer()
+			<-serverDone
+			return nil, nil, nil, fmt.Errorf("wait for benchmark loopgate health: %w", healthErr)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	benchmarkClient.ConfigureSession("memorybench", "memorybench-seed", []string{controlCapabilityMemoryWrite})
+	if _, err := benchmarkClient.ensureCapabilityToken(context.Background()); err != nil {
+		cancelServer()
+		<-serverDone
+		return nil, nil, nil, fmt.Errorf("open benchmark control session: %w", err)
+	}
+
+	return benchmarkServer, benchmarkClient, func() {
+		cancelServer()
+		<-serverDone
+		_ = os.Remove(socketPath)
+	}, nil
 }
 
 func cloneBenchmarkPartitionState(benchmarkServer *Server, tenantID string) (continuityMemoryState, error) {

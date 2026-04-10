@@ -456,6 +456,12 @@ Rules:
 - benchmark runs must use real session open, signed requests, and route auth
 - direct in-process calls into `rememberMemoryFact(...)` are benchmark-local
   shortcuts, not parity runs
+- `production_write_parity` now follows that rule on the write path by seeding
+  each benchmark scope through an isolated Loopgate runtime over the real
+  authenticated `memory.remember` route before materializing the projected-node
+  corpus
+- projected-node discovery remains a harness-level retrieval benchmark, not a
+  full end-to-end `/v1/memory/discover` product benchmark
 
 If a shortcut path remains for fixture speed, it should be labeled as such in
 code and output.

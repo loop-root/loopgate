@@ -113,9 +113,15 @@ Do not blend scored continuity runs and debug continuity runs into one number.
   - retrieval microbench over synthetic projected nodes
 - `production_write_parity`
   - scored fixture run
-  - authoritative supported slots are seeded through real `RememberMemoryFact`
-    writes, then materialized into a temporary projected-node store for benchmark
-    discovery
+  - authoritative supported slots are seeded through real authenticated
+    `RememberMemoryFact` HTTP-over-UDS writes against product-valid `global`
+    scope
+  - each benchmark scenario scope is seeded inside its own isolated Loopgate
+    runtime, then rewritten into the benchmark scenario scope only when
+    materializing the temporary projected-node corpus
+  - this is honest about the write path, but it is still a projected-node
+    discovery benchmark rather than a full `/v1/memory/discover` end-to-end
+    product benchmark
 - `debug_ambient_repo`
   - unscored debug run only
   - never eligible for headline comparison
