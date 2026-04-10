@@ -13,6 +13,7 @@ import (
 
 	"morph/internal/config"
 	"morph/internal/memorybench"
+	"morph/internal/threadstore"
 )
 
 type stubMemoryBackend struct {
@@ -1231,6 +1232,128 @@ func TestSeedBenchmarkRememberedFactsOverControlPlane_UsesAuthenticatedControlSe
 	}
 	if recordedEvents[0].Inspection == nil || recordedEvents[0].Inspection.Scope != memoryScopeGlobal {
 		t.Fatalf("expected route-seeded remembered fact to preserve product-valid global scope before benchmark rewriting, got %#v", recordedEvents[0])
+	}
+}
+
+func TestOpenContinuityTCLProductionParityControlPlaneDiscoverBackend_UsesObservedThreadInspectAndMemoryRecall(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, _ = startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	scenarioScope := memorybench.BenchmarkScenarioScope("contradiction.profile_timezone_same_entity_wrong_current_probe.v1")
+	controlPlaneBackend, err := OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot, []BenchmarkRememberedFactSeed{{
+		FactKey:       "profile.timezone",
+		FactValue:     "America/Denver",
+		SourceText:    "Current profile record: timezone is America/Denver for my own profile.",
+		SourceChannel: "benchmark_fixture",
+		Scope:         scenarioScope,
+	}}, []BenchmarkObservedThreadSeed{{
+		Scope: scenarioScope,
+		Events: []BenchmarkObservedThreadEventSeed{{
+			EventType:  threadstore.EventOrchToolResult,
+			Capability: "benchmark.fixture.observe",
+			Status:     "ok",
+			Facts: map[string]string{
+				"profile.timezone": "mountain time label",
+			},
+		}},
+	}}, nil)
+	if err != nil {
+		t.Fatalf("open control-plane production parity backend: %v", err)
+	}
+	if closeableBackend, ok := controlPlaneBackend.(interface{ Close() error }); ok {
+		defer func() {
+			if closeErr := closeableBackend.Close(); closeErr != nil {
+				t.Fatalf("close control-plane production parity backend: %v", closeErr)
+			}
+		}()
+	}
+
+	discoveredItems, err := controlPlaneBackend.DiscoverProjectedNodes(context.Background(), ProjectedNodeDiscoverRequest{
+		Scope:    scenarioScope,
+		Query:    "Retrieve the current user profile timezone from the profile slot.",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover control-plane production parity items: %v", err)
+	}
+	if len(discoveredItems) == 0 {
+		t.Fatalf("expected control-plane production parity discovery results, got %#v", discoveredItems)
+	}
+	if discoveredItems[0].NodeKind != sqliteNodeKindExplicitRememberedFact || !strings.Contains(discoveredItems[0].HintText, "America/Denver") {
+		t.Fatalf("expected explicit remembered fact to remain primary on control-plane discovery, got %#v", discoveredItems)
+	}
+	foundObservedContinuityItem := false
+	for _, discoveredItem := range discoveredItems {
+		if discoveredItem.SourceKind == "observed_thread_continuity" && strings.Contains(discoveredItem.HintText, "mountain time label") {
+			foundObservedContinuityItem = true
+			break
+		}
+	}
+	if !foundObservedContinuityItem {
+		t.Fatalf("expected observed-thread continuity distractor to survive benchmark control-plane discovery, got %#v", discoveredItems)
+	}
+}
+
+func TestOpenContinuityTCLProductionParityControlPlaneDiscoverBackend_UsesTodoWorkflowForTaskResumption(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, _ = startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	scenarioScope := memorybench.BenchmarkScenarioScope("task_resumption.benchmark_seeding_after_pause.v1")
+	controlPlaneBackend, err := OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot, nil, nil, []BenchmarkTodoSeed{
+		{
+			Scope:       scenarioScope,
+			SeedGroup:   "forbidden_hint",
+			Text:        "wire the rag baseline shell",
+			TaskKind:    taskKindCarryOver,
+			SourceKind:  "benchmark_task_resumption",
+			FinalStatus: explicitTodoWorkflowStatusDone,
+		},
+		{
+			Scope:       scenarioScope,
+			SeedGroup:   "required_hint",
+			Text:        "Qdrant container is not running",
+			NextStep:    "seed the fixture corpus into Qdrant",
+			TaskKind:    taskKindCarryOver,
+			SourceKind:  "benchmark_task_resumption",
+			FinalStatus: explicitTodoWorkflowStatusTodo,
+		},
+	})
+	if err != nil {
+		t.Fatalf("open control-plane production parity backend with todo workflow: %v", err)
+	}
+	if closeableBackend, ok := controlPlaneBackend.(interface{ Close() error }); ok {
+		defer func() {
+			if closeErr := closeableBackend.Close(); closeErr != nil {
+				t.Fatalf("close control-plane production parity todo backend: %v", closeErr)
+			}
+		}()
+	}
+
+	discoveredItems, err := controlPlaneBackend.DiscoverProjectedNodes(context.Background(), ProjectedNodeDiscoverRequest{
+		Scope:    scenarioScope,
+		Query:    "seed the fixture corpus into Qdrant Qdrant container is not running Resume the current benchmark task. What is the next step and blocker?",
+		MaxItems: 5,
+	})
+	if err != nil {
+		t.Fatalf("discover task-resumption control-plane items: %v", err)
+	}
+	if len(discoveredItems) == 0 {
+		t.Fatalf("expected task-resumption control-plane discovery results, got %#v", discoveredItems)
+	}
+
+	combinedHintText := make([]string, 0, len(discoveredItems))
+	for _, discoveredItem := range discoveredItems {
+		combinedHintText = append(combinedHintText, discoveredItem.HintText)
+		if discoveredItem.SourceKind != "todo_workflow_control_plane" {
+			t.Fatalf("expected todo workflow source kind, got %#v", discoveredItems)
+		}
+	}
+	joinedHintText := strings.Join(combinedHintText, "\n")
+	if !strings.Contains(joinedHintText, "seed the fixture corpus into Qdrant") || !strings.Contains(joinedHintText, "Qdrant container is not running") {
+		t.Fatalf("expected current todo text and next step in control-plane discovery, got %#v", discoveredItems)
+	}
+	if strings.Contains(joinedHintText, "wire the rag baseline shell") {
+		t.Fatalf("expected completed stale todo item to stay out of control-plane discovery, got %#v", discoveredItems)
 	}
 }
 

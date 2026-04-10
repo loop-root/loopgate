@@ -165,6 +165,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "memorybench failed: %v\n", err)
 		os.Exit(1)
 	}
+	if closeableDiscoverer, ok := discoverer.(interface{ Close() error }); ok {
+		defer func() {
+			if closeErr := closeableDiscoverer.Close(); closeErr != nil {
+				fmt.Fprintf(os.Stderr, "memorybench cleanup failed: %v\n", closeErr)
+			}
+		}()
+	}
 	candidateEvaluator, err := selectCandidateGovernanceEvaluator(backendName, validatedCandidateGovernanceMode, isolatedRAGBaselineConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "memorybench failed: %v\n", err)
@@ -178,7 +185,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	retrievalPathMode, seedPathMode := benchmarkPathModes(normalizedBackendName, validatedContinuitySeedingMode, ragSeedFixtures)
+	retrievalPathMode, seedPathMode := benchmarkPathModes(normalizedBackendName, validatedContinuitySeedingMode, ragSeedFixtures, seedManifestRecords)
 	runnerConfig := memorybench.RunnerConfig{
 		RunID:                                  runID,
 		StartedAtUTC:                           nowUTC.Format(time.RFC3339Nano),
@@ -239,14 +246,40 @@ func normalizeContinuityAblation(rawAblation string) (string, error) {
 	}
 }
 
-func benchmarkPathModes(normalizedBackendName string, continuitySeedingMode string, ragSeedFixtures bool) (string, string) {
+func benchmarkPathModes(normalizedBackendName string, continuitySeedingMode string, ragSeedFixtures bool, seedManifestRecords []memorybench.SeedManifestRecord) (string, string) {
 	switch normalizedBackendName {
 	case memorybench.BackendContinuityTCL:
 		switch continuitySeedingMode {
 		case memorybench.ContinuitySeedingModeSyntheticProjectedNodes:
 			return memorybench.RetrievalPathProjectedNodeSQLite, memorybench.SeedPathSyntheticProjectedNodes
 		case memorybench.ContinuitySeedingModeProductionWriteParity:
-			return memorybench.RetrievalPathProjectedNodeSQLite, memorybench.SeedPathMixedValidatedWritesAndFixtures
+			hasObservedThreads := false
+			hasTodoWorkflow := false
+			hasFixtureIngest := false
+			for _, seedManifestRecord := range seedManifestRecords {
+				switch seedManifestRecord.SeedPath {
+				case memorybench.ContinuitySeedPathObservedThread:
+					hasObservedThreads = true
+				case memorybench.ContinuitySeedPathTodoWorkflow:
+					hasTodoWorkflow = true
+				case memorybench.ContinuitySeedPathFixtureIngest:
+					hasFixtureIngest = true
+				}
+			}
+			switch {
+			case (hasObservedThreads || hasTodoWorkflow) && hasFixtureIngest:
+				if hasTodoWorkflow {
+					return memorybench.RetrievalPathMixedControlPlaneAndSQLite, memorybench.SeedPathMixedControlPlaneMemoryWorkflowAndFixtures
+				}
+				return memorybench.RetrievalPathMixedControlPlaneAndSQLite, memorybench.SeedPathMixedValidatedWritesObservedThreadsAndFixtures
+			case hasObservedThreads || hasTodoWorkflow:
+				if hasTodoWorkflow {
+					return memorybench.RetrievalPathControlPlaneMemoryRoutes, memorybench.SeedPathControlPlaneMemoryAndWorkflow
+				}
+				return memorybench.RetrievalPathControlPlaneMemoryRoutes, memorybench.SeedPathValidatedWritesAndObservedThreads
+			default:
+				return memorybench.RetrievalPathProjectedNodeSQLite, memorybench.SeedPathMixedValidatedWritesAndFixtures
+			}
 		case memorybench.ContinuitySeedingModeDebugAmbientRepo:
 			return memorybench.RetrievalPathProjectedNodeSQLite, memorybench.SeedPathAmbientRepoState
 		default:
@@ -346,21 +379,71 @@ func selectProjectedNodeDiscoverer(rawBackendName string, repoRoot string, ragBa
 			}
 			return projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend}, selectedBackendName, nil, nil
 		case memorybench.ContinuitySeedingModeProductionWriteParity:
-			rememberedFactSeeds, fixtureSeedNodes, seedManifestRecords, err := buildContinuityProductionParitySeeds(selectedScenarioFixtures)
+			rememberedFactSeeds, observedThreadSeeds, todoSeeds, fixtureSeedNodes, seedManifestRecords, err := buildContinuityProductionParitySeeds(selectedScenarioFixtures)
 			if err != nil {
 				return nil, "", nil, err
 			}
-			projectedNodeBackend, err := loopgate.OpenContinuityTCLProductionParityProjectedNodeDiscoverBackend(repoRoot, rememberedFactSeeds, fixtureSeedNodes)
-			if err != nil {
-				return nil, "", nil, err
+			var scopeRoutedDiscoverers []scopedProjectedNodeDiscoverer
+			assignedScopeSet := make(map[string]struct{})
+			if len(rememberedFactSeeds) > 0 || len(observedThreadSeeds) > 0 || len(todoSeeds) > 0 {
+				controlPlaneBackend, err := loopgate.OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot, rememberedFactSeeds, observedThreadSeeds, todoSeeds)
+				if err != nil {
+					return nil, "", nil, err
+				}
+				controlPlaneScopes := productionParityControlPlaneScopes(rememberedFactSeeds, observedThreadSeeds, todoSeeds)
+				for controlPlaneScope := range controlPlaneScopes {
+					assignedScopeSet[controlPlaneScope] = struct{}{}
+				}
+				scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
+					scopes:     controlPlaneScopes,
+					discoverer: projectedNodeDiscovererAdapter{discoverBackend: controlPlaneBackend},
+				})
 			}
-			parityDiscoverer := maybeWrapContinuitySlotOnlyPreference(
-				projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend},
-				selectedScenarioFixtures,
-				continuityPreviewSlotPreference,
-				continuityPreviewSlotPreferenceMargin,
-			)
-			return parityDiscoverer, selectedBackendName, seedManifestRecords, nil
+			if len(fixtureSeedNodes) > 0 {
+				projectedNodeBackend, err := loopgate.OpenContinuityTCLFixtureProjectedNodeDiscoverBackend(repoRoot, fixtureSeedNodes)
+				if err != nil {
+					return nil, "", nil, err
+				}
+				fallbackDiscoverer := maybeWrapContinuitySlotOnlyPreference(
+					projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend},
+					selectedScenarioFixtures,
+					continuityPreviewSlotPreference,
+					continuityPreviewSlotPreferenceMargin,
+				)
+				fixtureScopes := projectedSeedScopes(fixtureSeedNodes)
+				for fixtureScope := range fixtureScopes {
+					assignedScopeSet[fixtureScope] = struct{}{}
+				}
+				scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
+					scopes:     fixtureScopes,
+					discoverer: fallbackDiscoverer,
+				})
+			}
+			unseededScopes := make(map[string]struct{})
+			for _, selectedScenarioFixture := range selectedScenarioFixtures {
+				scenarioScope := memorybench.BenchmarkScenarioScope(selectedScenarioFixture.Metadata.ScenarioID)
+				if _, alreadyAssigned := assignedScopeSet[scenarioScope]; alreadyAssigned {
+					continue
+				}
+				unseededScopes[scenarioScope] = struct{}{}
+			}
+			if len(unseededScopes) > 0 {
+				// Some production-parity fixtures are governance-only and intentionally seed
+				// no discoverable continuity state. Route them explicitly to an empty
+				// discoverer so the run stays honest about zero retrieval instead of failing
+				// on an unrouted benchmark scope.
+				scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
+					scopes:     unseededScopes,
+					discoverer: emptyProjectedNodeDiscoverer{},
+				})
+			}
+			if len(scopeRoutedDiscoverers) == 0 {
+				return nil, "", nil, fmt.Errorf("production parity continuity seeding produced no discoverable benchmark scopes")
+			}
+			if len(scopeRoutedDiscoverers) == 1 {
+				return scopeRoutedDiscoverers[0].discoverer, selectedBackendName, seedManifestRecords, nil
+			}
+			return continuityScopeRoutingProjectedNodeDiscoverer{routedDiscoverers: scopeRoutedDiscoverers}, selectedBackendName, seedManifestRecords, nil
 		default:
 			return nil, "", nil, fmt.Errorf("unknown continuity seeding mode %q", continuitySeedingMode)
 		}
@@ -505,6 +588,26 @@ type continuityAblationProjectedNodeDiscoverer struct {
 	ablationName    string
 }
 
+type scopedProjectedNodeDiscoverer struct {
+	scopes     map[string]struct{}
+	discoverer memorybench.ProjectedNodeDiscoverer
+}
+
+type emptyProjectedNodeDiscoverer struct{}
+
+type continuityScopeRoutingProjectedNodeDiscoverer struct {
+	routedDiscoverers []scopedProjectedNodeDiscoverer
+}
+
+func (discoverer emptyProjectedNodeDiscoverer) DiscoverProjectedNodes(ctx context.Context, scope string, query string, maxItems int) ([]memorybench.ProjectedNodeDiscoverItem, error) {
+	_ = discoverer
+	_ = ctx
+	_ = scope
+	_ = query
+	_ = maxItems
+	return []memorybench.ProjectedNodeDiscoverItem{}, nil
+}
+
 func (discoverer continuityAblationProjectedNodeDiscoverer) DiscoverProjectedNodes(ctx context.Context, scope string, query string, maxItems int) ([]memorybench.ProjectedNodeDiscoverItem, error) {
 	if discoverer.ablationName == continuityAblationReducedContextBreadth && maxItems > 1 {
 		maxItems = 1
@@ -517,6 +620,13 @@ func (discoverer continuityAblationProjectedNodeDiscoverer) DiscoverProjectedNod
 		projectedItems = append([]memorybench.ProjectedNodeDiscoverItem(nil), projectedItems[:maxItems]...)
 	}
 	return projectedItems, nil
+}
+
+func (discoverer continuityAblationProjectedNodeDiscoverer) Close() error {
+	if closeableDiscoverer, ok := discoverer.innerDiscoverer.(interface{ Close() error }); ok {
+		return closeableDiscoverer.Close()
+	}
+	return nil
 }
 
 type continuitySlotOnlyRankingPreference struct {
@@ -548,6 +658,34 @@ func (discoverer continuitySlotOnlyPreferenceProjectedNodeDiscoverer) DiscoverPr
 		projectedItems = append([]memorybench.ProjectedNodeDiscoverItem(nil), projectedItems[:maxItems]...)
 	}
 	return projectedItems, nil
+}
+
+func (discoverer continuitySlotOnlyPreferenceProjectedNodeDiscoverer) Close() error {
+	if closeableDiscoverer, ok := discoverer.innerDiscoverer.(interface{ Close() error }); ok {
+		return closeableDiscoverer.Close()
+	}
+	return nil
+}
+
+func (discoverer continuityScopeRoutingProjectedNodeDiscoverer) DiscoverProjectedNodes(ctx context.Context, scope string, query string, maxItems int) ([]memorybench.ProjectedNodeDiscoverItem, error) {
+	trimmedScope := strings.TrimSpace(scope)
+	for _, routedDiscoverer := range discoverer.routedDiscoverers {
+		if _, found := routedDiscoverer.scopes[trimmedScope]; found {
+			return routedDiscoverer.discoverer.DiscoverProjectedNodes(ctx, scope, query, maxItems)
+		}
+	}
+	return nil, fmt.Errorf("benchmark scope %q is not routed to a discoverer", trimmedScope)
+}
+
+func (discoverer continuityScopeRoutingProjectedNodeDiscoverer) Close() error {
+	for _, routedDiscoverer := range discoverer.routedDiscoverers {
+		if closeableDiscoverer, ok := routedDiscoverer.discoverer.(interface{ Close() error }); ok {
+			if err := closeableDiscoverer.Close(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func buildContinuitySlotOnlyRankingPreferences(selectedScenarioFixtures []memorybench.ScenarioFixture, maxMatchCountDeficit int) map[string]continuitySlotOnlyRankingPreference {
@@ -588,6 +726,36 @@ func buildContinuitySlotOnlyRankingPreferences(selectedScenarioFixtures []memory
 		}
 	}
 	return scopePreferences
+}
+
+func productionParityControlPlaneScopes(rememberedFactSeeds []loopgate.BenchmarkRememberedFactSeed, observedThreadSeeds []loopgate.BenchmarkObservedThreadSeed, todoSeeds []loopgate.BenchmarkTodoSeed) map[string]struct{} {
+	scopes := make(map[string]struct{}, len(rememberedFactSeeds)+len(observedThreadSeeds)+len(todoSeeds))
+	for _, rememberedFactSeed := range rememberedFactSeeds {
+		if trimmedScope := strings.TrimSpace(rememberedFactSeed.Scope); trimmedScope != "" {
+			scopes[trimmedScope] = struct{}{}
+		}
+	}
+	for _, observedThreadSeed := range observedThreadSeeds {
+		if trimmedScope := strings.TrimSpace(observedThreadSeed.Scope); trimmedScope != "" {
+			scopes[trimmedScope] = struct{}{}
+		}
+	}
+	for _, todoSeed := range todoSeeds {
+		if trimmedScope := strings.TrimSpace(todoSeed.Scope); trimmedScope != "" {
+			scopes[trimmedScope] = struct{}{}
+		}
+	}
+	return scopes
+}
+
+func projectedSeedScopes(projectedNodeSeeds []loopgate.BenchmarkProjectedNodeSeed) map[string]struct{} {
+	scopes := make(map[string]struct{}, len(projectedNodeSeeds))
+	for _, projectedNodeSeed := range projectedNodeSeeds {
+		if trimmedScope := strings.TrimSpace(projectedNodeSeed.Scope); trimmedScope != "" {
+			scopes[trimmedScope] = struct{}{}
+		}
+	}
+	return scopes
 }
 
 func isContinuitySameEntityPreviewSignatureHint(rawSignatureHint string) bool {
@@ -967,6 +1135,13 @@ func (adapter projectedNodeDiscovererAdapter) DiscoverProjectedNodesDetailed(ctx
 		Items:         projectedItems,
 		CandidatePool: candidatePool,
 	}, nil
+}
+
+func (adapter projectedNodeDiscovererAdapter) Close() error {
+	if closeableBackend, ok := adapter.discoverBackend.(interface{ Close() error }); ok {
+		return closeableBackend.Close()
+	}
+	return nil
 }
 
 type candidateGovernanceEvaluatorAdapter struct {

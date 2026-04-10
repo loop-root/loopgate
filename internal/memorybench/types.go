@@ -12,19 +12,29 @@ const (
 	ContinuitySeedingModeDebugAmbientRepo        = "debug_ambient_repo"
 
 	ContinuitySeedPathRememberMemoryFact  = "remember_memory_fact"
+	ContinuitySeedPathObservedThread      = "observed_thread_inspect"
+	ContinuitySeedPathTodoWorkflow        = "todo_workflow_capability"
 	ContinuitySeedPathFixtureIngest       = "continuity_fixture_ingest"
 	ContinuitySeedPathSyntheticProjected  = "synthetic_projected_node"
 	ContinuityAuthorityValidatedWrite     = "validated_explicit_write"
+	ContinuityAuthorityObservedThread     = "observed_thread_inspection"
+	ContinuityAuthorityTodoWorkflow       = "todo_workflow_control_plane"
 	ContinuityAuthorityFixtureIngest      = "fixture_ingest_non_authoritative"
 	ContinuityAuthoritySyntheticProjected = "synthetic_projected_node"
 
-	RetrievalPathProjectedNodeSQLite = "projected_node_sqlite_backend"
-	RetrievalPathRAGSearchHelper     = "rag_search_helper"
+	RetrievalPathProjectedNodeSQLite        = "projected_node_sqlite_backend"
+	RetrievalPathControlPlaneMemoryRoutes   = "control_plane_memory_routes"
+	RetrievalPathMixedControlPlaneAndSQLite = "mixed_control_plane_and_projected_node_sqlite"
+	RetrievalPathRAGSearchHelper            = "rag_search_helper"
 
-	SeedPathSyntheticProjectedNodes         = "synthetic_projected_node_seed"
-	SeedPathMixedValidatedWritesAndFixtures = "mixed_validated_writes_and_fixture_ingest"
-	SeedPathAmbientRepoState                = "ambient_repo_authoritative_state"
-	SeedPathRAGFixtureCorpus                = "python_rag_fixture_seed"
+	SeedPathSyntheticProjectedNodes                        = "synthetic_projected_node_seed"
+	SeedPathValidatedWritesAndObservedThreads              = "validated_writes_and_observed_thread_inspect"
+	SeedPathControlPlaneMemoryAndWorkflow                  = "control_plane_memory_and_todo_workflow_routes"
+	SeedPathMixedValidatedWritesObservedThreadsAndFixtures = "mixed_validated_writes_observed_threads_and_projected_fixtures"
+	SeedPathMixedControlPlaneMemoryWorkflowAndFixtures     = "mixed_control_plane_memory_todo_workflow_and_projected_fixtures"
+	SeedPathMixedValidatedWritesAndFixtures                = "mixed_validated_writes_and_fixture_ingest"
+	SeedPathAmbientRepoState                               = "ambient_repo_authoritative_state"
+	SeedPathRAGFixtureCorpus                               = "python_rag_fixture_seed"
 )
 
 type ScenarioFilter struct {

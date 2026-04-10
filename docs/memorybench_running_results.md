@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-03
+**Last updated:** 2026-04-09
 
 # Memorybench Running Results
 
@@ -30,8 +30,12 @@ Fair-run requirements:
 - `continuity_tcl` must use an explicit scored seeding mode:
   - `synthetic_projected_nodes` for the synthetic retrieval microbench
   - `production_write_parity` for authenticated write-path continuity seeding
-- continuity headline runs currently also require
-  `retrieval_path_mode=projected_node_sqlite_backend`
+- continuity headline runs must declare whether they are:
+  - `retrieval_path_mode=control_plane_memory_routes`
+  - `retrieval_path_mode=mixed_control_plane_and_projected_node_sqlite`
+  - `retrieval_path_mode=projected_node_sqlite_backend`
+- only the first two count as current product-facing continuity evidence for
+  `production_write_parity`
 - `debug_ambient_repo` is never eligible for headline comparison.
 - `rag_baseline` and `rag_stronger` must use `-rag-seed-fixtures` so they index
   the same checked-in fixture corpus before the run.
@@ -47,11 +51,61 @@ Promotion requirements for this headline were:
 - stable passes on the harder preview-bias targeted `5/5` set
 
 This promoted headline uses the hardened `61`-fixture scored matrix. These
-published numbers predate the route-authenticated seeding rewrite and should be
-treated as historical until the matrix is rerun. The next promoted continuity
-headline should come from `production_write_parity` after the authenticated
-write-path seeding change. `synthetic_projected_nodes` remains retrieval-only
-control evidence.
+published numbers predate the control-plane seeding and control-plane
+discover/recall migration and should be treated as historical until the matrix
+is rerun. The next promoted continuity headline should come from
+`production_write_parity` after the authenticated `memory.remember`,
+`inspect-thread`, `todo` workflow, and `/v1/memory/discover` plus
+`/v1/memory/recall` benchmark migration. `synthetic_projected_nodes` remains
+retrieval-only control evidence.
+
+## Current honest rerun set (not yet promoted)
+
+Fresh post-hardening reruns:
+
+- continuity: `continuity_fixture_parity_20260409_honest_v1`
+  - `retrieval_path_mode=mixed_control_plane_and_projected_node_sqlite`
+  - `seed_path_mode=mixed_control_plane_memory_todo_workflow_and_projected_fixtures`
+- RAG baseline: `rag_baseline_fixture_20260409_honest_v1`
+  - `retrieval_path_mode=rag_search_helper`
+  - `seed_path_mode=python_rag_fixture_seed`
+- stronger RAG: `rag_stronger_fixture_20260409_honest_v1`
+  - `retrieval_path_mode=rag_search_helper`
+  - `seed_path_mode=python_rag_fixture_seed`
+
+Current counts from that rerun set:
+
+| Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
+| --- | --- | --- | --- | --- | --- |
+| `continuity_tcl` (`production_write_parity`) | `49/61` | `4/8` | `26/34` | `13/13` | `6/6` |
+| `rag_baseline` | `25/61` | `0/8` | `19/34` | `0/13` | `6/6` |
+| `rag_stronger` | `21/61` | `0/8` | `15/34` | `0/13` | `6/6` |
+
+Useful read:
+
+- the honest continuity path still holds `13/13` on task resumption after
+  moving those scenarios onto real `todo` workflow state and real discover/recall
+- contradiction improved to `26/34` on the post-hardening rerun
+- the gap remains concentrated in contradiction and task resumption rather than
+  in safety-precision filler
+- continuity answer-in-query is `5/7`, versus `0/7` for both RAG comparators
+- continuity slot-only is `21/27`, versus `19/27` for `rag_baseline` and
+  `15/27` for `rag_stronger`
+- this rerun set is current evidence, but it is not promoted as the new
+  headline yet because the promotion discipline still expects repeated targeted
+  reruns, not just one clean full-matrix pass
+
+Current rerun artifacts:
+
+- Summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v1/summary.csv`
+- Family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v1/family_summary.csv`
+- Subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v1/subfamily_summary.csv`
+- RAG baseline summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/summary.csv`
+- RAG baseline family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/family_summary.csv`
+- RAG baseline subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/subfamily_summary.csv`
+- Stronger RAG summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v1/summary.csv`
+- Stronger RAG family summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v1/family_summary.csv`
+- Stronger RAG subfamily summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v1/subfamily_summary.csv`
 
 Current live summaries:
 

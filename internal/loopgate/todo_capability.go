@@ -669,6 +669,10 @@ func (server *Server) completeTodoItem(tokenClaims capabilityToken, rawRequest T
 				reason:         "todo item not found",
 			}
 		}
+		existingOpenInspection, found := workingState.Inspections[activeTodoItem.InspectionID]
+		if !found {
+			return workingState, nil, continuityMutationEvents{}, fmt.Errorf("active todo inspection %q not found", activeTodoItem.InspectionID)
+		}
 
 		todoSuffix := makeEventPayloadID("todo_close", struct {
 			ItemID string `json:"item_id"`
@@ -703,10 +707,11 @@ func (server *Server) completeTodoItem(tokenClaims capabilityToken, rawRequest T
 				OperationID:    "todo_complete_" + inspectionID,
 			},
 			Lineage: continuityInspectionLineage{
-				Status:       continuityLineageStatusEligible,
-				ChangedAtUTC: nowUTC.Format(time.RFC3339Nano),
-				Reason:       "explicit_todo_complete",
-				OperationID:  "todo_complete_" + inspectionID,
+				Status:                 continuityLineageStatusEligible,
+				ChangedAtUTC:           nowUTC.Format(time.RFC3339Nano),
+				Reason:                 "explicit_todo_complete",
+				OperationID:            "todo_complete_" + inspectionID,
+				SupersedesInspectionID: activeTodoItem.InspectionID,
 			},
 			EventCount:            1,
 			ApproxPayloadBytes:    len([]byte(activeTodoItem.Text)),
@@ -746,6 +751,19 @@ func (server *Server) completeTodoItem(tokenClaims capabilityToken, rawRequest T
 			}},
 		}
 
+		// Completion is the current-state winner for an explicit todo item. Keep the
+		// original open inspection in authoritative history, but tombstone its active
+		// artifacts so discover/recall stop resurfacing stale blockers after closure.
+		existingOpenInspection.Lineage = continuityInspectionLineage{
+			Status:                   continuityLineageStatusTombstoned,
+			ChangedAtUTC:             nowUTC.Format(time.RFC3339Nano),
+			Reason:                   "superseded_by_todo_completion",
+			OperationID:              "todo_complete_" + inspectionID,
+			SupersededByInspectionID: inspectionID,
+			SupersededByDistillateID: distillateID,
+		}
+		stampContinuityDerivedArtifactsExcluded(&workingState, existingOpenInspection, nowUTC)
+		workingState.Inspections[activeTodoItem.InspectionID] = existingOpenInspection
 		workingState.Inspections[inspectionID] = inspectionRecord
 		workingState.Distillates[distillateID] = distillateRecord
 
@@ -774,6 +792,19 @@ func (server *Server) completeTodoItem(tokenClaims capabilityToken, rawRequest T
 				Distillate:    ptrContinuityDistillateRecord(cloneContinuityDistillateRecord(distillateRecord)),
 			}},
 		}
+		mutationEvents.Continuity = append(mutationEvents.Continuity, continuityAuthoritativeEvent{
+			SchemaVersion: continuityMemorySchemaVersion,
+			EventID:       "todo_complete_supersede_" + activeTodoItem.InspectionID,
+			EventType:     "continuity_inspection_lineage_updated",
+			CreatedAtUTC:  nowUTC.Format(time.RFC3339Nano),
+			Actor:         tokenClaims.ControlSessionID,
+			Scope:         existingOpenInspection.Scope,
+			InspectionID:  existingOpenInspection.InspectionID,
+			ThreadID:      existingOpenInspection.ThreadID,
+			GoalType:      distillateRecord.GoalType,
+			GoalFamilyID:  distillateRecord.GoalFamilyID,
+			Lineage:       ptrContinuityInspectionLineage(existingOpenInspection.Lineage),
+		})
 		return workingState, map[string]interface{}{
 			"item_id":       validatedRequest.ItemID,
 			"inspection_id": inspectionID,
@@ -1496,12 +1527,12 @@ func (server *Server) executeGoalSetCapability(tokenClaims capabilityToken, capa
 		}
 	}
 	if err := server.logEvent("capability.executed", tokenClaims.ControlSessionID, map[string]interface{}{
-		"request_id":           capabilityRequest.RequestID,
-		"capability":           capabilityRequest.Capability,
-		"status":               ResponseStatusSuccess,
-		"goal_id":              goalID,
-		"actor_label":          tokenClaims.ActorLabel,
-		"control_session_id":   tokenClaims.ControlSessionID,
+		"request_id":         capabilityRequest.RequestID,
+		"capability":         capabilityRequest.Capability,
+		"status":             ResponseStatusSuccess,
+		"goal_id":            goalID,
+		"actor_label":        tokenClaims.ActorLabel,
+		"control_session_id": tokenClaims.ControlSessionID,
 	}); err != nil {
 		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 	}
@@ -1591,11 +1622,11 @@ func (server *Server) setGoal(tokenClaims capabilityToken, text string) (string,
 		effectiveHotness := hotnessBase(server.runtimeConfig, userImportance)
 
 		inspectionRecord := continuityInspectionRecord{
-			InspectionID:   inspectionID,
-			ThreadID:       threadID,
-			Scope:          memoryScopeGlobal,
-			SubmittedAtUTC: nowUTC.Format(time.RFC3339Nano),
-			CompletedAtUTC: nowUTC.Format(time.RFC3339Nano),
+			InspectionID:      inspectionID,
+			ThreadID:          threadID,
+			Scope:             memoryScopeGlobal,
+			SubmittedAtUTC:    nowUTC.Format(time.RFC3339Nano),
+			CompletedAtUTC:    nowUTC.Format(time.RFC3339Nano),
 			Outcome:           continuityInspectionOutcomeDerived,
 			DerivationOutcome: continuityInspectionOutcomeDerived,
 			Review: continuityInspectionReview{
@@ -1684,11 +1715,11 @@ func (server *Server) closeGoal(tokenClaims capabilityToken, goalID string) erro
 		effectiveHotness := hotnessBase(server.runtimeConfig, userImportance)
 
 		inspectionRecord := continuityInspectionRecord{
-			InspectionID:   inspectionID,
-			ThreadID:       threadID,
-			Scope:          memoryScopeGlobal,
-			SubmittedAtUTC: nowUTC.Format(time.RFC3339Nano),
-			CompletedAtUTC: nowUTC.Format(time.RFC3339Nano),
+			InspectionID:      inspectionID,
+			ThreadID:          threadID,
+			Scope:             memoryScopeGlobal,
+			SubmittedAtUTC:    nowUTC.Format(time.RFC3339Nano),
+			CompletedAtUTC:    nowUTC.Format(time.RFC3339Nano),
 			Outcome:           continuityInspectionOutcomeDerived,
 			DerivationOutcome: continuityInspectionOutcomeDerived,
 			Review: continuityInspectionReview{

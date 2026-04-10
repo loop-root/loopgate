@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-03
+**Last updated:** 2026-04-09
 
 # Memorybench Benchmark Guide
 
@@ -113,15 +113,19 @@ Do not blend scored continuity runs and debug continuity runs into one number.
   - retrieval microbench over synthetic projected nodes
 - `production_write_parity`
   - scored fixture run
-  - authoritative supported slots are seeded through real authenticated
+  - authoritative supported profile facts are seeded through real authenticated
     `RememberMemoryFact` HTTP-over-UDS writes against product-valid `global`
     scope
-  - each benchmark scenario scope is seeded inside its own isolated Loopgate
-    runtime, then rewritten into the benchmark scenario scope only when
-    materializing the temporary projected-node corpus
-  - this is honest about the write path, but it is still a projected-node
-    discovery benchmark rather than a full `/v1/memory/discover` end-to-end
-    product benchmark
+  - supported continuity proposals are seeded through Haven's real
+    `/v1/continuity/inspect-thread` path
+  - supported task-resumption seeds are seeded through real `todo.add` and
+    `todo.complete` capability execution
+  - supported seeded scenarios are retrieved through the real
+    `/v1/memory/discover` and `/v1/memory/recall` routes inside isolated
+    Loopgate runtimes
+  - unsupported benchmark-only fixture leftovers still materialize projected
+    nodes, so some full-matrix runs are mixed control-plane and SQLite rather
+    than pure end-to-end control-plane retrieval
 - `debug_ambient_repo`
   - unscored debug run only
   - never eligible for headline comparison
@@ -142,8 +146,16 @@ Before trusting a continuity result, inspect `run_metadata.json` and confirm:
 
 Current expected values:
 
-- continuity scored runs currently use `retrieval_path_mode=projected_node_sqlite_backend`
-- `production_write_parity` should pair with `seed_path_mode=mixed_validated_writes_and_fixture_ingest`
+- `synthetic_projected_nodes` should use
+  `retrieval_path_mode=projected_node_sqlite_backend`
+- `production_write_parity` may use:
+  - `retrieval_path_mode=control_plane_memory_routes` with
+    `seed_path_mode=validated_writes_and_observed_thread_inspect` or
+    `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
+  - `retrieval_path_mode=mixed_control_plane_and_projected_node_sqlite` with
+    `seed_path_mode=mixed_validated_writes_observed_threads_and_projected_fixtures`
+    or `seed_path_mode=mixed_control_plane_memory_todo_workflow_and_projected_fixtures`
+    when unsupported fixture leftovers still need projected-node ingest
 - `synthetic_projected_nodes` should pair with `seed_path_mode=synthetic_projected_node_seed`
 - `debug_ambient_repo` should pair with `seed_path_mode=ambient_repo_authoritative_state`
 - seeded RAG runs should pair with `retrieval_path_mode=rag_search_helper` and
@@ -155,8 +167,13 @@ For production-parity continuity runs, inspect `seed_manifest.json` and confirm:
 - those authoritative seeds also have:
   - `authority_class=validated_explicit_write`
   - `validated_write_supported=true`
-- preview and distractor seeds use `seed_path=continuity_fixture_ingest`
-- preview and distractor seeds never appear as authoritative explicit writes
+- supported continuity proposal seeds use `seed_path=observed_thread_inspect`
+  with `authority_class=observed_thread_inspection`
+- supported task-resumption seeds use `seed_path=todo_workflow_capability`
+  with `authority_class=todo_workflow_control_plane`
+- preview, distractor, and unsupported leftovers may still use
+  `seed_path=continuity_fixture_ingest`
+- fixture-ingest leftovers must never appear as authoritative explicit writes
 
 `comparison_class` is part of the evidence boundary:
 

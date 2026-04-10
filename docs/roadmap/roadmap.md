@@ -142,10 +142,13 @@ Next lift:
   through the supported server-loaded path. The continuity memory benchmark’s
   `production_write_parity`
   seeding path now uses real authenticated `memory.remember` HTTP-over-UDS
-  writes inside isolated Loopgate runtimes instead of direct in-process calls
-  into `rememberMemoryFact(...)`. That makes the write-path benchmark claim much
-  more honest, although projected-node discovery is still a harness-level
-  retrieval benchmark rather than a full end-to-end `/v1/memory/discover` run.
+  writes, real `/v1/continuity/inspect-thread` continuity proposals, and real
+  `todo` workflow capability execution inside isolated Loopgate runtimes
+  instead of direct in-process calls into `rememberMemoryFact(...)`. Supported
+  production-parity retrieval now runs through `/v1/memory/discover` and
+  `/v1/memory/recall`; only unsupported fixture leftovers still rely on
+  projected-node ingest, which is now labeled as mixed control-plane and SQLite
+  rather than pretending to be pure product parity.
   before packets enter backend-owned observed continuity state, so first-class
   provenance refs only survive on supported server-loaded paths. Backend-owned
   observed packets now also allowlist source-ref kinds, so new provenance

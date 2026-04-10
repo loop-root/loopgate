@@ -2863,6 +2863,80 @@ func TestExecuteCapability_TodoComplete_ClosesExplicitOpenItem(t *testing.T) {
 	}
 }
 
+func TestExecuteCapability_TodoComplete_TombstonesOpenTodoDiscoveryLineage(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	addResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-todo-add-lineage",
+		Capability: "todo.add",
+		Arguments: map[string]string{
+			"text":      "Seed the fixture corpus into Qdrant",
+			"next_step": "Bring the local Qdrant container up first",
+		},
+	})
+	if err != nil {
+		t.Fatalf("add todo item: %v", err)
+	}
+	itemID, _ := addResponse.StructuredResult["item_id"].(string)
+	if strings.TrimSpace(itemID) == "" {
+		t.Fatalf("expected todo item id in add response, got %#v", addResponse.StructuredResult)
+	}
+
+	activeTodoItem, found := activeExplicitTodoItemByID(testDefaultMemoryState(t, server), itemID)
+	if !found {
+		t.Fatalf("expected active todo item %q after add", itemID)
+	}
+
+	completeResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-todo-complete-lineage",
+		Capability: "todo.complete",
+		Arguments: map[string]string{
+			"item_id": itemID,
+		},
+	})
+	if err != nil {
+		t.Fatalf("complete todo item: %v", err)
+	}
+	if completeResponse.Status != ResponseStatusSuccess {
+		t.Fatalf("unexpected todo.complete response: %#v", completeResponse)
+	}
+
+	currentState := testDefaultMemoryState(t, server)
+	supersededInspection := currentState.Inspections[activeTodoItem.InspectionID]
+	if supersededInspection.Lineage.Status != continuityLineageStatusTombstoned {
+		t.Fatalf("expected completed todo's open inspection to be tombstoned, got %#v", supersededInspection.Lineage)
+	}
+	completedInspectionID := supersededInspection.Lineage.SupersededByInspectionID
+	if strings.TrimSpace(completedInspectionID) == "" {
+		t.Fatalf("expected completed todo's open inspection to point at a completion inspection, got %#v", supersededInspection.Lineage)
+	}
+	if supersededInspection.Lineage.SupersededByDistillateID == "" {
+		t.Fatalf("expected completed todo's open inspection to record replacement distillate, got %#v", supersededInspection.Lineage)
+	}
+
+	completionInspection := currentState.Inspections[completedInspectionID]
+	if completionInspection.Lineage.SupersedesInspectionID != activeTodoItem.InspectionID {
+		t.Fatalf("expected completion inspection to record superseded open inspection %q, got %#v", activeTodoItem.InspectionID, completionInspection.Lineage)
+	}
+
+	discoverResponse, err := client.DiscoverMemory(context.Background(), MemoryDiscoverRequest{
+		Query: "Seed the fixture corpus into Qdrant Bring the local Qdrant container up first",
+	})
+	if err != nil {
+		t.Fatalf("discover memory after todo.complete: %v", err)
+	}
+	if len(discoverResponse.Items) != 0 {
+		t.Fatalf("expected completed todo to stay out of active discovery, got %#v", discoverResponse.Items)
+	}
+
+	if _, err := client.RecallMemory(context.Background(), MemoryRecallRequest{
+		RequestedKeys: []string{activeTodoItem.ResonateKeyID},
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeContinuityLineageIneligible) {
+		t.Fatalf("expected completed todo's superseded key recall denial, got %v", err)
+	}
+}
+
 func TestUITasks_GetStatusAndRecentDone(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
