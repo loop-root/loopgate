@@ -150,8 +150,9 @@ func (backend *continuityTCLMemoryBackend) recallFromBoundPartitionState(validat
 		}
 
 		recalledFacts := make([]MemoryRecallFact, 0, len(distillateRecord.Facts))
+		stateClass := memoryFactStateClassForDistillate(distillateRecord)
 		for _, factRecord := range distillateRecord.Facts {
-			recalledFacts = append(recalledFacts, memoryRecallFactFromDistillateFact(factRecord))
+			recalledFacts = append(recalledFacts, memoryRecallFactFromDistillateFact(factRecord, stateClass))
 		}
 		activeGoals, unresolvedItems := loopgateRecallOpenItems(distillateRecord)
 		recalledItem := MemoryRecallItem{

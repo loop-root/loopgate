@@ -97,6 +97,9 @@ Completed slices in the current refactor:
 - the explicit remember TCL candidate-builder seam is now backend-owned instead
   of hanging off `Server`, so targeted test injection no longer leaves server
   ownership in the live candidate-analysis path
+- wake-state and recall facts now carry an explicit `state_class`
+  (`authoritative_state` vs `derived_context`) so clients and future prompt
+  assembly do not have to infer hard-vs-soft memory from source-ref heuristics
 
 Still not finished:
 

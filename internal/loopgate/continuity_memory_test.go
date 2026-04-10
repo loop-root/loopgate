@@ -271,6 +271,9 @@ func TestRememberMemoryFact_PersistsAcrossRestartAndSupersedesOlderValue(t *test
 	if factValue, found := memoryWakeFactValue(initialWakeState, "name"); !found || factValue != "Ada" {
 		t.Fatalf("expected wake state to include remembered name Ada, got %#v", initialWakeState.RecentFacts)
 	}
+	if stateClass, found := memoryWakeFactStateClass(initialWakeState, "name"); !found || stateClass != memoryFactStateClassAuthoritative {
+		t.Fatalf("expected explicit remembered name to be authoritative_state in wake state, got found=%v state_class=%q facts=%#v", found, stateClass, initialWakeState.RecentFacts)
+	}
 
 	secondRemembered, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
 		FactKey:   "name",
@@ -338,6 +341,9 @@ func TestRememberMemoryFact_PersistsAcrossRestartAndSupersedesOlderValue(t *test
 	}
 	if recalledReplacement.Items[0].Facts[0].Name != "name" || recalledReplacement.Items[0].Facts[0].Value != "Grace" {
 		t.Fatalf("expected recalled replacement name Grace, got %#v", recalledReplacement.Items[0].Facts)
+	}
+	if recalledReplacement.Items[0].Facts[0].StateClass != memoryFactStateClassAuthoritative {
+		t.Fatalf("expected recalled explicit remembered fact to be authoritative_state, got %#v", recalledReplacement.Items[0].Facts[0])
 	}
 	discoverResponse, err := client.DiscoverMemory(context.Background(), MemoryDiscoverRequest{Query: "Ada"})
 	if err != nil {
@@ -995,6 +1001,9 @@ func TestRememberMemoryFact_ExplicitFactTakesPrecedenceOverDerivedFact(t *testin
 	if factValue, found := memoryWakeFactValue(wakeBeforeRemember, "name"); !found || factValue != "Charlie" {
 		t.Fatalf("expected derived name Charlie in wake state, got found=%v value=%q facts=%#v", found, factValue, wakeBeforeRemember.RecentFacts)
 	}
+	if stateClass, found := memoryWakeFactStateClass(wakeBeforeRemember, "name"); !found || stateClass != memoryFactStateClassDerived {
+		t.Fatalf("expected derived continuity name to be derived_context in wake state, got found=%v state_class=%q facts=%#v", found, stateClass, wakeBeforeRemember.RecentFacts)
+	}
 
 	if _, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
 		FactKey:   "name",
@@ -1009,6 +1018,9 @@ func TestRememberMemoryFact_ExplicitFactTakesPrecedenceOverDerivedFact(t *testin
 	}
 	if factValue, found := memoryWakeFactValue(wakeAfterRemember, "name"); !found || factValue != "Ada" {
 		t.Fatalf("expected explicit name Ada to take precedence over derived Charlie, got found=%v value=%q", found, factValue)
+	}
+	if stateClass, found := memoryWakeFactStateClass(wakeAfterRemember, "name"); !found || stateClass != memoryFactStateClassAuthoritative {
+		t.Fatalf("expected explicit remembered name to replace derived wake classification, got found=%v state_class=%q facts=%#v", found, stateClass, wakeAfterRemember.RecentFacts)
 	}
 }
 
@@ -3201,6 +3213,16 @@ func memoryWakeFactValues(wakeStateResponse MemoryWakeStateResponse, factKey str
 		values = append(values, factValue)
 	}
 	return values
+}
+
+func memoryWakeFactStateClass(wakeStateResponse MemoryWakeStateResponse, factKey string) (string, bool) {
+	for _, factRecord := range wakeStateResponse.RecentFacts {
+		if factRecord.Name != factKey {
+			continue
+		}
+		return factRecord.StateClass, true
+	}
+	return "", false
 }
 
 func containsString(values []string, wanted string) bool {

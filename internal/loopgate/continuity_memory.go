@@ -628,6 +628,11 @@ type continuityFactCandidate struct {
 	AuthorityLane int
 }
 
+const (
+	memoryFactStateClassAuthoritative = "authoritative_state"
+	memoryFactStateClassDerived       = "derived_context"
+)
+
 func deriveGoalOpSemanticProjection(action string, goalText string, sourceChannel string, trust tclpkg.Trust) *tclpkg.SemanticProjection {
 	return deriveMemoryCandidateSemanticProjection(tclpkg.MemoryCandidate{
 		Source:              tclpkg.CandidateSourceWorkflowStep,
@@ -672,6 +677,20 @@ func certaintyScoreForEpistemicFlavor(epistemicFlavor string) int {
 	default:
 		return 50
 	}
+}
+
+func memoryFactStateClassForAuthorityLane(authorityLane int) string {
+	if authorityLane >= 2 {
+		return memoryFactStateClassAuthoritative
+	}
+	return memoryFactStateClassDerived
+}
+
+func memoryFactStateClassForDistillate(distillateRecord continuityDistillateRecord) string {
+	if isExplicitProfileFactDistillate(distillateRecord) {
+		return memoryFactStateClassAuthoritative
+	}
+	return memoryFactStateClassDerived
 }
 
 func compareContinuityFactCandidates(existingCandidate continuityFactCandidate, candidate continuityFactCandidate) int {
@@ -776,7 +795,7 @@ func appendRecentFactCandidate(recentFactsBySlotKey map[string]MemoryWakeStateRe
 	factAnchorTupleKey := anchorTupleKey(factAnchorVersion, factAnchorKey)
 	if factAnchorTupleKey == "" {
 		slotKey := candidate.Fact.Name + ":" + candidate.Fact.SourceRef
-		recentFactsBySlotKey[slotKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact)
+		recentFactsBySlotKey[slotKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact, memoryFactStateClassForAuthorityLane(candidate.AuthorityLane))
 		*recentFactOrder = appendWithoutDuplicate(*recentFactOrder, slotKey)
 		return
 	}
@@ -787,7 +806,7 @@ func appendRecentFactCandidate(recentFactsBySlotKey map[string]MemoryWakeStateRe
 		switch compareContinuityFactCandidates(existingCandidate, candidate) {
 		case 1:
 			factCandidatesByAnchorTupleKey[factAnchorTupleKey] = candidate
-			recentFactsBySlotKey[factAnchorTupleKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact)
+			recentFactsBySlotKey[factAnchorTupleKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact, memoryFactStateClassForAuthorityLane(candidate.AuthorityLane))
 		case -1:
 			return
 		default:
@@ -801,7 +820,7 @@ func appendRecentFactCandidate(recentFactsBySlotKey map[string]MemoryWakeStateRe
 		return
 	}
 	factCandidatesByAnchorTupleKey[factAnchorTupleKey] = candidate
-	recentFactsBySlotKey[factAnchorTupleKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact)
+	recentFactsBySlotKey[factAnchorTupleKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact, memoryFactStateClassForAuthorityLane(candidate.AuthorityLane))
 	*recentFactOrder = appendWithoutDuplicate(*recentFactOrder, factAnchorTupleKey)
 }
 
@@ -1962,26 +1981,28 @@ func ptrContinuityObservedPacket(observedPacket continuityObservedPacket) *conti
 	return &observedPacket
 }
 
-func memoryWakeRecentFactFromDistillateFact(factRecord continuityDistillateFact) MemoryWakeStateRecentFact {
+func memoryWakeRecentFactFromDistillateFact(factRecord continuityDistillateFact, stateClass string) MemoryWakeStateRecentFact {
 	conflictAnchorVersion, conflictAnchorKey := continuityFactAnchorTuple(factRecord)
 	return MemoryWakeStateRecentFact{
 		Name:               factRecord.Name,
 		Value:              factRecord.Value,
 		SourceRef:          factRecord.SourceRef,
 		EpistemicFlavor:    factRecord.EpistemicFlavor,
+		StateClass:         stateClass,
 		ConflictKeyVersion: conflictAnchorVersion,
 		ConflictKey:        conflictAnchorKey,
 		CertaintyScore:     factRecord.CertaintyScore,
 	}
 }
 
-func memoryRecallFactFromDistillateFact(factRecord continuityDistillateFact) MemoryRecallFact {
+func memoryRecallFactFromDistillateFact(factRecord continuityDistillateFact, stateClass string) MemoryRecallFact {
 	conflictAnchorVersion, conflictAnchorKey := continuityFactAnchorTuple(factRecord)
 	return MemoryRecallFact{
 		Name:               factRecord.Name,
 		Value:              factRecord.Value,
 		SourceRef:          factRecord.SourceRef,
 		EpistemicFlavor:    factRecord.EpistemicFlavor,
+		StateClass:         stateClass,
 		ConflictKeyVersion: conflictAnchorVersion,
 		ConflictKey:        conflictAnchorKey,
 		CertaintyScore:     factRecord.CertaintyScore,

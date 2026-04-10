@@ -134,7 +134,9 @@ Next lift:
   so supported continuity provenance is stronger than a bare `thread:index`
   pointer. The explicit remember TCL candidate-builder seam has also moved
   behind the continuity backend, so the live memory-analysis path no longer
-  depends on a `Server` test hook.
+  depends on a `Server` test hook. Wake-state and recall facts now carry an
+  explicit `state_class` (`authoritative_state` vs `derived_context`) so hard
+  and soft memory no longer need to be inferred from precedence heuristics.
   Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.

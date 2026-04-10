@@ -924,13 +924,15 @@ type HavenMorphSleepResponse struct {
 }
 
 type MemoryWakeStateRecentFact struct {
-	Name               string      `json:"name"`
-	Value              interface{} `json:"value"`
-	SourceRef          string      `json:"source_ref"`
-	EpistemicFlavor    string      `json:"epistemic_flavor"`
-	ConflictKeyVersion string      `json:"conflict_key_version,omitempty"`
-	ConflictKey        string      `json:"conflict_key,omitempty"`
-	CertaintyScore     int         `json:"certainty_score,omitempty"`
+	Name            string      `json:"name"`
+	Value           interface{} `json:"value"`
+	SourceRef       string      `json:"source_ref"`
+	EpistemicFlavor string      `json:"epistemic_flavor"`
+	// StateClass distinguishes hard remembered state from softer derived continuity.
+	StateClass         string `json:"state_class,omitempty"`
+	ConflictKeyVersion string `json:"conflict_key_version,omitempty"`
+	ConflictKey        string `json:"conflict_key,omitempty"`
+	CertaintyScore     int    `json:"certainty_score,omitempty"`
 }
 
 type MemoryWakeStateResponse struct {
@@ -1002,13 +1004,15 @@ type MemoryRecallRequest struct {
 }
 
 type MemoryRecallFact struct {
-	Name               string      `json:"name"`
-	Value              interface{} `json:"value"`
-	SourceRef          string      `json:"source_ref"`
-	EpistemicFlavor    string      `json:"epistemic_flavor"`
-	ConflictKeyVersion string      `json:"conflict_key_version,omitempty"`
-	ConflictKey        string      `json:"conflict_key,omitempty"`
-	CertaintyScore     int         `json:"certainty_score,omitempty"`
+	Name            string      `json:"name"`
+	Value           interface{} `json:"value"`
+	SourceRef       string      `json:"source_ref"`
+	EpistemicFlavor string      `json:"epistemic_flavor"`
+	// StateClass distinguishes hard remembered state from softer derived continuity.
+	StateClass         string `json:"state_class,omitempty"`
+	ConflictKeyVersion string `json:"conflict_key_version,omitempty"`
+	ConflictKey        string `json:"conflict_key,omitempty"`
+	CertaintyScore     int    `json:"certainty_score,omitempty"`
 }
 
 type MemoryRecallItem struct {
