@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-09
 
 # Loopgate roadmap
 
@@ -146,9 +146,13 @@ Next lift:
   `todo` workflow capability execution inside isolated Loopgate runtimes
   instead of direct in-process calls into `rememberMemoryFact(...)`. Supported
   production-parity retrieval now runs through `/v1/memory/discover` and
-  `/v1/memory/recall`; only unsupported fixture leftovers still rely on
-  projected-node ingest, which is now labeled as mixed control-plane and SQLite
-  rather than pretending to be pure product parity.
+  `/v1/memory/recall`, and the current checked-in `61`-fixture scored set no
+  longer needs projected-node fallback.
+  The current honest continuity rerun is `43/61` overall with `20/34` on
+  contradiction and `13/13` on task resumption, which means the benchmark is
+  finally honest enough to expose the real product pressure points:
+  preview-label vs canonical-slot separation, same-entity stale preview
+  resurfacing, and different-entity contamination.
   before packets enter backend-owned observed continuity state, so first-class
   provenance refs only survive on supported server-loaded paths. Backend-owned
   observed packets now also allowlist source-ref kinds, so new provenance

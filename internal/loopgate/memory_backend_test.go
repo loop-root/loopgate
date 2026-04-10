@@ -1294,6 +1294,64 @@ func TestOpenContinuityTCLProductionParityControlPlaneDiscoverBackend_UsesObserv
 	}
 }
 
+func TestOpenContinuityTCLProductionParityControlPlaneDiscoverBackend_UsesObservedFactContextTextForPreviewDisambiguation(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, _ = startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	scenarioScope := memorybench.BenchmarkScenarioScope("contradiction.profile_timezone_preview_only_control.v1")
+	controlPlaneBackend, err := OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot, nil, []BenchmarkObservedThreadSeed{
+		{
+			Scope: scenarioScope,
+			Events: []BenchmarkObservedThreadEventSeed{{
+				EventType:  threadstore.EventOrchToolResult,
+				Text:       "Current user profile preview card: timezone label is Mountain Time on the preview card.",
+				Capability: "benchmark.fixture.observe",
+				Status:     "ok",
+				Facts: map[string]string{
+					"profile.preview_timezone_label": "Mountain Time",
+				},
+			}},
+		},
+		{
+			Scope: scenarioScope,
+			Events: []BenchmarkObservedThreadEventSeed{{
+				EventType:  threadstore.EventOrchToolResult,
+				Text:       "Current teammate preview card: timezone label is Phoenix local time for the shadow operator.",
+				Capability: "benchmark.fixture.observe",
+				Status:     "ok",
+				Facts: map[string]string{
+					"profile.preview_timezone_label": "Phoenix local time",
+				},
+			}},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("open control-plane production parity backend with preview-only observed facts: %v", err)
+	}
+	if closeableBackend, ok := controlPlaneBackend.(interface{ Close() error }); ok {
+		defer func() {
+			if closeErr := closeableBackend.Close(); closeErr != nil {
+				t.Fatalf("close preview-only control-plane backend: %v", closeErr)
+			}
+		}()
+	}
+
+	discoveredItems, err := controlPlaneBackend.DiscoverProjectedNodes(context.Background(), ProjectedNodeDiscoverRequest{
+		Scope:    scenarioScope,
+		Query:    "Retrieve the current user profile timezone label from the preview card slot.",
+		MaxItems: 3,
+	})
+	if err != nil {
+		t.Fatalf("discover preview-only control-plane items: %v", err)
+	}
+	if len(discoveredItems) == 0 {
+		t.Fatalf("expected preview-only control-plane discovery results, got %#v", discoveredItems)
+	}
+	if !strings.Contains(discoveredItems[0].HintText, "Mountain Time") {
+		t.Fatalf("expected current user preview timezone label to outrank teammate distractor, got %#v", discoveredItems)
+	}
+}
+
 func TestOpenContinuityTCLProductionParityControlPlaneDiscoverBackend_UsesTodoWorkflowForTaskResumption(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, _ = startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

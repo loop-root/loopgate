@@ -89,7 +89,7 @@ func buildParityContradictionFixtureSeeds(
 	paritySeedSpec := scenarioFixture.ContinuityParitySeedSpec
 	scenarioID := strings.TrimSpace(scenarioFixture.Metadata.ScenarioID)
 	canonicalFactKey := strings.TrimSpace(paritySeedSpec.CanonicalFactKey)
-	continuityFactKey := contradictionContinuityFactKey(scenarioFixture)
+	scenarioObservedFactKey := contradictionObservedFactKeyForSignatureHint(scenarioFixture, contradictionExpectation.CurrentSignatureHint)
 
 	rememberedFactSeeds := make([]loopgate.BenchmarkRememberedFactSeed, 0, len(contradictionExpectation.SuppressedHints)+1)
 	observedThreadSeeds := make([]loopgate.BenchmarkObservedThreadSeed, 0, len(contradictionExpectation.SuppressedHints)+len(contradictionExpectation.DistractorHints)+1)
@@ -120,10 +120,23 @@ func buildParityContradictionFixtureSeeds(
 			}
 			seedManifestRecords = append(seedManifestRecords, suppressedManifestRecord)
 		case memorybench.ContinuitySeedPathFixtureIngest:
-			if continuityFactKey != "" {
-				observedThreadSeed := benchmarkObservedFactThreadSeed(scenarioID, "suppressed", suppressedIndex, continuityFactKey, trimmedSuppressedHint)
+			// Suppressed hints currently do not carry their own signature annotation in the
+			// fixture schema. Fall back to the scenario's primary observed fact key so the
+			// parity harness can stay on the real observed-thread continuity path instead of
+			// fabricating benchmark-only projected nodes.
+			suppressedSourceText := sourceTextForFixtureHint(scenarioFixture, trimmedSuppressedHint)
+			suppressedObservedFactKey := benchmarkObservedFactKeyWithEntityScope(scenarioObservedFactKey, trimmedSuppressedHint, suppressedSourceText)
+			if suppressedObservedFactKey != "" {
+				observedThreadSeed := benchmarkObservedFactThreadSeed(
+					scenarioID,
+					"suppressed",
+					suppressedIndex,
+					suppressedObservedFactKey,
+					trimmedSuppressedHint,
+					suppressedSourceText,
+				)
 				observedThreadSeeds = append(observedThreadSeeds, observedThreadSeed)
-				seedManifestRecords = append(seedManifestRecords, observedThreadSeedManifestRecord(scenarioID, "suppressed", continuityFactKey, trimmedSuppressedHint))
+				seedManifestRecords = append(seedManifestRecords, observedThreadSeedManifestRecord(scenarioID, "suppressed", suppressedObservedFactKey, trimmedSuppressedHint))
 			} else {
 				suppressedSeedNode := loopgate.BenchmarkProjectedNodeSeed{
 					NodeID:          fmt.Sprintf("%s::suppressed::%02d", scenarioID, suppressedIndex),
@@ -162,10 +175,19 @@ func buildParityContradictionFixtureSeeds(
 			}
 			seedManifestRecords = append(seedManifestRecords, currentManifestRecord)
 		case memorybench.ContinuitySeedPathFixtureIngest:
-			if continuityFactKey != "" {
-				observedThreadSeed := benchmarkObservedFactThreadSeed(scenarioID, "current", 0, continuityFactKey, currentFactValue)
+			currentSourceText := sourceTextForFixtureHint(scenarioFixture, currentFactValue)
+			currentObservedFactKey := benchmarkObservedFactKeyWithEntityScope(scenarioObservedFactKey, currentFactValue, currentSourceText)
+			if currentObservedFactKey != "" {
+				observedThreadSeed := benchmarkObservedFactThreadSeed(
+					scenarioID,
+					"current",
+					0,
+					currentObservedFactKey,
+					currentFactValue,
+					currentSourceText,
+				)
 				observedThreadSeeds = append(observedThreadSeeds, observedThreadSeed)
-				seedManifestRecords = append(seedManifestRecords, observedThreadSeedManifestRecord(scenarioID, "current", continuityFactKey, currentFactValue))
+				seedManifestRecords = append(seedManifestRecords, observedThreadSeedManifestRecord(scenarioID, "current", currentObservedFactKey, currentFactValue))
 			} else {
 				currentSeedNode := loopgate.BenchmarkProjectedNodeSeed{
 					NodeID:          scenarioID + "::current",
@@ -198,10 +220,28 @@ func buildParityContradictionFixtureSeeds(
 		if distractorIndex < len(contradictionExpectation.DistractorSignatureHints) {
 			distractorSignatureHint = contradictionExpectation.DistractorSignatureHints[distractorIndex]
 		}
-		if continuityFactKey != "" {
-			observedThreadSeed := benchmarkObservedFactThreadSeed(scenarioID, "distractor", distractorIndex, continuityFactKey, trimmedDistractorHint)
+		distractorSourceText := sourceTextForFixtureHint(scenarioFixture, trimmedDistractorHint)
+		distractorObservedFactKey := contradictionObservedFactKeyForSignatureHint(scenarioFixture, distractorSignatureHint)
+		if distractorObservedFactKey == "" {
+			distractorObservedFactKey = scenarioObservedFactKey
+		}
+		distractorObservedFactKey = benchmarkObservedFactKeyWithEntityScope(
+			distractorObservedFactKey,
+			distractorSignatureHint,
+			trimmedDistractorHint,
+			distractorSourceText,
+		)
+		if distractorObservedFactKey != "" {
+			observedThreadSeed := benchmarkObservedFactThreadSeed(
+				scenarioID,
+				"distractor",
+				distractorIndex,
+				distractorObservedFactKey,
+				trimmedDistractorHint,
+				distractorSourceText,
+			)
 			observedThreadSeeds = append(observedThreadSeeds, observedThreadSeed)
-			seedManifestRecords = append(seedManifestRecords, observedThreadSeedManifestRecord(scenarioID, "distractor", continuityFactKey, trimmedDistractorHint))
+			seedManifestRecords = append(seedManifestRecords, observedThreadSeedManifestRecord(scenarioID, "distractor", distractorObservedFactKey, trimmedDistractorHint))
 			continue
 		}
 		distractorSeedNode := loopgate.BenchmarkProjectedNodeSeed{
@@ -249,6 +289,7 @@ func rememberedFactSeedManifestRecord(scenarioID string, seedGroup string, remem
 		SeedPath:                memorybench.ContinuitySeedPathRememberMemoryFact,
 		AuthorityClass:          memorybench.ContinuityAuthorityValidatedWrite,
 		ValidatedWriteSupported: true,
+		FactKey:                 validatedCandidate.CanonicalKey,
 		CanonicalFactKey:        validatedCandidate.CanonicalKey,
 		FactValue:               validatedCandidate.FactValue,
 		AnchorTupleKey:          validatedCandidate.AnchorTupleKey(),
@@ -277,11 +318,12 @@ func fixtureIngestManifestRecords(scenarioID string, seedNodes []loopgate.Benchm
 	return seedManifestRecords
 }
 
-func benchmarkObservedFactThreadSeed(scenarioID string, seedGroup string, seedIndex int, factKey string, factValue string) loopgate.BenchmarkObservedThreadSeed {
+func benchmarkObservedFactThreadSeed(scenarioID string, seedGroup string, seedIndex int, factKey string, factValue string, sourceText string) loopgate.BenchmarkObservedThreadSeed {
 	return loopgate.BenchmarkObservedThreadSeed{
 		Scope: memorybench.BenchmarkScenarioScope(scenarioID),
 		Events: []loopgate.BenchmarkObservedThreadEventSeed{{
 			EventType:  "orchestration.tool_result",
+			Text:       strings.TrimSpace(sourceText),
 			Capability: "benchmark.fixture.observe",
 			Status:     "ok",
 			Facts: map[string]string{
@@ -299,7 +341,8 @@ func observedThreadSeedManifestRecord(scenarioID string, seedGroup string, factK
 		SeedPath:                memorybench.ContinuitySeedPathObservedThread,
 		AuthorityClass:          memorybench.ContinuityAuthorityObservedThread,
 		ValidatedWriteSupported: false,
-		CanonicalFactKey:        strings.TrimSpace(factKey),
+		FactKey:                 strings.TrimSpace(factKey),
+		CanonicalFactKey:        manifestCanonicalFactKey(factKey),
 		FactValue:               strings.TrimSpace(factValue),
 		SourceKind:              "observed_thread_seed",
 		SourceRef:               "fixture:" + scenarioID + "::" + seedGroup,
@@ -404,30 +447,67 @@ func todoSeedLineageStatus(todoSeed loopgate.BenchmarkTodoSeed) string {
 	}
 }
 
-func contradictionContinuityFactKey(scenarioFixture memorybench.ScenarioFixture) string {
-	if scenarioFixture.ContradictionExpectation == nil {
-		return ""
-	}
-	if scenarioFixture.ContinuityParitySeedSpec != nil {
-		if trimmedCanonicalFactKey := strings.TrimSpace(scenarioFixture.ContinuityParitySeedSpec.CanonicalFactKey); trimmedCanonicalFactKey != "" {
-			return trimmedCanonicalFactKey
-		}
-	}
+func contradictionObservedFactKeyForSignatureHint(scenarioFixture memorybench.ScenarioFixture, rawSignatureHint string) string {
 	normalizedScenarioID := strings.ToLower(strings.TrimSpace(scenarioFixture.Metadata.ScenarioID))
-	normalizedSignatureHint := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(scenarioFixture.ContradictionExpectation.CurrentSignatureHint))), " ")
+	normalizedSignatureHint := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(rawSignatureHint))), " ")
 	switch {
 	case strings.Contains(normalizedSignatureHint, "identity timezone slot timezone"):
 		return "profile.timezone"
+	case strings.Contains(normalizedSignatureHint, "preview timezone label"),
+		strings.Contains(normalizedSignatureHint, "preview card timezone slot label"),
+		strings.Contains(normalizedSignatureHint, "preview timezone slot chip"):
+		return "profile.preview_timezone_label"
 	case strings.Contains(normalizedSignatureHint, "identity locale slot locale"):
 		return "profile.locale"
+	case strings.Contains(normalizedSignatureHint, "preview locale label"),
+		strings.Contains(normalizedSignatureHint, "preview card locale label"):
+		return "profile.preview_locale_label"
 	case strings.Contains(normalizedSignatureHint, "identity name slot preferred_name"):
 		return "preferred_name"
 	case strings.Contains(normalizedSignatureHint, "identity name slot name"):
 		return "name"
+	case strings.Contains(normalizedSignatureHint, "display name preview label"),
+		strings.Contains(normalizedSignatureHint, "display name preview alias"):
+		return "profile.display_name_preview_label"
+	case strings.Contains(normalizedSignatureHint, "identity pronouns slot pronouns"):
+		return "profile.pronouns"
+	case strings.Contains(normalizedSignatureHint, "preview pronouns badge"):
+		return "profile.preview_pronouns_badge"
+	case strings.HasPrefix(normalizedScenarioID, "contradiction.identity_old_name_"),
+		strings.HasPrefix(normalizedScenarioID, "contradiction.identity_entity_"):
+		return "name"
+	case strings.HasPrefix(normalizedScenarioID, "contradiction.identity_alias_"):
+		return "preferred_name"
 	case strings.HasPrefix(normalizedScenarioID, "contradiction.preference_"):
 		return "preference.stated_preference"
 	default:
 		return ""
+	}
+}
+
+func manifestCanonicalFactKey(rawFactKey string) string {
+	canonicalFactKey := tclpkg.CanonicalizeExplicitMemoryFactKey(strings.TrimSpace(rawFactKey))
+	if canonicalFactKey == "" {
+		return ""
+	}
+	return canonicalFactKey
+}
+
+func benchmarkObservedFactKeyWithEntityScope(baseFactKey string, rawContexts ...string) string {
+	normalizedBaseFactKey := strings.TrimSpace(baseFactKey)
+	if normalizedBaseFactKey == "" {
+		return ""
+	}
+	normalizedContext := strings.ToLower(strings.Join(rawContexts, "\n"))
+	switch {
+	case strings.Contains(normalizedContext, "shadow operator"),
+		strings.Contains(normalizedContext, "teammate"),
+		strings.Contains(normalizedContext, "on-call handoff"):
+		return "teammate." + normalizedBaseFactKey
+	case strings.Contains(normalizedContext, "my cat"):
+		return "pet." + normalizedBaseFactKey
+	default:
+		return normalizedBaseFactKey
 	}
 }
 

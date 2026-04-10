@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-09
 
 # Backend-Owned Memory Authority Redesign Plan
 
@@ -106,6 +106,10 @@ Completed slices in the current refactor:
 - backend-owned observed packets now allowlist source-ref kinds, so any new
   provenance source has to be added intentionally instead of arriving as an
   arbitrary string in observed continuity state
+- continuity-derived observed facts now preserve bounded event `text` and
+  `output` tags alongside the derived value so retrieval has some context for
+  same-key preview-label and different-entity disambiguation instead of
+  reducing everything to value-only overlap
 
 Still not finished:
 
@@ -462,9 +466,16 @@ Rules:
   `todo` capability routes
 - supported production-parity retrieval now uses the real
   `/v1/memory/discover` and `/v1/memory/recall` routes
-- unsupported benchmark leftovers may still require projected-node fixture
-  ingest, so some scored runs remain mixed control-plane and SQLite rather than
-  pure end-to-end control-plane retrieval
+- the current checked-in `61`-fixture scored set no longer needs projected-node
+  fallback, so the honest continuity parity baseline now runs with
+  `retrieval_path_mode=control_plane_memory_routes` and
+  `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
+- that more honest baseline is also harsher: the latest continuity rerun is
+  `43/61` overall with only `20/34` on contradiction, which means benchmark
+  routing is no longer the main problem
+- the remaining gap is product behavior, especially preview-label vs
+  canonical-slot separation and different-entity contamination inside derived
+  continuity state
 
 If a shortcut path remains for fixture speed, it should be labeled as such in
 code and output.

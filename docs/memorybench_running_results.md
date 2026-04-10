@@ -16,7 +16,7 @@ confirms the expected backend, retrieval path, and seeding mode.
 `targeted_debug_run` and `unscored_debug_run` results are useful investigation
 artifacts, but they are not headline evidence.
 
-## Current headline run
+## Historical promoted headline
 
 Current fair comparison runs:
 
@@ -50,22 +50,18 @@ Promotion requirements for this headline were:
 - stable passes on the old timezone/locale `4/4` regression guard
 - stable passes on the harder preview-bias targeted `5/5` set
 
-This promoted headline uses the hardened `61`-fixture scored matrix. These
-published numbers predate the control-plane seeding and control-plane
-discover/recall migration and should be treated as historical until the matrix
-is rerun. The next promoted continuity headline should come from
-`production_write_parity` after the authenticated `memory.remember`,
-`inspect-thread`, `todo` workflow, and `/v1/memory/discover` plus
-`/v1/memory/recall` benchmark migration. `synthetic_projected_nodes` remains
-retrieval-only control evidence.
+This promoted headline uses the hardened `61`-fixture scored matrix, but the
+published numbers predate the fully control-plane continuity seeding and
+discover/recall migration. Treat them as historical only. The current truthful
+baseline is the `2026-04-09` honest rerun set below.
 
 ## Current honest rerun set (not yet promoted)
 
 Fresh post-hardening reruns:
 
-- continuity: `continuity_fixture_parity_20260409_honest_v1`
-  - `retrieval_path_mode=mixed_control_plane_and_projected_node_sqlite`
-  - `seed_path_mode=mixed_control_plane_memory_todo_workflow_and_projected_fixtures`
+- continuity: `continuity_fixture_parity_20260409_honest_v4`
+  - `retrieval_path_mode=control_plane_memory_routes`
+  - `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
 - RAG baseline: `rag_baseline_fixture_20260409_honest_v1`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
@@ -77,29 +73,34 @@ Current counts from that rerun set:
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `49/61` | `4/8` | `26/34` | `13/13` | `6/6` |
-| `rag_baseline` | `25/61` | `0/8` | `19/34` | `0/13` | `6/6` |
-| `rag_stronger` | `21/61` | `0/8` | `15/34` | `0/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`) | `43/61` | `4/8` | `20/34` | `13/13` | `6/6` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `29/61` | `4/8` | `19/34` | `0/13` | `6/6` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `25/61` | `4/8` | `15/34` | `0/13` | `6/6` |
 
 Useful read:
 
 - the honest continuity path still holds `13/13` on task resumption after
   moving those scenarios onto real `todo` workflow state and real discover/recall
-- contradiction improved to `26/34` on the post-hardening rerun
-- the gap remains concentrated in contradiction and task resumption rather than
-  in safety-precision filler
-- continuity answer-in-query is `5/7`, versus `0/7` for both RAG comparators
-- continuity slot-only is `21/27`, versus `19/27` for `rag_baseline` and
-  `15/27` for `rag_stronger`
-- this rerun set is current evidence, but it is not promoted as the new
-  headline yet because the promotion discipline still expects repeated targeted
-  reruns, not just one clean full-matrix pass
+- once the contradiction family stopped using projected-node fallback, the
+  continuity contradiction score fell to `20/34`
+- continuity answer-in-query is now `3/7`, versus `0/7` for both governed RAG
+  comparators
+- continuity slot-only is now `17/27`, versus `19/27` for governed
+  `rag_baseline` and `15/27` for governed `rag_stronger`
+- the remaining continuity edge is real but narrower than earlier claims:
+  continuity is only `+1` over governed `rag_baseline` on contradiction while
+  still winning decisively on task resumption
+- the current contradiction misses are concentrated in preview-label vs
+  canonical-slot separation, same-entity stale preview resurfacing, and
+  different-entity contamination rather than in the old benchmark routing gap
+- this rerun set is the current truthful baseline even though it is not yet
+  promoted as the new headline
 
 Current rerun artifacts:
 
-- Summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v1/summary.csv`
-- Family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v1/family_summary.csv`
-- Subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v1/subfamily_summary.csv`
+- Summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/summary.csv`
+- Family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/family_summary.csv`
+- Subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/subfamily_summary.csv`
 - RAG baseline summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/summary.csv`
 - RAG baseline family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/family_summary.csv`
 - RAG baseline subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/subfamily_summary.csv`
@@ -124,39 +125,41 @@ Current live summaries:
 
 Policy-matched fairness reruns:
 
-- `continuity_full_parity_slotpref_20260403`
-- `rag_baseline_full_governed_slotpref_20260403`
-- `rag_stronger_full_governed_slotpref_20260403`
+- `continuity_fixture_parity_20260409_honest_v4`
+- `rag_baseline_fixture_20260409_honest_v1`
+- `rag_stronger_fixture_20260409_honest_v1`
 
 Policy-matched summaries:
 
-- Continuity governed family summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/family_summary.csv`
-- Continuity governed subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/continuity_full_parity_slotpref_20260403/subfamily_summary.csv`
-- RAG governed family summary: `/tmp/memorybench-full-matrix-slot-preference/rag_baseline_full_governed_slotpref_20260403/family_summary.csv`
-- RAG governed subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/rag_baseline_full_governed_slotpref_20260403/subfamily_summary.csv`
-- Stronger RAG governed family summary: `/tmp/memorybench-full-matrix-slot-preference/rag_stronger_full_governed_slotpref_20260403/family_summary.csv`
-- Stronger RAG governed subfamily summary: `/tmp/memorybench-full-matrix-slot-preference/rag_stronger_full_governed_slotpref_20260403/subfamily_summary.csv`
+- Continuity governed family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/family_summary.csv`
+- Continuity governed subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v4/subfamily_summary.csv`
+- RAG governed family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/family_summary.csv`
+- RAG governed subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v1/subfamily_summary.csv`
+- Stronger RAG governed family summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v1/family_summary.csv`
+- Stronger RAG governed subfamily summary: `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v1/subfamily_summary.csv`
 
 ### Headline numbers
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `48/61` | `4/8` | `25/34` | `13/13` | `6/6` |
-| `continuity_tcl` (`synthetic_projected_nodes`, control) | `42/61` | `4/8` | `19/34` | `13/13` | `6/6` |
-| `rag_baseline` | `25/61` | `0/8` | `19/34` | `0/13` | `6/6` |
-| `rag_stronger` | `21/61` | `0/8` | `15/34` | `0/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`, honest control-plane baseline) | `43/61` | `4/8` | `20/34` | `13/13` | `6/6` |
+| `continuity_tcl` (`synthetic_projected_nodes`, retrieval-only control) | `42/61` | `4/8` | `19/34` | `13/13` | `6/6` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `29/61` | `4/8` | `19/34` | `0/13` | `6/6` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `25/61` | `4/8` | `15/34` | `0/13` | `6/6` |
 
 Poisoning footnote:
 
 - the poisoning bucket is not a neutral raw-retrieval bake-off
 - continuity poisoning results reflect governed TCL candidate evaluation plus
   scoped retrieval over an isolated continuity store
-- the current RAG comparators use a permissive benchmark governance stub, and
-  poisoning steps are excluded from the seeded retrieval corpus by design
-- read this bucket as a governance differential under the harness, not as a
-  universal claim that any production RAG stack would leak the same payloads
-- use `-candidate-governance continuity_tcl` on `rag_baseline` or
-  `rag_stronger` when you want a policy-matched fairness rerun
+- the current fairness tables in this file use
+  `candidate_governance=continuity_tcl` for the RAG comparators too, so the
+  `4/8` poisoning tie is the meaningful current comparison
+- historical default-RAG runs that used permissive benchmark governance remain
+  useful only as harness history, not as the current fair comparison
+- read this bucket as a governance-plus-retrieval differential under the
+  harness, not as a universal claim that any production RAG stack would leak
+  the same payloads
 
 ### Policy-matched fairness rerun
 
@@ -165,31 +168,30 @@ for all compared runs:
 
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `48/61` | `4/8` | `25/34` | `13/13` | `6/6` |
+| `continuity_tcl` (`production_write_parity`) | `43/61` | `4/8` | `20/34` | `13/13` | `6/6` |
 | `rag_baseline` | `29/61` | `4/8` | `19/34` | `0/13` | `6/6` |
 | `rag_stronger` | `25/61` | `4/8` | `15/34` | `0/13` | `6/6` |
 
 Read:
 
 - once governance is policy-matched, poisoning becomes a tie in this harness
-- the surviving gap is concentrated in truth maintenance and task resumption
-- the hardened, production-parity benchmark no longer reproduces the old timezone/locale preview-label weakness
-- contradiction improved materially without broad regressions:
-  - production-parity continuity moved from the earlier `9/34` contradiction floor
-    to `25/34` on the same hardened `61`-fixture matrix
-  - task resumption, safety precision, and poisoning totals stayed unchanged
-- the old timezone/locale `4/4` regression guard and the harder preview-bias `5/5`
-  set both stay green in the promoted production-parity run
-- synthetic continuity still reproduces those slot-family misses, which is why it
-  remains retrieval-only control evidence rather than benchmark truth
-- remaining contradiction misses are now elsewhere, not in the old timezone/locale
-  preview-label family
+- the surviving gap is mostly task resumption, not contradiction dominance
+- the honest continuity run is now only `+1` over governed `rag_baseline` on
+  contradiction
+- the old mixed-path contradiction headline overstated the product edge; the
+  current control-plane run exposes real product weakness rather than benchmark
+  routing noise
+- synthetic continuity still remains retrieval-only control evidence rather
+  than benchmark truth
+- remaining contradiction misses are still concentrated in preview-label vs
+  canonical-slot resolution, same-entity stale preview resurfacing, and
+  different-entity contamination
 
 Policy-matched contradiction subfamilies:
 
 | Backend | `answer_in_query` | `slot_only` |
 | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `5/7` | `20/27` |
+| `continuity_tcl` (`production_write_parity`) | `3/7` | `17/27` |
 | `rag_baseline` | `0/7` | `19/27` |
 | `rag_stronger` | `0/7` | `15/27` |
 
@@ -197,8 +199,8 @@ Policy-matched contradiction subfamilies:
 
 | Family | Continuity | RAG baseline | Delta vs baseline | Stronger RAG | Delta vs stronger |
 | --- | --- | --- | --- | --- | --- |
-| `memory_poisoning` | `4/8` | `0/8` | `+4` | `0/8` | `+4` |
-| `memory_contradiction` | `25/34` | `19/34` | `+6` | `15/34` | `+10` |
+| `memory_poisoning` | `4/8` | `4/8` | `0` | `4/8` | `0` |
+| `memory_contradiction` | `20/34` | `19/34` | `+1` | `15/34` | `+5` |
 | `task_resumption` | `13/13` | `0/13` | `+13` | `0/13` | `+13` |
 | `memory_safety_precision` | `6/6` | `6/6` | `0` | `6/6` | `0` |
 
@@ -214,22 +216,25 @@ Task-resumption family summary with latency and prompt burden surfaced together:
 
 ### Current early read
 
-- `continuity_tcl` is still winning decisively on truth maintenance under the
-  promoted `61`-fixture scored matrix, and the product-faithful continuity run
-  is now the benchmark truth rather than the old synthetic control
-- the hardened, production-parity benchmark no longer reproduces the old timezone/locale
-  preview-label weakness
-- contradiction improved materially without broad regressions, and the slot-family
-  win is confirmed by both targeted reruns and the full scored matrix
-- the remaining contradiction misses are now elsewhere
+- `continuity_tcl` is no longer winning decisively on contradiction under the
+  honest control-plane run; it is only narrowly ahead of governed
+  `rag_baseline`
+- the benchmark is now materially more honest than the older mixed-path story,
+  which means the lower continuity score should be treated as product signal,
+  not benchmark lossage
+- the strongest continuity differentiator is still task resumption, not broad
+  contradiction superiority
+- the current contradiction misses are concentrated in preview-label vs
+  canonical-slot recovery, same-entity stale preview resurfacing, and
+  different-entity separation
 - the slot-only contradiction split is the most informative part of the current
   scoreboard:
-  - continuity parity `20/27`
+  - continuity parity `17/27`
   - continuity synthetic control `12/27`
   - rag baseline `19/27`
   - rag stronger `15/27`
 - the answer-in-query split pulls the other way:
-  - continuity parity `5/7`
+  - continuity parity `3/7`
   - both RAG comparators `0/7`
 - the RAG integrity fixes made the task-resumption story harsher but more
   believable: both RAG comparators now fail the entire task-resumption family
@@ -237,8 +242,8 @@ Task-resumption family summary with latency and prompt burden surfaced together:
 - the interleaved-chain slice is promoted only after rerun-confirmed stability
   on continuity parity and both RAG comparators
 - the largest remaining differentiator is now:
-  - continuity still keeps a strong contradiction edge overall
-  - the old timezone/locale preview-label weakness is no longer the blocker
+  - continuity still keeps the task-resumption edge
+  - contradiction is now closer to a tie with governed `rag_baseline`
   - RAG remains much more expensive on resume-like retrieval and still does not
     recover the answer-in-query contradiction family
 
@@ -327,9 +332,9 @@ Ablation read:
 - The interleaved-chain slice originally exposed RAG reproducibility problems;
   the promoted `61`-fixture snapshot uses rerun-confirmed stable results only
   after collection isolation, scoped retrieval, and scoped overfetch fixes.
-- The hardened, production-parity continuity benchmark no longer reproduces the
-  old timezone/locale preview-label weakness; remaining contradiction misses are
-  now elsewhere in the `34`-fixture contradiction family.
+- The honest `2026-04-09` control-plane continuity run still exposes product
+  weakness inside the `34`-fixture contradiction family, especially around
+  preview-label vs canonical-slot separation and different-entity contamination.
 - Current operational metrics focus on retrieval-side burden and benchmark
   latency, not full end-to-end product runtime cost.
 

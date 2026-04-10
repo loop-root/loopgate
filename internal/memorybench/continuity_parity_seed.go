@@ -76,6 +76,15 @@ func contradictionValidatedWriteCanonicalFactKey(fixture ScenarioFixture) string
 	if strings.Contains(normalizedScenarioID, "preview_only_control") {
 		return ""
 	}
+	switch {
+	case strings.HasPrefix(normalizedScenarioID, "contradiction.identity_old_name_"),
+		strings.HasPrefix(normalizedScenarioID, "contradiction.identity_entity_"):
+		return "name"
+	case strings.HasPrefix(normalizedScenarioID, "contradiction.identity_alias_"):
+		return "preferred_name"
+	case strings.HasPrefix(normalizedScenarioID, "contradiction.preference_"):
+		return "preference.stated_preference"
+	}
 	normalizedSignatureHint := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(fixture.ContradictionExpectation.CurrentSignatureHint))), " ")
 	switch {
 	case strings.Contains(normalizedSignatureHint, "identity timezone slot timezone"):
@@ -86,8 +95,6 @@ func contradictionValidatedWriteCanonicalFactKey(fixture ScenarioFixture) string
 		return "preferred_name"
 	case strings.Contains(normalizedSignatureHint, "identity name slot name"):
 		return "name"
-	case strings.HasPrefix(normalizedScenarioID, "contradiction.preference_"):
-		return "preference.stated_preference"
 	default:
 		return ""
 	}

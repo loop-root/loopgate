@@ -422,12 +422,13 @@ func TestBuildContinuityProductionParitySeeds_ManifestAuthorityInvariants(t *tes
 	if len(todoSeeds) == 0 {
 		t.Fatal("expected production parity todo workflow seeds")
 	}
-	if len(fixtureSeedNodes) == 0 {
-		t.Fatal("expected production parity fixture-ingest seeds")
+	if len(fixtureSeedNodes) != 0 {
+		t.Fatalf("expected selected production parity fixtures to stay off projected fixture ingest, got %#v", fixtureSeedNodes)
 	}
 	if len(seedManifestRecords) == 0 {
 		t.Fatal("expected production parity seed manifest records")
 	}
+	foundPreviewOnlyObservedThreadRecord := false
 	for _, seedManifestRecord := range seedManifestRecords {
 		switch seedManifestRecord.SeedPath {
 		case memorybench.ContinuitySeedPathRememberMemoryFact:
@@ -437,6 +438,19 @@ func TestBuildContinuityProductionParitySeeds_ManifestAuthorityInvariants(t *tes
 		case memorybench.ContinuitySeedPathObservedThread:
 			if seedManifestRecord.AuthorityClass != memorybench.ContinuityAuthorityObservedThread || seedManifestRecord.ValidatedWriteSupported {
 				t.Fatalf("expected observed-thread manifest record to stay continuity-derived, got %#v", seedManifestRecord)
+			}
+			if seedManifestRecord.ScenarioID == "contradiction.profile_timezone_preview_only_control.v1" &&
+				seedManifestRecord.SeedGroup == "current" {
+				foundPreviewOnlyObservedThreadRecord = true
+				if seedManifestRecord.FactKey != "profile.preview_timezone_label" {
+					t.Fatalf("expected preview-only control to use an observed preview fact key, got %#v", seedManifestRecord)
+				}
+				if seedManifestRecord.CanonicalFactKey != "profile.preview_timezone_label" {
+					t.Fatalf("expected preview-only observed fact to report its registry-normalized fact key, got %#v", seedManifestRecord)
+				}
+				if seedManifestRecord.AnchorTupleKey != "" {
+					t.Fatalf("expected preview-only observed fact to remain unanchored, got %#v", seedManifestRecord)
+				}
 			}
 		case memorybench.ContinuitySeedPathTodoWorkflow:
 			if seedManifestRecord.AuthorityClass != memorybench.ContinuityAuthorityTodoWorkflow || seedManifestRecord.ValidatedWriteSupported {
@@ -449,6 +463,34 @@ func TestBuildContinuityProductionParitySeeds_ManifestAuthorityInvariants(t *tes
 		default:
 			t.Fatalf("unexpected production parity seed path %#v", seedManifestRecord)
 		}
+	}
+	if !foundPreviewOnlyObservedThreadRecord {
+		t.Fatalf("expected preview-only control to emit an observed-thread seed manifest record, got %#v", seedManifestRecords)
+	}
+}
+
+func TestBuildContinuityProductionParitySeeds_DefaultFixturesAvoidProjectedFallback(t *testing.T) {
+	rememberedFactSeeds, observedThreadSeeds, todoSeeds, fixtureSeedNodes, seedManifestRecords, err := buildContinuityProductionParitySeeds(memorybench.DefaultScenarioFixtures())
+	if err != nil {
+		t.Fatalf("buildContinuityProductionParitySeeds default fixtures: %v", err)
+	}
+	if len(rememberedFactSeeds) == 0 || len(observedThreadSeeds) == 0 || len(todoSeeds) == 0 {
+		t.Fatalf("expected default fixtures to produce remembered, observed, and todo seeds, got remembered=%d observed=%d todo=%d", len(rememberedFactSeeds), len(observedThreadSeeds), len(todoSeeds))
+	}
+	if len(fixtureSeedNodes) != 0 {
+		t.Fatalf("expected default production parity fixtures to avoid projected-node fallback, got %#v", fixtureSeedNodes)
+	}
+	retrievalPathMode, seedPathMode := benchmarkPathModes(
+		memorybench.BackendContinuityTCL,
+		memorybench.ContinuitySeedingModeProductionWriteParity,
+		false,
+		seedManifestRecords,
+	)
+	if retrievalPathMode != memorybench.RetrievalPathControlPlaneMemoryRoutes {
+		t.Fatalf("expected default production parity retrieval path %q, got %q", memorybench.RetrievalPathControlPlaneMemoryRoutes, retrievalPathMode)
+	}
+	if seedPathMode != memorybench.SeedPathControlPlaneMemoryAndWorkflow {
+		t.Fatalf("expected default production parity seed path %q, got %q", memorybench.SeedPathControlPlaneMemoryAndWorkflow, seedPathMode)
 	}
 }
 
@@ -569,6 +611,10 @@ func TestContinuitySyntheticAndProductionParityPlansAreDistinct(t *testing.T) {
 			continue
 		}
 		if observedThreadSeed.Events[0].Facts["profile.timezone"] == "mountain time label" {
+			foundObservedDistractor = true
+			break
+		}
+		if observedThreadSeed.Events[0].Facts["profile.preview_timezone_label"] == "mountain time label" {
 			foundObservedDistractor = true
 			break
 		}

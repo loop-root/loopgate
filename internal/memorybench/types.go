@@ -267,6 +267,7 @@ type SeedManifestRecord struct {
 	SeedPath                string `json:"seed_path"`
 	AuthorityClass          string `json:"authority_class"`
 	ValidatedWriteSupported bool   `json:"validated_write_supported"`
+	FactKey                 string `json:"fact_key,omitempty"`
 	CanonicalFactKey        string `json:"canonical_fact_key,omitempty"`
 	FactValue               string `json:"fact_value,omitempty"`
 	AnchorTupleKey          string `json:"anchor_tuple_key,omitempty"`

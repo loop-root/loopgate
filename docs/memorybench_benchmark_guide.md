@@ -123,9 +123,11 @@ Do not blend scored continuity runs and debug continuity runs into one number.
   - supported seeded scenarios are retrieved through the real
     `/v1/memory/discover` and `/v1/memory/recall` routes inside isolated
     Loopgate runtimes
-  - unsupported benchmark-only fixture leftovers still materialize projected
-    nodes, so some full-matrix runs are mixed control-plane and SQLite rather
-    than pure end-to-end control-plane retrieval
+  - the current checked-in `61`-fixture scored set no longer needs projected
+    fixture ingest, so the honest continuity parity baseline is now a pure
+    control-plane memory and workflow run
+  - mixed control-plane plus projected-node SQLite remains a contingency for
+    future unsupported fixtures, not the current default scored path
 - `debug_ambient_repo`
   - unscored debug run only
   - never eligible for headline comparison
@@ -148,14 +150,13 @@ Current expected values:
 
 - `synthetic_projected_nodes` should use
   `retrieval_path_mode=projected_node_sqlite_backend`
-- `production_write_parity` may use:
-  - `retrieval_path_mode=control_plane_memory_routes` with
-    `seed_path_mode=validated_writes_and_observed_thread_inspect` or
-    `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
-  - `retrieval_path_mode=mixed_control_plane_and_projected_node_sqlite` with
-    `seed_path_mode=mixed_validated_writes_observed_threads_and_projected_fixtures`
-    or `seed_path_mode=mixed_control_plane_memory_todo_workflow_and_projected_fixtures`
-    when unsupported fixture leftovers still need projected-node ingest
+- `production_write_parity` should use
+  `retrieval_path_mode=control_plane_memory_routes` with
+  `seed_path_mode=control_plane_memory_and_todo_workflow_routes` for the
+  current default scored fixture set
+- `production_write_parity` mixed modes remain valid only when a future fixture
+  cannot yet be expressed through real `memory.remember`,
+  `/v1/continuity/inspect-thread`, or `todo` workflow routes
 - `synthetic_projected_nodes` should pair with `seed_path_mode=synthetic_projected_node_seed`
 - `debug_ambient_repo` should pair with `seed_path_mode=ambient_repo_authoritative_state`
 - seeded RAG runs should pair with `retrieval_path_mode=rag_search_helper` and
@@ -171,9 +172,20 @@ For production-parity continuity runs, inspect `seed_manifest.json` and confirm:
   with `authority_class=observed_thread_inspection`
 - supported task-resumption seeds use `seed_path=todo_workflow_capability`
   with `authority_class=todo_workflow_control_plane`
-- preview, distractor, and unsupported leftovers may still use
+- the current default scored fixture set should not emit
   `seed_path=continuity_fixture_ingest`
-- fixture-ingest leftovers must never appear as authoritative explicit writes
+- if fixture-ingest leftovers ever reappear, they must stay benchmark-local and
+  must never appear as authoritative explicit writes
+- `fact_key` records the actual seeded fact name
+- `canonical_fact_key` records the registry-normalized remembered-fact key when
+  one exists
+- observed-thread seeds may legitimately carry a non-empty `fact_key` with an
+  empty or different `canonical_fact_key`, especially for preview-label or
+  entity-scoped distractor facts that stay continuity-derived rather than
+  promoting into anchored remembered state
+- observed-thread seeds now also preserve bounded event `Text` so benchmark
+  continuity writes retain context words such as `preview card`, `teammate`,
+  or `shadow operator` instead of collapsing to value-only tags
 
 `comparison_class` is part of the evidence boundary:
 

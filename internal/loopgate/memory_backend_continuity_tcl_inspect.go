@@ -578,7 +578,17 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(observedPa
 					continue
 				}
 				distillateRecord.Facts = append(distillateRecord.Facts, derivedFact)
-				recordLoopgateMemoryTags(discoveredTags, derivedFact.Name, fmt.Sprint(derivedFact.Value))
+				// Observed facts remain derived context, but their surrounding event text is
+				// still useful retrieval evidence. Preserve bounded source words like
+				// "preview card" or "teammate" in the distillate tags so same-key distractors
+				// do not collapse to bare value-only ranking.
+				recordLoopgateMemoryTags(
+					discoveredTags,
+					derivedFact.Name,
+					fmt.Sprint(derivedFact.Value),
+					continuityEvent.payloadText(),
+					continuityEvent.payloadOutput(),
+				)
 			}
 		case "goal_opened":
 			goalID := continuityEvent.payloadGoalID()
@@ -675,6 +685,13 @@ func (continuityEvent continuityObservedEventRecord) payloadText() string {
 		return ""
 	}
 	return strings.TrimSpace(continuityEvent.Payload.Text)
+}
+
+func (continuityEvent continuityObservedEventRecord) payloadOutput() string {
+	if continuityEvent.Payload == nil {
+		return ""
+	}
+	return strings.TrimSpace(continuityEvent.Payload.Output)
 }
 
 func (backend *continuityTCLMemoryBackend) deriveContinuityDistillateFact(eventSourceRef string, continuityEvent continuityObservedEventRecord, observedFact continuityObservedFactRecord) (continuityDistillateFact, bool) {
