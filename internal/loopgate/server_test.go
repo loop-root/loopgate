@@ -5572,19 +5572,9 @@ func containsCapability(capabilities []CapabilitySummary, capabilityName string)
 }
 
 func loopgatePolicyYAML(writeRequiresApproval bool) string {
-	// Tests still exercise the raw continuity inspect compatibility route directly, so keep it
-	// enabled in the shared test policy helper. Production policy now disables it by default.
-	return loopgatePolicyYAMLWithRawContinuityInspect(writeRequiresApproval, true)
-}
-
-func loopgatePolicyYAMLWithRawContinuityInspect(writeRequiresApproval bool, allowRawContinuityInspect bool) string {
 	approvalValue := "false"
 	if writeRequiresApproval {
 		approvalValue = "true"
-	}
-	rawContinuityInspectValue := "false"
-	if allowRawContinuityInspect {
-		rawContinuityInspectValue = "true"
 	}
 
 	return "version: 0.1.0\n\n" +
@@ -5617,7 +5607,6 @@ func loopgatePolicyYAMLWithRawContinuityInspect(writeRequiresApproval bool, allo
 		"  auto_distillate: true\n" +
 		"  require_promotion_approval: true\n" +
 		"  continuity_review_required: false\n" +
-		"  allow_raw_continuity_inspect: " + rawContinuityInspectValue + "\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
 		"  allow_policy_modification: false\n" +

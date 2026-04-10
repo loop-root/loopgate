@@ -10,17 +10,6 @@ import (
 	tclpkg "morph/internal/tcl"
 )
 
-func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(authenticatedSession capabilityToken, rawRequest ContinuityInspectRequest) (ContinuityInspectResponse, error) {
-	validatedRequest, err := normalizeContinuityInspectRequest(rawRequest)
-	if err != nil {
-		return ContinuityInspectResponse{}, err
-	}
-	if err := validateContinuityInspectProvenance(authenticatedSession, validatedRequest); err != nil {
-		return ContinuityInspectResponse{}, err
-	}
-	return backend.inspectObservedContinuityAuthoritatively(authenticatedSession, buildObservedContinuityInspectRequest(validatedRequest))
-}
-
 func (backend *continuityTCLMemoryBackend) inspectObservedContinuityAuthoritatively(authenticatedSession capabilityToken, rawRequest ObservedContinuityInspectRequest) (ContinuityInspectResponse, error) {
 	validatedRequest, err := normalizeObservedContinuityInspectRequest(rawRequest)
 	if err != nil {

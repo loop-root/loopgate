@@ -218,8 +218,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows |
 | `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft |
 | `POST /v1/sandbox/*` | import, stage, metadata, export, list |
-| `POST /v1/continuity/inspect` | Compatibility-only raw continuity inspection (caller supplies `events` JSON); policy-gated and disabled by default |
-| `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
+| `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; requires `memory.write`; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
 | `GET /v1/memory/wake-state` | Wake state projection |
 | `GET` / `PUT /v1/tasks` … | Task board sync |
 | `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
@@ -298,19 +297,18 @@ These routes let a client using **actor label `haven`** create or complete **Tas
 
 **`POST /v1/continuity/inspect-thread`**
 
-- **Auth:** Actor label **`haven`** + **signed body** (same pattern as `POST /v1/chat` for the current compatibility gate).
+- **Auth:** Actor label **`haven`** + **signed body** + **`memory.write`** control capability (same signed-request pattern as `POST /v1/chat` for the current compatibility gate).
 - **Body:** `{ "thread_id": "<required>" }` — must match a thread in Loopgate’s threadstore for the session workspace (on-disk implementation under `internal/threadstore`; default paths may use a **`.haven`** segment as a historical directory name—treat as an implementation detail, not a product name).
 - **Behavior:** Loads persisted thread events, canonicalizes them into a Loopgate-owned observed packet server-side, and runs the same inspection pipeline as other continuity proposals. If the thread has no mappable continuity rows, returns **200** with `submit_status: "skipped_no_continuity_events"`.
 - **Success (200):** `HavenContinuityInspectThreadResponse` in `internal/loopgate/types.go` (`submit_status`, optional `inspection_id`, derivation/review fields; Go identifier retained for compatibility).
 - **Product:** Clients may call this **best-effort after a completed chat turn** when the turn did **not** stop for `approval_required`, so operators get continuity proposals without shipping raw transcripts over HTTP.
 
-### 7.3.1 Raw continuity inspection compatibility path
+### 7.3.1 Historical note
 
-**`POST /v1/continuity/inspect`**
-
-- **Status:** compatibility-only; **disabled by policy by default**.
-- **Why:** caller-supplied event bundles are weaker provenance than Loopgate-loaded thread or ledger records.
-- **Use:** tests and temporary migrations only while stronger authoritative source refs are being built.
+The raw `POST /v1/continuity/inspect` route has been removed. Continuity
+proposal input now comes from Loopgate-loaded threadstore records via
+`POST /v1/continuity/inspect-thread` or from internal test helpers that never
+cross the public control-plane surface.
 
 ### 7.4 Operator diagnostics (“doctor” / troubleshooting)
 

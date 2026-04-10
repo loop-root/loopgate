@@ -124,11 +124,11 @@ Next lift:
   persisted facts directly from inline TCL analysis results. New continuity
   writes persist a Loopgate-owned canonical `observed_packet` in continuity
   JSONL instead of the raw inspect request body, and distillation derives from
-  that typed packet rather than the caller payload bundle. Raw
-  `/v1/continuity/inspect` is now a compatibility-only policy-gated path rather
-  than the default production route, and the supported server-loaded
-  `/v1/continuity/inspect-thread` path now hands the backend a Loopgate-owned
-  observed packet directly instead of fabricating a raw continuity request.
+  that typed packet rather than the caller payload bundle. The raw
+  `/v1/continuity/inspect` route has now been removed, and the supported
+  server-loaded `/v1/continuity/inspect-thread` path hands the backend a
+  Loopgate-owned observed packet directly instead of fabricating a raw
+  continuity request.
   Haven-backed observed packets now also stamp the authoritative control
   session id and carry the stable threadstore event hash on each source ref,
   so supported continuity provenance is stronger than a bare `thread:index`

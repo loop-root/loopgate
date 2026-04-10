@@ -60,14 +60,6 @@ func (backend *continuityTCLMemoryBackend) RememberFact(ctx context.Context, aut
 	return backend.rememberFactAuthoritatively(authenticatedSession, request)
 }
 
-func (backend *continuityTCLMemoryBackend) InspectContinuity(ctx context.Context, authenticatedSession capabilityToken, request ContinuityInspectRequest) (ContinuityInspectResponse, error) {
-	_ = ctx
-	if err := backend.ensureAuthenticatedSessionMatchesBoundPartition(authenticatedSession); err != nil {
-		return ContinuityInspectResponse{}, err
-	}
-	return backend.inspectContinuityAuthoritatively(authenticatedSession, request)
-}
-
 func (backend *continuityTCLMemoryBackend) InspectObservedContinuity(ctx context.Context, authenticatedSession capabilityToken, request ObservedContinuityInspectRequest) (ContinuityInspectResponse, error) {
 	_ = ctx
 	if err := backend.ensureAuthenticatedSessionMatchesBoundPartition(authenticatedSession); err != nil {

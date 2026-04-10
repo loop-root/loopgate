@@ -59,7 +59,6 @@ The following paths are registered next to `NewServer` (search for `mux.HandleFu
 - `/v1/connections/status`, `/v1/connections/validate`, `/v1/connections/pkce/start`, `/v1/connections/pkce/complete`
 - `/v1/sites/inspect`, `/v1/sites/trust-draft`
 - `/v1/sandbox/import`, `/v1/sandbox/stage`, `/v1/sandbox/metadata`, `/v1/sandbox/export`, `/v1/sandbox/list`
-- `/v1/continuity/inspect`
 - `/v1/memory/wake-state`, `/v1/memory/diagnostic-wake`, `/v1/memory/discover`, `/v1/memory/recall`, `/v1/memory/remember`, `/v1/memory/inspections/…`
 - `/v1/tasks`, `/v1/tasks/…`
 - `/v1/morphlings/spawn`, `/v1/morphlings/status`, `/v1/morphlings/terminate`, `/v1/morphlings/review`

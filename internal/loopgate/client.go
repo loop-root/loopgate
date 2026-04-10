@@ -333,26 +333,9 @@ func (client *Client) SandboxExport(ctx context.Context, request SandboxExportRe
 	return response, nil
 }
 
-// InspectContinuityThread calls the legacy raw continuity proposal route where the caller
-// supplies event bundles directly. This path is compatibility-only and may be disabled by
-// policy. Caller-supplied source_refs are ignored on this route; local chat clients should
-// prefer SubmitHavenContinuityInspectionForThread so Loopgate loads authoritative thread
-// data server-side and attaches server-owned provenance refs itself.
-func (client *Client) InspectContinuityThread(ctx context.Context, request ContinuityInspectRequest) (ContinuityInspectResponse, error) {
-	capabilityToken, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return ContinuityInspectResponse{}, err
-	}
-	var response ContinuityInspectResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/continuity/inspect", capabilityToken, request, &response, nil); err != nil {
-		return ContinuityInspectResponse{}, err
-	}
-	return response, nil
-}
-
 // SubmitHavenContinuityInspectionForThread loads a stored chat thread from Loopgate's threadstore
-// and runs continuity inspection (proposal path). Prefer this over InspectContinuityThread for
-// local chat clients so the client does not ship raw transcript payloads.
+// and runs continuity inspection (proposal path). This is the supported client-facing continuity
+// submission path so the client does not ship raw transcript payloads.
 func (client *Client) SubmitHavenContinuityInspectionForThread(ctx context.Context, threadID string) (HavenContinuityInspectThreadResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {

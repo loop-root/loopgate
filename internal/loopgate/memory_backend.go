@@ -19,7 +19,6 @@ type MemoryBackend interface {
 	// The backend owns memory mutation from this seam downward; transport auth and
 	// capability checks stay outside the backend.
 	RememberFact(ctx context.Context, authenticatedSession capabilityToken, request MemoryRememberRequest) (MemoryRememberResponse, error)
-	InspectContinuity(ctx context.Context, authenticatedSession capabilityToken, request ContinuityInspectRequest) (ContinuityInspectResponse, error)
 	InspectObservedContinuity(ctx context.Context, authenticatedSession capabilityToken, request ObservedContinuityInspectRequest) (ContinuityInspectResponse, error)
 	ReviewContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionReviewRequest) (MemoryInspectionGovernanceResponse, error)
 	TombstoneContinuityInspection(ctx context.Context, authenticatedSession capabilityToken, inspectionID string, request MemoryInspectionLineageRequest) (MemoryInspectionGovernanceResponse, error)

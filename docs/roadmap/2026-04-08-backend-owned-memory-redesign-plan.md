@@ -82,9 +82,8 @@ Completed slices in the current refactor:
   `observed_packet` record instead of storing the raw inspect request body in
   continuity JSONL, and distillation now derives from that typed packet rather
   than the caller-supplied payload bundle
-- raw `/v1/continuity/inspect` is now an explicit compatibility path controlled
-  by policy instead of a silent production default; the supported operator path
-  remains server-loaded `/v1/continuity/inspect-thread`
+- raw `/v1/continuity/inspect` has been removed; the supported operator path is
+  now server-loaded `/v1/continuity/inspect-thread`
 - server-loaded `/v1/continuity/inspect-thread` now sends a backend-owned
   observed packet directly instead of first fabricating a raw client-style
   continuity request
@@ -437,7 +436,7 @@ Expected route mapping:
 
 - `/v1/memory/wake-state`, `/v1/memory/discover`, `/v1/memory/recall` ->
   `memory.read`
-- `/v1/memory/remember`, `/v1/continuity/inspect` -> `memory.write`
+- `/v1/memory/remember`, `/v1/continuity/inspect-thread` -> `memory.write`
 - `/v1/memory/inspections/{id}/review` -> `memory.review`
 - tombstone/purge/lineage operations -> `memory.lineage`
 

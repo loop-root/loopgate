@@ -21,7 +21,6 @@ type stubMemoryBackend struct {
 	discoverResponse           MemoryDiscoverResponse
 	recallResponse             MemoryRecallResponse
 	rememberResponse           MemoryRememberResponse
-	inspectResponse            ContinuityInspectResponse
 	inspectObservedResponse    ContinuityInspectResponse
 	reviewResponse             MemoryInspectionGovernanceResponse
 	tombstoneResponse          MemoryInspectionGovernanceResponse
@@ -30,7 +29,6 @@ type stubMemoryBackend struct {
 	discoverCalls              int
 	recallCalls                int
 	rememberCalls              int
-	inspectCalls               int
 	inspectObservedCalls       int
 	reviewCalls                int
 	tombstoneCalls             int
@@ -38,7 +36,6 @@ type stubMemoryBackend struct {
 	lastDiscoverRequest        MemoryDiscoverRequest
 	lastRecallRequest          MemoryRecallRequest
 	lastRememberRequest        MemoryRememberRequest
-	lastInspectRequest         ContinuityInspectRequest
 	lastInspectObservedRequest ObservedContinuityInspectRequest
 	lastReviewInspectionID     string
 	lastReviewRequest          MemoryInspectionReviewRequest
@@ -77,12 +74,6 @@ func (backend *stubMemoryBackend) RememberFact(ctx context.Context, authenticate
 	backend.rememberCalls++
 	backend.lastRememberRequest = request
 	return backend.rememberResponse, nil
-}
-
-func (backend *stubMemoryBackend) InspectContinuity(ctx context.Context, authenticatedSession capabilityToken, request ContinuityInspectRequest) (ContinuityInspectResponse, error) {
-	backend.inspectCalls++
-	backend.lastInspectRequest = request
-	return backend.inspectResponse, nil
 }
 
 func (backend *stubMemoryBackend) InspectObservedContinuity(ctx context.Context, authenticatedSession capabilityToken, request ObservedContinuityInspectRequest) (ContinuityInspectResponse, error) {
@@ -177,55 +168,6 @@ func TestRememberMemoryFact_UsesConfiguredBackend(t *testing.T) {
 	}
 }
 
-func TestInspectContinuityThread_UsesConfiguredBackend(t *testing.T) {
-	expectedResponse := ContinuityInspectResponse{
-		InspectionID:      "inspect_backend_seam",
-		ThreadID:          "thread_backend_seam",
-		DerivationOutcome: continuityInspectionOutcomeDerived,
-	}
-	server := newTestServerWithStubMemoryBackend(t, &stubMemoryBackend{
-		name:            "stub_backend",
-		inspectResponse: expectedResponse,
-	})
-
-	actualResponse, err := server.inspectContinuityThread(capabilityToken{TenantID: "", ControlSessionID: "cs-test"}, ContinuityInspectRequest{
-		InspectionID: "inspect_backend_seam",
-		ThreadID:     "thread_backend_seam",
-		Scope:        memoryScopeGlobal,
-		Events: []ContinuityEventInput{{
-			TimestampUTC:    "2026-04-08T00:00:00Z",
-			SessionID:       "session-test",
-			Type:            "provider_fact_observed",
-			Scope:           memoryScopeGlobal,
-			ThreadID:        "thread_backend_seam",
-			EpistemicFlavor: "remembered",
-			LedgerSequence:  1,
-			EventHash:       strings.Repeat("a", 64),
-			Payload: map[string]interface{}{
-				"fact_key":   "name",
-				"fact_value": "Ada",
-			},
-		}},
-	})
-	if err != nil {
-		t.Fatalf("inspect continuity thread: %v", err)
-	}
-	if actualResponse.InspectionID != expectedResponse.InspectionID || actualResponse.ThreadID != expectedResponse.ThreadID || actualResponse.DerivationOutcome != expectedResponse.DerivationOutcome {
-		t.Fatalf("unexpected inspect response: got %#v want %#v", actualResponse, expectedResponse)
-	}
-
-	server.memoryMu.Lock()
-	partition := server.memoryPartitions[memoryPartitionKey("")]
-	stubBackend := partition.backend.(*stubMemoryBackend)
-	server.memoryMu.Unlock()
-	if stubBackend.inspectCalls != 1 {
-		t.Fatalf("expected one backend inspect call, got %d", stubBackend.inspectCalls)
-	}
-	if stubBackend.lastInspectRequest.InspectionID != "inspect_backend_seam" {
-		t.Fatalf("unexpected inspect request recorded by backend: %#v", stubBackend.lastInspectRequest)
-	}
-}
-
 func TestInspectObservedContinuity_UsesConfiguredBackend(t *testing.T) {
 	expectedResponse := ContinuityInspectResponse{
 		InspectionID:      "inspect_observed_backend_seam",
@@ -294,15 +236,35 @@ func TestContinuityTCLRememberFact_DeniesTenantPartitionMismatch(t *testing.T) {
 	}
 }
 
-func TestContinuityTCLInspectContinuity_DeniesTenantPartitionMismatch(t *testing.T) {
+func TestContinuityTCLInspectObservedContinuity_DeniesTenantPartitionMismatch(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	continuityBackend := defaultContinuityTCLBackendForTests(t, server)
-	_, err := continuityBackend.InspectContinuity(context.Background(), capabilityToken{
+	_, err := continuityBackend.InspectObservedContinuity(context.Background(), capabilityToken{
 		TenantID:         "other-tenant",
 		ControlSessionID: client.controlSessionID,
-	}, testContinuityInspectRequest("inspect_tenant_mismatch", "thread_tenant_mismatch", "monitor github status"))
+	}, ObservedContinuityInspectRequest{
+		InspectionID: "inspect_tenant_mismatch",
+		ThreadID:     "thread_tenant_mismatch",
+		Scope:        memoryScopeGlobal,
+		SealedAtUTC:  "2026-04-09T00:00:00Z",
+		ObservedPacket: continuityObservedPacket{
+			ThreadID:    "thread_tenant_mismatch",
+			Scope:       memoryScopeGlobal,
+			SealedAtUTC: "2026-04-09T00:00:00Z",
+			Events: []continuityObservedEventRecord{{
+				TimestampUTC:    "2026-04-09T00:00:00Z",
+				SessionID:       client.controlSessionID,
+				Type:            "user_message",
+				Scope:           memoryScopeGlobal,
+				ThreadID:        "thread_tenant_mismatch",
+				EpistemicFlavor: "freshly_checked",
+				LedgerSequence:  1,
+				EventHash:       strings.Repeat("b", 32),
+			}},
+		},
+	})
 	if err == nil || !strings.Contains(err.Error(), "tenant does not match") {
 		t.Fatalf("expected tenant mismatch denial, got %v", err)
 	}

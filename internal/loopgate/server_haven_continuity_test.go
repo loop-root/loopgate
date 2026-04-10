@@ -12,7 +12,7 @@ import (
 
 func TestHavenContinuityInspectThread_SubmittedAndSkipped(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithRawContinuityInspect(false, false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	wsID := server.deriveWorkspaceIDFromRepoRoot()
@@ -37,7 +37,7 @@ func TestHavenContinuityInspectThread_SubmittedAndSkipped(t *testing.T) {
 	})
 
 	client.SetWorkspaceID(wsID)
-	client.ConfigureSession("haven", "haven-continuity-inspect-test", capabilityNames(status.Capabilities))
+	client.ConfigureSession("haven", "haven-continuity-inspect-test", advertisedSessionCapabilityNames(status))
 	ctx := context.Background()
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
@@ -70,7 +70,7 @@ func TestHavenContinuityInspectThread_SubmittedAndSkipped(t *testing.T) {
 
 func TestHavenContinuityInspectThread_LegacyAliasStillWorks(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithRawContinuityInspect(false, false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	workspaceID := server.deriveWorkspaceIDFromRepoRoot()
@@ -89,7 +89,7 @@ func TestHavenContinuityInspectThread_LegacyAliasStillWorks(t *testing.T) {
 	})
 
 	client.SetWorkspaceID(workspaceID)
-	client.ConfigureSession("haven", "legacy-continuity-alias-test", capabilityNames(status.Capabilities))
+	client.ConfigureSession("haven", "legacy-continuity-alias-test", advertisedSessionCapabilityNames(status))
 	ctx := context.Background()
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
@@ -107,7 +107,7 @@ func TestHavenContinuityInspectThread_LegacyAliasStillWorks(t *testing.T) {
 
 func TestHavenContinuityInspectThread_PersistsThreadstoreSourceRefs(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithRawContinuityInspect(false, false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	workspaceID := server.deriveWorkspaceIDFromRepoRoot()
@@ -130,7 +130,7 @@ func TestHavenContinuityInspectThread_PersistsThreadstoreSourceRefs(t *testing.T
 	})
 
 	client.SetWorkspaceID(workspaceID)
-	client.ConfigureSession("haven", "haven-continuity-source-ref-test", capabilityNames(status.Capabilities))
+	client.ConfigureSession("haven", "haven-continuity-source-ref-test", advertisedSessionCapabilityNames(status))
 	if _, err := client.SubmitHavenContinuityInspectionForThread(context.Background(), summary.ThreadID); err != nil {
 		t.Fatalf("submit haven continuity inspect-thread: %v", err)
 	}

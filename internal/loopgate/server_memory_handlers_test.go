@@ -3,8 +3,11 @@ package loopgate
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"morph/internal/threadstore"
 )
 
 func TestStatusAdvertisesMemoryControlCapabilities(t *testing.T) {
@@ -77,10 +80,12 @@ func TestMemoryReadRoutesRequireMemoryReadScope(t *testing.T) {
 
 func TestMemoryWriteRoutesRequireMemoryWriteScope(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	threadID, workspaceID := createContinuityInspectThreadForTests(t, server, repoRoot)
 
 	deniedClient := NewClient(client.socketPath)
-	deniedClient.ConfigureSession("memory-writer", "memory-write-denied", []string{"memory.read"})
+	deniedClient.SetWorkspaceID(workspaceID)
+	deniedClient.ConfigureSession("haven", "memory-write-denied", []string{"memory.read"})
 	if _, err := deniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied token: %v", err)
 	}
@@ -90,12 +95,13 @@ func TestMemoryWriteRoutesRequireMemoryWriteScope(t *testing.T) {
 	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected memory.write scope denial for remember, got %v", err)
 	}
-	if _, err := deniedClient.InspectContinuityThread(context.Background(), testContinuityInspectRequestForSession("inspect_scope_denied", "thread_scope_denied", "monitor github status", "memory-write-denied")); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected memory.write scope denial for continuity inspect, got %v", err)
+	if _, err := deniedClient.SubmitHavenContinuityInspectionForThread(context.Background(), threadID); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected memory.write scope denial for continuity inspect-thread, got %v", err)
 	}
 
 	allowedClient := NewClient(client.socketPath)
-	allowedClient.ConfigureSession("memory-writer", "memory-write-allowed", []string{"memory.write"})
+	allowedClient.SetWorkspaceID(workspaceID)
+	allowedClient.ConfigureSession("haven", "memory-write-allowed", []string{"memory.write"})
 	if _, err := allowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure memory.write token: %v", err)
 	}
@@ -105,37 +111,46 @@ func TestMemoryWriteRoutesRequireMemoryWriteScope(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("remember memory with memory.write: %v", err)
 	}
-	if _, err := allowedClient.InspectContinuityThread(context.Background(), testContinuityInspectRequestForSession("inspect_scope_allowed", "thread_scope_allowed", "monitor github status", "memory-write-allowed")); err != nil {
-		t.Fatalf("inspect continuity with memory.write: %v", err)
+	if _, err := allowedClient.SubmitHavenContinuityInspectionForThread(context.Background(), threadID); err != nil {
+		t.Fatalf("inspect continuity-thread with memory.write: %v", err)
 	}
 }
 
-func TestRawContinuityInspectDisabledByPolicy(t *testing.T) {
+func TestRawContinuityInspectRouteIsRemoved(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithRawContinuityInspect(false, false))
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	writerClient := NewClient(client.socketPath)
-	writerClient.ConfigureSession("memory-writer", "memory-write-raw-continuity-disabled", []string{"memory.write"})
-	if _, err := writerClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure memory.write token: %v", err)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, client.baseURL+"/v1/continuity/inspect", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("build removed raw continuity inspect request: %v", err)
 	}
-	if _, err := writerClient.InspectContinuityThread(context.Background(), testContinuityInspectRequestForSession("inspect_policy_disabled", "thread_policy_disabled", "monitor github status", "memory-write-raw-continuity-disabled")); err == nil || !strings.Contains(err.Error(), DenialCodePolicyDenied) || !strings.Contains(err.Error(), "/v1/continuity/inspect-thread") {
-		t.Fatalf("expected raw continuity inspect policy denial directing caller to inspect-thread, got %v", err)
+	response, err := client.httpClient.Do(request)
+	if err != nil {
+		t.Fatalf("POST removed raw continuity inspect route: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected removed raw continuity inspect route to return 404, got %d", response.StatusCode)
 	}
 }
 
 func TestMemoryGovernanceRoutesRequireReviewAndLineageScope(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	threadID, workspaceID := createContinuityInspectThreadForTests(t, server, repoRoot)
 
 	writerClient := NewClient(client.socketPath)
-	writerClient.ConfigureSession("memory-writer", "memory-governance-writer", []string{"memory.write"})
+	writerClient.SetWorkspaceID(workspaceID)
+	writerClient.ConfigureSession("haven", "memory-governance-writer", []string{"memory.write"})
 	if _, err := writerClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure memory.write token: %v", err)
 	}
-	inspectResponse, err := writerClient.InspectContinuityThread(context.Background(), testContinuityInspectRequestForSession("inspect_governance_scope", "thread_governance_scope", "monitor github status", "memory-governance-writer"))
+	inspectThreadResponse, err := writerClient.SubmitHavenContinuityInspectionForThread(context.Background(), threadID)
 	if err != nil {
 		t.Fatalf("seed continuity inspection: %v", err)
+	}
+	if strings.TrimSpace(inspectThreadResponse.InspectionID) == "" {
+		t.Fatalf("expected inspect-thread to create an inspection, got %#v", inspectThreadResponse)
 	}
 
 	reviewDeniedClient := NewClient(client.socketPath)
@@ -143,7 +158,7 @@ func TestMemoryGovernanceRoutesRequireReviewAndLineageScope(t *testing.T) {
 	if _, err := reviewDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied review token: %v", err)
 	}
-	if _, err := reviewDeniedClient.ReviewMemoryInspection(context.Background(), inspectResponse.InspectionID, MemoryInspectionReviewRequest{
+	if _, err := reviewDeniedClient.ReviewMemoryInspection(context.Background(), inspectThreadResponse.InspectionID, MemoryInspectionReviewRequest{
 		Decision:    continuityReviewStatusRejected,
 		OperationID: "review_scope_denied",
 		Reason:      "operator rejected lineage",
@@ -156,7 +171,7 @@ func TestMemoryGovernanceRoutesRequireReviewAndLineageScope(t *testing.T) {
 	if _, err := reviewAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure memory.review token: %v", err)
 	}
-	if _, err := reviewAllowedClient.ReviewMemoryInspection(context.Background(), inspectResponse.InspectionID, MemoryInspectionReviewRequest{
+	if _, err := reviewAllowedClient.ReviewMemoryInspection(context.Background(), inspectThreadResponse.InspectionID, MemoryInspectionReviewRequest{
 		Decision:    continuityReviewStatusAccepted,
 		OperationID: "review_scope_allowed",
 		Reason:      "operator accepted lineage",
@@ -169,10 +184,39 @@ func TestMemoryGovernanceRoutesRequireReviewAndLineageScope(t *testing.T) {
 	if _, err := lineageDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied lineage token: %v", err)
 	}
-	if _, err := lineageDeniedClient.TombstoneMemoryInspection(context.Background(), inspectResponse.InspectionID, MemoryInspectionLineageRequest{
+	if _, err := lineageDeniedClient.TombstoneMemoryInspection(context.Background(), inspectThreadResponse.InspectionID, MemoryInspectionLineageRequest{
 		OperationID: "lineage_scope_denied",
 		Reason:      "operator tombstoned lineage",
 	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected memory.lineage scope denial, got %v", err)
 	}
+}
+
+func createContinuityInspectThreadForTests(t *testing.T, server *Server, repoRoot string) (string, string) {
+	t.Helper()
+
+	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
+	workspaceID := server.deriveWorkspaceIDFromRepoRoot()
+	threadStoreRoot := filepath.Join(repoRoot, ".haven", "threads")
+	store, err := threadstore.NewStore(threadStoreRoot, workspaceID)
+	if err != nil {
+		t.Fatalf("thread store: %v", err)
+	}
+	summary, err := store.NewThread()
+	if err != nil {
+		t.Fatalf("new thread: %v", err)
+	}
+	if err := store.AppendEvent(summary.ThreadID, threadstore.ConversationEvent{
+		Type: threadstore.EventUserMessage,
+		Data: map[string]interface{}{"text": "monitor github status"},
+	}); err != nil {
+		t.Fatalf("append user event: %v", err)
+	}
+	if err := store.AppendEvent(summary.ThreadID, threadstore.ConversationEvent{
+		Type: threadstore.EventAssistantMessage,
+		Data: map[string]interface{}{"text": "noted"},
+	}); err != nil {
+		t.Fatalf("append assistant event: %v", err)
+	}
+	return summary.ThreadID, workspaceID
 }

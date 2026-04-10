@@ -154,7 +154,7 @@ type ControlPlaneClient interface {
 	SandboxMetadata(ctx context.Context, request SandboxMetadataRequest) (SandboxArtifactMetadataResponse, error)
 	SandboxExport(ctx context.Context, request SandboxExportRequest) (SandboxOperationResponse, error)
 	SandboxList(ctx context.Context, request SandboxListRequest) (SandboxListResponse, error)
-	InspectContinuityThread(ctx context.Context, request ContinuityInspectRequest) (ContinuityInspectResponse, error)
+	SubmitHavenContinuityInspectionForThread(ctx context.Context, threadID string) (HavenContinuityInspectThreadResponse, error)
 	LoadMemoryWakeState(ctx context.Context) (MemoryWakeStateResponse, error)
 	LoadMemoryDiagnosticWake(ctx context.Context) (MemoryDiagnosticWakeResponse, error)
 	LoadHavenMemoryInventory(ctx context.Context) (HavenMemoryInventoryResponse, error)
@@ -581,6 +581,9 @@ type ContinuityEventInput struct {
 	Payload         map[string]interface{}     `json:"payload,omitempty"`
 }
 
+// ContinuityInspectRequest is the legacy raw continuity proposal shape. Loopgate no longer
+// exposes a public route that accepts this request directly; it remains for test migration
+// helpers and backward-compatible replay decoding of older continuity JSONL records.
 type ContinuityInspectRequest struct {
 	InspectionID       string                 `json:"inspection_id"`
 	ThreadID           string                 `json:"thread_id"`
@@ -607,7 +610,7 @@ type ContinuityInspectResponse struct {
 // HavenContinuityInspectThreadRequest is the JSON body for POST /v1/continuity/inspect-thread.
 // The legacy /v1/haven/continuity/inspect-thread alias uses the same payload.
 // Loopgate loads the thread from its threadstore and proposes continuity for
-// inspection; the client does not supply raw events (unlike POST /v1/continuity/inspect).
+// inspection; the client does not supply raw events.
 type HavenContinuityInspectThreadRequest struct {
 	ThreadID string `json:"thread_id"`
 }

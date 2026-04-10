@@ -1,7 +1,6 @@
 package loopgate
 
 import (
-	"context"
 	"errors"
 	"os"
 	"strings"
@@ -52,7 +51,7 @@ func TestMutateContinuityMemory_DoesNotLeaveReplayableMutationWhenAuditFails(t *
 		return origAppend(ledgerPath, ev)
 	}
 
-	_, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_audit_fail", "thread_audit_fail", "monitor audit ordering"))
+	_, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_audit_fail", "thread_audit_fail", "monitor audit ordering"))
 	if err == nil {
 		t.Fatal("expected inspect to fail when audit ledger append fails")
 	}
@@ -70,7 +69,7 @@ func TestMutateContinuityMemory_SaveFailureDoesNotCreateAmbiguousDurableState(t 
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	if _, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_sf_base", "thread_sf_base", "baseline goal")); err != nil {
+	if _, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_sf_base", "thread_sf_base", "baseline goal")); err != nil {
 		t.Fatalf("baseline inspect: %v", err)
 	}
 
@@ -85,7 +84,7 @@ func TestMutateContinuityMemory_SaveFailureDoesNotCreateAmbiguousDurableState(t 
 		return errors.New("forced continuity memory save failure")
 	}
 
-	_, err = client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_sf_second", "thread_sf_second", "second goal"))
+	_, err = submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_sf_second", "thread_sf_second", "second goal"))
 	if err == nil {
 		t.Fatal("expected second inspect to fail when saveMemoryState fails")
 	}
@@ -106,7 +105,7 @@ func TestMutateContinuityMemory_SaveFailureDoesNotCreateAmbiguousDurableState(t 
 func TestContinuityReplay_RejectsOrRepairsOrphanedMutationSequence(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	if _, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_replay_corrupt", "thread_replay_corrupt", "seed continuity jsonl")); err != nil {
+	if _, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_replay_corrupt", "thread_replay_corrupt", "seed continuity jsonl")); err != nil {
 		t.Fatalf("seed inspect: %v", err)
 	}
 	paths := newContinuityMemoryPaths(testDefaultPartitionRoot(t, server), server.memoryLegacyPath)
@@ -137,7 +136,7 @@ func TestContinuityReplay_RejectsOrRepairsOrphanedMutationSequence(t *testing.T)
 func TestEnsureMemoryPartitionLocked_CorruptReplayFailureIsExplicit(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	if _, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_partition_replay_corrupt", "thread_partition_replay_corrupt", "seed continuity jsonl")); err != nil {
+	if _, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_partition_replay_corrupt", "thread_partition_replay_corrupt", "seed continuity jsonl")); err != nil {
 		t.Fatalf("seed inspect: %v", err)
 	}
 

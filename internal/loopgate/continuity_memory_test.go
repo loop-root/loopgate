@@ -23,11 +23,11 @@ func TestInspectContinuityThread_ReplayIsIdempotentAndDoesNotAuditRawContinuityT
 	rawGoalText := "Top Secret Goal Text"
 	inspectRequest := testContinuityInspectRequest("inspect_thread_test", "thread_test", rawGoalText)
 
-	firstResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	firstResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("first continuity inspect: %v", err)
 	}
-	secondResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	secondResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("second continuity inspect: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestInspectContinuityThread_PersistsObservedPacketInsteadOfRawRequest(t *te
 		"untrusted_blob": "should_not_persist",
 	}
 
-	if _, err := client.InspectContinuityThread(context.Background(), inspectRequest); err != nil {
+	if _, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest); err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestInspectContinuityThread_IgnoresCallerSuppliedSourceRefs(t *testing.T) {
 		Ref:  "name",
 	}}
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestInspectContinuityThread_RejectsMismatchedContinuityProvenance(t *testin
 			inspectRequest := testContinuityInspectRequest("inspect_"+testCase.name, "thread_"+testCase.name, "monitor github status")
 			testCase.mutateRequest(&inspectRequest)
 
-			_, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+			_, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 			if err == nil {
 				t.Fatal("expected malformed continuity provenance denial")
 			}
@@ -223,7 +223,7 @@ func TestContinuityPendingReviewIsAbsentFromWakeDiscoverAndRecall(t *testing.T) 
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgateContinuityPolicyYAML(false, true))
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_pending_review", "thread_pending_review", "monitor github status"))
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_pending_review", "thread_pending_review", "monitor github status"))
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestRejectedLineageCannotBeRederivedByReplay(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgateContinuityPolicyYAML(false, true))
 
 	inspectRequest := testContinuityInspectRequest("inspect_rejected", "thread_rejected", "monitor github status")
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestRejectedLineageCannotBeRederivedByReplay(t *testing.T) {
 		t.Fatalf("expected rejected review status, got %#v", reviewResponse)
 	}
 
-	replayResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	replayResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("replay continuity inspect: %v", err)
 	}
@@ -1018,7 +1018,7 @@ func TestRememberMemoryFact_IdempotentSameValueDoesNotSupersede(t *testing.T) {
 
 func TestRememberMemoryFact_ExplicitFactTakesPrecedenceOverDerivedFact(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	inspectRequest := testContinuityInspectRequest("inspect_derived_name", "thread_derived_name", "user introduced themselves as Charlie")
 	inspectRequest.Events = append(inspectRequest.Events, ContinuityEventInput{
@@ -1036,7 +1036,7 @@ func TestRememberMemoryFact_ExplicitFactTakesPrecedenceOverDerivedFact(t *testin
 			},
 		},
 	})
-	if _, err := client.InspectContinuityThread(context.Background(), inspectRequest); err != nil {
+	if _, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest); err != nil {
 		t.Fatalf("inspect with derived name fact: %v", err)
 	}
 
@@ -1091,7 +1091,7 @@ func TestInspectContinuityThread_PersistsAnchorTupleForRecognizedDerivedFact(t *
 		},
 	})
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -1149,7 +1149,7 @@ func TestInspectContinuityThread_PersistsAnalyzedContinuityFactCandidateFields(t
 		},
 	})
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -1321,7 +1321,7 @@ func TestInspectContinuityThread_FallbackSourceRefRetainsEventHash(t *testing.T)
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	inspectRequest := testContinuityInspectRequest("inspect_fallback_source_ref_hash", "thread_fallback_source_ref_hash", "monitor github status")
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -1351,7 +1351,7 @@ func TestInspectContinuityThread_UnsupportedDerivedFactRemainsUnanchored(t *test
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_anchorless_status", "thread_anchorless_status", "monitor github status"))
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_anchorless_status", "thread_anchorless_status", "monitor github status"))
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -1415,7 +1415,7 @@ func TestInspectContinuityThread_DropsNestedDerivedFactPayload(t *testing.T) {
 		},
 	}
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -1447,7 +1447,7 @@ func TestInspectContinuityThread_DropsDangerousDerivedFactCandidate(t *testing.T
 		},
 	}
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), inspectRequest)
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, inspectRequest)
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -3191,7 +3191,7 @@ func TestInspectContinuityThread_PersistsSemanticProjectionForWorkflowTransition
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	if _, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_workflow_projection", "thread_workflow_projection", "monitor github status")); err != nil {
+	if _, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_workflow_projection", "thread_workflow_projection", "monitor github status")); err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
 
@@ -3228,7 +3228,7 @@ func TestStaleResonateKeyFailsAfterTombstonedAndPurged(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_tombstone", "thread_tombstone", "monitor github status"))
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_tombstone", "thread_tombstone", "monitor github status"))
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -3336,7 +3336,7 @@ func TestStartupWakeRebuildRemovesStaleCachedWakeEntries(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_startup_rebuild", "thread_startup_rebuild", "monitor github status"))
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_startup_rebuild", "thread_startup_rebuild", "monitor github status"))
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -3733,9 +3733,9 @@ func TestReplay_LegacyAnchoredEventMigratesToSemanticProjection(t *testing.T) {
 
 func TestConflictingReviewDecisionsAndPurgeDominanceAreDenied(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgateContinuityPolicyYAML(false, true))
+	client, _, server := startLoopgateServer(t, repoRoot, loopgateContinuityPolicyYAML(false, true))
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_conflict", "thread_conflict", "monitor github status"))
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_conflict", "thread_conflict", "monitor github status"))
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -3780,7 +3780,7 @@ func TestContinuityGovernanceRollbackPreservesPreviousAuthoritativeStateOnSaveFa
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_save_failure", "thread_save_failure", "monitor github status"))
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_save_failure", "thread_save_failure", "monitor github status"))
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -3834,7 +3834,7 @@ func TestNoDirectEligibilityPathBypassesInspectionAuthority(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	inspectResponse, err := client.InspectContinuityThread(context.Background(), testContinuityInspectRequest("inspect_authority_bypass", "thread_authority_bypass", "monitor github status"))
+	inspectResponse, err := submitSyntheticObservedContinuityForTests(t, server, client.controlSessionID, testContinuityInspectRequest("inspect_authority_bypass", "thread_authority_bypass", "monitor github status"))
 	if err != nil {
 		t.Fatalf("inspect continuity thread: %v", err)
 	}
@@ -4642,6 +4642,58 @@ func readContinuityAuthoritativeEventsForTests(t *testing.T, server *Server) []c
 		t.Fatalf("replay continuity authoritative events: %v", err)
 	}
 	return recordedEvents
+}
+
+func submitSyntheticObservedContinuityForTests(t *testing.T, server *Server, controlSessionID string, rawRequest ContinuityInspectRequest) (ContinuityInspectResponse, error) {
+	t.Helper()
+
+	boundControlSessionID := strings.TrimSpace(controlSessionID)
+	if boundControlSessionID == "" {
+		boundControlSessionID = "test-session"
+	}
+
+	// Legacy synthetic inspect fixtures were written before continuity proposals
+	// were bound to authenticated control sessions. Preserve those fixtures by
+	// rebinding the default test session to the active control session here,
+	// while still allowing explicit mismatch tests to override the session_id.
+	for eventIndex := range rawRequest.Events {
+		if strings.TrimSpace(rawRequest.Events[eventIndex].SessionID) == "test-session" {
+			rawRequest.Events[eventIndex].SessionID = boundControlSessionID
+		}
+	}
+
+	validatedRequest, err := normalizeContinuityInspectRequest(rawRequest)
+	if err != nil {
+		return ContinuityInspectResponse{}, RequestDeniedError{
+			DenialCode:   DenialCodeMalformedRequest,
+			DenialReason: err.Error(),
+		}
+	}
+
+	tokenClaims := capabilityToken{
+		TenantID:         "",
+		ControlSessionID: boundControlSessionID,
+	}
+	if err := validateContinuityInspectProvenance(tokenClaims, validatedRequest); err != nil {
+		return ContinuityInspectResponse{}, RequestDeniedError{
+			DenialCode:   DenialCodeMalformedRequest,
+			DenialReason: err.Error(),
+		}
+	}
+
+	inspectResponse, err := server.inspectObservedContinuity(tokenClaims, buildObservedContinuityInspectRequest(validatedRequest))
+	if err == nil {
+		return inspectResponse, nil
+	}
+
+	var governanceError continuityGovernanceError
+	if errors.As(err, &governanceError) {
+		return ContinuityInspectResponse{}, RequestDeniedError{
+			DenialCode:   governanceError.denialCode,
+			DenialReason: governanceError.reason,
+		}
+	}
+	return ContinuityInspectResponse{}, err
 }
 
 func testContinuityInspectRequest(inspectionID string, threadID string, goalText string) ContinuityInspectRequest {

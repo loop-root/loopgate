@@ -8,51 +8,6 @@ import (
 	"morph/internal/identifiers"
 )
 
-func (server *Server) handleContinuityInspect(writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodPost {
-		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	tokenClaims, ok := server.authenticate(writer, request)
-	if !ok {
-		return
-	}
-	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryWrite) {
-		return
-	}
-	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
-	if !ok {
-		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
-		return
-	}
-	if !server.policy.Memory.AllowRawContinuityInspect {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "raw continuity inspect is disabled by policy; use /v1/continuity/inspect-thread",
-			DenialCode:   DenialCodePolicyDenied,
-		})
-		return
-	}
-
-	var inspectRequest ContinuityInspectRequest
-	if err := decodeJSONBytes(requestBodyBytes, &inspectRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
-		})
-		return
-	}
-
-	inspectResponse, err := server.inspectContinuityThread(tokenClaims, inspectRequest)
-	if err != nil {
-		server.writeMemoryOperationError(writer, err)
-		return
-	}
-	server.writeJSON(writer, http.StatusOK, inspectResponse)
-}
-
 func (server *Server) handleMemoryWakeState(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)

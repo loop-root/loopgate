@@ -33,6 +33,9 @@ func (server *Server) handleHavenContinuityInspectThread(writer http.ResponseWri
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryWrite) {
+		return
+	}
 	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
 		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
 			Status:       ResponseStatusDenied,
