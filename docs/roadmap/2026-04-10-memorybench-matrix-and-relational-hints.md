@@ -16,7 +16,7 @@ The short version:
 
 - continuity should be measured as durable state memory, not generic corpus search
 - RAG should be measured as broad evidence retrieval, not canonical current-state memory
-- hybrid should eventually be measured as continuity for state plus RAG for evidence
+- hybrid should be measured as continuity for state plus RAG for evidence
 - TCL-backed graph expansion should be bounded, hint-scoped, and mode-specific
 
 ## 2. Current Checked-In Matrix
@@ -31,10 +31,15 @@ Current checked-in fixture counts:
 
 Extended targeted profile:
 
-- `74` fixtures in `-profile extended_fixtures`
-- the additional `4` fixtures are `memory_evidence_retrieval`
+- `77` fixtures in `-profile extended_fixtures`
+- the additional `7` fixtures are:
+  - `4` `memory_evidence_retrieval`
+  - `3` `memory_hybrid_recall`
 - those evidence fixtures now share one working-set scope:
   `benchmark:evidence_working_set`
+- the hybrid fixtures use the same bounded state-plus-evidence split:
+  - continuity owns the current blocker or next-step state
+  - RAG owns the broader supporting incident or design evidence
 
 The current checked-in matrix is larger than the last scored `2026-04-09`
 honest rerun set. That means the scoreboard in
@@ -155,7 +160,30 @@ Current category:
 
 ### 4.2 Hybrid Should Win
 
-These fixtures should require both:
+This bucket is now partially implemented as `memory_hybrid_recall` inside
+`-profile extended_fixtures`.
+
+Current targeted run IDs:
+
+- continuity control: `continuity_hybrid_matrix_20260410_v2`
+- RAG baseline: `rag_baseline_hybrid_matrix_20260410_v2`
+- stronger RAG: `rag_stronger_hybrid_matrix_20260410_v2`
+- stronger hybrid: `hybrid_stronger_hybrid_matrix_20260410_v4`
+
+Current read:
+
+- continuity control is `0/3`
+- baseline RAG is `0/3`
+- stronger RAG is `0/3`
+- stronger hybrid is `2/3`
+- the two hybrid wins are the replay root-cause and preview-card authority
+  boundary cases, where continuity supplies the current step or follow-up state
+  and the RAG side recovers the supporting design or incident context
+- the remaining mount-grant miss is useful because it shows the current hybrid
+  combiner still confuses a stale demo note for the real supporting renew-path
+  design rationale when the evidence set is too broad
+
+These fixtures require both:
 
 - continuity for current state
 - RAG for supporting evidence
@@ -165,7 +193,7 @@ Examples:
 - recover the current blocker from continuity, then pull the supporting log note from RAG
 - recover the current preferred runtime config from continuity, then retrieve the prior design discussion from RAG
 
-Recommended future category:
+Current category:
 
 - `memory_hybrid_recall`
 
@@ -228,6 +256,23 @@ env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build go run ./cmd/memorybenc
   -rag-collection memorybench_rerank \
   -rag-seed-fixtures \
   -scenario-set poisoning_policy_matrix
+```
+
+Hybrid state-plus-evidence slice:
+
+```bash
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build go run ./cmd/memorybench \
+  -output-root /tmp/memorybench-current \
+  -run-id hybrid_stronger_hybrid_matrix_20260410 \
+  -profile extended_fixtures \
+  -backend hybrid \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode production_write_parity \
+  -rag-qdrant-url http://127.0.0.1:6333 \
+  -rag-collection memorybench_rerank \
+  -rag-reranker Xenova/ms-marco-MiniLM-L-6-v2 \
+  -rag-seed-fixtures \
+  -scenario-set hybrid_recall_matrix
 ```
 
 ## 6. Why The Relational Hint Layer Needs Anchors

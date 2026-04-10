@@ -131,12 +131,12 @@ Previous honest `61`-fixture artifacts remain preserved:
 - `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/*`
 - `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v2/*`
 
-## Targeted evidence retrieval matrix (`extended_fixtures`, not headline)
+## Targeted evidence and hybrid retrieval matrix (`extended_fixtures`, not headline)
 
 The checked-in harness now also has an `extended_fixtures` profile with a
-shared-scope `rag_evidence_matrix` bucket. These runs are intentionally
-`targeted_debug_run` evidence, not headline replacements for the scored
-`70`-fixture state-memory baseline.
+shared-scope `rag_evidence_matrix` bucket and a `hybrid_recall_matrix` bucket.
+These runs are intentionally `targeted_debug_run` evidence, not headline
+replacements for the scored `70`-fixture state-memory baseline.
 
 Final `2026-04-10` targeted evidence runs:
 
@@ -184,6 +184,61 @@ Evidence-matrix artifacts:
 - `/tmp/memorybench-live-continuity/continuity_evidence_synth_20260410_v4/*`
 - `/tmp/memorybench-live-rag/rag_baseline_evidence_20260410_v4/*`
 - `/tmp/memorybench-live-rag/rag_stronger_evidence_20260410_v4/*`
+
+## Targeted hybrid recall matrix (`extended_fixtures`, not headline)
+
+The same `extended_fixtures` profile now also includes a `memory_hybrid_recall`
+bucket. These fixtures intentionally require:
+
+- continuity for current governed state
+- RAG for supporting design or incident evidence
+
+Final `2026-04-10` hybrid runs:
+
+- continuity control: `continuity_hybrid_matrix_20260410_v2`
+  - `retrieval_path_mode=control_plane_memory_routes`
+  - `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
+- RAG baseline: `rag_baseline_hybrid_matrix_20260410_v2`
+  - `retrieval_path_mode=rag_search_helper`
+  - `seed_path_mode=python_rag_fixture_seed`
+- stronger RAG: `rag_stronger_hybrid_matrix_20260410_v2`
+  - `retrieval_path_mode=rag_search_helper`
+  - `seed_path_mode=python_rag_fixture_seed`
+- stronger hybrid: `hybrid_stronger_hybrid_matrix_20260410_v4`
+  - `retrieval_path_mode=hybrid_continuity_state_plus_rag_evidence`
+  - `seed_path_mode=control_plane_state_and_rag_fixture_corpus`
+
+Current hybrid-matrix counts:
+
+| Backend | Overall | Mount grant blocker + rationale | Replay recovery step + root cause | Preview-card follow-up + boundary rationale |
+| --- | --- | --- | --- | --- |
+| `continuity_tcl` (`production_write_parity`) | `0/3` | `0/1` | `0/1` | `0/1` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `0/3` | `0/1` | `0/1` | `0/1` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `0/3` | `0/1` | `0/1` | `0/1` |
+| `hybrid` (continuity state + stronger RAG evidence) | `2/3` | `0/1` | `1/1` | `1/1` |
+
+Read:
+
+- this is the first checked-in bucket where the hybrid path beats both pure
+  controls instead of merely tying them
+- continuity-only fails for the expected reason: it can recover the current
+  state node, but it does not have the broader supporting evidence corpus
+- RAG-only fails for the opposite reason: it can retrieve evidence, but it
+  lacks the canonical current blocker or next-step state that continuity keeps
+  current
+- the bounded hybrid combiner now uses retrieved continuity state hints to
+  shape evidence lookup and deterministic reranking instead of dumping the
+  whole related set into the prompt
+- the remaining mount-grant miss is still useful: the hybrid path found the
+  current blocker, but it still pulled the wrong supporting design thread and
+  exceeded the hint-byte budget on that scenario
+
+Hybrid-matrix artifacts:
+
+- `/tmp/memorybench-live-continuity/continuity_hybrid_matrix_20260410_v2/*`
+- `/tmp/memorybench-live-rag/rag_baseline_hybrid_matrix_20260410_v2/*`
+- `/tmp/memorybench-live-rag/rag_stronger_hybrid_matrix_20260410_v2/*`
+- `/tmp/memorybench-live-hybrid/hybrid_stronger_hybrid_matrix_20260410_v4/*`
 
 ## Preserved prior honest rerun set (61-fixture matrix)
 

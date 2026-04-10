@@ -101,8 +101,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "memorybench failed: %v\n", err)
 		os.Exit(1)
 	}
-	if normalizedBackendName != memorybench.BackendContinuityTCL && strings.TrimSpace(validatedContinuitySeedingMode) != "" {
-		fmt.Fprintf(os.Stderr, "memorybench failed: continuity seeding mode is only valid with backend %q\n", memorybench.BackendContinuityTCL)
+	if normalizedBackendName != memorybench.BackendContinuityTCL && normalizedBackendName != memorybench.BackendHybrid && strings.TrimSpace(validatedContinuitySeedingMode) != "" {
+		fmt.Fprintf(os.Stderr, "memorybench failed: continuity seeding mode is only valid with backends %q or %q\n", memorybench.BackendContinuityTCL, memorybench.BackendHybrid)
 		os.Exit(1)
 	}
 	validatedCandidateGovernanceMode, err := memorybench.NormalizeCandidateGovernanceMode(candidateGovernanceMode)
@@ -138,8 +138,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "memorybench failed: %v\n", err)
 		os.Exit(1)
 	}
-	if normalizedBackendName == memorybench.BackendContinuityTCL && strings.TrimSpace(benchmarkProfile) == "fixtures" && strings.TrimSpace(validatedContinuitySeedingMode) == "" {
-		fmt.Fprintf(os.Stderr, "memorybench failed: backend %q with -profile fixtures requires -continuity-seeding-mode\n", memorybench.BackendContinuityTCL)
+	if (normalizedBackendName == memorybench.BackendContinuityTCL || normalizedBackendName == memorybench.BackendHybrid) &&
+		strings.TrimSpace(strings.ToLower(benchmarkProfile)) != "smoke" &&
+		strings.TrimSpace(validatedContinuitySeedingMode) == "" {
+		fmt.Fprintf(os.Stderr, "memorybench failed: backend %q with fixture-backed profiles requires -continuity-seeding-mode\n", normalizedBackendName)
 		os.Exit(1)
 	}
 	comparisonClass := benchmarkComparisonClass(benchmarkProfile, normalizedBackendName, validatedContinuitySeedingMode, validatedScenarioFilter)
@@ -151,6 +153,10 @@ func main() {
 	isolatedRAGBaselineConfig, err := isolateRAGBenchmarkConfig(normalizedBackendName, validatedCandidateGovernanceMode, runID, ragBaselineConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "memorybench failed: %v\n", err)
+		os.Exit(1)
+	}
+	if normalizedBackendName == memorybench.BackendHybrid && !ragSeedFixtures {
+		fmt.Fprintf(os.Stderr, "memorybench failed: backend %q requires -rag-seed-fixtures so hybrid evidence retrieval uses a deterministic fixture corpus\n", memorybench.BackendHybrid)
 		os.Exit(1)
 	}
 	if ragSeedFixtures {
@@ -165,9 +171,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "memorybench failed: %v\n", err)
 		os.Exit(1)
 	}
+	evidenceDiscoverer, err := selectEvidenceProjectedNodeDiscoverer(normalizedBackendName, repoRoot, isolatedRAGBaselineConfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "memorybench failed: %v\n", err)
+		os.Exit(1)
+	}
 	if closeableDiscoverer, ok := discoverer.(interface{ Close() error }); ok {
 		defer func() {
 			if closeErr := closeableDiscoverer.Close(); closeErr != nil {
+				fmt.Fprintf(os.Stderr, "memorybench cleanup failed: %v\n", closeErr)
+			}
+		}()
+	}
+	if closeableEvidenceDiscoverer, ok := evidenceDiscoverer.(interface{ Close() error }); ok {
+		defer func() {
+			if closeErr := closeableEvidenceDiscoverer.Close(); closeErr != nil {
 				fmt.Fprintf(os.Stderr, "memorybench cleanup failed: %v\n", closeErr)
 			}
 		}()
@@ -208,6 +226,7 @@ func main() {
 		ContinuityBenchmarkLocalSlotPreferenceMargin: validatedContinuityBenchmarkLocalSlotPreferenceMargin,
 		Observer:           observer,
 		Discoverer:         discoverer,
+		EvidenceDiscoverer: evidenceDiscoverer,
 		CandidateEvaluator: candidateEvaluator,
 	}
 	var runResult memorybench.RunResult
@@ -290,6 +309,8 @@ func benchmarkPathModes(normalizedBackendName string, continuitySeedingMode stri
 			return memorybench.RetrievalPathRAGSearchHelper, memorybench.SeedPathRAGFixtureCorpus
 		}
 		return memorybench.RetrievalPathRAGSearchHelper, ""
+	case memorybench.BackendHybrid:
+		return memorybench.RetrievalPathHybridStateAndEvidence, memorybench.SeedPathHybridControlPlaneAndRAGFixtureCorpus
 	default:
 		return "", ""
 	}
@@ -303,11 +324,11 @@ func normalizeContinuityPreviewSlotPreferenceMargin(rawMargin int) (int, error) 
 }
 
 func isolateRAGBenchmarkConfig(normalizedBackendName string, validatedCandidateGovernanceMode string, runID string, rawRAGBaselineConfig memorybench.RAGBaselineConfig) (memorybench.RAGBaselineConfig, error) {
-	isRAGBackend, err := memorybench.IsRAGBenchmarkBackend(normalizedBackendName)
+	usesRAGHelper, err := memorybench.BenchmarkBackendUsesRAGHelper(normalizedBackendName)
 	if err != nil {
 		return memorybench.RAGBaselineConfig{}, err
 	}
-	if !isRAGBackend {
+	if !usesRAGHelper {
 		return rawRAGBaselineConfig, nil
 	}
 	trimmedRunID := strings.TrimSpace(runID)
@@ -345,108 +366,12 @@ func selectProjectedNodeDiscoverer(rawBackendName string, repoRoot string, ragBa
 		return nil, "", nil, err
 	}
 	switch selectedBackendName {
-	case memorybench.BackendContinuityTCL:
-		if continuityAblation != continuityAblationNone && continuitySeedingMode != memorybench.ContinuitySeedingModeSyntheticProjectedNodes {
-			return nil, "", nil, fmt.Errorf("continuity ablation %q requires -continuity-seeding-mode %q", continuityAblation, memorybench.ContinuitySeedingModeSyntheticProjectedNodes)
+	case memorybench.BackendContinuityTCL, memorybench.BackendHybrid:
+		discoverer, seedManifestRecords, err := selectContinuityProjectedNodeDiscoverer(repoRoot, selectedScenarioFixtures, continuitySeedingMode, continuityAblation, continuityPreviewSlotPreference, continuityPreviewSlotPreferenceMargin)
+		if err != nil {
+			return nil, "", nil, err
 		}
-		if repoRoot == "" {
-			return nil, selectedBackendName, nil, nil
-		}
-		switch continuitySeedingMode {
-		case memorybench.ContinuitySeedingModeSyntheticProjectedNodes:
-			projectedNodeSeeds, err := buildContinuityFixtureProjectedNodeSeeds(selectedScenarioFixtures, continuityAblation)
-			if err != nil {
-				return nil, "", nil, err
-			}
-			projectedNodeBackend, err := loopgate.OpenContinuityTCLFixtureProjectedNodeDiscoverBackend(repoRoot, projectedNodeSeeds)
-			if err != nil {
-				return nil, "", nil, err
-			}
-			fixtureDiscoverer := maybeWrapContinuitySlotOnlyPreference(
-				projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend},
-				selectedScenarioFixtures,
-				continuityPreviewSlotPreference,
-				continuityPreviewSlotPreferenceMargin,
-			)
-			return continuityAblationProjectedNodeDiscoverer{
-				innerDiscoverer: fixtureDiscoverer,
-				ablationName:    continuityAblation,
-			}, selectedBackendName, buildSyntheticSeedManifestRecords(projectedNodeSeeds), nil
-		case memorybench.ContinuitySeedingModeDebugAmbientRepo, "":
-			projectedNodeBackend, err := loopgate.OpenContinuityTCLProjectedNodeDiscoverBackend(repoRoot)
-			if err != nil {
-				return nil, "", nil, err
-			}
-			return projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend}, selectedBackendName, nil, nil
-		case memorybench.ContinuitySeedingModeProductionWriteParity:
-			rememberedFactSeeds, observedThreadSeeds, todoSeeds, fixtureSeedNodes, seedManifestRecords, err := buildContinuityProductionParitySeeds(selectedScenarioFixtures)
-			if err != nil {
-				return nil, "", nil, err
-			}
-			var scopeRoutedDiscoverers []scopedProjectedNodeDiscoverer
-			assignedScopeSet := make(map[string]struct{})
-			if len(rememberedFactSeeds) > 0 || len(observedThreadSeeds) > 0 || len(todoSeeds) > 0 {
-				controlPlaneBackend, err := loopgate.OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot, rememberedFactSeeds, observedThreadSeeds, todoSeeds)
-				if err != nil {
-					return nil, "", nil, err
-				}
-				controlPlaneScopes := productionParityControlPlaneScopes(rememberedFactSeeds, observedThreadSeeds, todoSeeds)
-				for controlPlaneScope := range controlPlaneScopes {
-					assignedScopeSet[controlPlaneScope] = struct{}{}
-				}
-				scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
-					scopes:     controlPlaneScopes,
-					discoverer: projectedNodeDiscovererAdapter{discoverBackend: controlPlaneBackend},
-				})
-			}
-			if len(fixtureSeedNodes) > 0 {
-				projectedNodeBackend, err := loopgate.OpenContinuityTCLFixtureProjectedNodeDiscoverBackend(repoRoot, fixtureSeedNodes)
-				if err != nil {
-					return nil, "", nil, err
-				}
-				fallbackDiscoverer := maybeWrapContinuitySlotOnlyPreference(
-					projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend},
-					selectedScenarioFixtures,
-					continuityPreviewSlotPreference,
-					continuityPreviewSlotPreferenceMargin,
-				)
-				fixtureScopes := projectedSeedScopes(fixtureSeedNodes)
-				for fixtureScope := range fixtureScopes {
-					assignedScopeSet[fixtureScope] = struct{}{}
-				}
-				scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
-					scopes:     fixtureScopes,
-					discoverer: fallbackDiscoverer,
-				})
-			}
-			unseededScopes := make(map[string]struct{})
-			for _, selectedScenarioFixture := range selectedScenarioFixtures {
-				scenarioScope := memorybench.BenchmarkScenarioScope(selectedScenarioFixture.Metadata.ScenarioID)
-				if _, alreadyAssigned := assignedScopeSet[scenarioScope]; alreadyAssigned {
-					continue
-				}
-				unseededScopes[scenarioScope] = struct{}{}
-			}
-			if len(unseededScopes) > 0 {
-				// Some production-parity fixtures are governance-only and intentionally seed
-				// no discoverable continuity state. Route them explicitly to an empty
-				// discoverer so the run stays honest about zero retrieval instead of failing
-				// on an unrouted benchmark scope.
-				scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
-					scopes:     unseededScopes,
-					discoverer: emptyProjectedNodeDiscoverer{},
-				})
-			}
-			if len(scopeRoutedDiscoverers) == 0 {
-				return nil, "", nil, fmt.Errorf("production parity continuity seeding produced no discoverable benchmark scopes")
-			}
-			if len(scopeRoutedDiscoverers) == 1 {
-				return scopeRoutedDiscoverers[0].discoverer, selectedBackendName, seedManifestRecords, nil
-			}
-			return continuityScopeRoutingProjectedNodeDiscoverer{routedDiscoverers: scopeRoutedDiscoverers}, selectedBackendName, seedManifestRecords, nil
-		default:
-			return nil, "", nil, fmt.Errorf("unknown continuity seeding mode %q", continuitySeedingMode)
-		}
+		return discoverer, selectedBackendName, seedManifestRecords, nil
 	case memorybench.BackendRAGBaseline, memorybench.BackendRAGStronger:
 		if continuityAblation != continuityAblationNone {
 			return nil, "", nil, fmt.Errorf("continuity ablation %q is only valid with backend %q", continuityAblation, memorybench.BackendContinuityTCL)
@@ -468,11 +393,136 @@ func selectProjectedNodeDiscoverer(rawBackendName string, repoRoot string, ragBa
 			return nil, "", nil, err
 		}
 		return discoverer, selectedBackendName, nil, nil
-	case memorybench.BackendHybrid:
-		return nil, "", nil, fmt.Errorf("benchmark backend %q is not wired yet", memorybench.BackendHybrid)
 	default:
 		return nil, "", nil, fmt.Errorf("unknown benchmark backend %q", rawBackendName)
 	}
+}
+
+func selectContinuityProjectedNodeDiscoverer(repoRoot string, selectedScenarioFixtures []memorybench.ScenarioFixture, continuitySeedingMode string, continuityAblation string, continuityPreviewSlotPreference bool, continuityPreviewSlotPreferenceMargin int) (memorybench.ProjectedNodeDiscoverer, []memorybench.SeedManifestRecord, error) {
+	if continuityAblation != continuityAblationNone && continuitySeedingMode != memorybench.ContinuitySeedingModeSyntheticProjectedNodes {
+		return nil, nil, fmt.Errorf("continuity ablation %q requires -continuity-seeding-mode %q", continuityAblation, memorybench.ContinuitySeedingModeSyntheticProjectedNodes)
+	}
+	if repoRoot == "" {
+		return nil, nil, nil
+	}
+	switch continuitySeedingMode {
+	case memorybench.ContinuitySeedingModeSyntheticProjectedNodes:
+		projectedNodeSeeds, err := buildContinuityFixtureProjectedNodeSeeds(selectedScenarioFixtures, continuityAblation)
+		if err != nil {
+			return nil, nil, err
+		}
+		projectedNodeBackend, err := loopgate.OpenContinuityTCLFixtureProjectedNodeDiscoverBackend(repoRoot, projectedNodeSeeds)
+		if err != nil {
+			return nil, nil, err
+		}
+		fixtureDiscoverer := maybeWrapContinuitySlotOnlyPreference(
+			projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend},
+			selectedScenarioFixtures,
+			continuityPreviewSlotPreference,
+			continuityPreviewSlotPreferenceMargin,
+		)
+		return continuityAblationProjectedNodeDiscoverer{
+			innerDiscoverer: fixtureDiscoverer,
+			ablationName:    continuityAblation,
+		}, buildSyntheticSeedManifestRecords(projectedNodeSeeds), nil
+	case memorybench.ContinuitySeedingModeDebugAmbientRepo, "":
+		projectedNodeBackend, err := loopgate.OpenContinuityTCLProjectedNodeDiscoverBackend(repoRoot)
+		if err != nil {
+			return nil, nil, err
+		}
+		return projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend}, nil, nil
+	case memorybench.ContinuitySeedingModeProductionWriteParity:
+		rememberedFactSeeds, observedThreadSeeds, todoSeeds, fixtureSeedNodes, seedManifestRecords, err := buildContinuityProductionParitySeeds(selectedScenarioFixtures)
+		if err != nil {
+			return nil, nil, err
+		}
+		var scopeRoutedDiscoverers []scopedProjectedNodeDiscoverer
+		assignedScopeSet := make(map[string]struct{})
+		if len(rememberedFactSeeds) > 0 || len(observedThreadSeeds) > 0 || len(todoSeeds) > 0 {
+			controlPlaneBackend, err := loopgate.OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot, rememberedFactSeeds, observedThreadSeeds, todoSeeds)
+			if err != nil {
+				return nil, nil, err
+			}
+			controlPlaneScopes := productionParityControlPlaneScopes(rememberedFactSeeds, observedThreadSeeds, todoSeeds)
+			for controlPlaneScope := range controlPlaneScopes {
+				assignedScopeSet[controlPlaneScope] = struct{}{}
+			}
+			scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
+				scopes:     controlPlaneScopes,
+				discoverer: projectedNodeDiscovererAdapter{discoverBackend: controlPlaneBackend},
+			})
+		}
+		if len(fixtureSeedNodes) > 0 {
+			projectedNodeBackend, err := loopgate.OpenContinuityTCLFixtureProjectedNodeDiscoverBackend(repoRoot, fixtureSeedNodes)
+			if err != nil {
+				return nil, nil, err
+			}
+			fallbackDiscoverer := maybeWrapContinuitySlotOnlyPreference(
+				projectedNodeDiscovererAdapter{discoverBackend: projectedNodeBackend},
+				selectedScenarioFixtures,
+				continuityPreviewSlotPreference,
+				continuityPreviewSlotPreferenceMargin,
+			)
+			fixtureScopes := projectedSeedScopes(fixtureSeedNodes)
+			for fixtureScope := range fixtureScopes {
+				assignedScopeSet[fixtureScope] = struct{}{}
+			}
+			scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
+				scopes:     fixtureScopes,
+				discoverer: fallbackDiscoverer,
+			})
+		}
+		unseededScopes := make(map[string]struct{})
+		for _, selectedScenarioFixture := range selectedScenarioFixtures {
+			fixtureScope := memorybench.BenchmarkFixtureScope(selectedScenarioFixture)
+			if _, alreadyAssigned := assignedScopeSet[fixtureScope]; alreadyAssigned {
+			} else {
+				unseededScopes[fixtureScope] = struct{}{}
+			}
+			corpusScope := memorybench.BenchmarkCorpusScope(selectedScenarioFixture)
+			if _, alreadyAssigned := assignedScopeSet[corpusScope]; alreadyAssigned {
+				continue
+			}
+			unseededScopes[corpusScope] = struct{}{}
+		}
+		if len(unseededScopes) > 0 {
+			// Some fixture sets intentionally seed no discoverable continuity state for
+			// a given scope. Route those scopes explicitly to an empty discoverer so the
+			// run stays honest about zero retrieval instead of failing on unrouted state.
+			scopeRoutedDiscoverers = append(scopeRoutedDiscoverers, scopedProjectedNodeDiscoverer{
+				scopes:     unseededScopes,
+				discoverer: emptyProjectedNodeDiscoverer{},
+			})
+		}
+		if len(scopeRoutedDiscoverers) == 0 {
+			return nil, nil, fmt.Errorf("production parity continuity seeding produced no discoverable benchmark scopes")
+		}
+		if len(scopeRoutedDiscoverers) == 1 {
+			return scopeRoutedDiscoverers[0].discoverer, seedManifestRecords, nil
+		}
+		return continuityScopeRoutingProjectedNodeDiscoverer{routedDiscoverers: scopeRoutedDiscoverers}, seedManifestRecords, nil
+	default:
+		return nil, nil, fmt.Errorf("unknown continuity seeding mode %q", continuitySeedingMode)
+	}
+}
+
+func selectEvidenceProjectedNodeDiscoverer(selectedBackendName string, repoRoot string, ragBaselineConfig memorybench.RAGBaselineConfig) (memorybench.ProjectedNodeDiscoverer, error) {
+	if selectedBackendName != memorybench.BackendHybrid {
+		return nil, nil
+	}
+	if strings.TrimSpace(repoRoot) == "" {
+		return nil, fmt.Errorf("benchmark backend %q requires -repo-root for local helper/runtime paths", selectedBackendName)
+	}
+	retrieverClient, err := memorybench.NewPythonRAGRetrieverClient(memorybench.PythonRAGRetrieverClientConfig{
+		RepoRoot:          repoRoot,
+		PythonExecutable:  filepath.Join(repoRoot, ".cache", "memorybench-venv", "bin", "python"),
+		HelperScriptPath:  filepath.Join(repoRoot, "cmd", "memorybench", "rag_search.py"),
+		RAGBaselineConfig: ragBaselineConfig,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return memorybench.NewRAGBaselineDiscovererWithClient(ragBaselineConfig, retrieverClient)
 }
 
 func maybeWrapContinuitySlotOnlyPreference(innerDiscoverer memorybench.ProjectedNodeDiscoverer, selectedScenarioFixtures []memorybench.ScenarioFixture, enabled bool, maxMatchCountDeficit int) memorybench.ProjectedNodeDiscoverer {
@@ -500,6 +550,8 @@ func selectCandidateGovernanceEvaluator(rawBackendName string, rawCandidateGover
 			validatedCandidateGovernanceMode = memorybench.CandidateGovernanceContinuityTCL
 		case memorybench.BackendRAGBaseline, memorybench.BackendRAGStronger:
 			validatedCandidateGovernanceMode = memorybench.CandidateGovernancePermissive
+		case memorybench.BackendHybrid:
+			validatedCandidateGovernanceMode = memorybench.CandidateGovernanceContinuityTCL
 		}
 	}
 	switch selectedBackendName {
@@ -530,7 +582,18 @@ func selectCandidateGovernanceEvaluator(rawBackendName string, rawCandidateGover
 			return nil, fmt.Errorf("candidate governance mode %q is not supported for backend %q", validatedCandidateGovernanceMode, selectedBackendName)
 		}
 	case memorybench.BackendHybrid:
-		return nil, fmt.Errorf("benchmark backend %q is not wired yet", memorybench.BackendHybrid)
+		switch validatedCandidateGovernanceMode {
+		case memorybench.CandidateGovernanceContinuityTCL:
+			governanceBackend, err := loopgate.OpenContinuityTCLMemoryCandidateGovernanceBackend()
+			if err != nil {
+				return nil, err
+			}
+			return candidateGovernanceEvaluatorAdapter{governanceBackend: governanceBackend}, nil
+		case memorybench.CandidateGovernancePermissive:
+			return memorybench.NewPermissiveCandidateGovernanceEvaluator(), nil
+		default:
+			return nil, fmt.Errorf("candidate governance mode %q is not supported for backend %q", validatedCandidateGovernanceMode, selectedBackendName)
+		}
 	default:
 		return nil, fmt.Errorf("unknown benchmark backend %q", rawBackendName)
 	}
@@ -553,6 +616,12 @@ func buildContinuityFixtureProjectedNodeSeeds(selectedScenarioFixtures []memoryb
 			projectedNodeSeeds = append(projectedNodeSeeds, seedNodes...)
 		case memorybench.CategoryTaskResumption:
 			seedNodes, err := buildContinuityTaskResumptionFixtureSeeds(scenarioFixture, baseTimestampUTC, &seedOffset)
+			if err != nil {
+				return nil, err
+			}
+			projectedNodeSeeds = append(projectedNodeSeeds, seedNodes...)
+		case memorybench.CategoryMemoryHybridRecall:
+			seedNodes, err := buildContinuityHybridRecallFixtureSeeds(scenarioFixture, baseTimestampUTC, &seedOffset)
 			if err != nil {
 				return nil, err
 			}
@@ -991,6 +1060,61 @@ func buildContinuityTaskResumptionFixtureSeeds(
 	return projectedNodeSeeds, nil
 }
 
+func buildContinuityHybridRecallFixtureSeeds(
+	scenarioFixture memorybench.ScenarioFixture,
+	baseTimestampUTC time.Time,
+	seedOffset *int,
+) ([]loopgate.BenchmarkProjectedNodeSeed, error) {
+	if scenarioFixture.HybridRecallExpectation == nil {
+		return nil, fmt.Errorf("hybrid recall fixture %q is missing hybrid recall expectation", scenarioFixture.Metadata.ScenarioID)
+	}
+	hybridExpectation := scenarioFixture.HybridRecallExpectation
+	trimmedScenarioID := strings.TrimSpace(scenarioFixture.Metadata.ScenarioID)
+	if trimmedScenarioID == "" {
+		return nil, fmt.Errorf("hybrid recall fixture is missing scenario id")
+	}
+
+	projectedNodeSeeds := make([]loopgate.BenchmarkProjectedNodeSeed, 0, len(hybridExpectation.RequiredStateHints)+len(hybridExpectation.ForbiddenStateHints))
+	for requiredIndex, requiredStateHint := range hybridExpectation.RequiredStateHints {
+		trimmedRequiredStateHint := strings.TrimSpace(requiredStateHint)
+		if trimmedRequiredStateHint == "" {
+			continue
+		}
+		projectedNodeSeeds = append(projectedNodeSeeds, loopgate.BenchmarkProjectedNodeSeed{
+			NodeID:          fmt.Sprintf("%s::resume::%02d", trimmedScenarioID, requiredIndex),
+			CreatedAtUTC:    continuityFixtureSeedTimestamp(baseTimestampUTC, seedOffset),
+			Scope:           memorybench.BenchmarkFixtureScope(scenarioFixture),
+			NodeKind:        memorybench.BenchmarkNodeKindStep,
+			State:           "active",
+			HintText:        trimmedRequiredStateHint,
+			ExactSignature:  continuityFixtureSlotSignature(trimmedScenarioID) + "::hybrid",
+			FamilySignature: continuityFixtureFamilySignature(trimmedScenarioID) + "::hybrid",
+			ProvenanceEvent: fmt.Sprintf("fixture:%s::resume::%02d", trimmedScenarioID, requiredIndex),
+		})
+	}
+	for forbiddenIndex, forbiddenStateHint := range hybridExpectation.ForbiddenStateHints {
+		trimmedForbiddenStateHint := strings.TrimSpace(forbiddenStateHint)
+		if trimmedForbiddenStateHint == "" {
+			continue
+		}
+		projectedNodeSeeds = append(projectedNodeSeeds, loopgate.BenchmarkProjectedNodeSeed{
+			NodeID:          fmt.Sprintf("%s::stale::%02d", trimmedScenarioID, forbiddenIndex),
+			CreatedAtUTC:    continuityFixtureSeedTimestamp(baseTimestampUTC, seedOffset),
+			Scope:           memorybench.BenchmarkFixtureScope(scenarioFixture),
+			NodeKind:        memorybench.BenchmarkNodeKindStep,
+			State:           "tombstoned",
+			HintText:        trimmedForbiddenStateHint,
+			ExactSignature:  continuityFixtureSlotSignature(trimmedScenarioID) + "::hybrid",
+			FamilySignature: continuityFixtureFamilySignature(trimmedScenarioID) + "::hybrid",
+			ProvenanceEvent: fmt.Sprintf("fixture:%s::stale::%02d", trimmedScenarioID, forbiddenIndex),
+		})
+	}
+	if len(projectedNodeSeeds) == 0 {
+		return nil, fmt.Errorf("hybrid recall fixture %q did not produce any projected node seeds", scenarioFixture.Metadata.ScenarioID)
+	}
+	return projectedNodeSeeds, nil
+}
+
 func continuityFixtureSeedTimestamp(baseTimestampUTC time.Time, seedOffset *int) string {
 	currentTimestampUTC := baseTimestampUTC.Add(time.Duration(*seedOffset) * time.Minute)
 	*seedOffset = *seedOffset + 1
@@ -1042,11 +1166,11 @@ func maybeSeedRAGFixtureCorpus(ctx context.Context, repoRoot string, rawBackendN
 	if err != nil {
 		return err
 	}
-	isRAGBackend, err := memorybench.IsRAGBenchmarkBackend(selectedBackendName)
+	usesRAGHelper, err := memorybench.BenchmarkBackendUsesRAGHelper(selectedBackendName)
 	if err != nil {
 		return err
 	}
-	if !isRAGBackend {
+	if !usesRAGHelper {
 		return nil
 	}
 	if strings.TrimSpace(repoRoot) == "" {

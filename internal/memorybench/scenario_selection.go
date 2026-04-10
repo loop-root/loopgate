@@ -75,6 +75,11 @@ var builtInScenarioSets = map[string][]string{
 		"evidence.incident_qdrant_backfill_socket_stall.v1",
 		"evidence.preview_card_authority_boundary_thread.v1",
 	},
+	"hybrid_recall_matrix": {
+		"hybrid.mount_grant_current_blocker_and_design_rationale.v1",
+		"hybrid.replay_recovery_current_step_and_root_cause.v1",
+		"hybrid.preview_card_follow_up_and_boundary_rationale.v1",
+	},
 }
 
 func NormalizeScenarioFilter(rawScenarioFilter ScenarioFilter) (ScenarioFilter, error) {

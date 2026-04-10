@@ -352,6 +352,93 @@ func TestRunScenarioFixtures_EvidenceRetrievalFailsOnWrongContextIntrusion(t *te
 	}
 }
 
+func TestRunScenarioFixtures_HybridRecallUsesStateAndEvidenceProbeQueries(t *testing.T) {
+	fixture := HybridMountGrantCurrentBlockerFixture()
+	var recordedStateScope string
+	var recordedStateQuery string
+	var recordedEvidenceScope string
+	var recordedEvidenceQuery string
+
+	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{
+		RunID:            "run_hybrid_recall_queries",
+		StartedAtUTC:     "2026-03-26T12:00:00Z",
+		BackendName:      "hybrid",
+		BenchmarkProfile: "extended_fixtures",
+		ModelProvider:    "test",
+		ModelName:        "stub",
+		TokenBudget:      2048,
+		Observer:         NoopObserver{},
+		Discoverer: fakeProjectedNodeDiscoverer{
+			recordedScope: &recordedStateScope,
+			recordedQuery: &recordedStateQuery,
+			items: []ProjectedNodeDiscoverItem{
+				{NodeID: "state-1", NodeKind: BenchmarkNodeKindStep, HintText: "Current blocker: Haven renew flow still lets projected status cards look renewed even when memory.write is missing.", ProvenanceEvent: "fixture:state:1", MatchCount: 4},
+				{NodeID: "state-2", NodeKind: BenchmarkNodeKindStep, HintText: "Next step: thread the explicit renew action through the governed memory.write check and keep projected status cards visibly non-authoritative.", ProvenanceEvent: "fixture:state:2", MatchCount: 3},
+			},
+		},
+		EvidenceDiscoverer: fakeProjectedNodeDiscoverer{
+			recordedScope: &recordedEvidenceScope,
+			recordedQuery: &recordedEvidenceQuery,
+			items: []ProjectedNodeDiscoverItem{
+				{NodeID: "evidence-1", NodeKind: BenchmarkNodeKindStep, HintText: "Design note: operator mount write grant renewal moved into the explicit UI renew action so audit append failures still block authority mutation.", ProvenanceEvent: "fixture:evidence:1", MatchCount: 4},
+				{NodeID: "evidence-2", NodeKind: BenchmarkNodeKindStep, HintText: "Design follow-up: status cards remain projected convenience views and must never imply a renewed grant on their own.", ProvenanceEvent: "fixture:evidence:2", MatchCount: 3},
+			},
+		},
+	}, []ScenarioFixture{fixture})
+	if err != nil {
+		t.Fatalf("RunScenarioFixtures: %v", err)
+	}
+	scenarioResult := runResult.ScenarioResults[0]
+	if !scenarioResult.Outcome.Passed {
+		t.Fatalf("expected hybrid recall fixture to pass, got %#v", scenarioResult.Outcome)
+	}
+	if recordedStateScope != BenchmarkScenarioScope(fixture.Metadata.ScenarioID) {
+		t.Fatalf("expected state scope %q, got %q", BenchmarkScenarioScope(fixture.Metadata.ScenarioID), recordedStateScope)
+	}
+	if recordedEvidenceScope != BenchmarkHybridEvidenceScope {
+		t.Fatalf("expected evidence scope %q, got %q", BenchmarkHybridEvidenceScope, recordedEvidenceScope)
+	}
+	if recordedStateQuery != "What is the current blocker and next step for the operator mount grant hardening task?" {
+		t.Fatalf("unexpected state probe query %q", recordedStateQuery)
+	}
+	if !strings.Contains(recordedEvidenceQuery, "Find the design thread about why write access only advances during an explicit operator refresh instead of a self-updating dashboard card.") {
+		t.Fatalf("expected base evidence probe query, got %q", recordedEvidenceQuery)
+	}
+	if !strings.Contains(recordedEvidenceQuery, "Current blocker: Haven renew flow still lets projected status cards look renewed even when memory.write is missing.") {
+		t.Fatalf("expected hybrid evidence query to carry the retrieved state hint, got %q", recordedEvidenceQuery)
+	}
+}
+
+func TestRunScenarioFixtures_HybridRecallFailsWhenEvidenceHalfIsMissing(t *testing.T) {
+	fixture := HybridReplayRecoveryCurrentStepFixture()
+	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{
+		RunID:            "run_hybrid_recall_missing_evidence",
+		StartedAtUTC:     "2026-03-26T12:00:00Z",
+		BackendName:      "continuity_tcl",
+		BenchmarkProfile: "extended_fixtures",
+		ModelProvider:    "test",
+		ModelName:        "stub",
+		TokenBudget:      2048,
+		Observer:         NoopObserver{},
+		Discoverer: fakeProjectedNodeDiscoverer{
+			items: []ProjectedNodeDiscoverItem{
+				{NodeID: "state-1", NodeKind: BenchmarkNodeKindStep, HintText: "Current action: keep recovery replay on the warm-writer path while validating watchdog stability under catch-up load.", ProvenanceEvent: "fixture:state:1", MatchCount: 4},
+				{NodeID: "state-2", NodeKind: BenchmarkNodeKindStep, HintText: "Next step: add a regression that proves watchdog latency stays bounded before removing the capped-batch guard.", ProvenanceEvent: "fixture:state:2", MatchCount: 3},
+			},
+		},
+	}, []ScenarioFixture{fixture})
+	if err != nil {
+		t.Fatalf("RunScenarioFixtures: %v", err)
+	}
+	scenarioResult := runResult.ScenarioResults[0]
+	if scenarioResult.Outcome.Passed {
+		t.Fatalf("expected missing evidence half to fail hybrid fixture, got %#v", scenarioResult.Outcome)
+	}
+	if scenarioResult.Outcome.MissingEvidenceContext == 0 {
+		t.Fatalf("expected missing evidence context to be counted, got %#v", scenarioResult.Outcome)
+	}
+}
+
 func TestRunScenarioFixtures_AllowsBenignRetrievalDuringPoisoningFixture(t *testing.T) {
 	fixture := PoisoningRememberedInstructionFixture()
 	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{

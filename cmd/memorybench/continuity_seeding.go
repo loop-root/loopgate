@@ -51,6 +51,13 @@ func buildContinuityProductionParitySeeds(selectedScenarioFixtures []memorybench
 			}
 			fixtureSeedNodes = append(fixtureSeedNodes, evidenceSeedNodes...)
 			seedManifestRecords = append(seedManifestRecords, evidenceManifestRecords...)
+		case memorybench.CategoryMemoryHybridRecall:
+			hybridTodoSeeds, hybridManifestRecords, err := buildContinuityHybridRecallTodoSeeds(scenarioFixture)
+			if err != nil {
+				return nil, nil, nil, nil, nil, err
+			}
+			todoSeeds = append(todoSeeds, hybridTodoSeeds...)
+			seedManifestRecords = append(seedManifestRecords, hybridManifestRecords...)
 		case memorybench.CategoryTaskResumption:
 			taskResumptionTodoSeeds, taskResumptionManifestRecords, err := buildContinuityTaskResumptionTodoSeeds(scenarioFixture)
 			if err != nil {
@@ -414,6 +421,67 @@ func buildContinuityTaskResumptionTodoSeeds(scenarioFixture memorybench.Scenario
 
 	if len(todoSeeds) == 0 {
 		return nil, nil, fmt.Errorf("task resumption fixture %q produced no todo workflow seeds", scenarioID)
+	}
+	return todoSeeds, seedManifestRecords, nil
+}
+
+func buildContinuityHybridRecallTodoSeeds(scenarioFixture memorybench.ScenarioFixture) ([]loopgate.BenchmarkTodoSeed, []memorybench.SeedManifestRecord, error) {
+	if scenarioFixture.HybridRecallExpectation == nil {
+		return nil, nil, fmt.Errorf("hybrid recall fixture %q is missing hybrid recall expectation", scenarioFixture.Metadata.ScenarioID)
+	}
+	scenarioID := strings.TrimSpace(scenarioFixture.Metadata.ScenarioID)
+	if scenarioID == "" {
+		return nil, nil, fmt.Errorf("hybrid recall fixture is missing scenario id")
+	}
+
+	hybridExpectation := scenarioFixture.HybridRecallExpectation
+	todoSeeds := make([]loopgate.BenchmarkTodoSeed, 0, len(hybridExpectation.RequiredStateHints)+len(hybridExpectation.ForbiddenStateHints))
+	seedManifestRecords := make([]memorybench.SeedManifestRecord, 0, len(hybridExpectation.RequiredStateHints)+len(hybridExpectation.ForbiddenStateHints))
+
+	for _, forbiddenStateHint := range hybridExpectation.ForbiddenStateHints {
+		trimmedForbiddenStateHint := strings.TrimSpace(forbiddenStateHint)
+		if trimmedForbiddenStateHint == "" {
+			continue
+		}
+		todoSeed := loopgate.BenchmarkTodoSeed{
+			Scope:       memorybench.BenchmarkFixtureScope(scenarioFixture),
+			SeedGroup:   "forbidden_hint",
+			Text:        trimmedForbiddenStateHint,
+			TaskKind:    "carry_over",
+			SourceKind:  "benchmark_hybrid_state",
+			FinalStatus: "done",
+		}
+		todoSeeds = append(todoSeeds, todoSeed)
+		seedManifestRecords = append(seedManifestRecords, todoSeedManifestRecord(scenarioID, len(todoSeeds)-1, todoSeed))
+	}
+
+	// Hybrid state still rides the same bounded continuity workflow shape as task
+	// resume. Pair adjacent required hints into one active item so the benchmark
+	// does not get a free win from spraying separate synthetic state nodes.
+	for requiredIndex := 0; requiredIndex < len(hybridExpectation.RequiredStateHints); requiredIndex += 2 {
+		trimmedPrimaryStateHint := strings.TrimSpace(hybridExpectation.RequiredStateHints[requiredIndex])
+		if trimmedPrimaryStateHint == "" {
+			continue
+		}
+		nextStateHint := ""
+		if requiredIndex+1 < len(hybridExpectation.RequiredStateHints) {
+			nextStateHint = strings.TrimSpace(hybridExpectation.RequiredStateHints[requiredIndex+1])
+		}
+		todoSeed := loopgate.BenchmarkTodoSeed{
+			Scope:       memorybench.BenchmarkFixtureScope(scenarioFixture),
+			SeedGroup:   "required_hint",
+			Text:        trimmedPrimaryStateHint,
+			NextStep:    nextStateHint,
+			TaskKind:    "carry_over",
+			SourceKind:  "benchmark_hybrid_state",
+			FinalStatus: "todo",
+		}
+		todoSeeds = append(todoSeeds, todoSeed)
+		seedManifestRecords = append(seedManifestRecords, todoSeedManifestRecord(scenarioID, len(todoSeeds)-1, todoSeed))
+	}
+
+	if len(todoSeeds) == 0 {
+		return nil, nil, fmt.Errorf("hybrid recall fixture %q produced no continuity state seeds", scenarioID)
 	}
 	return todoSeeds, seedManifestRecords, nil
 }

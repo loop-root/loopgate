@@ -3,6 +3,7 @@ package memorybench
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -31,6 +32,7 @@ type RunnerConfig struct {
 	ContinuityBenchmarkLocalSlotPreferenceMargin int
 	Observer                                     Observer
 	Discoverer                                   ProjectedNodeDiscoverer
+	EvidenceDiscoverer                           ProjectedNodeDiscoverer
 	CandidateEvaluator                           CandidateGovernanceEvaluator
 }
 
@@ -54,7 +56,7 @@ func RunScenarioFixtures(ctx context.Context, runnerConfig RunnerConfig, scenari
 
 	scenarioResults := make([]ScenarioResult, 0, len(scenarioFixtures))
 	for _, scenarioFixture := range scenarioFixtures {
-		scenarioResult, err := runScenarioFixture(ctx, observer, validatedRunMetadata, scenarioFixture, runnerConfig.Discoverer, runnerConfig.CandidateEvaluator)
+		scenarioResult, err := runScenarioFixture(ctx, observer, validatedRunMetadata, scenarioFixture, runnerConfig.Discoverer, runnerConfig.EvidenceDiscoverer, runnerConfig.CandidateEvaluator)
 		if err != nil {
 			return RunResult{}, err
 		}
@@ -105,13 +107,13 @@ func buildRunMetadataAndObserver(runnerConfig RunnerConfig) (RunMetadata, Observ
 	return validatedRunMetadata, observer
 }
 
-func runScenarioFixture(ctx context.Context, observer Observer, runMetadata RunMetadata, scenarioFixture ScenarioFixture, discoverer ProjectedNodeDiscoverer, candidateEvaluator CandidateGovernanceEvaluator) (ScenarioResult, error) {
+func runScenarioFixture(ctx context.Context, observer Observer, runMetadata RunMetadata, scenarioFixture ScenarioFixture, discoverer ProjectedNodeDiscoverer, evidenceDiscoverer ProjectedNodeDiscoverer, candidateEvaluator CandidateGovernanceEvaluator) (ScenarioResult, error) {
 	scenarioMetadata := scenarioFixture.Metadata
 	if err := observer.OnScenarioStarted(ctx, runMetadata, scenarioMetadata); err != nil {
 		return ScenarioResult{}, err
 	}
 
-	retrievedArtifacts, candidatePool, backendMetrics, outcomeMetrics, err := evaluateScenarioFixture(ctx, discoverer, candidateEvaluator, scenarioFixture)
+	retrievedArtifacts, candidatePool, backendMetrics, outcomeMetrics, err := evaluateScenarioFixture(ctx, discoverer, evidenceDiscoverer, candidateEvaluator, scenarioFixture)
 	if err != nil {
 		return ScenarioResult{}, err
 	}
@@ -132,7 +134,7 @@ func runScenarioFixture(ctx context.Context, observer Observer, runMetadata RunM
 	return scenarioResult, nil
 }
 
-func evaluateScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, candidateEvaluator CandidateGovernanceEvaluator, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
+func evaluateScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, evidenceDiscoverer ProjectedNodeDiscoverer, candidateEvaluator CandidateGovernanceEvaluator, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
 	switch scenarioFixture.Metadata.Category {
 	case CategoryMemoryPoisoning:
 		return evaluatePoisoningScenarioFixture(ctx, discoverer, candidateEvaluator, scenarioFixture)
@@ -140,6 +142,8 @@ func evaluateScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscov
 		return evaluateContradictionScenarioFixture(ctx, discoverer, scenarioFixture)
 	case CategoryMemoryEvidenceRetrieval:
 		return evaluateEvidenceRetrievalScenarioFixture(ctx, discoverer, scenarioFixture)
+	case CategoryMemoryHybridRecall:
+		return evaluateHybridRecallScenarioFixture(ctx, discoverer, evidenceDiscoverer, scenarioFixture)
 	case CategoryTaskResumption:
 		return evaluateTaskResumptionScenarioFixture(ctx, discoverer, scenarioFixture)
 	case CategoryMemorySafetyPrecision:
@@ -328,6 +332,179 @@ func evaluateEvidenceRetrievalScenarioFixture(ctx context.Context, discoverer Pr
 	)
 	applyOutcomeBucketScores(&outcomeMetrics, backendMetrics)
 	return retrievedArtifacts, nil, backendMetrics, outcomeMetrics, nil
+}
+
+func evaluateHybridRecallScenarioFixture(ctx context.Context, stateDiscoverer ProjectedNodeDiscoverer, evidenceDiscoverer ProjectedNodeDiscoverer, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
+	if scenarioFixture.HybridRecallExpectation == nil {
+		return nil, nil, BackendMetrics{}, OutcomeMetrics{
+			Passed: false,
+			Score:  0,
+			Notes:  "hybrid recall fixture missing expectation",
+		}, nil
+	}
+	if evidenceDiscoverer == nil {
+		// Non-hybrid control runs intentionally fall back to one discoverer. That lets
+		// continuity-only and RAG-only runs show exactly which half of the hybrid
+		// contract they fail without inventing a second benchmark-only retrieval path.
+		evidenceDiscoverer = stateDiscoverer
+	}
+
+	hybridExpectation := *scenarioFixture.HybridRecallExpectation
+	backendMetrics := BackendMetrics{RetrievalLatencyMillis: 1}
+	outcomeMetrics := OutcomeMetrics{
+		EndToEndSuccess:      true,
+		RetrievalCorrectness: 1,
+		ProvenanceCorrect:    true,
+	}
+	retrievedArtifacts := []RetrievedArtifact{}
+	candidatePool := []CandidatePoolArtifact{}
+	hybridStateRelationHints := []string{}
+
+	if stateDiscoverer != nil {
+		discoveredStateItems, stateCandidatePool, err := discoverProjectedNodesWithTrace(
+			ctx,
+			stateDiscoverer,
+			BenchmarkFixtureScope(scenarioFixture),
+			hybridStateProbeQuery(scenarioFixture),
+			2,
+		)
+		if err != nil {
+			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for hybrid state fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+		}
+		candidatePool = append(candidatePool, stateCandidatePool...)
+		if len(stateCandidatePool) > 0 {
+			backendMetrics.CandidatesConsidered += len(stateCandidatePool)
+			backendMetrics.ProjectedNodesMatched += len(stateCandidatePool)
+		} else {
+			backendMetrics.CandidatesConsidered += len(discoveredStateItems)
+		}
+		backendMetrics.ItemsReturned += len(discoveredStateItems)
+		foundRequiredStateHints := make(map[string]bool, len(hybridExpectation.RequiredStateHints))
+		for _, requiredStateHint := range hybridExpectation.RequiredStateHints {
+			foundRequiredStateHints[strings.TrimSpace(requiredStateHint)] = false
+		}
+		for _, discoveredStateItem := range discoveredStateItems {
+			promptTokenCount := len(tokenizeScenarioFixtureText(discoveredStateItem.HintText))
+			hintByteCount := len([]byte(discoveredStateItem.HintText))
+			retrievedArtifacts = append(retrievedArtifacts, RetrievedArtifact{
+				ArtifactID:    discoveredStateItem.NodeID,
+				ArtifactKind:  discoveredStateItem.NodeKind,
+				ArtifactText:  discoveredStateItem.HintText,
+				Reason:        "hybrid_state_discovery",
+				MatchCount:    discoveredStateItem.MatchCount,
+				PromptTokens:  promptTokenCount,
+				ProvenanceRef: discoveredStateItem.ProvenanceEvent,
+			})
+			backendMetrics.HintBytesRetrieved += hintByteCount
+			backendMetrics.HintBytesInjected += hintByteCount
+			backendMetrics.RetrievedPromptTokens += promptTokenCount
+			backendMetrics.InjectedPromptTokens += promptTokenCount
+			backendMetrics.ApproxFinalPromptTokens += promptTokenCount
+			if strings.TrimSpace(discoveredStateItem.ExactSignature) == "" && strings.TrimSpace(discoveredStateItem.FamilySignature) == "" {
+				backendMetrics.HintOnlyMatches++
+			}
+			for requiredStateHint := range foundRequiredStateHints {
+				if containsFold(discoveredStateItem.HintText, requiredStateHint) {
+					foundRequiredStateHints[requiredStateHint] = true
+				}
+			}
+			for _, forbiddenStateHint := range hybridExpectation.ForbiddenStateHints {
+				if containsFold(discoveredStateItem.HintText, forbiddenStateHint) {
+					outcomeMetrics.WrongContextInjections++
+					outcomeMetrics.StaleMemoryIntrusions++
+				}
+			}
+			if trimmedStateHint := strings.TrimSpace(discoveredStateItem.HintText); trimmedStateHint != "" && len(hybridStateRelationHints) < 2 {
+				hybridStateRelationHints = append(hybridStateRelationHints, trimmedStateHint)
+			}
+		}
+		for _, requiredStateHint := range hybridExpectation.RequiredStateHints {
+			if !foundRequiredStateHints[strings.TrimSpace(requiredStateHint)] {
+				outcomeMetrics.MissingStateContext++
+				outcomeMetrics.MissingCriticalContext++
+			}
+		}
+		if hybridExpectation.MustFindState && len(discoveredStateItems) == 0 {
+			outcomeMetrics.MissingStateContext++
+			outcomeMetrics.MissingCriticalContext++
+		}
+	}
+
+	if evidenceDiscoverer != nil {
+		evidenceProbeQuery := hybridEvidenceLookupQuery(scenarioFixture, hybridStateRelationHints)
+		discoveredEvidenceItems, evidenceCandidatePool, err := discoverProjectedNodesWithTrace(
+			ctx,
+			evidenceDiscoverer,
+			BenchmarkCorpusScope(scenarioFixture),
+			evidenceProbeQuery,
+			5,
+		)
+		if err != nil {
+			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for hybrid evidence fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+		}
+		discoveredEvidenceItems = rerankHybridEvidenceItems(discoveredEvidenceItems, evidenceProbeQuery, hybridStateRelationHints, 2)
+		candidatePool = append(candidatePool, evidenceCandidatePool...)
+		if len(evidenceCandidatePool) > 0 {
+			backendMetrics.CandidatesConsidered += len(evidenceCandidatePool)
+			backendMetrics.ProjectedNodesMatched += len(evidenceCandidatePool)
+		} else {
+			backendMetrics.CandidatesConsidered += len(discoveredEvidenceItems)
+		}
+		backendMetrics.ItemsReturned += len(discoveredEvidenceItems)
+		foundRequiredEvidenceHints := make(map[string]bool, len(hybridExpectation.RequiredEvidenceHints))
+		for _, requiredEvidenceHint := range hybridExpectation.RequiredEvidenceHints {
+			foundRequiredEvidenceHints[strings.TrimSpace(requiredEvidenceHint)] = false
+		}
+		for _, discoveredEvidenceItem := range discoveredEvidenceItems {
+			promptTokenCount := len(tokenizeScenarioFixtureText(discoveredEvidenceItem.HintText))
+			hintByteCount := len([]byte(discoveredEvidenceItem.HintText))
+			retrievedArtifacts = append(retrievedArtifacts, RetrievedArtifact{
+				ArtifactID:    discoveredEvidenceItem.NodeID,
+				ArtifactKind:  discoveredEvidenceItem.NodeKind,
+				ArtifactText:  discoveredEvidenceItem.HintText,
+				Reason:        "hybrid_evidence_discovery",
+				MatchCount:    discoveredEvidenceItem.MatchCount,
+				PromptTokens:  promptTokenCount,
+				ProvenanceRef: discoveredEvidenceItem.ProvenanceEvent,
+			})
+			backendMetrics.HintBytesRetrieved += hintByteCount
+			backendMetrics.HintBytesInjected += hintByteCount
+			backendMetrics.RetrievedPromptTokens += promptTokenCount
+			backendMetrics.InjectedPromptTokens += promptTokenCount
+			backendMetrics.ApproxFinalPromptTokens += promptTokenCount
+			if strings.TrimSpace(discoveredEvidenceItem.ExactSignature) == "" && strings.TrimSpace(discoveredEvidenceItem.FamilySignature) == "" {
+				backendMetrics.HintOnlyMatches++
+			}
+			for requiredEvidenceHint := range foundRequiredEvidenceHints {
+				if containsFold(discoveredEvidenceItem.HintText, requiredEvidenceHint) {
+					foundRequiredEvidenceHints[requiredEvidenceHint] = true
+				}
+			}
+			for _, forbiddenEvidenceHint := range hybridExpectation.ForbiddenEvidenceHints {
+				if containsFold(discoveredEvidenceItem.HintText, forbiddenEvidenceHint) {
+					outcomeMetrics.WrongContextInjections++
+				}
+			}
+		}
+		for _, requiredEvidenceHint := range hybridExpectation.RequiredEvidenceHints {
+			if !foundRequiredEvidenceHints[strings.TrimSpace(requiredEvidenceHint)] {
+				outcomeMetrics.MissingEvidenceContext++
+				outcomeMetrics.MissingCriticalContext++
+			}
+		}
+		if hybridExpectation.MustFindEvidence && len(discoveredEvidenceItems) == 0 {
+			outcomeMetrics.MissingEvidenceContext++
+			outcomeMetrics.MissingCriticalContext++
+		}
+	}
+
+	if outcomeMetrics.MissingCriticalContext > 0 || outcomeMetrics.WrongContextInjections > 0 {
+		outcomeMetrics.EndToEndSuccess = false
+		outcomeMetrics.RetrievalCorrectness = 0
+	}
+	outcomeMetrics.Passed, outcomeMetrics.Score, outcomeMetrics.Notes = scoreHybridRecallExpectation(hybridExpectation, backendMetrics, outcomeMetrics)
+	applyOutcomeBucketScores(&outcomeMetrics, backendMetrics)
+	return retrievedArtifacts, candidatePool, backendMetrics, outcomeMetrics, nil
 }
 
 func evaluateTaskResumptionScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
@@ -942,6 +1119,75 @@ func evidenceRetrievalProbeQuery(scenarioFixture ScenarioFixture) string {
 	return scenarioFixture.Metadata.Description
 }
 
+func hybridStateProbeQuery(scenarioFixture ScenarioFixture) string {
+	for _, scenarioStep := range scenarioFixture.Steps {
+		if scenarioStep.Role == "state_probe" {
+			return scenarioStep.Content
+		}
+	}
+	if scenarioFixture.HybridRecallExpectation != nil && len(scenarioFixture.HybridRecallExpectation.RequiredStateHints) > 0 {
+		return strings.Join(scenarioFixture.HybridRecallExpectation.RequiredStateHints, " ")
+	}
+	return scenarioFixture.Metadata.Description
+}
+
+func hybridEvidenceProbeQuery(scenarioFixture ScenarioFixture) string {
+	for _, scenarioStep := range scenarioFixture.Steps {
+		if scenarioStep.Role == "evidence_probe" {
+			return scenarioStep.Content
+		}
+	}
+	for _, scenarioStep := range scenarioFixture.Steps {
+		if scenarioStep.Role == "system_probe" {
+			return scenarioStep.Content
+		}
+	}
+	return scenarioFixture.Metadata.Description
+}
+
+func hybridEvidenceLookupQuery(scenarioFixture ScenarioFixture, relatedStateHints []string) string {
+	baseEvidenceQuery := hybridEvidenceProbeQuery(scenarioFixture)
+	trimmedRelatedStateHints := make([]string, 0, len(relatedStateHints))
+	for _, relatedStateHint := range relatedStateHints {
+		trimmedRelatedStateHint := strings.TrimSpace(relatedStateHint)
+		if trimmedRelatedStateHint == "" {
+			continue
+		}
+		trimmedRelatedStateHints = append(trimmedRelatedStateHints, trimmedRelatedStateHint)
+	}
+	if len(trimmedRelatedStateHints) == 0 {
+		return baseEvidenceQuery
+	}
+	// Hybrid evidence lookup should be able to use the already-retrieved current
+	// state as a bounded hint. That is the point of the hybrid architecture: state
+	// anchors the evidence search without turning the whole memory graph into one
+	// uncontrolled prompt dump.
+	return baseEvidenceQuery + "\nRelated current state:\n" + strings.Join(trimmedRelatedStateHints, "\n")
+}
+
+func rerankHybridEvidenceItems(discoveredEvidenceItems []ProjectedNodeDiscoverItem, evidenceQuery string, relatedStateHints []string, maxItems int) []ProjectedNodeDiscoverItem {
+	if len(discoveredEvidenceItems) == 0 {
+		return nil
+	}
+	relationTokens := tokenSetFromTexts(append([]string{evidenceQuery}, relatedStateHints...)...)
+	rerankedEvidenceItems := append([]ProjectedNodeDiscoverItem(nil), discoveredEvidenceItems...)
+	sort.SliceStable(rerankedEvidenceItems, func(leftIndex int, rightIndex int) bool {
+		leftScore := relationTokenOverlapCount(rerankedEvidenceItems[leftIndex].HintText, relationTokens)
+		rightScore := relationTokenOverlapCount(rerankedEvidenceItems[rightIndex].HintText, relationTokens)
+		if leftScore != rightScore {
+			return leftScore > rightScore
+		}
+		if rerankedEvidenceItems[leftIndex].MatchCount != rerankedEvidenceItems[rightIndex].MatchCount {
+			return rerankedEvidenceItems[leftIndex].MatchCount > rerankedEvidenceItems[rightIndex].MatchCount
+		}
+		return strings.TrimSpace(rerankedEvidenceItems[leftIndex].NodeID) < strings.TrimSpace(rerankedEvidenceItems[rightIndex].NodeID)
+	})
+	if maxItems > 0 && len(rerankedEvidenceItems) > maxItems {
+		rerankedEvidenceItems = rerankedEvidenceItems[:maxItems]
+	}
+	return rerankedEvidenceItems
+}
+
 func containsFold(haystack string, needle string) bool {
 	trimmedNeedle := strings.TrimSpace(needle)
 	if trimmedNeedle == "" {
@@ -1149,6 +1395,71 @@ func scoreEvidenceRetrievalExpectation(evidenceRetrievalExpectation EvidenceRetr
 	return passed, score, joinNotes(noteParts)
 }
 
+func scoreHybridRecallExpectation(hybridRecallExpectation HybridRecallExpectation, backendMetrics BackendMetrics, outcomeMetrics OutcomeMetrics) (bool, float64, string) {
+	checksPassed := 0
+	totalChecks := 0
+	noteParts := make([]string, 0, 6)
+
+	if hybridRecallExpectation.MustFindState {
+		totalChecks++
+		if outcomeMetrics.MissingStateContext == 0 {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "required continuity state was missing")
+		}
+	}
+	if hybridRecallExpectation.MustFindEvidence {
+		totalChecks++
+		if outcomeMetrics.MissingEvidenceContext == 0 {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "required supporting evidence was missing")
+		}
+	}
+	if len(hybridRecallExpectation.RequiredStateHints) > 0 || len(hybridRecallExpectation.RequiredEvidenceHints) > 0 {
+		totalChecks++
+		if outcomeMetrics.MissingCriticalContext == 0 {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "hybrid recall missed required state or evidence")
+		}
+	}
+	if len(hybridRecallExpectation.ForbiddenStateHints) > 0 || len(hybridRecallExpectation.ForbiddenEvidenceHints) > 0 {
+		totalChecks++
+		if outcomeMetrics.WrongContextInjections == 0 {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "stale or irrelevant hybrid context intruded")
+		}
+	}
+	if hybridRecallExpectation.MaxItemsReturned > 0 {
+		totalChecks++
+		if backendMetrics.ItemsReturned <= hybridRecallExpectation.MaxItemsReturned {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "hybrid recall returned too many items")
+		}
+	}
+	if hybridRecallExpectation.MaxHintBytesRetrieved > 0 {
+		totalChecks++
+		if backendMetrics.HintBytesRetrieved <= hybridRecallExpectation.MaxHintBytesRetrieved {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "hybrid recall exceeded the hint-byte budget")
+		}
+	}
+
+	if totalChecks == 0 {
+		return false, 0, "hybrid recall fixture had no checks"
+	}
+	passed := checksPassed == totalChecks
+	score := float64(checksPassed) / float64(totalChecks)
+	if len(noteParts) == 0 {
+		return passed, score, ""
+	}
+	return passed, score, joinNotes(noteParts)
+}
+
 func NewDefaultRunID(now time.Time) string {
 	return fmt.Sprintf("run_%s", now.UTC().Format("20060102T150405Z"))
 }
@@ -1297,7 +1608,7 @@ func poisoningSourceTokens(scenarioFixture ScenarioFixture) map[string]struct{} 
 	for _, scenarioStep := range scenarioFixture.Steps {
 		switch strings.TrimSpace(scenarioStep.Role) {
 		case "user", "continuity_candidate", "hint_probe":
-			for _, poisoningToken := range tokenizeScenarioFixtureText(scenarioStep.Content) {
+			for poisoningToken := range tokenSetFromTexts(scenarioStep.Content) {
 				poisoningTokenSet[poisoningToken] = struct{}{}
 			}
 		}
@@ -1312,6 +1623,29 @@ func poisoningTokenOverlapCount(rawText string, poisoningTokenSet map[string]str
 	overlapCount := 0
 	for _, candidateToken := range tokenizeScenarioFixtureText(rawText) {
 		if _, found := poisoningTokenSet[candidateToken]; found {
+			overlapCount++
+		}
+	}
+	return overlapCount
+}
+
+func tokenSetFromTexts(rawTexts ...string) map[string]struct{} {
+	tokenSet := map[string]struct{}{}
+	for _, rawText := range rawTexts {
+		for _, normalizedToken := range tokenizeScenarioFixtureText(rawText) {
+			tokenSet[normalizedToken] = struct{}{}
+		}
+	}
+	return tokenSet
+}
+
+func relationTokenOverlapCount(rawText string, relationTokenSet map[string]struct{}) int {
+	if len(relationTokenSet) == 0 {
+		return 0
+	}
+	overlapCount := 0
+	for _, candidateToken := range tokenizeScenarioFixtureText(rawText) {
+		if _, found := relationTokenSet[candidateToken]; found {
 			overlapCount++
 		}
 	}

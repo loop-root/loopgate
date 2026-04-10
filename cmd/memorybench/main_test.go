@@ -148,6 +148,20 @@ func TestSelectProjectedNodeDiscoverer_WiresStrongerRAGWithLocalHelperPaths(t *t
 	}
 }
 
+func TestSelectProjectedNodeDiscoverer_WiresHybridPrimaryContinuityDiscoverer(t *testing.T) {
+	repoRoot := t.TempDir()
+	discoverer, backendName, _, err := selectProjectedNodeDiscoverer("hybrid", repoRoot, memorybench.RAGBaselineConfig{}, memorybench.ExtendedScenarioFixtures(), memorybench.ContinuitySeedingModeSyntheticProjectedNodes, continuityAblationNone, true, 1)
+	if err != nil {
+		t.Fatalf("selectProjectedNodeDiscoverer: %v", err)
+	}
+	if discoverer == nil {
+		t.Fatal("expected hybrid primary discoverer to be constructed")
+	}
+	if backendName != memorybench.BackendHybrid {
+		t.Fatalf("expected hybrid backend, got %q", backendName)
+	}
+}
+
 func TestSelectProjectedNodeDiscoverer_RejectsUnknownBackend(t *testing.T) {
 	_, _, _, err := selectProjectedNodeDiscoverer("mystery_backend", "", memorybench.RAGBaselineConfig{}, memorybench.DefaultScenarioFixtures(), "", continuityAblationNone, true, 1)
 	if err == nil {
@@ -247,6 +261,14 @@ func TestSelectCandidateGovernanceEvaluator_WiresContinuityAndRAGBackends(t *tes
 	if strongerRAGEvaluator == nil {
 		t.Fatal("expected stronger rag candidate evaluator")
 	}
+
+	hybridEvaluator, err := selectCandidateGovernanceEvaluator("hybrid", memorybench.CandidateGovernanceBackendDefault, memorybench.RAGBaselineConfig{})
+	if err != nil {
+		t.Fatalf("select hybrid candidate evaluator: %v", err)
+	}
+	if hybridEvaluator == nil {
+		t.Fatal("expected hybrid candidate evaluator")
+	}
 }
 
 func TestSelectCandidateGovernanceEvaluator_AllowsFairnessOverrides(t *testing.T) {
@@ -273,6 +295,35 @@ func TestSelectCandidateGovernanceEvaluator_AllowsFairnessOverrides(t *testing.T
 func TestMaybeSeedRAGFixtureCorpus_NoOpForContinuityBackend(t *testing.T) {
 	if err := maybeSeedRAGFixtureCorpus(t.Context(), "", "continuity_tcl", memorybench.RAGBaselineConfig{}, memorybench.DefaultScenarioFixtures()); err != nil {
 		t.Fatalf("maybeSeedRAGFixtureCorpus: %v", err)
+	}
+}
+
+func TestSelectEvidenceProjectedNodeDiscoverer_WiresHybridRAGEvidencePath(t *testing.T) {
+	repoRoot := t.TempDir()
+	pythonExecutablePath := filepath.Join(repoRoot, ".cache", "memorybench-venv", "bin", "python")
+	if err := os.MkdirAll(filepath.Dir(pythonExecutablePath), 0o755); err != nil {
+		t.Fatalf("mkdir python executable parent: %v", err)
+	}
+	if err := os.WriteFile(pythonExecutablePath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake python executable: %v", err)
+	}
+	helperScriptPath := filepath.Join(repoRoot, "cmd", "memorybench", "rag_search.py")
+	if err := os.MkdirAll(filepath.Dir(helperScriptPath), 0o755); err != nil {
+		t.Fatalf("mkdir helper script parent: %v", err)
+	}
+	if err := os.WriteFile(helperScriptPath, []byte("print('ok')\n"), 0o644); err != nil {
+		t.Fatalf("write fake helper script: %v", err)
+	}
+
+	evidenceDiscoverer, err := selectEvidenceProjectedNodeDiscoverer(memorybench.BackendHybrid, repoRoot, memorybench.RAGBaselineConfig{
+		QdrantURL:      "http://127.0.0.1:6333",
+		CollectionName: "memorybench_default",
+	})
+	if err != nil {
+		t.Fatalf("selectEvidenceProjectedNodeDiscoverer: %v", err)
+	}
+	if evidenceDiscoverer == nil {
+		t.Fatal("expected hybrid evidence discoverer")
 	}
 }
 
@@ -555,6 +606,14 @@ func TestBenchmarkPathModes(t *testing.T) {
 			backendName:       memorybench.BackendRAGStronger,
 			wantRetrievalPath: memorybench.RetrievalPathRAGSearchHelper,
 			wantSeedPath:      "",
+		},
+		{
+			name:              "hybrid_seeded",
+			backendName:       memorybench.BackendHybrid,
+			continuitySeeding: memorybench.ContinuitySeedingModeProductionWriteParity,
+			ragSeedFixtures:   true,
+			wantRetrievalPath: memorybench.RetrievalPathHybridStateAndEvidence,
+			wantSeedPath:      memorybench.SeedPathHybridControlPlaneAndRAGFixtureCorpus,
 		},
 	}
 
@@ -858,6 +917,49 @@ func TestSelectProjectedNodeDiscoverer_ProductionWriteParityAllowsGovernanceOnly
 	}
 }
 
+func TestSelectProjectedNodeDiscoverer_ProductionWriteParityRoutesHybridEvidenceScopeToEmptyDiscovery(t *testing.T) {
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	repoRoot = filepath.Clean(filepath.Join(repoRoot, "..", ".."))
+	selectedScenarioFixtures, err := memorybench.SelectScenarioFixtures(memorybench.ExtendedScenarioFixtures(), memorybench.ScenarioFilter{
+		ScenarioSets: []string{"hybrid_recall_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+
+	discoverer, backendName, _, err := selectProjectedNodeDiscoverer(
+		memorybench.BackendContinuityTCL,
+		repoRoot,
+		memorybench.RAGBaselineConfig{},
+		selectedScenarioFixtures,
+		memorybench.ContinuitySeedingModeProductionWriteParity,
+		continuityAblationNone,
+		true,
+		1,
+	)
+	if err != nil {
+		t.Fatalf("selectProjectedNodeDiscoverer production parity hybrid control: %v", err)
+	}
+	if backendName != memorybench.BackendContinuityTCL {
+		t.Fatalf("expected continuity backend, got %q", backendName)
+	}
+	discoveredItems, err := discoverer.DiscoverProjectedNodes(
+		t.Context(),
+		memorybench.BenchmarkHybridEvidenceScope,
+		"Find the design thread about why write access only advances during an explicit operator refresh instead of a self-updating dashboard card.",
+		5,
+	)
+	if err != nil {
+		t.Fatalf("discover hybrid evidence scope: %v", err)
+	}
+	if len(discoveredItems) != 0 {
+		t.Fatalf("expected hybrid evidence scope to route to explicit empty discovery for continuity-only parity runs, got %#v", discoveredItems)
+	}
+}
+
 func TestBuildContinuityFixtureProjectedNodeSeeds_AppliesAnchorAndHintAblations(t *testing.T) {
 	anchorlessSeeds, err := buildContinuityFixtureProjectedNodeSeeds(memorybench.DefaultScenarioFixtures(), continuityAblationAnchorsOff)
 	if err != nil {
@@ -1076,6 +1178,19 @@ func TestMaybeSeedRAGFixtureCorpus_RejectsMissingRepoRoot(t *testing.T) {
 	}
 }
 
+func TestMaybeSeedRAGFixtureCorpus_RejectsMissingRepoRootForHybrid(t *testing.T) {
+	err := maybeSeedRAGFixtureCorpus(t.Context(), "", "hybrid", memorybench.RAGBaselineConfig{
+		QdrantURL:      "http://127.0.0.1:6333",
+		CollectionName: "memorybench_default",
+	}, memorybench.ExtendedScenarioFixtures())
+	if err == nil {
+		t.Fatal("expected missing repo root for hybrid to fail")
+	}
+	if !strings.Contains(err.Error(), "requires -repo-root") {
+		t.Fatalf("expected repo-root requirement error, got %v", err)
+	}
+}
+
 func TestMaybeSeedRAGFixtureCorpus_UsesLocalRuntimePaths(t *testing.T) {
 	repoRoot := t.TempDir()
 	pythonExecutablePath := filepath.Join(repoRoot, ".cache", "memorybench-venv", "bin", "python")
@@ -1227,6 +1342,27 @@ func TestBenchmarkFixturesForProfile_ExtendedFixturesIncludesEvidenceMatrix(t *t
 	for _, selectedFixture := range selectedFixtures {
 		if selectedFixture.Metadata.Category != memorybench.CategoryMemoryEvidenceRetrieval {
 			t.Fatalf("expected evidence retrieval fixture, got %#v", selectedFixture.Metadata)
+		}
+	}
+}
+
+func TestBenchmarkFixturesForProfile_ExtendedFixturesIncludesHybridMatrix(t *testing.T) {
+	normalizedScenarioFilter, err := memorybench.NormalizeScenarioFilter(memorybench.ScenarioFilter{
+		ScenarioSets: []string{"hybrid_recall_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := benchmarkFixturesForProfile("extended_fixtures", normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("benchmarkFixturesForProfile extended_fixtures: %v", err)
+	}
+	if len(selectedFixtures) != 3 {
+		t.Fatalf("expected three hybrid fixtures in extended profile, got %d", len(selectedFixtures))
+	}
+	for _, selectedFixture := range selectedFixtures {
+		if selectedFixture.Metadata.Category != memorybench.CategoryMemoryHybridRecall {
+			t.Fatalf("expected hybrid recall fixture, got %#v", selectedFixture.Metadata)
 		}
 	}
 }

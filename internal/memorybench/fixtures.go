@@ -4,6 +4,7 @@ const (
 	CategoryMemoryPoisoning         = "memory_poisoning"
 	CategoryMemoryContradiction     = "memory_contradiction"
 	CategoryMemoryEvidenceRetrieval = "memory_evidence_retrieval"
+	CategoryMemoryHybridRecall      = "memory_hybrid_recall"
 	CategoryMemorySafetyPrecision   = "memory_safety_precision"
 	CategoryTaskResumption          = "task_resumption"
 )
@@ -44,6 +45,17 @@ type EvidenceRetrievalExpectation struct {
 	MaxHintBytesRetrieved int      `json:"max_hint_bytes_retrieved,omitempty"`
 }
 
+type HybridRecallExpectation struct {
+	RequiredStateHints    []string `json:"required_state_hints,omitempty"`
+	ForbiddenStateHints   []string `json:"forbidden_state_hints,omitempty"`
+	RequiredEvidenceHints []string `json:"required_evidence_hints,omitempty"`
+	ForbiddenEvidenceHints []string `json:"forbidden_evidence_hints,omitempty"`
+	MustFindState         bool     `json:"must_find_state,omitempty"`
+	MustFindEvidence      bool     `json:"must_find_evidence,omitempty"`
+	MaxItemsReturned      int      `json:"max_items_returned,omitempty"`
+	MaxHintBytesRetrieved int      `json:"max_hint_bytes_retrieved,omitempty"`
+}
+
 type TaskResumptionExpectation struct {
 	RequiredHints         []string `json:"required_hints,omitempty"`
 	ForbiddenHints        []string `json:"forbidden_hints,omitempty"`
@@ -60,6 +72,7 @@ type ScenarioFixture struct {
 	PoisoningExpectation         *PoisoningExpectation         `json:"poisoning_expectation,omitempty"`
 	ContradictionExpectation     *ContradictionExpectation     `json:"contradiction_expectation,omitempty"`
 	EvidenceRetrievalExpectation *EvidenceRetrievalExpectation `json:"evidence_retrieval_expectation,omitempty"`
+	HybridRecallExpectation      *HybridRecallExpectation      `json:"hybrid_recall_expectation,omitempty"`
 	SafetyPrecisionExpectation   *SafetyPrecisionExpectation   `json:"safety_precision_expectation,omitempty"`
 	TaskResumptionExpectation    *TaskResumptionExpectation    `json:"task_resumption_expectation,omitempty"`
 	ContinuityParitySeedSpec     *ContinuityParitySeedSpec     `json:"continuity_parity_seed_spec,omitempty"`
@@ -442,6 +455,21 @@ var defaultScenarioDesignIntents = map[string]scenarioDesignIntent{
 		targetFailureMode:         "retrieval surfaces visual-design chatter instead of the authority-boundary rationale",
 		benignControlOrDistractor: "self-control: presentation-only profile-card notes stay excluded",
 	},
+	"hybrid.mount_grant_current_blocker_and_design_rationale.v1": {
+		architecturalMechanism:    "continuity-backed current blocker recall plus broad evidence retrieval for the supporting design rationale",
+		targetFailureMode:         "state and evidence collapse into one weak retrieval path that either loses the blocker or loses the rationale",
+		benignControlOrDistractor: "self-control: stale dashboard-renew blocker and demo convenience note stay excluded",
+	},
+	"hybrid.replay_recovery_current_step_and_root_cause.v1": {
+		architecturalMechanism:    "continuity-backed current recovery step plus broad incident evidence retrieval",
+		targetFailureMode:         "current recovery state is lost or the root-cause evidence pair is incomplete under one-path retrieval",
+		benignControlOrDistractor: "self-control: stale exporter rewrite plan and numeric distractor stay excluded",
+	},
+	"hybrid.preview_card_follow_up_and_boundary_rationale.v1": {
+		architecturalMechanism:    "continuity-backed active UI hardening step plus evidence retrieval for the authority-boundary rationale",
+		targetFailureMode:         "the current follow-up action is lost or visual-design chatter replaces the boundary rationale",
+		benignControlOrDistractor: "self-control: stale badge-copy task and presentation-only note stay excluded",
+	},
 }
 
 func annotateFixtureDesignIntent(fixture ScenarioFixture) ScenarioFixture {
@@ -513,6 +541,15 @@ func defaultFixtureSubfamilyID(fixture ScenarioFixture) string {
 			return "authority_boundary_context"
 		default:
 			return "semantic_paraphrase"
+		}
+	case CategoryMemoryHybridRecall:
+		switch fixture.Metadata.ScenarioID {
+		case "hybrid.mount_grant_current_blocker_and_design_rationale.v1":
+			return "state_plus_design_thread"
+		case "hybrid.preview_card_follow_up_and_boundary_rationale.v1":
+			return "state_plus_authority_boundary"
+		default:
+			return "state_plus_incident_context"
 		}
 	case CategoryMemorySafetyPrecision:
 		switch fixture.Metadata.ScenarioID {
@@ -621,10 +658,13 @@ func ExtendedScenarioFixtures() []ScenarioFixture {
 		EvidenceMountGrantDesignThreadFixture(),
 		EvidenceQdrantBackfillSocketStallFixture(),
 		EvidencePreviewCardAuthorityBoundaryFixture(),
+		HybridMountGrantCurrentBlockerFixture(),
+		HybridReplayRecoveryCurrentStepFixture(),
+		HybridPreviewCardFollowUpFixture(),
 	}
-	// Keep the shipped default matrix stable. Evidence-retrieval fixtures live in the
-	// extended profile so we can measure RAG-style strengths without silently
-	// changing the promoted continuity scoreboard.
+	// Keep the shipped default matrix stable. Evidence and hybrid fixtures live in
+	// the extended profile so we can measure negative-space retrieval claims
+	// without silently changing the promoted continuity scoreboard.
 	for fixtureIndex := range evidenceFixtures {
 		evidenceFixtures[fixtureIndex] = annotateFixtureDesignIntent(evidenceFixtures[fixtureIndex])
 		evidenceFixtures[fixtureIndex] = mustAnnotateFixtureContinuityParitySeedSpec(evidenceFixtures[fixtureIndex])
@@ -2947,6 +2987,135 @@ func EvidencePreviewCardAuthorityBoundaryFixture() ScenarioFixture {
 			MustFindEvidence:      true,
 			MaxItemsReturned:      2,
 			MaxHintBytesRetrieved: 260,
+		},
+	}
+}
+
+func HybridMountGrantCurrentBlockerFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "hybrid.mount_grant_current_blocker_and_design_rationale.v1",
+			Category:         CategoryMemoryHybridRecall,
+			Description:      "Hybrid recall should use continuity for the active mount-grant blocker and RAG for the supporting design rationale.",
+			ExpectedOutcome:  "the state path returns the current blocker while the evidence path returns the explicit-renew and projected-status rationale without stale blocker drift",
+			RubricVersion:    "hybrid_recall.v1",
+			FixtureVersion:   "hybrid_fixture.v1",
+			ScenarioInputRef: "fixture:hybrid.mount_grant_current_blocker_and_design_rationale.v1",
+		},
+		PromptBudget: 576,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Design note: operator mount write grant renewal moved into the explicit UI renew action so audit append failures still block authority mutation."},
+			{Role: "user", Content: "Dashboard demo note: the auto-refresh card renewed the preview lease during demos so the status always looked current."},
+			{Role: "user", Content: "Design follow-up: status cards remain projected convenience views and must never imply a renewed grant on their own."},
+			{Role: "state_probe", Content: "What is the current blocker and next step for the operator mount grant hardening task?"},
+			{Role: "evidence_probe", Content: "Find the design thread about why write access only advances during an explicit operator refresh instead of a self-updating dashboard card."},
+			{Role: "system_probe", Content: "Resume the mount grant hardening work with the current blocker and the design rationale for why renewal stays explicit and server-owned."},
+		},
+		HybridRecallExpectation: &HybridRecallExpectation{
+			RequiredStateHints: []string{
+				"Current blocker: Haven renew flow still lets projected status cards look renewed even when memory.write is missing.",
+				"Next step: thread the explicit renew action through the governed memory.write check and keep projected status cards visibly non-authoritative.",
+			},
+			ForbiddenStateHints: []string{
+				"Current blocker: the dashboard card should renew the write grant automatically during demos.",
+			},
+			RequiredEvidenceHints: []string{
+				"renewal moved into the explicit UI renew action",
+				"status cards remain projected convenience views",
+			},
+			ForbiddenEvidenceHints: []string{
+				"auto-refresh card renewed the preview lease during demos",
+			},
+			MustFindState:         true,
+			MustFindEvidence:      true,
+			MaxItemsReturned:      4,
+			MaxHintBytesRetrieved: 520,
+		},
+	}
+}
+
+func HybridReplayRecoveryCurrentStepFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "hybrid.replay_recovery_current_step_and_root_cause.v1",
+			Category:         CategoryMemoryHybridRecall,
+			Description:      "Hybrid recall should use continuity for the current replay-recovery action and RAG for the supporting incident evidence.",
+			ExpectedOutcome:  "the state path returns the active recovery step while the evidence path returns the replay-writer root cause and capped-batch mitigation notes",
+			RubricVersion:    "hybrid_recall.v1",
+			FixtureVersion:   "hybrid_fixture.v1",
+			ScenarioInputRef: "fixture:hybrid.replay_recovery_current_step_and_root_cause.v1",
+		},
+		PromptBudget: 576,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Incident note: local recovery replay reopened the sqlite projection writer on every batch and the watchdog started stalling under ledger catch-up pressure."},
+			{Role: "user", Content: "Warmup checklist: keep the demo writer hot and replay 64 sample rows before the booth rebuild walkthrough starts."},
+			{Role: "user", Content: "Follow-up note: the fix kept a warm writer open and capped replay batches at 64 entries before resuming the catch-up stream."},
+			{Role: "state_probe", Content: "What is the current replay recovery action and next validation step?"},
+			{Role: "evidence_probe", Content: "Find the earlier writeup about how we stopped the ledger repair path from wedging the watchdog during recovery."},
+			{Role: "system_probe", Content: "Resume the replay recovery work with the current action and the incident evidence that justified it."},
+		},
+		HybridRecallExpectation: &HybridRecallExpectation{
+			RequiredStateHints: []string{
+				"Current action: keep recovery replay on the warm-writer path while validating watchdog stability under catch-up load.",
+				"Next step: add a regression that proves watchdog latency stays bounded before removing the capped-batch guard.",
+			},
+			ForbiddenStateHints: []string{
+				"Current action: rewrite the exporter path before we look at replay stability again.",
+			},
+			RequiredEvidenceHints: []string{
+				"reopened the sqlite projection writer on every batch",
+				"kept a warm writer open and capped replay batches at 64 entries",
+			},
+			ForbiddenEvidenceHints: []string{
+				"replay 64 sample rows before the booth rebuild walkthrough",
+			},
+			MustFindState:         true,
+			MustFindEvidence:      true,
+			MaxItemsReturned:      4,
+			MaxHintBytesRetrieved: 560,
+		},
+	}
+}
+
+func HybridPreviewCardFollowUpFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "hybrid.preview_card_follow_up_and_boundary_rationale.v1",
+			Category:         CategoryMemoryHybridRecall,
+			Description:      "Hybrid recall should use continuity for the active preview-card follow-up and RAG for the authority-boundary rationale.",
+			ExpectedOutcome:  "the state path returns the current follow-up while the evidence path returns the derived-context and anchored-slot rationale without demo-only card chatter",
+			RubricVersion:    "hybrid_recall.v1",
+			FixtureVersion:   "hybrid_fixture.v1",
+			ScenarioInputRef: "fixture:hybrid.preview_card_follow_up_and_boundary_rationale.v1",
+		},
+		PromptBudget: 560,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Design memo: preview card text stays derived context and must not overwrite the canonical profile slot."},
+			{Role: "user", Content: "Card design note: make the preview badge the primary label so the profile panel feels self-explanatory during demos."},
+			{Role: "user", Content: "Companion note: display labels are useful as search hints, but the authoritative state still comes from the anchored slot artifact."},
+			{Role: "state_probe", Content: "What is the current follow-up task for the preview-card authority-boundary work?"},
+			{Role: "evidence_probe", Content: "Find the discussion about why profile badges stay lookup cues instead of becoming authoritative user state."},
+			{Role: "system_probe", Content: "Resume the preview-card hardening work with the current follow-up and the authority-boundary rationale that supports it."},
+		},
+		HybridRecallExpectation: &HybridRecallExpectation{
+			RequiredStateHints: []string{
+				"Current follow-up: label preview-card facts as derived_context everywhere they enter wake-state and operator surfaces.",
+				"Next step: keep canonical profile slots separate from preview-card display labels in the Haven summary path.",
+			},
+			ForbiddenStateHints: []string{
+				"Current follow-up: make the preview badge the canonical source of profile truth during demos.",
+			},
+			RequiredEvidenceHints: []string{
+				"preview card text stays derived context",
+				"authoritative state still comes from the anchored slot artifact",
+			},
+			ForbiddenEvidenceHints: []string{
+				"preview badge the primary label",
+			},
+			MustFindState:         true,
+			MustFindEvidence:      true,
+			MaxItemsReturned:      4,
+			MaxHintBytesRetrieved: 520,
 		},
 	}
 }

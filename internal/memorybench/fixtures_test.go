@@ -161,42 +161,57 @@ func TestExtendedScenarioFixtures_AddEvidenceRetrievalMatrixWithoutMutatingDefau
 	if len(defaultFixtures) != 70 {
 		t.Fatalf("expected stable 70-fixture default baseline, got %d", len(defaultFixtures))
 	}
-	if len(extendedFixtures) != len(defaultFixtures)+4 {
-		t.Fatalf("expected four additional evidence fixtures, got default=%d extended=%d", len(defaultFixtures), len(extendedFixtures))
+	if len(extendedFixtures) != len(defaultFixtures)+7 {
+		t.Fatalf("expected seven additional evidence and hybrid fixtures, got default=%d extended=%d", len(defaultFixtures), len(extendedFixtures))
 	}
 
-	expectedEvidenceFixtureIDs := map[string]bool{
+	expectedExtendedFixtureIDs := map[string]bool{
 		"evidence.semantic_paraphrase_replay_batch_root_cause.v1": false,
 		"evidence.multi_document_mount_grant_design_thread.v1":    false,
 		"evidence.incident_qdrant_backfill_socket_stall.v1":       false,
 		"evidence.preview_card_authority_boundary_thread.v1":      false,
+		"hybrid.mount_grant_current_blocker_and_design_rationale.v1": false,
+		"hybrid.replay_recovery_current_step_and_root_cause.v1":      false,
+		"hybrid.preview_card_follow_up_and_boundary_rationale.v1":    false,
 	}
 	for _, extendedFixture := range extendedFixtures {
-		expectedFound, isEvidenceFixture := expectedEvidenceFixtureIDs[extendedFixture.Metadata.ScenarioID]
-		if !isEvidenceFixture {
+		expectedFound, isExtendedFixture := expectedExtendedFixtureIDs[extendedFixture.Metadata.ScenarioID]
+		if !isExtendedFixture {
 			continue
 		}
 		_ = expectedFound
-		expectedEvidenceFixtureIDs[extendedFixture.Metadata.ScenarioID] = true
-		if extendedFixture.Metadata.Category != CategoryMemoryEvidenceRetrieval {
-			t.Fatalf("expected evidence retrieval category, got %#v", extendedFixture.Metadata)
-		}
-		if extendedFixture.EvidenceRetrievalExpectation == nil {
-			t.Fatalf("expected evidence retrieval expectation on fixture %#v", extendedFixture)
-		}
-		if len(extendedFixture.EvidenceRetrievalExpectation.RequiredHints) < 2 {
-			t.Fatalf("expected multi-hint evidence retrieval fixture, got %#v", extendedFixture.EvidenceRetrievalExpectation)
-		}
-		if !extendedFixture.EvidenceRetrievalExpectation.MustFindEvidence {
-			t.Fatalf("expected must-find-evidence guard on fixture %#v", extendedFixture.EvidenceRetrievalExpectation)
+		expectedExtendedFixtureIDs[extendedFixture.Metadata.ScenarioID] = true
+		switch extendedFixture.Metadata.Category {
+		case CategoryMemoryEvidenceRetrieval:
+			if extendedFixture.EvidenceRetrievalExpectation == nil {
+				t.Fatalf("expected evidence retrieval expectation on fixture %#v", extendedFixture)
+			}
+			if len(extendedFixture.EvidenceRetrievalExpectation.RequiredHints) < 2 {
+				t.Fatalf("expected multi-hint evidence retrieval fixture, got %#v", extendedFixture.EvidenceRetrievalExpectation)
+			}
+			if !extendedFixture.EvidenceRetrievalExpectation.MustFindEvidence {
+				t.Fatalf("expected must-find-evidence guard on fixture %#v", extendedFixture.EvidenceRetrievalExpectation)
+			}
+		case CategoryMemoryHybridRecall:
+			if extendedFixture.HybridRecallExpectation == nil {
+				t.Fatalf("expected hybrid recall expectation on fixture %#v", extendedFixture)
+			}
+			if len(extendedFixture.HybridRecallExpectation.RequiredStateHints) == 0 || len(extendedFixture.HybridRecallExpectation.RequiredEvidenceHints) == 0 {
+				t.Fatalf("expected hybrid fixture to require both state and evidence, got %#v", extendedFixture.HybridRecallExpectation)
+			}
+			if !extendedFixture.HybridRecallExpectation.MustFindState || !extendedFixture.HybridRecallExpectation.MustFindEvidence {
+				t.Fatalf("expected hybrid fixture to require both state and evidence retrieval, got %#v", extendedFixture.HybridRecallExpectation)
+			}
+		default:
+			t.Fatalf("expected evidence or hybrid category, got %#v", extendedFixture.Metadata)
 		}
 		if extendedFixture.Metadata.SubfamilyID == "" {
-			t.Fatalf("expected evidence subfamily on fixture %#v", extendedFixture.Metadata)
+			t.Fatalf("expected extended fixture subfamily on fixture %#v", extendedFixture.Metadata)
 		}
 	}
-	for scenarioID, found := range expectedEvidenceFixtureIDs {
+	for scenarioID, found := range expectedExtendedFixtureIDs {
 		if !found {
-			t.Fatalf("expected evidence fixture %q in extended fixtures", scenarioID)
+			t.Fatalf("expected extended fixture %q in extended fixtures", scenarioID)
 		}
 	}
 }

@@ -26,6 +26,7 @@ const (
 	RetrievalPathControlPlaneMemoryRoutes   = "control_plane_memory_routes"
 	RetrievalPathMixedControlPlaneAndSQLite = "mixed_control_plane_and_projected_node_sqlite"
 	RetrievalPathRAGSearchHelper            = "rag_search_helper"
+	RetrievalPathHybridStateAndEvidence     = "hybrid_continuity_state_plus_rag_evidence"
 
 	SeedPathSyntheticProjectedNodes                        = "synthetic_projected_node_seed"
 	SeedPathValidatedWritesAndObservedThreads              = "validated_writes_and_observed_thread_inspect"
@@ -35,6 +36,7 @@ const (
 	SeedPathMixedValidatedWritesAndFixtures                = "mixed_validated_writes_and_fixture_ingest"
 	SeedPathAmbientRepoState                               = "ambient_repo_authoritative_state"
 	SeedPathRAGFixtureCorpus                               = "python_rag_fixture_seed"
+	SeedPathHybridControlPlaneAndRAGFixtureCorpus          = "control_plane_state_and_rag_fixture_corpus"
 )
 
 type ScenarioFilter struct {
@@ -122,6 +124,8 @@ type OutcomeMetrics struct {
 	ContradictionMisses     int     `json:"contradiction_misses,omitempty"`
 	FalseContradictions     int     `json:"false_contradictions,omitempty"`
 	FalseSuppressions       int     `json:"false_suppressions,omitempty"`
+	MissingStateContext     int     `json:"missing_state_context,omitempty"`
+	MissingEvidenceContext  int     `json:"missing_evidence_context,omitempty"`
 	MissingCriticalContext  int     `json:"missing_critical_context,omitempty"`
 	WrongContextInjections  int     `json:"wrong_context_injections,omitempty"`
 	StaleMemoryIntrusions   int     `json:"stale_memory_intrusions,omitempty"`

@@ -156,6 +156,27 @@ func TestSelectScenarioFixtures_RAGEvidenceMatrixSet(t *testing.T) {
 	}
 }
 
+func TestSelectScenarioFixtures_HybridRecallMatrixSet(t *testing.T) {
+	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
+		ScenarioSets: []string{"hybrid_recall_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := SelectScenarioFixtures(ExtendedScenarioFixtures(), normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	if len(selectedFixtures) != 3 {
+		t.Fatalf("expected three hybrid recall fixtures, got %d", len(selectedFixtures))
+	}
+	for _, selectedFixture := range selectedFixtures {
+		if selectedFixture.Metadata.Category != CategoryMemoryHybridRecall {
+			t.Fatalf("expected hybrid recall fixture, got %#v", selectedFixture.Metadata)
+		}
+	}
+}
+
 func TestSelectScenarioFixtures_EmptySelectionFailsClosed(t *testing.T) {
 	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
 		ScenarioIDs: []string{"missing.fixture.v1"},

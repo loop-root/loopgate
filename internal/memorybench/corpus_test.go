@@ -87,3 +87,26 @@ func TestBuildCorpusDocumentsFromFixtures_IncludesEvidenceRetrievalSteps(t *test
 		}
 	}
 }
+
+func TestBuildCorpusDocumentsFromFixtures_HybridFixturesUseSharedEvidenceScopeWithoutProbeLeakage(t *testing.T) {
+	corpusDocuments, err := BuildCorpusDocumentsFromFixtures([]ScenarioFixture{
+		HybridMountGrantCurrentBlockerFixture(),
+	})
+	if err != nil {
+		t.Fatalf("BuildCorpusDocumentsFromFixtures: %v", err)
+	}
+	if len(corpusDocuments) != 3 {
+		t.Fatalf("expected three hybrid evidence corpus documents without probe steps, got %d", len(corpusDocuments))
+	}
+	for _, corpusDocument := range corpusDocuments {
+		if corpusDocument.Metadata["scenario_category"] != CategoryMemoryHybridRecall {
+			t.Fatalf("expected hybrid recall category metadata, got %#v", corpusDocument)
+		}
+		if corpusDocument.Metadata["scenario_role"] == "state_probe" || corpusDocument.Metadata["scenario_role"] == "evidence_probe" || corpusDocument.Metadata["scenario_role"] == "system_probe" {
+			t.Fatalf("expected probe steps to stay out of hybrid corpus, got %#v", corpusDocument)
+		}
+		if corpusDocument.Scope != BenchmarkHybridEvidenceScope {
+			t.Fatalf("expected hybrid evidence documents to share one evidence scope, got %#v", corpusDocument)
+		}
+	}
+}

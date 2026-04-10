@@ -9,6 +9,7 @@ import (
 const (
 	BenchmarkScopeGlobal             = "global"
 	BenchmarkEvidenceWorkingSetScope = "benchmark:evidence_working_set"
+	BenchmarkHybridEvidenceScope     = "benchmark:hybrid_evidence_working_set"
 	BenchmarkNodeKindStep            = "benchmark_fixture_step"
 	BenchmarkSourceFixture           = "memorybench_fixture"
 )
@@ -52,7 +53,7 @@ func BuildCorpusDocumentsFromFixtures(scenarioFixtures []ScenarioFixture) ([]Cor
 				DocumentID:    documentID,
 				Content:       trimmedContent,
 				DocumentKind:  BenchmarkNodeKindStep,
-				Scope:         BenchmarkFixtureScope(scenarioFixture),
+				Scope:         BenchmarkCorpusScope(scenarioFixture),
 				CreatedAtUTC:  baseTimestampUTC.Add(time.Duration(documentOffset) * time.Minute).Format(time.RFC3339),
 				ProvenanceRef: fmt.Sprintf("fixture:%s", documentID),
 				Metadata: map[string]string{
@@ -91,10 +92,24 @@ func BenchmarkFixtureScope(scenarioFixture ScenarioFixture) string {
 	return BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID)
 }
 
+func BenchmarkCorpusScope(scenarioFixture ScenarioFixture) string {
+	switch strings.TrimSpace(scenarioFixture.Metadata.Category) {
+	case CategoryMemoryEvidenceRetrieval:
+		return BenchmarkEvidenceWorkingSetScope
+	case CategoryMemoryHybridRecall:
+		// Hybrid fixtures keep their continuity state isolated per scenario but share
+		// one evidence working set so the benchmark has to do real evidence lookup
+		// rather than retrieve from tiny per-scenario document islands.
+		return BenchmarkHybridEvidenceScope
+	default:
+		return BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID)
+	}
+}
+
 func fixtureStepEligibleForCorpus(scenarioFixture ScenarioFixture, scenarioStep ScenarioStep) bool {
 	trimmedRole := strings.TrimSpace(scenarioStep.Role)
 	switch trimmedRole {
-	case "system_probe", "hint_probe":
+	case "system_probe", "hint_probe", "state_probe", "evidence_probe":
 		return false
 	}
 

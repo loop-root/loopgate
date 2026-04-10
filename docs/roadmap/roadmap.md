@@ -170,8 +170,15 @@ Next lift:
   read is still cautious: stronger RAG is `2/4`, while continuity product path,
   continuity synthetic, and baseline RAG are `1/4`. That is enough to prove at
   least one honest broad-evidence case where stronger RAG beats continuity, but
-  it is not yet broad enough to count as a promoted headline bucket. Hybrid
-  evidence recall is still missing.
+  it is not yet broad enough to count as a promoted headline bucket. The first
+  targeted `hybrid should win` bucket now also exists as `hybrid_recall_matrix`
+  inside `extended_fixtures`. The current read there is sharper: continuity
+  control is `0/3`, baseline RAG is `0/3`, stronger RAG is `0/3`, and the
+  current hybrid path is `2/3` once retrieved continuity state hints are used
+  to shape bounded evidence reranking. That is the first checked-in result
+  showing a real hybrid advantage over both pure controls, but it still has one
+  unresolved mount-grant design-thread miss and should remain targeted rather
+  than promoted.
   Backend-owned observed packets now also allowlist source-ref kinds, so
   first-class provenance refs only survive on supported server-loaded paths,
   and new provenance sources have to be added intentionally rather than

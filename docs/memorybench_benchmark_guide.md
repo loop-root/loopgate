@@ -48,8 +48,10 @@ Current skeptical fixture count:
 
 Extended targeted matrix:
 
-- `74` total fixtures in `-profile extended_fixtures`
-- the extra `4` fixtures are `memory_evidence_retrieval`
+- `77` total fixtures in `-profile extended_fixtures`
+- the extra `7` fixtures are:
+  - `4` `memory_evidence_retrieval`
+  - `3` `memory_hybrid_recall`
 - those evidence fixtures share one benchmark working-set scope:
   `benchmark:evidence_working_set`
 
@@ -84,6 +86,7 @@ The live scoreboard lives in:
 - [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
 - [memorybench-honest-rerun-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-honest-rerun-2026-04-10.md)
 - [memorybench-evidence-matrix-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-evidence-matrix-2026-04-10.md)
+- [memorybench-hybrid-matrix-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-hybrid-matrix-2026-04-10.md)
 
 The internal methodology report lives in (maintainer checkout, not in clone):
 
@@ -130,7 +133,7 @@ Do not blend scored continuity runs and debug continuity runs into one number.
 - `extended_fixtures`
   - targeted debug profile only
   - preserves the shipped `70`-fixture state-memory scoreboard while adding
-    broad evidence-retrieval probes
+    broad evidence-retrieval probes and hybrid state-plus-evidence probes
 - `production_write_parity`
   - scored fixture run
   - authoritative supported profile facts are seeded through real authenticated
@@ -191,6 +194,9 @@ Current expected values:
 - targeted evidence runs on `-profile extended_fixtures` intentionally remain
   `targeted_debug_run` until that bucket is broad enough to stand as its own
   stable comparison class
+- targeted hybrid runs on `-profile extended_fixtures` intentionally remain
+  `targeted_debug_run` until the hybrid bucket is broad enough to stand as its
+  own stable comparison class
 
 For production-parity continuity runs, inspect `seed_manifest.json` and confirm:
 
@@ -400,6 +406,7 @@ Built-in targeted scenario sets currently include:
 - `poisoning_format_laundering`
 - `poisoning_delayed_trigger`
 - `rag_evidence_matrix`
+- `hybrid_recall_matrix`
 
 Targeted runs are debug evidence, not headline evidence. They should show
 `comparison_class=targeted_debug_run` in `run_metadata.json`.
@@ -412,6 +419,14 @@ failing benchmark setup.
 Evidence-retrieval targeted runs intentionally do the opposite: they now share
 one benchmark evidence scope so broad retrieval backends compete over a real
 working set instead of isolated per-scenario mini-corpora.
+
+Hybrid targeted runs keep the same evidence working-set discipline, but they
+split retrieval roles on purpose:
+
+- continuity retrieves the current blocker, next step, or follow-up state
+- the RAG helper retrieves the broader incident or design-thread evidence
+- the current hybrid combiner then uses a bounded subset of retrieved state
+  hints to shape evidence lookup and deterministic reranking
 
 Before promoting any new benchmark headline tied to a local improvement:
 
@@ -438,6 +453,24 @@ env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   -rag-collection memorybench_rerank \
   -rag-seed-fixtures \
   -scenario-set rag_evidence_matrix
+```
+
+Targeted hybrid matrix with continuity state plus stronger RAG evidence:
+
+```bash
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
+  go run ./cmd/memorybench \
+  -output-root /tmp/memorybench-live-hybrid \
+  -run-id hybrid_stronger_hybrid_v1 \
+  -profile extended_fixtures \
+  -backend hybrid \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode production_write_parity \
+  -rag-qdrant-url http://127.0.0.1:6333 \
+  -rag-collection memorybench_rerank \
+  -rag-reranker Xenova/ms-marco-MiniLM-L-6-v2 \
+  -rag-seed-fixtures \
+  -scenario-set hybrid_recall_matrix
 ```
 
 ### Plain RAG

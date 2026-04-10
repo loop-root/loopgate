@@ -52,6 +52,19 @@ func IsRAGBenchmarkBackend(rawBackendName string) (bool, error) {
 	}
 }
 
+func BenchmarkBackendUsesRAGHelper(rawBackendName string) (bool, error) {
+	normalizedBackendName, err := NormalizeBenchmarkBackendName(rawBackendName)
+	if err != nil {
+		return false, err
+	}
+	switch normalizedBackendName {
+	case BackendRAGBaseline, BackendRAGStronger, BackendHybrid:
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
 func ValidateRAGBaselineConfig(ragBaselineConfig RAGBaselineConfig) error {
 	if strings.TrimSpace(ragBaselineConfig.QdrantURL) == "" {
 		return fmt.Errorf("rag baseline qdrant url is required")
