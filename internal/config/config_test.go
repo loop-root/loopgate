@@ -459,16 +459,11 @@ func TestLoadRuntimeConfig_RejectsUnsupportedMemoryBackend(t *testing.T) {
 		{
 			name:         "unknown_backend",
 			backendName:  "mystery_backend",
-			wantFragment: "memory.backend must be continuity_tcl",
+			wantFragment: "memory.backend must be continuity_tcl or hybrid",
 		},
 		{
 			name:         "benchmark_only_rag_baseline",
 			backendName:  "rag_baseline",
-			wantFragment: benchmarkOnlyMemoryBackendErrorSuffix,
-		},
-		{
-			name:         "benchmark_only_hybrid",
-			backendName:  "hybrid",
 			wantFragment: benchmarkOnlyMemoryBackendErrorSuffix,
 		},
 	}
@@ -502,6 +497,81 @@ memory:
 				t.Fatalf("expected error containing %q, got %v", testCase.wantFragment, err)
 			}
 		})
+	}
+}
+
+func TestLoadRuntimeConfig_RejectsHybridWithoutEvidenceConfig(t *testing.T) {
+	repoRoot := t.TempDir()
+	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
+	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	raw := `version: "1"
+memory:
+  backend: "hybrid"
+  candidate_panel_size: 3
+  decomposition_preference: "hybrid_schema_guided"
+  review_preference: "risk_tiered"
+  soft_morphling_concurrency: 3
+  batching_preference: "pause_on_wave_failure"
+`
+	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	_, err := LoadRuntimeConfig(repoRoot)
+	if err == nil {
+		t.Fatal("expected hybrid backend without evidence config to fail closed")
+	}
+	if !strings.Contains(err.Error(), "memory.hybrid_evidence.qdrant_url") {
+		t.Fatalf("expected hybrid evidence config error, got %v", err)
+	}
+}
+
+func TestLoadRuntimeConfig_AcceptsHybridWithEvidenceConfig(t *testing.T) {
+	repoRoot := t.TempDir()
+	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
+	helperScriptPath := filepath.Join(repoRoot, "cmd", "memorybench", "rag_search.py")
+	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
+		t.Fatalf("mkdir runtime config dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(helperScriptPath), 0o755); err != nil {
+		t.Fatalf("mkdir helper dir: %v", err)
+	}
+	if err := os.WriteFile(helperScriptPath, []byte("#!/usr/bin/env python3\n"), 0o700); err != nil {
+		t.Fatalf("write helper script: %v", err)
+	}
+
+	raw := `version: "1"
+memory:
+  backend: "hybrid"
+  candidate_panel_size: 3
+  decomposition_preference: "hybrid_schema_guided"
+  review_preference: "risk_tiered"
+  soft_morphling_concurrency: 3
+  batching_preference: "pause_on_wave_failure"
+  hybrid_evidence:
+    python_executable: "/bin/sh"
+    helper_script_path: "cmd/memorybench/rag_search.py"
+    qdrant_url: "http://127.0.0.1:6333"
+    collection_name: "memorybench_default"
+    max_items: 2
+    max_hint_bytes: 580
+`
+	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	loadedRuntimeConfig, err := LoadRuntimeConfig(repoRoot)
+	if err != nil {
+		t.Fatalf("load hybrid runtime config: %v", err)
+	}
+	if loadedRuntimeConfig.Memory.Backend != "hybrid" {
+		t.Fatalf("expected hybrid backend, got %q", loadedRuntimeConfig.Memory.Backend)
+	}
+	if loadedRuntimeConfig.Memory.HybridEvidence.CollectionName != "memorybench_default" {
+		t.Fatalf("unexpected hybrid collection: %#v", loadedRuntimeConfig.Memory.HybridEvidence)
 	}
 }
 

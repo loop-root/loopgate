@@ -45,6 +45,8 @@ Current skeptical fixture count:
 - `34` contradiction
 - `13` task resumption
 - `9` safety precision
+- `8` of those headline fixtures are also grouped into `long_horizon_matrix`
+  for explicit over-time regression checks
 
 Extended targeted matrix:
 
@@ -88,6 +90,7 @@ The live scoreboard lives in:
 - [memorybench-evidence-matrix-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-evidence-matrix-2026-04-10.md)
 - [memorybench-hybrid-matrix-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-hybrid-matrix-2026-04-10.md)
 - [memorybench-targeted-matrix-expansion-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-targeted-matrix-expansion-2026-04-10.md)
+- [memory-runtime-hybrid-and-long-horizon-2026-04-10.md](/Users/adalaide/Dev/loopgate/docs/reports/memory-runtime-hybrid-and-long-horizon-2026-04-10.md)
 
 The internal methodology report lives in (maintainer checkout, not in clone):
 
@@ -406,6 +409,7 @@ Built-in targeted scenario sets currently include:
 - `poisoning_policy_matrix`
 - `poisoning_format_laundering`
 - `poisoning_delayed_trigger`
+- `long_horizon_matrix`
 - `rag_evidence_matrix`
 - `hybrid_recall_matrix`
 
@@ -428,6 +432,16 @@ split retrieval roles on purpose:
 - the RAG helper retrieves the broader incident or design-thread evidence
 - the current hybrid combiner then uses a bounded subset of retrieved state
   hints to shape evidence lookup and deterministic reranking
+
+The runtime now also has a real `memory.backend=hybrid` path behind the same
+Loopgate-owned backend seam. It is intentionally narrow:
+
+- continuity still owns writes, wake state, and authoritative recall
+- hybrid only adds bounded evidence sidecars on `discover`
+- the Python/Qdrant helper remains advisory and untrusted, so backend failure is
+  a hard error rather than a silent fallback to permissive behavior
+- prompt assembly or agent planning still has to choose how to use the returned
+  evidence; the benchmark proves the retrieval seam, not a finished UX policy
 
 Before promoting any new benchmark headline tied to a local improvement:
 
@@ -472,6 +486,24 @@ env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
   -rag-reranker Xenova/ms-marco-MiniLM-L-6-v2 \
   -rag-seed-fixtures \
   -scenario-set hybrid_recall_matrix
+```
+
+Targeted long-horizon state-continuity matrix:
+
+```bash
+env GOCACHE=/Users/adalaide/Dev/loopgate/.cache/go-build \
+  go run ./cmd/memorybench \
+  -output-root /tmp/memorybench-live-hybrid \
+  -run-id hybrid_long_horizon_v1 \
+  -profile fixtures \
+  -backend hybrid \
+  -repo-root /Users/adalaide/Dev/loopgate \
+  -continuity-seeding-mode production_write_parity \
+  -rag-qdrant-url http://127.0.0.1:6333 \
+  -rag-collection memorybench_rerank \
+  -rag-reranker Xenova/ms-marco-MiniLM-L-6-v2 \
+  -rag-seed-fixtures \
+  -scenario-set long_horizon_matrix
 ```
 
 ### Plain RAG

@@ -47,6 +47,26 @@ type stubMemoryBackend struct {
 	lastPurgeRequest           MemoryInspectionLineageRequest
 }
 
+type fakeMemoryEvidenceRetriever struct {
+	searchResults []memoryEvidenceSearchResult
+	searchErr     error
+	searchCalls   int
+	lastScope     string
+	lastQuery     string
+	lastMaxItems  int
+}
+
+func (retriever *fakeMemoryEvidenceRetriever) Search(ctx context.Context, scope string, query string, maxItems int) ([]memoryEvidenceSearchResult, error) {
+	retriever.searchCalls++
+	retriever.lastScope = scope
+	retriever.lastQuery = query
+	retriever.lastMaxItems = maxItems
+	if retriever.searchErr != nil {
+		return nil, retriever.searchErr
+	}
+	return append([]memoryEvidenceSearchResult(nil), retriever.searchResults...), nil
+}
+
 func (backend *stubMemoryBackend) Name() string {
 	return backend.name
 }
@@ -460,7 +480,7 @@ func TestNewMemoryBackend_DefaultsToContinuityTCL(t *testing.T) {
 	}
 }
 
-func TestNewMemoryBackend_RejectsUnimplementedBackend(t *testing.T) {
+func TestNewMemoryBackend_RejectsBenchmarkOnlyRAGBackend(t *testing.T) {
 	repoRoot := t.TempDir()
 	memBase := filepath.Join(repoRoot, "runtime", "state", "memory")
 	if err := maybeMigrateMemoryToPartitionedLayout(memBase); err != nil {
@@ -484,6 +504,50 @@ func TestNewMemoryBackend_RejectsUnimplementedBackend(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), memoryBackendRAGBaseline) || !strings.Contains(err.Error(), "benchmark-only") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNewMemoryBackend_BuildsHybridBackend(t *testing.T) {
+	repoRoot := t.TempDir()
+	memBase := filepath.Join(repoRoot, "runtime", "state", "memory")
+	if err := maybeMigrateMemoryToPartitionedLayout(memBase); err != nil {
+		t.Fatalf("migrate memory layout: %v", err)
+	}
+	partitionRoot := filepath.Join(memBase, memoryPartitionsDirName, memoryPartitionKey(""))
+	if err := os.MkdirAll(partitionRoot, 0o700); err != nil {
+		t.Fatalf("mkdir partition root: %v", err)
+	}
+	fakeRetriever := &fakeMemoryEvidenceRetriever{}
+	server := &Server{
+		repoRoot:       repoRoot,
+		memoryBasePath: memBase,
+		runtimeConfig:  config.DefaultRuntimeConfig(),
+		newMemoryEvidenceRetriever: func(repoRoot string, runtimeConfig config.RuntimeConfig) (memoryEvidenceRetriever, error) {
+			return fakeRetriever, nil
+		},
+	}
+	server.runtimeConfig.Memory.Backend = memoryBackendHybrid
+	server.runtimeConfig.Memory.HybridEvidence.MaxItems = 2
+	server.runtimeConfig.Memory.HybridEvidence.MaxHintBytes = 580
+	partition := &memoryPartition{
+		partitionKey: memoryPartitionKey(""),
+		rootPath:     partitionRoot,
+		tenantID:     "",
+	}
+
+	selectedBackend, err := newMemoryBackendForPartition(server, partition)
+	if err != nil {
+		t.Fatalf("new hybrid memory backend: %v", err)
+	}
+	hybridBackend, ok := selectedBackend.(*hybridMemoryBackend)
+	if !ok {
+		t.Fatalf("expected hybrid backend type, got %T", selectedBackend)
+	}
+	if hybridBackend.continuityBackend == nil || hybridBackend.continuityBackend.store == nil {
+		t.Fatalf("expected hybrid backend to wrap continuity store, got %#v", hybridBackend)
+	}
+	if hybridBackend.evidenceRetriever != fakeRetriever {
+		t.Fatalf("expected injected evidence retriever, got %#v", hybridBackend.evidenceRetriever)
 	}
 }
 
@@ -562,6 +626,93 @@ func TestDiscoverMemory_UsesConfiguredBackend(t *testing.T) {
 	}
 	if stubBackend.lastDiscoverRequest.MaxItems != 5 {
 		t.Fatalf("expected discover max_items default, got %#v", stubBackend.lastDiscoverRequest)
+	}
+}
+
+func TestHybridMemoryDiscover_ReturnsEvidenceSidecar(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	if _, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "preferred_name",
+		FactValue: "Ada Jane",
+	}); err != nil {
+		t.Fatalf("remember preferred name: %v", err)
+	}
+
+	fakeRetriever := &fakeMemoryEvidenceRetriever{
+		searchResults: []memoryEvidenceSearchResult{{
+			EvidenceID:    "ev_1",
+			SourceKind:    "design_note",
+			Scope:         memoryScopeGlobal,
+			CreatedAtUTC:  time.Now().UTC().Format(time.RFC3339Nano),
+			Snippet:       "The profile card authority note says the preview label should never outrank the canonical preferred-name slot.",
+			ProvenanceRef: "note:design-thread",
+			MatchCount:    3,
+		}},
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	continuityBackend := partition.backend.(*continuityTCLMemoryBackend)
+	partition.backend = &hybridMemoryBackend{
+		continuityBackend: continuityBackend,
+		evidenceRetriever: fakeRetriever,
+		maxEvidenceItems:  2,
+		maxEvidenceBytes:  580,
+	}
+	server.memoryMu.Unlock()
+
+	discoverResponse, err := client.DiscoverMemory(context.Background(), MemoryDiscoverRequest{
+		Query: "Retrieve the current user profile name from the identity slot.",
+	})
+	if err != nil {
+		t.Fatalf("hybrid discover memory: %v", err)
+	}
+	if discoverResponse.RetrievalMode != memoryDiscoverRetrievalModeHybrid {
+		t.Fatalf("expected hybrid retrieval mode, got %#v", discoverResponse)
+	}
+	if len(discoverResponse.Items) == 0 {
+		t.Fatalf("expected continuity discover items, got %#v", discoverResponse)
+	}
+	if len(discoverResponse.Evidence) != 1 {
+		t.Fatalf("expected one evidence item, got %#v", discoverResponse)
+	}
+	if !strings.Contains(fakeRetriever.lastQuery, "Ada Jane") {
+		t.Fatalf("expected hybrid evidence query to carry recalled state hint, got %q", fakeRetriever.lastQuery)
+	}
+	if !containsStringValue(discoverResponse.Evidence[0].RelatedStateKeys, discoverResponse.Items[0].KeyID) {
+		t.Fatalf("expected evidence to reference discovered state key, got %#v", discoverResponse.Evidence[0])
+	}
+}
+
+func TestHybridMemoryDiscover_FailsClosedWhenEvidenceRetrievalFails(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	if _, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "preferred_name",
+		FactValue: "Ada Jane",
+	}); err != nil {
+		t.Fatalf("remember preferred name: %v", err)
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	continuityBackend := partition.backend.(*continuityTCLMemoryBackend)
+	partition.backend = &hybridMemoryBackend{
+		continuityBackend: continuityBackend,
+		evidenceRetriever: &fakeMemoryEvidenceRetriever{searchErr: fmt.Errorf("qdrant unavailable")},
+		maxEvidenceItems:  2,
+		maxEvidenceBytes:  580,
+	}
+	server.memoryMu.Unlock()
+
+	_, err := client.DiscoverMemory(context.Background(), MemoryDiscoverRequest{
+		Query: "Retrieve the current user profile name from the identity slot.",
+	})
+	if err == nil || !strings.Contains(err.Error(), "hybrid evidence retrieval failed") {
+		t.Fatalf("expected hybrid evidence failure, got %v", err)
 	}
 }
 

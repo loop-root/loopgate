@@ -37,7 +37,32 @@ func newMemoryBackendForPartition(server *Server, partition *memoryPartition) (M
 			store:                             sqliteStore,
 			buildValidatedRememberCandidateFn: buildValidatedMemoryRememberCandidate,
 		}, nil
-	case memoryBackendRAGBaseline, memoryBackendHybrid:
+	case memoryBackendHybrid:
+		storePath := filepath.Join(partition.rootPath, continuityTCLStoreFilename)
+		sqliteStore, err := openContinuitySQLiteStore(storePath)
+		if err != nil {
+			return nil, fmt.Errorf("open continuity sqlite store for hybrid backend: %w", err)
+		}
+		continuityBackend := &continuityTCLMemoryBackend{
+			server:                            server,
+			partition:                         partition,
+			store:                             sqliteStore,
+			buildValidatedRememberCandidateFn: buildValidatedMemoryRememberCandidate,
+		}
+		if server.newMemoryEvidenceRetriever == nil {
+			return nil, fmt.Errorf("memory evidence retriever factory is not configured")
+		}
+		evidenceRetriever, err := server.newMemoryEvidenceRetriever(server.repoRoot, server.runtimeConfig)
+		if err != nil {
+			return nil, fmt.Errorf("open hybrid evidence retriever: %w", err)
+		}
+		return &hybridMemoryBackend{
+			continuityBackend: continuityBackend,
+			evidenceRetriever: evidenceRetriever,
+			maxEvidenceItems:  server.runtimeConfig.Memory.HybridEvidence.MaxItems,
+			maxEvidenceBytes:  server.runtimeConfig.Memory.HybridEvidence.MaxHintBytes,
+		}, nil
+	case memoryBackendRAGBaseline:
 		return nil, fmt.Errorf("memory backend %q is benchmark-only and not available for runtime partitions", selectedBackendName)
 	default:
 		return nil, fmt.Errorf("unknown memory backend %q", selectedBackendName)

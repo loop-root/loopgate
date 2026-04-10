@@ -4,9 +4,9 @@ import "context"
 
 const (
 	memoryBackendContinuityTCL = "continuity_tcl"
-	// Benchmark-only backend labels are kept here so stale runtime configs fail
-	// closed with an explicit message instead of silently degrading into the
-	// default continuity backend.
+	// rag_baseline remains benchmark-only. hybrid is a real runtime backend that
+	// keeps continuity as the write-side authority and adds bounded evidence
+	// retrieval on discover reads.
 	memoryBackendRAGBaseline = "rag_baseline"
 	memoryBackendHybrid      = "hybrid"
 )

@@ -158,8 +158,9 @@ Loopgate’s benchmark bridge now exposes two benchmark-local surfaces:
 - governed candidate evaluation over the TCL memory-policy path
 
 The CLI must select benchmark backends explicitly and fail closed for
-unimplemented backends. Do not silently map `rag_baseline` or `hybrid` onto the
-`continuity_tcl` path.
+benchmark-only backends. Do not silently map `rag_baseline` onto the
+`continuity_tcl` path, and do not treat the real runtime `hybrid` backend as a
+benchmark-only alias.
 
 The live `rag_baseline` path requires repo-local helper/runtime files. Keep it
 out of Loopgate’s control-plane code and treat helper output as untrusted data

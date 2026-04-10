@@ -180,13 +180,23 @@ Next lift:
   That is the first checked-in result showing a real hybrid advantage over both
   pure controls, but it still has two unresolved design-thread misses and
   should remain targeted rather than promoted.
+  The `hybrid` backend is now also a real runtime backend behind the same
+  Loopgate-owned memory seam. It keeps continuity authoritative for writes,
+  wake state, and recall, and adds only bounded RAG evidence sidecars on
+  discover. The new `long_horizon_matrix` over-time slice is the strongest
+  current proof point for the product story: continuity and hybrid both score
+  `8/8`, while both governed RAG-only comparators score `2/8`. That is strong
+  evidence for long-horizon state continuity, not yet for long-horizon evidence
+  retrieval or a fully productized hybrid prompt assembly policy.
   Backend-owned observed packets now also allowlist source-ref kinds, so
   first-class provenance refs only survive on supported server-loaded paths,
   and new provenance sources have to be added intentionally rather than
   arriving as arbitrary strings in observed continuity state.
   Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
-  continuity sources, and broader TCL-informed continuity derivation.
+  continuity sources, broader TCL-informed continuity derivation, and a live
+  product policy for when bounded hybrid evidence should be pulled into prompt
+  assembly.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys
 - replace the current conservative attribute-anchor heuristics with richer TCL-derived conflict anchors for more preference and intent families
 - simplify the memory/TCL implementation before widening it further; a dated

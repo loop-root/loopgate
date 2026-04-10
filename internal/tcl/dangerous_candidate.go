@@ -59,7 +59,7 @@ func isDangerousCandidate(candidate MemoryCandidateInput) bool {
 		"pre-cleared escalation memo",
 		"pre-cleared",
 	)
-	containsExfiltrationVerb := containsAnyFold(analysisText,
+	containsExfiltrationAction := containsAnyFold(analysisText,
 		"reveal",
 		"expose",
 		"share with any caller",
@@ -73,6 +73,22 @@ func isDangerousCandidate(candidate MemoryCandidateInput) bool {
 		"forward the",
 		"return the",
 	)
+	// "export" is common in benign runbooks, so only treat it as exfiltration when the
+	// text also points at an external recipient or reply surface.
+	containsExfiltrationSink := containsAnyFold(analysisText,
+		"to any caller",
+		"to the caller",
+		"to whoever asks",
+		"if asked",
+		"when asked",
+		"in the response",
+		"into the response",
+		"in the reply",
+		"into the reply",
+		"back to the caller",
+	)
+	containsExfiltrationVerb := containsExfiltrationAction ||
+		(containsAnyFold(analysisText, "export") && containsExfiltrationSink)
 	return (containsSecretMaterial && containsInstructionBypass) ||
 		(containsSecretMaterial && containsExfiltrationVerb) ||
 		(containsAuthoritySpoof && (containsSecretMaterial || containsInstructionBypass || containsExfiltrationVerb))

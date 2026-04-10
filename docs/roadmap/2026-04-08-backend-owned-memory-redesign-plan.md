@@ -110,6 +110,14 @@ Completed slices in the current refactor:
   `output` tags alongside the derived value so retrieval has some context for
   same-key preview-label and different-entity disambiguation instead of
   reducing everything to value-only overlap
+- runtime config now accepts `memory.backend=hybrid`, which keeps
+  `continuity_tcl` authoritative for writes and recall while adding bounded
+  RAG evidence sidecars on discover through the same backend-owned seam
+- the benchmark harness now has a checked-in `long_horizon_matrix` slice that
+  explicitly measures over-time contradiction suppression and task resumption;
+  current `2026-04-10` runs are `8/8` for continuity parity, `8/8` for
+  continuity synthetic control, `2/8` for both governed RAG comparators, and
+  `8/8` for the runtime hybrid backend
 - discover ranking now treats generic profile-name slot queries as
   `preferred_name`, keeps preview-targeted queries separate from canonical slot
   queries, and suppresses other-entity distractors when a user-scoped
@@ -124,9 +132,11 @@ Still not finished:
   methods and `Server`-owned injectable seams for test fault injection
 - diagnostic wake and some partition-state helpers still exist as compatibility
   seams for tests and should not become new production authority paths
-- the benchmark matrix still lacks the planned RAG-wins evidence-retrieval and
-  hybrid-wins state-plus-evidence buckets described in
-  `docs/roadmap/2026-04-10-memorybench-matrix-and-relational-hints.md`
+- the benchmark now has first-pass RAG-wins evidence and hybrid-wins buckets,
+  but those buckets are still too small to promote; the remaining misses are
+  concentrated in design-thread evidence disambiguation
+- the runtime hybrid backend is only a discover-time evidence seam today; wake
+  assembly and product prompt composition still need an explicit bounded policy
 
 ## 3. Design Goals
 

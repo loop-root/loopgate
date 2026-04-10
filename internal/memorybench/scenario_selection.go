@@ -84,6 +84,16 @@ var builtInScenarioSets = map[string][]string{
 		"hybrid.offline_policy_follow_up_and_signature_rationale.v1",
 		"hybrid.resolved_path_follow_up_and_projection_rationale.v1",
 	},
+	"long_horizon_matrix": {
+		"contradiction.preference_multiple_theme_supersessions.v1",
+		"contradiction.identity_alias_supersession_paraphrase.v1",
+		"contradiction.identity_interleaved_alias_chain_slot_probe.v1",
+		"contradiction.profile_timezone_interleaved_preview_chain_slot_probe.v1",
+		"contradiction.profile_locale_interleaved_preview_chain_slot_probe.v1",
+		"task_resumption.long_history_cost_pressure.v1",
+		"task_resumption.long_supersession_chain_multi_blocker_updates.v1",
+		"task_resumption.interleaved_malicious_history_guard.v1",
+	},
 }
 
 func NormalizeScenarioFilter(rawScenarioFilter ScenarioFilter) (ScenarioFilter, error) {

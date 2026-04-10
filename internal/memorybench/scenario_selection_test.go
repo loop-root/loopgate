@@ -177,6 +177,29 @@ func TestSelectScenarioFixtures_HybridRecallMatrixSet(t *testing.T) {
 	}
 }
 
+func TestSelectScenarioFixtures_LongHorizonMatrixSet(t *testing.T) {
+	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
+		ScenarioSets: []string{"long_horizon_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := SelectScenarioFixtures(DefaultScenarioFixtures(), normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	if len(selectedFixtures) != 8 {
+		t.Fatalf("expected eight long-horizon fixtures, got %d", len(selectedFixtures))
+	}
+	for _, selectedFixture := range selectedFixtures {
+		switch selectedFixture.Metadata.Category {
+		case CategoryMemoryContradiction, CategoryTaskResumption:
+		default:
+			t.Fatalf("expected contradiction or task resumption fixture, got %#v", selectedFixture.Metadata)
+		}
+	}
+}
+
 func TestSelectScenarioFixtures_EmptySelectionFailsClosed(t *testing.T) {
 	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
 		ScenarioIDs: []string{"missing.fixture.v1"},

@@ -992,10 +992,27 @@ type MemoryDiscoverItem struct {
 	MatchCount   int      `json:"match_count"`
 }
 
+// MemoryEvidenceItem is bounded, non-authoritative supporting context returned by
+// hybrid discovery. It is intentionally separate from MemoryDiscoverItem so RAG
+// evidence never masquerades as durable continuity state.
+type MemoryEvidenceItem struct {
+	EvidenceID       string   `json:"evidence_id"`
+	SourceKind       string   `json:"source_kind,omitempty"`
+	Scope            string   `json:"scope,omitempty"`
+	CreatedAtUTC     string   `json:"created_at_utc,omitempty"`
+	Snippet          string   `json:"snippet,omitempty"`
+	ProvenanceRef    string   `json:"provenance_ref,omitempty"`
+	MatchCount       int      `json:"match_count,omitempty"`
+	RelatedStateKeys []string `json:"related_state_keys,omitempty"`
+}
+
 type MemoryDiscoverResponse struct {
-	Scope string               `json:"scope"`
-	Query string               `json:"query"`
-	Items []MemoryDiscoverItem `json:"items,omitempty"`
+	Scope         string               `json:"scope"`
+	Query         string               `json:"query"`
+	RetrievalMode string               `json:"retrieval_mode,omitempty"`
+	EvidenceQuery string               `json:"evidence_query,omitempty"`
+	Items         []MemoryDiscoverItem `json:"items,omitempty"`
+	Evidence      []MemoryEvidenceItem `json:"evidence,omitempty"`
 }
 
 type MemoryRecallRequest struct {

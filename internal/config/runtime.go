@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,7 +18,11 @@ const runtimeConfigVersion = "1"
 
 const DefaultSupersededLineageRetentionWindow = 30 * 24 * time.Hour
 const DefaultMemoryBackend = "continuity_tcl"
-const benchmarkOnlyMemoryBackendErrorSuffix = "is benchmark-only; runtime config currently supports only continuity_tcl"
+const benchmarkOnlyMemoryBackendErrorSuffix = "is benchmark-only; runtime config currently supports continuity_tcl or hybrid"
+const DefaultHybridEvidenceMaxItems = 2
+const DefaultHybridEvidenceMaxHintBytes = 580
+const defaultHybridEvidencePythonExecutable = "python3"
+const defaultHybridEvidenceHelperScriptPath = "cmd/memorybench/rag_search.py"
 
 // DiagnosticLogging configures optional text log files (slog) for local troubleshooting.
 // DefaultLevel: error | warn | info | debug | trace (trace is finer than debug).
@@ -134,7 +139,17 @@ type RuntimeConfig struct {
 			PromotionThresholdActive        int `yaml:"promotion_threshold_active" json:"promotion_threshold_active"`
 			PromotionThresholdEmerging      int `yaml:"promotion_threshold_emerging" json:"promotion_threshold_emerging"`
 		} `yaml:"scoring" json:"scoring"`
-		Corrections []RuntimeMemoryCorrection `yaml:"corrections,omitempty" json:"corrections,omitempty"`
+		Corrections    []RuntimeMemoryCorrection `yaml:"corrections,omitempty" json:"corrections,omitempty"`
+		HybridEvidence struct {
+			PythonExecutable string `yaml:"python_executable" json:"python_executable"`
+			HelperScriptPath string `yaml:"helper_script_path" json:"helper_script_path"`
+			QdrantURL        string `yaml:"qdrant_url" json:"qdrant_url"`
+			CollectionName   string `yaml:"collection_name" json:"collection_name"`
+			EmbeddingModel   string `yaml:"embedding_model" json:"embedding_model"`
+			RerankerModel    string `yaml:"reranker_model" json:"reranker_model"`
+			MaxItems         int    `yaml:"max_items" json:"max_items"`
+			MaxHintBytes     int    `yaml:"max_hint_bytes" json:"max_hint_bytes"`
+		} `yaml:"hybrid_evidence" json:"hybrid_evidence"`
 	} `yaml:"memory" json:"memory"`
 	// Tenancy holds deployment-scoped identity for single-node enterprise prep.
 	// Values are applied at control-session open (never taken from untrusted client JSON).
@@ -176,7 +191,7 @@ func LoadRuntimeConfig(repoRoot string) (RuntimeConfig, error) {
 			if err := ApplyDiagnosticLoggingOverride(repoRoot, &runtimeConfig); err != nil {
 				return RuntimeConfig{}, err
 			}
-			if err := validateRuntimeConfig(runtimeConfig); err != nil {
+			if err := validateRuntimeConfig(repoRoot, runtimeConfig); err != nil {
 				return RuntimeConfig{}, err
 			}
 			return runtimeConfig, nil
@@ -194,7 +209,7 @@ func LoadRuntimeConfig(repoRoot string) (RuntimeConfig, error) {
 	if err := ApplyDiagnosticLoggingOverride(repoRoot, &runtimeConfig); err != nil {
 		return RuntimeConfig{}, err
 	}
-	if err := validateRuntimeConfig(runtimeConfig); err != nil {
+	if err := validateRuntimeConfig(repoRoot, runtimeConfig); err != nil {
 		return RuntimeConfig{}, err
 	}
 	return runtimeConfig, nil
@@ -351,9 +366,21 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	if runtimeConfig.Memory.Scoring.PromotionThresholdActive == 0 {
 		runtimeConfig.Memory.Scoring.PromotionThresholdActive = 3
 	}
+	if strings.TrimSpace(runtimeConfig.Memory.HybridEvidence.PythonExecutable) == "" {
+		runtimeConfig.Memory.HybridEvidence.PythonExecutable = defaultHybridEvidencePythonExecutable
+	}
+	if strings.TrimSpace(runtimeConfig.Memory.HybridEvidence.HelperScriptPath) == "" {
+		runtimeConfig.Memory.HybridEvidence.HelperScriptPath = defaultHybridEvidenceHelperScriptPath
+	}
+	if runtimeConfig.Memory.HybridEvidence.MaxItems <= 0 {
+		runtimeConfig.Memory.HybridEvidence.MaxItems = DefaultHybridEvidenceMaxItems
+	}
+	if runtimeConfig.Memory.HybridEvidence.MaxHintBytes <= 0 {
+		runtimeConfig.Memory.HybridEvidence.MaxHintBytes = DefaultHybridEvidenceMaxHintBytes
+	}
 }
 
-func validateRuntimeConfig(runtimeConfig RuntimeConfig) error {
+func validateRuntimeConfig(repoRoot string, runtimeConfig RuntimeConfig) error {
 	if strings.TrimSpace(runtimeConfig.Version) == "" {
 		return fmt.Errorf("version is required")
 	}
@@ -386,13 +413,18 @@ func validateRuntimeConfig(runtimeConfig RuntimeConfig) error {
 		return fmt.Errorf("candidate_panel_size must be positive")
 	}
 	switch trimmedMemoryBackend := strings.TrimSpace(runtimeConfig.Memory.Backend); trimmedMemoryBackend {
-	case DefaultMemoryBackend:
+	case DefaultMemoryBackend, "hybrid":
 	default:
 		switch trimmedMemoryBackend {
-		case "rag_baseline", "hybrid":
+		case "rag_baseline":
 			return fmt.Errorf("memory.backend %q %s", trimmedMemoryBackend, benchmarkOnlyMemoryBackendErrorSuffix)
 		default:
-			return fmt.Errorf("memory.backend must be %s", DefaultMemoryBackend)
+			return fmt.Errorf("memory.backend must be %s or hybrid", DefaultMemoryBackend)
+		}
+	}
+	if strings.TrimSpace(runtimeConfig.Memory.Backend) == "hybrid" {
+		if err := validateHybridEvidenceConfig(repoRoot, runtimeConfig); err != nil {
+			return err
 		}
 	}
 	if runtimeConfig.Memory.SoftMorphlingConcurrency <= 0 {
@@ -449,6 +481,76 @@ func validateAuditLedgerHMACCheckpoint(hc AuditLedgerHMACCheckpoint) error {
 		return err
 	}
 	return nil
+}
+
+func validateHybridEvidenceConfig(repoRoot string, runtimeConfig RuntimeConfig) error {
+	hybridEvidenceConfig := runtimeConfig.Memory.HybridEvidence
+	if strings.TrimSpace(hybridEvidenceConfig.QdrantURL) == "" {
+		return fmt.Errorf("memory.hybrid_evidence.qdrant_url is required when memory.backend=hybrid")
+	}
+	if strings.TrimSpace(hybridEvidenceConfig.CollectionName) == "" {
+		return fmt.Errorf("memory.hybrid_evidence.collection_name is required when memory.backend=hybrid")
+	}
+	if hybridEvidenceConfig.MaxItems < 1 || hybridEvidenceConfig.MaxItems > 5 {
+		return fmt.Errorf("memory.hybrid_evidence.max_items must be between 1 and 5")
+	}
+	if hybridEvidenceConfig.MaxHintBytes < 64 || hybridEvidenceConfig.MaxHintBytes > 8192 {
+		return fmt.Errorf("memory.hybrid_evidence.max_hint_bytes must be between 64 and 8192")
+	}
+	if _, err := resolveRuntimeExecutableReference(strings.TrimSpace(hybridEvidenceConfig.PythonExecutable)); err != nil {
+		return fmt.Errorf("memory.hybrid_evidence.python_executable %w", err)
+	}
+	if _, err := resolveRuntimeRepoPath(repoRoot, strings.TrimSpace(hybridEvidenceConfig.HelperScriptPath)); err != nil {
+		return fmt.Errorf("memory.hybrid_evidence.helper_script_path %w", err)
+	}
+	return nil
+}
+
+func resolveRuntimeExecutableReference(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("is required")
+	}
+	if strings.ContainsAny(trimmed, "\x00\n\r") {
+		return "", fmt.Errorf("contains control characters")
+	}
+	if filepath.IsAbs(trimmed) {
+		if _, err := os.Stat(trimmed); err != nil {
+			return "", fmt.Errorf("is unavailable: %w", err)
+		}
+		return trimmed, nil
+	}
+	resolvedExecutablePath, err := exec.LookPath(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("is unavailable: %w", err)
+	}
+	return resolvedExecutablePath, nil
+}
+
+func resolveRuntimeRepoPath(repoRoot string, rawPath string) (string, error) {
+	trimmedPath := strings.TrimSpace(rawPath)
+	if trimmedPath == "" {
+		return "", fmt.Errorf("is required")
+	}
+	if strings.ContainsAny(trimmedPath, "\x00\n\r") {
+		return "", fmt.Errorf("contains control characters")
+	}
+	if filepath.IsAbs(trimmedPath) {
+		resolvedPath := filepath.Clean(trimmedPath)
+		if _, err := os.Stat(resolvedPath); err != nil {
+			return "", fmt.Errorf("is unavailable: %w", err)
+		}
+		return resolvedPath, nil
+	}
+	cleanedPath := filepath.Clean(trimmedPath)
+	if cleanedPath == "." || cleanedPath == ".." || strings.HasPrefix(cleanedPath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("must stay within the repository root")
+	}
+	resolvedPath := filepath.Join(repoRoot, cleanedPath)
+	if _, err := os.Stat(resolvedPath); err != nil {
+		return "", fmt.Errorf("is unavailable: %w", err)
+	}
+	return resolvedPath, nil
 }
 
 const maxExpectedSessionClientExecutableRunes = 4096

@@ -16,6 +16,8 @@ listed here.
 
 For the change-by-change rerun narrative, see
 [Memorybench Honest Rerun Report (2026-04-10)](/Users/adalaide/Dev/loopgate/docs/reports/memorybench-honest-rerun-2026-04-10.md).
+For the runtime hybrid backend and long-horizon continuity proof slice, see
+[Memory Runtime Hybrid And Long-Horizon Report (2026-04-10)](/Users/adalaide/Dev/loopgate/docs/reports/memory-runtime-hybrid-and-long-horizon-2026-04-10.md).
 
 This file is conservative on promotion. A benchmark result is headline-eligible
 only if it is a `scored_fixture_run` and its top-level `run_metadata.json`
@@ -187,6 +189,64 @@ Evidence-matrix artifacts:
 - `/tmp/memorybench-live-continuity/continuity_evidence_synth_20260410_v5/*`
 - `/tmp/memorybench-live-rag/rag_baseline_evidence_20260410_v5/*`
 - `/tmp/memorybench-live-rag/rag_stronger_evidence_20260410_v5/*`
+
+## Targeted long-horizon state continuity matrix (`fixtures`, not headline)
+
+The benchmark now also has a focused `long_horizon_matrix` scenario set. This
+is still a `targeted_debug_run`, not a promoted headline, because it is only an
+`8`-fixture slice of the larger matrix. It matters anyway because it is the
+closest checked-in proof of the product claim "better over time" that the repo
+currently has.
+
+Final `2026-04-10` long-horizon runs:
+
+- continuity product path: `continuity_long_horizon_parity_20260410_v1`
+  - `retrieval_path_mode=control_plane_memory_routes`
+  - `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
+- continuity synthetic control: `continuity_long_horizon_synth_20260410_v1`
+  - `retrieval_path_mode=projected_node_sqlite_backend`
+  - `seed_path_mode=synthetic_projected_nodes`
+- governed RAG baseline: `rag_baseline_long_horizon_20260410_v1`
+  - `retrieval_path_mode=rag_search_helper`
+  - `seed_path_mode=python_rag_fixture_seed`
+- governed stronger RAG: `rag_stronger_long_horizon_20260410_v1`
+  - `retrieval_path_mode=rag_search_helper`
+  - `seed_path_mode=python_rag_fixture_seed`
+- hybrid runtime path: `hybrid_long_horizon_20260410_v1`
+  - `retrieval_path_mode=hybrid_continuity_state_plus_rag_evidence`
+  - `seed_path_mode=control_plane_state_and_rag_fixture_corpus`
+
+Current long-horizon counts:
+
+| Backend | Overall | Contradiction | Task resumption |
+| --- | --- | --- | --- |
+| `continuity_tcl` (`production_write_parity`) | `8/8` | `5/5` | `3/3` |
+| `continuity_tcl` (`synthetic_projected_nodes`) | `8/8` | `5/5` | `3/3` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `2/8` | `2/5` | `0/3` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `2/8` | `2/5` | `0/3` |
+| `hybrid` (runtime backend) | `8/8` | `5/5` | `3/3` |
+
+Read:
+
+- this is the cleanest current proof that governed continuity memory is better
+  than RAG-only memory on long-horizon continuity/state tasks
+- both RAG comparators fail the long supersession and long history task slices,
+  even when the stronger reranker partially improves one identity-chain slot
+  case
+- the hybrid runtime backend ties continuity here for the expected reason:
+  these fixtures are state-dominant, so the bounded evidence sidecar is not the
+  bottleneck
+- this does not prove broad long-horizon evidence retrieval; it proves that the
+  canonical-state memory path continues to win when old values, task drift, and
+  long update chains are the real problem
+
+Long-horizon artifacts:
+
+- `/tmp/memorybench-live-continuity/continuity_long_horizon_parity_20260410_v1/*`
+- `/tmp/memorybench-live-continuity/continuity_long_horizon_synth_20260410_v1/*`
+- `/tmp/memorybench-live-rag/rag_baseline_long_horizon_20260410_v1/*`
+- `/tmp/memorybench-live-rag/rag_stronger_long_horizon_20260410_v1/*`
+- `/tmp/memorybench-live-hybrid/hybrid_long_horizon_20260410_v1/*`
 
 ## Targeted hybrid recall matrix (`extended_fixtures`, not headline)
 

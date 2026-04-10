@@ -48,6 +48,10 @@ logging:
       model: model.log
 
 memory:
+  # Runtime memory backends:
+  # - continuity_tcl: canonical long-lived state memory
+  # - hybrid: continuity_tcl state plus bounded RAG evidence on discover
+  backend: continuity_tcl
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
@@ -83,3 +87,14 @@ memory:
     negative_completion_rejection: 15
     promotion_threshold_emerging: 2
     promotion_threshold_active: 3
+  # Optional only when memory.backend=hybrid. The evidence retriever is
+  # advisory and bounded; continuity remains the authority path.
+  # hybrid_evidence:
+  #   python_executable: "python3"
+  #   helper_script_path: "cmd/memorybench/rag_search.py"
+  #   qdrant_url: "http://127.0.0.1:6333"
+  #   collection_name: "loopgate_runtime_hybrid"
+  #   embedding_model: ""
+  #   reranker_model: "Xenova/ms-marco-MiniLM-L-6-v2"
+  #   max_items: 2
+  #   max_hint_bytes: 580

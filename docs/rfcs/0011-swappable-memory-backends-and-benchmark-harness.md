@@ -299,9 +299,11 @@ also add benign approval/checklist notes so the system is not rewarded for
 blocking every mention of `approval`, `audit note`, or similar operator-facing
 language.
 
-Benchmark backend selection must be explicit and fail closed. An unimplemented
-`rag_baseline` or `hybrid` selection should return a clear error rather than
-silently reusing the `continuity_tcl` path.
+Benchmark backend selection must be explicit and fail closed. An unsupported or
+benchmark-only runtime backend such as `rag_baseline` should return a clear
+error rather than silently reusing the `continuity_tcl` path. The real runtime
+`hybrid` backend still has to stay behind the same governed Loopgate seam; it
+must not become a benchmark-only bypass around the control plane.
 
 Once `rag_baseline` is benchmark-wired, that wiring should still remain local to
 the benchmark harness unless and until a separate design explicitly introduces a
@@ -537,9 +539,12 @@ memory:
 
 Current implementation note:
 
-- product runtime config currently accepts only `continuity_tcl`
-- `rag_baseline`, `rag_stronger`, and `hybrid` remain benchmark labels until a
-  second backend is actually implemented behind the same governed Loopgate seam
+- product runtime config now accepts `continuity_tcl` and `hybrid`
+- `rag_baseline` and `rag_stronger` remain benchmark-only labels
+- `hybrid` is implemented as a real runtime backend behind the same governed
+  seam, but it is intentionally narrow: continuity remains authoritative for
+  writes, wake state, and recall, while hybrid adds bounded evidence sidecars
+  on discover
 
 Loopgate should fail closed on unknown or benchmark-only runtime backend names.
 

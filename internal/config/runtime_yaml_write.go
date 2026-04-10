@@ -13,7 +13,7 @@ import (
 // It removes runtime/state/config/runtime.json if present so operators are not confused by a stale frozen copy.
 func WriteRuntimeConfigYAML(repoRoot string, runtimeConfig RuntimeConfig) error {
 	applyRuntimeConfigDefaults(&runtimeConfig)
-	if err := validateRuntimeConfig(runtimeConfig); err != nil {
+	if err := validateRuntimeConfig(repoRoot, runtimeConfig); err != nil {
 		return fmt.Errorf("validate runtime config: %w", err)
 	}
 	destPath := filepath.Join(repoRoot, "config", "runtime.yaml")
