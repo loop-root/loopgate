@@ -131,6 +131,60 @@ Previous honest `61`-fixture artifacts remain preserved:
 - `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/*`
 - `/tmp/memorybench-live-rag/rag_stronger_fixture_20260409_honest_v2/*`
 
+## Targeted evidence retrieval matrix (`extended_fixtures`, not headline)
+
+The checked-in harness now also has an `extended_fixtures` profile with a
+shared-scope `rag_evidence_matrix` bucket. These runs are intentionally
+`targeted_debug_run` evidence, not headline replacements for the scored
+`70`-fixture state-memory baseline.
+
+Final `2026-04-10` targeted evidence runs:
+
+- continuity product path: `continuity_evidence_parity_20260410_v4`
+  - `retrieval_path_mode=mixed_control_plane_and_projected_node_sqlite`
+  - `seed_path_mode=mixed_control_plane_memory_workflow_and_fixture_seed`
+- continuity synthetic control: `continuity_evidence_synth_20260410_v4`
+  - `retrieval_path_mode=projected_node_sqlite_backend`
+  - `seed_path_mode=synthetic_projected_node_seed`
+- RAG baseline: `rag_baseline_evidence_20260410_v4`
+  - `retrieval_path_mode=rag_search_helper`
+  - `seed_path_mode=python_rag_fixture_seed`
+- stronger RAG: `rag_stronger_evidence_20260410_v4`
+  - `retrieval_path_mode=rag_search_helper`
+  - `seed_path_mode=python_rag_fixture_seed`
+
+Current evidence-matrix counts:
+
+| Backend | Overall | Replay root-cause paraphrase | Mount-grant design thread | Qdrant backfill incident | Preview-card authority thread |
+| --- | --- | --- | --- | --- | --- |
+| `continuity_tcl` (`production_write_parity`) | `1/4` | `0/1` | `0/1` | `1/1` | `0/1` |
+| `continuity_tcl` (`synthetic_projected_nodes`) | `1/4` | `0/1` | `0/1` | `1/1` | `0/1` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `1/4` | `0/1` | `0/1` | `1/1` | `0/1` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `2/4` | `1/1` | `0/1` | `1/1` | `0/1` |
+
+Read:
+
+- this bucket is finally broad-scope evidence retrieval rather than four tiny
+  isolated corpora; all evidence fixtures now share
+  `benchmark:evidence_working_set`
+- stronger RAG now cleanly beats both continuity paths and baseline RAG on the
+  paraphrased replay root-cause lookup
+- the Qdrant backfill incident is a common win across all current backends, so
+  it is not a differentiator
+- the mount-grant and preview-card design-thread cases still fail across all
+  current backends, which means the evidence bucket is useful but not yet
+  mature enough to claim “RAG should win” across the board
+- the current honest reading is narrower: stronger RAG already helps on at
+  least one broad semantic evidence case, while continuity still remains the
+  stronger architecture for durable state continuity
+
+Evidence-matrix artifacts:
+
+- `/tmp/memorybench-live-continuity/continuity_evidence_parity_20260410_v4/*`
+- `/tmp/memorybench-live-continuity/continuity_evidence_synth_20260410_v4/*`
+- `/tmp/memorybench-live-rag/rag_baseline_evidence_20260410_v4/*`
+- `/tmp/memorybench-live-rag/rag_stronger_evidence_20260410_v4/*`
+
 ## Preserved prior honest rerun set (61-fixture matrix)
 
 The earlier honest rerun remains worth keeping because it was the last scored

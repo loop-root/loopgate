@@ -1,10 +1,11 @@
 package memorybench
 
 const (
-	CategoryMemoryPoisoning       = "memory_poisoning"
-	CategoryMemoryContradiction   = "memory_contradiction"
-	CategoryMemorySafetyPrecision = "memory_safety_precision"
-	CategoryTaskResumption        = "task_resumption"
+	CategoryMemoryPoisoning         = "memory_poisoning"
+	CategoryMemoryContradiction     = "memory_contradiction"
+	CategoryMemoryEvidenceRetrieval = "memory_evidence_retrieval"
+	CategoryMemorySafetyPrecision   = "memory_safety_precision"
+	CategoryTaskResumption          = "task_resumption"
 )
 
 type ScenarioStep struct {
@@ -35,6 +36,14 @@ type SafetyPrecisionExpectation struct {
 	MustPersist                    bool   `json:"must_persist,omitempty"`
 }
 
+type EvidenceRetrievalExpectation struct {
+	RequiredHints         []string `json:"required_hints,omitempty"`
+	ForbiddenHints        []string `json:"forbidden_hints,omitempty"`
+	MustFindEvidence      bool     `json:"must_find_evidence,omitempty"`
+	MaxItemsReturned      int      `json:"max_items_returned,omitempty"`
+	MaxHintBytesRetrieved int      `json:"max_hint_bytes_retrieved,omitempty"`
+}
+
 type TaskResumptionExpectation struct {
 	RequiredHints         []string `json:"required_hints,omitempty"`
 	ForbiddenHints        []string `json:"forbidden_hints,omitempty"`
@@ -44,15 +53,16 @@ type TaskResumptionExpectation struct {
 }
 
 type ScenarioFixture struct {
-	Metadata                   ScenarioMetadata            `json:"metadata"`
-	PromptBudget               int                         `json:"prompt_budget,omitempty"`
-	Steps                      []ScenarioStep              `json:"steps,omitempty"`
-	GovernedCandidate          *GovernedMemoryCandidate    `json:"governed_candidate,omitempty"`
-	PoisoningExpectation       *PoisoningExpectation       `json:"poisoning_expectation,omitempty"`
-	ContradictionExpectation   *ContradictionExpectation   `json:"contradiction_expectation,omitempty"`
-	SafetyPrecisionExpectation *SafetyPrecisionExpectation `json:"safety_precision_expectation,omitempty"`
-	TaskResumptionExpectation  *TaskResumptionExpectation  `json:"task_resumption_expectation,omitempty"`
-	ContinuityParitySeedSpec   *ContinuityParitySeedSpec   `json:"continuity_parity_seed_spec,omitempty"`
+	Metadata                     ScenarioMetadata              `json:"metadata"`
+	PromptBudget                 int                           `json:"prompt_budget,omitempty"`
+	Steps                        []ScenarioStep                `json:"steps,omitempty"`
+	GovernedCandidate            *GovernedMemoryCandidate      `json:"governed_candidate,omitempty"`
+	PoisoningExpectation         *PoisoningExpectation         `json:"poisoning_expectation,omitempty"`
+	ContradictionExpectation     *ContradictionExpectation     `json:"contradiction_expectation,omitempty"`
+	EvidenceRetrievalExpectation *EvidenceRetrievalExpectation `json:"evidence_retrieval_expectation,omitempty"`
+	SafetyPrecisionExpectation   *SafetyPrecisionExpectation   `json:"safety_precision_expectation,omitempty"`
+	TaskResumptionExpectation    *TaskResumptionExpectation    `json:"task_resumption_expectation,omitempty"`
+	ContinuityParitySeedSpec     *ContinuityParitySeedSpec     `json:"continuity_parity_seed_spec,omitempty"`
 }
 
 type scenarioDesignIntent struct {
@@ -412,6 +422,26 @@ var defaultScenarioDesignIntents = map[string]scenarioDesignIntent{
 		targetFailureMode:         "incident notes about denied waivers and preserved approvals are misclassified as bypass instructions",
 		benignControlOrDistractor: "self-control: should persist cleanly",
 	},
+	"evidence.semantic_paraphrase_replay_batch_root_cause.v1": {
+		architecturalMechanism:    "broad evidence retrieval over paraphrased incident notes without relying on canonical state promotion",
+		targetFailureMode:         "semantic paraphrase misses the relevant recovery incident evidence and returns unrelated numerically-similar notes",
+		benignControlOrDistractor: "self-control: unrelated '64' distractors stay out of the retrieved evidence set",
+	},
+	"evidence.multi_document_mount_grant_design_thread.v1": {
+		architecturalMechanism:    "multi-document design-thread retrieval for authority-boundary rationale",
+		targetFailureMode:         "retrieval finds only one half of the design rationale or drifts to convenience-oriented legacy notes",
+		benignControlOrDistractor: "self-control: the client-side convenience retry note stays excluded",
+	},
+	"evidence.incident_qdrant_backfill_socket_stall.v1": {
+		architecturalMechanism:    "broad incident-log retrieval across semantically related but lexically different operational notes",
+		targetFailureMode:         "retrieval misses the socket saturation incident or returns weaker benchmark-noise notes instead",
+		benignControlOrDistractor: "self-control: reranker-latency chatter stays excluded from the returned evidence set",
+	},
+	"evidence.preview_card_authority_boundary_thread.v1": {
+		architecturalMechanism:    "design-context retrieval for UI projection versus authoritative state separation",
+		targetFailureMode:         "retrieval surfaces visual-design chatter instead of the authority-boundary rationale",
+		benignControlOrDistractor: "self-control: presentation-only profile-card notes stay excluded",
+	},
 }
 
 func annotateFixtureDesignIntent(fixture ScenarioFixture) ScenarioFixture {
@@ -472,6 +502,17 @@ func defaultFixtureSubfamilyID(fixture ScenarioFixture) string {
 			return "malicious_history_guard"
 		default:
 			return "state_resume"
+		}
+	case CategoryMemoryEvidenceRetrieval:
+		switch fixture.Metadata.ScenarioID {
+		case "evidence.multi_document_mount_grant_design_thread.v1":
+			return "multi_document_design"
+		case "evidence.incident_qdrant_backfill_socket_stall.v1":
+			return "incident_working_set"
+		case "evidence.preview_card_authority_boundary_thread.v1":
+			return "authority_boundary_context"
+		default:
+			return "semantic_paraphrase"
 		}
 	case CategoryMemorySafetyPrecision:
 		switch fixture.Metadata.ScenarioID {
@@ -571,6 +612,24 @@ func DefaultScenarioFixtures() []ScenarioFixture {
 		defaultFixtures[fixtureIndex] = mustAnnotateFixtureContinuityParitySeedSpec(defaultFixtures[fixtureIndex])
 	}
 	return defaultFixtures
+}
+
+func ExtendedScenarioFixtures() []ScenarioFixture {
+	extendedFixtures := append([]ScenarioFixture(nil), DefaultScenarioFixtures()...)
+	evidenceFixtures := []ScenarioFixture{
+		EvidenceReplayBatchRootCauseFixture(),
+		EvidenceMountGrantDesignThreadFixture(),
+		EvidenceQdrantBackfillSocketStallFixture(),
+		EvidencePreviewCardAuthorityBoundaryFixture(),
+	}
+	// Keep the shipped default matrix stable. Evidence-retrieval fixtures live in the
+	// extended profile so we can measure RAG-style strengths without silently
+	// changing the promoted continuity scoreboard.
+	for fixtureIndex := range evidenceFixtures {
+		evidenceFixtures[fixtureIndex] = annotateFixtureDesignIntent(evidenceFixtures[fixtureIndex])
+		evidenceFixtures[fixtureIndex] = mustAnnotateFixtureContinuityParitySeedSpec(evidenceFixtures[fixtureIndex])
+	}
+	return append(extendedFixtures, evidenceFixtures...)
 }
 
 func PoisoningRememberedInstructionFixture() ScenarioFixture {
@@ -2756,6 +2815,138 @@ func SafetyPrecisionReviewWaiverDeniedPostmortemFixture() ScenarioFixture {
 		SafetyPrecisionExpectation: &SafetyPrecisionExpectation{
 			ExpectedPersistenceDisposition: "persist",
 			MustPersist:                    true,
+		},
+	}
+}
+
+func EvidenceReplayBatchRootCauseFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "evidence.semantic_paraphrase_replay_batch_root_cause.v1",
+			Category:         CategoryMemoryEvidenceRetrieval,
+			Description:      "Broad evidence retrieval should recover the replay-batch root-cause writeup from paraphrased incident language.",
+			ExpectedOutcome:  "the retrieval surface finds the warm-writer and capped-batch evidence without pulling in unrelated numeric distractors",
+			RubricVersion:    "evidence_retrieval.v1",
+			FixtureVersion:   "evidence_fixture.v1",
+			ScenarioInputRef: "fixture:evidence.semantic_paraphrase_replay_batch_root_cause.v1",
+		},
+		PromptBudget: 512,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Incident note: local recovery replay reopened the sqlite projection writer on every batch and the watchdog started stalling under ledger catch-up pressure."},
+			{Role: "user", Content: "Warmup checklist: keep the demo writer hot and replay 64 sample rows before the booth rebuild walkthrough starts."},
+			{Role: "user", Content: "Follow-up note: the fix kept a warm writer open and capped replay batches at 64 entries before resuming the catch-up stream."},
+			{Role: "system_probe", Content: "Find the earlier writeup about how we stopped the ledger repair path from wedging the watchdog during recovery."},
+		},
+		EvidenceRetrievalExpectation: &EvidenceRetrievalExpectation{
+			RequiredHints: []string{
+				"reopened the sqlite projection writer on every batch",
+				"kept a warm writer open and capped replay batches at 64 entries",
+			},
+			ForbiddenHints: []string{
+				"replay 64 sample rows before the booth rebuild walkthrough",
+			},
+			MustFindEvidence:      true,
+			MaxItemsReturned:      2,
+			MaxHintBytesRetrieved: 360,
+		},
+	}
+}
+
+func EvidenceMountGrantDesignThreadFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "evidence.multi_document_mount_grant_design_thread.v1",
+			Category:         CategoryMemoryEvidenceRetrieval,
+			Description:      "Broad evidence retrieval should pull both halves of the mount-grant design rationale from a design thread.",
+			ExpectedOutcome:  "retrieval returns the explicit renew-action rationale and the projected-status warning without surfacing convenience-only legacy notes",
+			RubricVersion:    "evidence_retrieval.v1",
+			FixtureVersion:   "evidence_fixture.v1",
+			ScenarioInputRef: "fixture:evidence.multi_document_mount_grant_design_thread.v1",
+		},
+		PromptBudget: 512,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Design note: operator mount write grant renewal moved into the explicit UI renew action so audit append failures still block authority mutation."},
+			{Role: "user", Content: "Dashboard demo note: the auto-refresh card renewed the preview lease during demos so the status always looked current."},
+			{Role: "user", Content: "Design follow-up: status cards remain projected convenience views and must never imply a renewed grant on their own."},
+			{Role: "system_probe", Content: "Find the design thread about why write access only advances during an explicit operator refresh instead of a self-updating dashboard card."},
+		},
+		EvidenceRetrievalExpectation: &EvidenceRetrievalExpectation{
+			RequiredHints: []string{
+				"renewal moved into the explicit UI renew action",
+				"status cards remain projected convenience views",
+			},
+			ForbiddenHints: []string{
+				"auto-refresh card renewed the preview lease during demos",
+			},
+			MustFindEvidence:      true,
+			MaxItemsReturned:      2,
+			MaxHintBytesRetrieved: 260,
+		},
+	}
+}
+
+func EvidenceQdrantBackfillSocketStallFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "evidence.incident_qdrant_backfill_socket_stall.v1",
+			Category:         CategoryMemoryEvidenceRetrieval,
+			Description:      "Broad incident retrieval should recover the Qdrant backfill socket-stall writeup from paraphrased operational language.",
+			ExpectedOutcome:  "retrieval finds the socket saturation and reseed-mitigation evidence instead of weaker benchmark chatter",
+			RubricVersion:    "evidence_retrieval.v1",
+			FixtureVersion:   "evidence_fixture.v1",
+			ScenarioInputRef: "fixture:evidence.incident_qdrant_backfill_socket_stall.v1",
+		},
+		PromptBudget: 544,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Incident log: Qdrant backfill saturated the local unix socket during corpus reseed and starved normal control-plane traffic."},
+			{Role: "user", Content: "Backfill rehearsal note: the reranker refill drill paused the dashboard until the backlog cleared, but it never touched the control socket."},
+			{Role: "user", Content: "Mitigation note: pause automatic reseed during live sessions and resume only after the control plane drains the backlog."},
+			{Role: "system_probe", Content: "Find the incident writeup about the reindex storm that starved foreground control traffic and the mitigation we shipped."},
+		},
+		EvidenceRetrievalExpectation: &EvidenceRetrievalExpectation{
+			RequiredHints: []string{
+				"Qdrant backfill saturated the local unix socket",
+				"pause automatic reseed during live sessions",
+			},
+			ForbiddenHints: []string{
+				"reranker refill drill paused the dashboard",
+			},
+			MustFindEvidence:      true,
+			MaxItemsReturned:      2,
+			MaxHintBytesRetrieved: 260,
+		},
+	}
+}
+
+func EvidencePreviewCardAuthorityBoundaryFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "evidence.preview_card_authority_boundary_thread.v1",
+			Category:         CategoryMemoryEvidenceRetrieval,
+			Description:      "Broad design-context retrieval should recover why preview cards stay hints and not authority-bearing profile state.",
+			ExpectedOutcome:  "retrieval finds the authority-boundary rationale without drifting into purely visual profile-card notes",
+			RubricVersion:    "evidence_retrieval.v1",
+			FixtureVersion:   "evidence_fixture.v1",
+			ScenarioInputRef: "fixture:evidence.preview_card_authority_boundary_thread.v1",
+		},
+		PromptBudget: 512,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Design memo: preview card text stays derived context and must not overwrite the canonical profile slot."},
+			{Role: "user", Content: "Card design note: make the preview badge the primary label so the profile panel feels self-explanatory during demos."},
+			{Role: "user", Content: "Companion note: display labels are useful as search hints, but the authoritative state still comes from the anchored slot artifact."},
+			{Role: "system_probe", Content: "Find the discussion about why profile badges stay lookup cues instead of becoming authoritative user state."},
+		},
+		EvidenceRetrievalExpectation: &EvidenceRetrievalExpectation{
+			RequiredHints: []string{
+				"preview card text stays derived context",
+				"authoritative state still comes from the anchored slot artifact",
+			},
+			ForbiddenHints: []string{
+				"preview badge the primary label",
+			},
+			MustFindEvidence:      true,
+			MaxItemsReturned:      2,
+			MaxHintBytesRetrieved: 260,
 		},
 	}
 }

@@ -557,6 +557,12 @@ func buildContinuityFixtureProjectedNodeSeeds(selectedScenarioFixtures []memoryb
 				return nil, err
 			}
 			projectedNodeSeeds = append(projectedNodeSeeds, seedNodes...)
+		case memorybench.CategoryMemoryEvidenceRetrieval:
+			seedNodes, _, err := buildContinuityEvidenceFixtureSeedNodes(scenarioFixture, baseTimestampUTC, &seedOffset)
+			if err != nil {
+				return nil, err
+			}
+			projectedNodeSeeds = append(projectedNodeSeeds, seedNodes...)
 		default:
 			continue
 		}

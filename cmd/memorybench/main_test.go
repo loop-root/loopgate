@@ -649,6 +649,36 @@ func TestBuildContinuityProductionParitySeeds_AllowsGovernanceOnlyScenarioSets(t
 	}
 }
 
+func TestBuildContinuityProductionParitySeeds_EvidenceFixturesStayOnFixtureIngest(t *testing.T) {
+	selectedScenarioFixtures, err := memorybench.SelectScenarioFixtures(memorybench.ExtendedScenarioFixtures(), memorybench.ScenarioFilter{
+		ScenarioSets: []string{"rag_evidence_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+
+	rememberedFactSeeds, observedThreadSeeds, todoSeeds, fixtureSeedNodes, seedManifestRecords, err := buildContinuityProductionParitySeeds(selectedScenarioFixtures)
+	if err != nil {
+		t.Fatalf("buildContinuityProductionParitySeeds evidence fixtures: %v", err)
+	}
+	if len(rememberedFactSeeds) != 0 || len(observedThreadSeeds) != 0 || len(todoSeeds) != 0 {
+		t.Fatalf("expected evidence fixtures to avoid control-plane state seeds, got remembered=%d observed=%d todo=%d", len(rememberedFactSeeds), len(observedThreadSeeds), len(todoSeeds))
+	}
+	if len(fixtureSeedNodes) == 0 || len(seedManifestRecords) == 0 {
+		t.Fatalf("expected evidence fixtures to produce fixture-ingest seeds, got fixture=%d manifest=%d", len(fixtureSeedNodes), len(seedManifestRecords))
+	}
+	for _, seedManifestRecord := range seedManifestRecords {
+		if seedManifestRecord.SeedPath != memorybench.ContinuitySeedPathFixtureIngest {
+			t.Fatalf("expected evidence manifest to stay on fixture-ingest path, got %#v", seedManifestRecord)
+		}
+	}
+	for _, fixtureSeedNode := range fixtureSeedNodes {
+		if fixtureSeedNode.Scope != memorybench.BenchmarkEvidenceWorkingSetScope {
+			t.Fatalf("expected evidence fixture seeds to share the evidence working-set scope, got %#v", fixtureSeedNode)
+		}
+	}
+}
+
 func TestNormalizeContinuityAblation_DefaultsAndRejectsUnknownModes(t *testing.T) {
 	validatedAblation, err := normalizeContinuityAblation("")
 	if err != nil {
@@ -706,6 +736,9 @@ func TestBenchmarkComparisonClass_DistinguishesScoredAndDebugRuns(t *testing.T) 
 	}
 	if got := benchmarkComparisonClass("fixtures", memorybench.BackendContinuityTCL, memorybench.ContinuitySeedingModeSyntheticProjectedNodes, memorybench.ScenarioFilter{ScenarioSets: []string{"profile_slot_preview_bias"}}); got != memorybench.ComparisonClassTargetedDebugRun {
 		t.Fatalf("expected targeted debug run for filtered fixtures, got %q", got)
+	}
+	if got := benchmarkComparisonClass("extended_fixtures", memorybench.BackendRAGBaseline, "", memorybench.ScenarioFilter{}); got != memorybench.ComparisonClassTargetedDebugRun {
+		t.Fatalf("expected extended fixtures to stay targeted debug runs, got %q", got)
 	}
 }
 
@@ -1174,5 +1207,26 @@ func TestMaybeSeedRAGFixtureCorpus_UsesIsolatedCollectionName(t *testing.T) {
 	argsText := string(argsBytes)
 	if !strings.Contains(argsText, "--collection") || !strings.Contains(argsText, isolatedConfig.CollectionName) {
 		t.Fatalf("expected isolated collection in seed args, got %q", argsText)
+	}
+}
+
+func TestBenchmarkFixturesForProfile_ExtendedFixturesIncludesEvidenceMatrix(t *testing.T) {
+	normalizedScenarioFilter, err := memorybench.NormalizeScenarioFilter(memorybench.ScenarioFilter{
+		ScenarioSets: []string{"rag_evidence_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := benchmarkFixturesForProfile("extended_fixtures", normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("benchmarkFixturesForProfile extended_fixtures: %v", err)
+	}
+	if len(selectedFixtures) != 4 {
+		t.Fatalf("expected four evidence fixtures in extended profile, got %d", len(selectedFixtures))
+	}
+	for _, selectedFixture := range selectedFixtures {
+		if selectedFixture.Metadata.Category != memorybench.CategoryMemoryEvidenceRetrieval {
+			t.Fatalf("expected evidence retrieval fixture, got %#v", selectedFixture.Metadata)
+		}
 	}
 }

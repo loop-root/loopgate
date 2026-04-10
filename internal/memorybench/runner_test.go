@@ -280,6 +280,78 @@ func TestRunScenarioFixtures_FailsWhenBackendDiscoveryLeaksPoisoningContent(t *t
 	}
 }
 
+func TestRunScenarioFixtures_EvidenceRetrievalUsesProbeQueryWithoutHintLeakage(t *testing.T) {
+	fixture := EvidenceMountGrantDesignThreadFixture()
+	var recordedQuery string
+	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{
+		RunID:            "run_evidence_probe_query",
+		StartedAtUTC:     "2026-03-26T12:00:00Z",
+		BackendName:      "rag_baseline",
+		BenchmarkProfile: "extended_fixtures",
+		ModelProvider:    "test",
+		ModelName:        "stub",
+		TokenBudget:      2048,
+		Observer:         NoopObserver{},
+		Discoverer: fakeProjectedNodeDiscoverer{
+			recordedQuery: &recordedQuery,
+			items: []ProjectedNodeDiscoverItem{
+				{NodeID: "evidence-1", NodeKind: BenchmarkNodeKindStep, HintText: "Design note: operator mount write grant renewal moved into the explicit UI renew action so audit append failures still block authority mutation.", ProvenanceEvent: "fixture:evidence:1", MatchCount: 4},
+				{NodeID: "evidence-2", NodeKind: BenchmarkNodeKindStep, HintText: "Design follow-up: status cards remain projected convenience views and must never imply a renewed grant on their own.", ProvenanceEvent: "fixture:evidence:2", MatchCount: 3},
+			},
+		},
+	}, []ScenarioFixture{fixture})
+	if err != nil {
+		t.Fatalf("RunScenarioFixtures: %v", err)
+	}
+	if len(runResult.ScenarioResults) != 1 {
+		t.Fatalf("expected one scenario result, got %#v", runResult)
+	}
+	scenarioResult := runResult.ScenarioResults[0]
+	if !scenarioResult.Outcome.Passed {
+		t.Fatalf("expected evidence retrieval fixture to pass, got %#v", scenarioResult.Outcome)
+	}
+	expectedQuery := "Find the design thread about why write access only advances during an explicit operator refresh instead of a self-updating dashboard card."
+	if recordedQuery != expectedQuery {
+		t.Fatalf("expected probe-only evidence query, got %q", recordedQuery)
+	}
+	if strings.Contains(strings.ToLower(recordedQuery), "status cards remain projected convenience views") {
+		t.Fatalf("expected evidence retrieval query not to leak required hint text, got %q", recordedQuery)
+	}
+}
+
+func TestRunScenarioFixtures_EvidenceRetrievalFailsOnWrongContextIntrusion(t *testing.T) {
+	fixture := EvidenceQdrantBackfillSocketStallFixture()
+	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{
+		RunID:            "run_evidence_wrong_context",
+		StartedAtUTC:     "2026-03-26T12:00:00Z",
+		BackendName:      "rag_baseline",
+		BenchmarkProfile: "extended_fixtures",
+		ModelProvider:    "test",
+		ModelName:        "stub",
+		TokenBudget:      2048,
+		Observer:         NoopObserver{},
+		Discoverer: fakeProjectedNodeDiscoverer{
+			items: []ProjectedNodeDiscoverItem{
+				{NodeID: "evidence-1", NodeKind: BenchmarkNodeKindStep, HintText: "Incident log: Qdrant backfill saturated the local unix socket during corpus reseed and starved normal control-plane traffic.", ProvenanceEvent: "fixture:evidence:1", MatchCount: 4},
+				{NodeID: "distractor-1", NodeKind: BenchmarkNodeKindStep, HintText: "Backfill rehearsal note: the reranker refill drill paused the dashboard until the backlog cleared, but it never touched the control socket.", ProvenanceEvent: "fixture:evidence:2", MatchCount: 4},
+			},
+		},
+	}, []ScenarioFixture{fixture})
+	if err != nil {
+		t.Fatalf("RunScenarioFixtures: %v", err)
+	}
+	scenarioResult := runResult.ScenarioResults[0]
+	if scenarioResult.Outcome.Passed {
+		t.Fatalf("expected wrong-context evidence intrusion to fail, got %#v", scenarioResult.Outcome)
+	}
+	if scenarioResult.Outcome.MissingCriticalContext == 0 {
+		t.Fatalf("expected missing evidence context to be counted, got %#v", scenarioResult.Outcome)
+	}
+	if scenarioResult.Outcome.WrongContextInjections == 0 {
+		t.Fatalf("expected wrong-context evidence intrusion to be counted, got %#v", scenarioResult.Outcome)
+	}
+}
+
 func TestRunScenarioFixtures_AllowsBenignRetrievalDuringPoisoningFixture(t *testing.T) {
 	fixture := PoisoningRememberedInstructionFixture()
 	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{

@@ -64,3 +64,26 @@ func TestBuildCorpusDocumentsFromFixtures_IncludesTaskResumptionSteps(t *testing
 		t.Fatalf("expected task resumption document id, got %#v", corpusDocuments[0])
 	}
 }
+
+func TestBuildCorpusDocumentsFromFixtures_IncludesEvidenceRetrievalSteps(t *testing.T) {
+	corpusDocuments, err := BuildCorpusDocumentsFromFixtures([]ScenarioFixture{
+		EvidenceReplayBatchRootCauseFixture(),
+	})
+	if err != nil {
+		t.Fatalf("BuildCorpusDocumentsFromFixtures: %v", err)
+	}
+	if len(corpusDocuments) != 3 {
+		t.Fatalf("expected three evidence corpus documents without the probe step, got %d", len(corpusDocuments))
+	}
+	for _, corpusDocument := range corpusDocuments {
+		if corpusDocument.Metadata["scenario_category"] != CategoryMemoryEvidenceRetrieval {
+			t.Fatalf("expected evidence retrieval category metadata, got %#v", corpusDocument)
+		}
+		if corpusDocument.Metadata["scenario_role"] == "system_probe" {
+			t.Fatalf("expected probe step to stay out of evidence corpus, got %#v", corpusDocument)
+		}
+		if corpusDocument.Scope != BenchmarkEvidenceWorkingSetScope {
+			t.Fatalf("expected evidence documents to share one working-set scope, got %#v", corpusDocument)
+		}
+	}
+}

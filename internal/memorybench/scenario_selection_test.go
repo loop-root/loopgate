@@ -135,6 +135,27 @@ func TestSelectScenarioFixtures_PoisoningDelayedTriggerSet(t *testing.T) {
 	}
 }
 
+func TestSelectScenarioFixtures_RAGEvidenceMatrixSet(t *testing.T) {
+	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
+		ScenarioSets: []string{"rag_evidence_matrix"},
+	})
+	if err != nil {
+		t.Fatalf("NormalizeScenarioFilter: %v", err)
+	}
+	selectedFixtures, err := SelectScenarioFixtures(ExtendedScenarioFixtures(), normalizedScenarioFilter)
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+	if len(selectedFixtures) != 4 {
+		t.Fatalf("expected four evidence-retrieval fixtures, got %d", len(selectedFixtures))
+	}
+	for _, selectedFixture := range selectedFixtures {
+		if selectedFixture.Metadata.Category != CategoryMemoryEvidenceRetrieval {
+			t.Fatalf("expected evidence retrieval fixture, got %#v", selectedFixture.Metadata)
+		}
+	}
+}
+
 func TestSelectScenarioFixtures_EmptySelectionFailsClosed(t *testing.T) {
 	normalizedScenarioFilter, err := NormalizeScenarioFilter(ScenarioFilter{
 		ScenarioIDs: []string{"missing.fixture.v1"},

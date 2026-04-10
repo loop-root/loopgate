@@ -138,6 +138,8 @@ func evaluateScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscov
 		return evaluatePoisoningScenarioFixture(ctx, discoverer, candidateEvaluator, scenarioFixture)
 	case CategoryMemoryContradiction:
 		return evaluateContradictionScenarioFixture(ctx, discoverer, scenarioFixture)
+	case CategoryMemoryEvidenceRetrieval:
+		return evaluateEvidenceRetrievalScenarioFixture(ctx, discoverer, scenarioFixture)
 	case CategoryTaskResumption:
 		return evaluateTaskResumptionScenarioFixture(ctx, discoverer, scenarioFixture)
 	case CategoryMemorySafetyPrecision:
@@ -184,6 +186,148 @@ func discoverProjectedNodesWithTrace(ctx context.Context, discoverer ProjectedNo
 		return nil, nil, err
 	}
 	return projectedItems, nil, nil
+}
+
+func evaluateEvidenceRetrievalScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
+	if scenarioFixture.EvidenceRetrievalExpectation == nil {
+		return nil, nil, BackendMetrics{}, OutcomeMetrics{
+			Passed: false,
+			Score:  0,
+			Notes:  "evidence retrieval fixture missing expectation",
+		}, nil
+	}
+
+	evidenceRetrievalExpectation := *scenarioFixture.EvidenceRetrievalExpectation
+	requiredHints := evidenceRetrievalExpectation.RequiredHints
+	retrievedArtifacts := make([]RetrievedArtifact, 0, len(requiredHints))
+	retrievedPromptTokens := 0
+	retrievedHintBytes := 0
+	for requiredIndex, requiredHint := range requiredHints {
+		promptTokenCount := len(tokenizeScenarioFixtureText(requiredHint))
+		hintByteCount := len([]byte(requiredHint))
+		retrievedArtifacts = append(retrievedArtifacts, RetrievedArtifact{
+			ArtifactID:    fmt.Sprintf("evidence_candidate_%d", requiredIndex),
+			ArtifactKind:  "candidate_memory",
+			ArtifactText:  requiredHint,
+			Reason:        "evidence_fixture_expected_context",
+			MatchCount:    1,
+			PromptTokens:  promptTokenCount,
+			ProvenanceRef: scenarioFixture.Metadata.ScenarioInputRef,
+		})
+		retrievedPromptTokens += promptTokenCount
+		retrievedHintBytes += hintByteCount
+	}
+
+	backendMetrics := BackendMetrics{
+		RetrievalLatencyMillis:  1,
+		CandidatesConsidered:    len(retrievedArtifacts),
+		ItemsReturned:           len(retrievedArtifacts),
+		HintBytesRetrieved:      retrievedHintBytes,
+		HintBytesInjected:       retrievedHintBytes,
+		RetrievedPromptTokens:   retrievedPromptTokens,
+		InjectedPromptTokens:    retrievedPromptTokens,
+		ApproxFinalPromptTokens: retrievedPromptTokens,
+	}
+	outcomeMetrics := OutcomeMetrics{
+		EndToEndSuccess:      true,
+		RetrievalCorrectness: 1,
+		ProvenanceCorrect:    true,
+	}
+
+	if discoverer != nil {
+		maxItemsReturned := 5
+		if evidenceRetrievalExpectation.MaxItemsReturned > 0 {
+			maxItemsReturned = evidenceRetrievalExpectation.MaxItemsReturned
+		}
+		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(
+			ctx,
+			discoverer,
+			BenchmarkFixtureScope(scenarioFixture),
+			evidenceRetrievalProbeQuery(scenarioFixture),
+			maxItemsReturned,
+		)
+		if err != nil {
+			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for evidence retrieval fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
+		}
+		if len(candidatePool) > 0 {
+			backendMetrics.CandidatesConsidered = len(candidatePool)
+			backendMetrics.ProjectedNodesMatched = len(candidatePool)
+		} else {
+			backendMetrics.CandidatesConsidered = len(discoveredItems)
+		}
+		backendMetrics.ItemsReturned = len(discoveredItems)
+		backendMetrics.HintBytesRetrieved = 0
+		backendMetrics.HintBytesInjected = 0
+		backendMetrics.RetrievedPromptTokens = 0
+		backendMetrics.InjectedPromptTokens = 0
+		backendMetrics.ApproxFinalPromptTokens = 0
+		backendMetrics.HintOnlyMatches = 0
+		retrievedArtifacts = make([]RetrievedArtifact, 0, len(discoveredItems))
+
+		foundRequiredHints := make(map[string]bool, len(requiredHints))
+		for _, requiredHint := range requiredHints {
+			foundRequiredHints[strings.TrimSpace(requiredHint)] = false
+		}
+		for _, discoveredItem := range discoveredItems {
+			promptTokenCount := len(tokenizeScenarioFixtureText(discoveredItem.HintText))
+			hintByteCount := len([]byte(discoveredItem.HintText))
+			retrievedArtifacts = append(retrievedArtifacts, RetrievedArtifact{
+				ArtifactID:    discoveredItem.NodeID,
+				ArtifactKind:  discoveredItem.NodeKind,
+				ArtifactText:  discoveredItem.HintText,
+				Reason:        "projected_node_discovery",
+				MatchCount:    discoveredItem.MatchCount,
+				PromptTokens:  promptTokenCount,
+				ProvenanceRef: discoveredItem.ProvenanceEvent,
+			})
+			backendMetrics.HintBytesRetrieved += hintByteCount
+			backendMetrics.HintBytesInjected += hintByteCount
+			backendMetrics.RetrievedPromptTokens += promptTokenCount
+			backendMetrics.InjectedPromptTokens += promptTokenCount
+			backendMetrics.ApproxFinalPromptTokens += promptTokenCount
+			if strings.TrimSpace(discoveredItem.ExactSignature) == "" && strings.TrimSpace(discoveredItem.FamilySignature) == "" {
+				backendMetrics.HintOnlyMatches++
+			}
+			for requiredHint := range foundRequiredHints {
+				if containsFold(discoveredItem.HintText, requiredHint) {
+					foundRequiredHints[requiredHint] = true
+				}
+			}
+			for _, forbiddenHint := range evidenceRetrievalExpectation.ForbiddenHints {
+				if containsFold(discoveredItem.HintText, forbiddenHint) {
+					outcomeMetrics.WrongContextInjections++
+				}
+			}
+		}
+		for _, requiredHint := range requiredHints {
+			if !foundRequiredHints[strings.TrimSpace(requiredHint)] {
+				outcomeMetrics.MissingCriticalContext++
+			}
+		}
+		if evidenceRetrievalExpectation.MustFindEvidence && len(discoveredItems) == 0 {
+			outcomeMetrics.MissingCriticalContext++
+		}
+		if outcomeMetrics.MissingCriticalContext > 0 || outcomeMetrics.WrongContextInjections > 0 {
+			outcomeMetrics.EndToEndSuccess = false
+			outcomeMetrics.RetrievalCorrectness = 0
+		}
+
+		outcomeMetrics.Passed, outcomeMetrics.Score, outcomeMetrics.Notes = scoreEvidenceRetrievalExpectation(
+			evidenceRetrievalExpectation,
+			backendMetrics,
+			outcomeMetrics,
+		)
+		applyOutcomeBucketScores(&outcomeMetrics, backendMetrics)
+		return retrievedArtifacts, candidatePool, backendMetrics, outcomeMetrics, nil
+	}
+
+	outcomeMetrics.Passed, outcomeMetrics.Score, outcomeMetrics.Notes = scoreEvidenceRetrievalExpectation(
+		evidenceRetrievalExpectation,
+		backendMetrics,
+		outcomeMetrics,
+	)
+	applyOutcomeBucketScores(&outcomeMetrics, backendMetrics)
+	return retrievedArtifacts, nil, backendMetrics, outcomeMetrics, nil
 }
 
 func evaluateTaskResumptionScenarioFixture(ctx context.Context, discoverer ProjectedNodeDiscoverer, scenarioFixture ScenarioFixture) ([]RetrievedArtifact, []CandidatePoolArtifact, BackendMetrics, OutcomeMetrics, error) {
@@ -233,7 +377,7 @@ func evaluateTaskResumptionScenarioFixture(ctx context.Context, discoverer Proje
 	}
 
 	if discoverer != nil {
-		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(ctx, discoverer, BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID), taskResumptionProbeQuery(scenarioFixture), 5)
+		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(ctx, discoverer, BenchmarkFixtureScope(scenarioFixture), taskResumptionProbeQuery(scenarioFixture), 5)
 		if err != nil {
 			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for task resumption fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
 		}
@@ -408,7 +552,7 @@ func evaluateContradictionScenarioFixture(ctx context.Context, discoverer Projec
 		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(
 			ctx,
 			discoverer,
-			BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID),
+			BenchmarkFixtureScope(scenarioFixture),
 			contradictionProbeQuery(scenarioFixture),
 			maxItemsReturned,
 		)
@@ -512,7 +656,7 @@ func evaluatePoisoningScenarioFixture(ctx context.Context, discoverer ProjectedN
 	}}
 	backendMetrics := BackendMetrics{RetrievalLatencyMillis: 1, CandidatesConsidered: 1}
 	if discoverer != nil {
-		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(ctx, discoverer, BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID), poisoningProbeQuery(scenarioFixture), 5)
+		discoveredItems, candidatePool, err := discoverProjectedNodesWithTrace(ctx, discoverer, BenchmarkFixtureScope(scenarioFixture), poisoningProbeQuery(scenarioFixture), 5)
 		if err != nil {
 			return nil, nil, BackendMetrics{}, OutcomeMetrics{}, fmt.Errorf("discover projected nodes for fixture %q: %w", scenarioFixture.Metadata.ScenarioID, err)
 		}
@@ -625,7 +769,9 @@ func applyOutcomeBucketScores(outcomeMetrics *OutcomeMetrics, backendMetrics Bac
 	}
 	operationalPenalty += float64(outcomeMetrics.MissingCriticalContext) * 0.25
 	operationalPenalty += float64(outcomeMetrics.WrongContextInjections) * 0.20
-	if !outcomeMetrics.TaskResumptionSuccess && (outcomeMetrics.MissingCriticalContext > 0 || outcomeMetrics.WrongContextInjections > 0) {
+	// Missing or contaminated retrieval context is operationally worse regardless
+	// of whether the scenario is a task-resume flow or a broader evidence lookup.
+	if !outcomeMetrics.EndToEndSuccess && (outcomeMetrics.MissingCriticalContext > 0 || outcomeMetrics.WrongContextInjections > 0) {
 		operationalPenalty += 0.15
 	}
 	outcomeMetrics.OperationalCostScore = clampBucketScore(1 - operationalPenalty)
@@ -787,6 +933,15 @@ func taskResumptionProbeQuery(scenarioFixture ScenarioFixture) string {
 	return scenarioFixture.Metadata.Description
 }
 
+func evidenceRetrievalProbeQuery(scenarioFixture ScenarioFixture) string {
+	for _, scenarioStep := range scenarioFixture.Steps {
+		if scenarioStep.Role == "system_probe" {
+			return scenarioStep.Content
+		}
+	}
+	return scenarioFixture.Metadata.Description
+}
+
 func containsFold(haystack string, needle string) bool {
 	trimmedNeedle := strings.TrimSpace(needle)
 	if trimmedNeedle == "" {
@@ -928,6 +1083,63 @@ func scoreTaskResumptionExpectation(taskResumptionExpectation TaskResumptionExpe
 
 	if totalChecks == 0 {
 		return false, 0, "task resumption fixture had no checks"
+	}
+	passed := checksPassed == totalChecks
+	score := float64(checksPassed) / float64(totalChecks)
+	if len(noteParts) == 0 {
+		return passed, score, ""
+	}
+	return passed, score, joinNotes(noteParts)
+}
+
+func scoreEvidenceRetrievalExpectation(evidenceRetrievalExpectation EvidenceRetrievalExpectation, backendMetrics BackendMetrics, outcomeMetrics OutcomeMetrics) (bool, float64, string) {
+	checksPassed := 0
+	totalChecks := 0
+	noteParts := make([]string, 0, 5)
+
+	if evidenceRetrievalExpectation.MustFindEvidence {
+		totalChecks++
+		if backendMetrics.ItemsReturned > 0 && outcomeMetrics.MissingCriticalContext == 0 {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "required evidence was not retrieved")
+		}
+	}
+	if len(evidenceRetrievalExpectation.RequiredHints) > 0 {
+		totalChecks++
+		if outcomeMetrics.MissingCriticalContext == 0 {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "expected evidence hints were missing")
+		}
+	}
+	if len(evidenceRetrievalExpectation.ForbiddenHints) > 0 {
+		totalChecks++
+		if outcomeMetrics.WrongContextInjections == 0 {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "irrelevant or wrong-context evidence intruded")
+		}
+	}
+	if evidenceRetrievalExpectation.MaxItemsReturned > 0 {
+		totalChecks++
+		if backendMetrics.ItemsReturned <= evidenceRetrievalExpectation.MaxItemsReturned {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "too many evidence items were returned")
+		}
+	}
+	if evidenceRetrievalExpectation.MaxHintBytesRetrieved > 0 {
+		totalChecks++
+		if backendMetrics.HintBytesRetrieved <= evidenceRetrievalExpectation.MaxHintBytesRetrieved {
+			checksPassed++
+		} else {
+			noteParts = append(noteParts, "evidence retrieval exceeded the hint-byte budget")
+		}
+	}
+
+	if totalChecks == 0 {
+		return false, 0, "evidence retrieval fixture had no checks"
 	}
 	passed := checksPassed == totalChecks
 	score := float64(checksPassed) / float64(totalChecks)

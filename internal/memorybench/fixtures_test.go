@@ -154,3 +154,49 @@ func TestDefaultScenarioFixtures_IncludePoisoningFixture(t *testing.T) {
 		}
 	}
 }
+
+func TestExtendedScenarioFixtures_AddEvidenceRetrievalMatrixWithoutMutatingDefaultBaseline(t *testing.T) {
+	defaultFixtures := DefaultScenarioFixtures()
+	extendedFixtures := ExtendedScenarioFixtures()
+	if len(defaultFixtures) != 70 {
+		t.Fatalf("expected stable 70-fixture default baseline, got %d", len(defaultFixtures))
+	}
+	if len(extendedFixtures) != len(defaultFixtures)+4 {
+		t.Fatalf("expected four additional evidence fixtures, got default=%d extended=%d", len(defaultFixtures), len(extendedFixtures))
+	}
+
+	expectedEvidenceFixtureIDs := map[string]bool{
+		"evidence.semantic_paraphrase_replay_batch_root_cause.v1": false,
+		"evidence.multi_document_mount_grant_design_thread.v1":    false,
+		"evidence.incident_qdrant_backfill_socket_stall.v1":       false,
+		"evidence.preview_card_authority_boundary_thread.v1":      false,
+	}
+	for _, extendedFixture := range extendedFixtures {
+		expectedFound, isEvidenceFixture := expectedEvidenceFixtureIDs[extendedFixture.Metadata.ScenarioID]
+		if !isEvidenceFixture {
+			continue
+		}
+		_ = expectedFound
+		expectedEvidenceFixtureIDs[extendedFixture.Metadata.ScenarioID] = true
+		if extendedFixture.Metadata.Category != CategoryMemoryEvidenceRetrieval {
+			t.Fatalf("expected evidence retrieval category, got %#v", extendedFixture.Metadata)
+		}
+		if extendedFixture.EvidenceRetrievalExpectation == nil {
+			t.Fatalf("expected evidence retrieval expectation on fixture %#v", extendedFixture)
+		}
+		if len(extendedFixture.EvidenceRetrievalExpectation.RequiredHints) < 2 {
+			t.Fatalf("expected multi-hint evidence retrieval fixture, got %#v", extendedFixture.EvidenceRetrievalExpectation)
+		}
+		if !extendedFixture.EvidenceRetrievalExpectation.MustFindEvidence {
+			t.Fatalf("expected must-find-evidence guard on fixture %#v", extendedFixture.EvidenceRetrievalExpectation)
+		}
+		if extendedFixture.Metadata.SubfamilyID == "" {
+			t.Fatalf("expected evidence subfamily on fixture %#v", extendedFixture.Metadata)
+		}
+	}
+	for scenarioID, found := range expectedEvidenceFixtureIDs {
+		if !found {
+			t.Fatalf("expected evidence fixture %q in extended fixtures", scenarioID)
+		}
+	}
+}

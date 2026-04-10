@@ -163,8 +163,15 @@ Next lift:
   honest rerun remains useful as the pre-expansion baseline, but the current
   scoreboard is the `2026-04-10` `70`-fixture rerun. See
   `docs/roadmap/2026-04-10-memorybench-matrix-and-relational-hints.md` for the
-  executable matrix buckets and the planned RAG/hybrid evidence buckets that
-  are still missing.
+  executable matrix buckets. The first targeted `RAG should win` evidence
+  bucket now exists as `extended_fixtures` plus `rag_evidence_matrix`, with a
+  shared `benchmark:evidence_working_set` scope so broad retrieval competes
+  over one corpus instead of isolated per-scenario mini-corpora. The current
+  read is still cautious: stronger RAG is `2/4`, while continuity product path,
+  continuity synthetic, and baseline RAG are `1/4`. That is enough to prove at
+  least one honest broad-evidence case where stronger RAG beats continuity, but
+  it is not yet broad enough to count as a promoted headline bucket. Hybrid
+  evidence recall is still missing.
   Backend-owned observed packets now also allowlist source-ref kinds, so
   first-class provenance refs only survive on supported server-loaded paths,
   and new provenance sources have to be added intentionally rather than

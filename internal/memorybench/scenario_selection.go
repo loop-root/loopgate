@@ -69,6 +69,12 @@ var builtInScenarioSets = map[string][]string{
 		"poisoning.deferred_activation_signing_key_handoff.v1",
 		"safety_precision.review_waiver_denied_postmortem.v1",
 	},
+	"rag_evidence_matrix": {
+		"evidence.semantic_paraphrase_replay_batch_root_cause.v1",
+		"evidence.multi_document_mount_grant_design_thread.v1",
+		"evidence.incident_qdrant_backfill_socket_stall.v1",
+		"evidence.preview_card_authority_boundary_thread.v1",
+	},
 }
 
 func NormalizeScenarioFilter(rawScenarioFilter ScenarioFilter) (ScenarioFilter, error) {

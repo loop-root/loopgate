@@ -29,6 +29,13 @@ Current checked-in fixture counts:
 - `13` task-resumption fixtures
 - `9` safety-precision fixtures
 
+Extended targeted profile:
+
+- `74` fixtures in `-profile extended_fixtures`
+- the additional `4` fixtures are `memory_evidence_retrieval`
+- those evidence fixtures now share one working-set scope:
+  `benchmark:evidence_working_set`
+
 The current checked-in matrix is larger than the last scored `2026-04-09`
 honest rerun set. That means the scoreboard in
 [memorybench_running_results.md](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
@@ -112,7 +119,29 @@ claims about continuity versus RAG beyond state continuity.
 
 ### 4.1 RAG Should Win
 
-These fixtures should reward broad evidence retrieval, not canonical state:
+This bucket is now partially implemented as `memory_evidence_retrieval` inside
+`-profile extended_fixtures`.
+
+Current targeted run IDs:
+
+- continuity parity: `continuity_evidence_parity_20260410_v4`
+- continuity synthetic: `continuity_evidence_synth_20260410_v4`
+- RAG baseline: `rag_baseline_evidence_20260410_v4`
+- stronger RAG: `rag_stronger_evidence_20260410_v4`
+
+Current read:
+
+- stronger RAG is `2/4`
+- continuity product path is `1/4`
+- continuity synthetic is `1/4`
+- baseline RAG is `1/4`
+- the strongest current separator is the paraphrased replay root-cause fixture,
+  where stronger RAG retrieves the correct evidence pair and both continuity
+  paths miss the second required artifact under shared-scope retrieval
+- the mount-grant and preview-card design-thread fixtures still fail across
+  every current backend, so this bucket is useful but still immature
+
+These fixtures are intended to reward broad evidence retrieval, not canonical state:
 
 - exact quote lookup from longer notes
 - multi-document synthesis
@@ -120,7 +149,7 @@ These fixtures should reward broad evidence retrieval, not canonical state:
 - “find the three relevant prior discussions” style search
 - large working-set recall where distillation would be lossy
 
-Recommended future category:
+Current category:
 
 - `memory_evidence_retrieval`
 

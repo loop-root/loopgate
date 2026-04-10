@@ -66,12 +66,15 @@ func benchmarkFixturesForProfile(benchmarkProfile string, scenarioFilter memoryb
 	switch strings.TrimSpace(strings.ToLower(benchmarkProfile)) {
 	case "smoke":
 		if !scenarioFilter.IsZero() {
-			return nil, fmt.Errorf("scenario filters are only supported with -profile fixtures")
+			return nil, fmt.Errorf("scenario filters are only supported with -profile fixtures or -profile extended_fixtures")
 		}
 		return []memorybench.ScenarioFixture{}, nil
 	case "fixtures":
 		defaultScenarioFixtures := memorybench.DefaultScenarioFixtures()
 		return memorybench.SelectScenarioFixtures(defaultScenarioFixtures, scenarioFilter)
+	case "extended_fixtures":
+		extendedScenarioFixtures := memorybench.ExtendedScenarioFixtures()
+		return memorybench.SelectScenarioFixtures(extendedScenarioFixtures, scenarioFilter)
 	default:
 		return nil, fmt.Errorf("unsupported benchmark profile %q", benchmarkProfile)
 	}

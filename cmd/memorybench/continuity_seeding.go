@@ -44,6 +44,13 @@ func buildContinuityProductionParitySeeds(selectedScenarioFixtures []memorybench
 		switch scenarioFixture.Metadata.Category {
 		case memorybench.CategoryMemoryPoisoning, memorybench.CategoryMemorySafetyPrecision:
 			continue
+		case memorybench.CategoryMemoryEvidenceRetrieval:
+			evidenceSeedNodes, evidenceManifestRecords, err := buildContinuityEvidenceFixtureSeedNodes(scenarioFixture, baseTimestampUTC, &seedOffset)
+			if err != nil {
+				return nil, nil, nil, nil, nil, err
+			}
+			fixtureSeedNodes = append(fixtureSeedNodes, evidenceSeedNodes...)
+			seedManifestRecords = append(seedManifestRecords, evidenceManifestRecords...)
 		case memorybench.CategoryTaskResumption:
 			taskResumptionTodoSeeds, taskResumptionManifestRecords, err := buildContinuityTaskResumptionTodoSeeds(scenarioFixture)
 			if err != nil {
@@ -444,6 +451,61 @@ func todoSeedLineageStatus(todoSeed loopgate.BenchmarkTodoSeed) string {
 		return "tombstoned"
 	default:
 		return "eligible"
+	}
+}
+
+func buildContinuityEvidenceFixtureSeedNodes(
+	scenarioFixture memorybench.ScenarioFixture,
+	baseTimestampUTC time.Time,
+	seedOffset *int,
+) ([]loopgate.BenchmarkProjectedNodeSeed, []memorybench.SeedManifestRecord, error) {
+	if scenarioFixture.EvidenceRetrievalExpectation == nil {
+		return nil, nil, fmt.Errorf("evidence retrieval fixture %q is missing expectation", scenarioFixture.Metadata.ScenarioID)
+	}
+	scenarioID := strings.TrimSpace(scenarioFixture.Metadata.ScenarioID)
+	if scenarioID == "" {
+		return nil, nil, fmt.Errorf("evidence retrieval fixture is missing scenario id")
+	}
+
+	seedNodes := make([]loopgate.BenchmarkProjectedNodeSeed, 0, len(scenarioFixture.Steps))
+	for stepIndex, scenarioStep := range scenarioFixture.Steps {
+		if !memorybenchFixtureStepEligibleForEvidenceSeeds(scenarioFixture, scenarioStep) {
+			continue
+		}
+		trimmedContent := strings.TrimSpace(scenarioStep.Content)
+		if trimmedContent == "" {
+			continue
+		}
+		seedNodes = append(seedNodes, loopgate.BenchmarkProjectedNodeSeed{
+			NodeID:          fmt.Sprintf("%s::evidence::%02d", scenarioID, len(seedNodes)),
+			CreatedAtUTC:    continuityFixtureSeedTimestamp(baseTimestampUTC, seedOffset),
+			Scope:           memorybench.BenchmarkFixtureScope(scenarioFixture),
+			NodeKind:        memorybench.BenchmarkNodeKindStep,
+			State:           "active",
+			HintText:        trimmedContent,
+			ProvenanceEvent: fmt.Sprintf("fixture:%s:step:%02d", scenarioID, stepIndex),
+		})
+	}
+	if len(seedNodes) == 0 {
+		return nil, nil, fmt.Errorf("evidence retrieval fixture %q produced no benchmark evidence seeds", scenarioID)
+	}
+	// Evidence fixtures intentionally stay on fixture-ingest nodes. Continuity does
+	// not yet have a first-class broad evidence memory path, so promoting these into
+	// remembered facts would overstate what the product actually does today.
+	return seedNodes, fixtureIngestManifestRecords(scenarioID, seedNodes), nil
+}
+
+func memorybenchFixtureStepEligibleForEvidenceSeeds(scenarioFixture memorybench.ScenarioFixture, scenarioStep memorybench.ScenarioStep) bool {
+	trimmedRole := strings.TrimSpace(scenarioStep.Role)
+	switch trimmedRole {
+	case "system_probe", "hint_probe":
+		return false
+	}
+	switch strings.TrimSpace(scenarioFixture.Metadata.Category) {
+	case memorybench.CategoryMemoryPoisoning, memorybench.CategoryMemorySafetyPrecision:
+		return false
+	default:
+		return trimmedRole == "user" || trimmedRole == "continuity_candidate"
 	}
 }
 

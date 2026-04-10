@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	BenchmarkScopeGlobal   = "global"
-	BenchmarkNodeKindStep  = "benchmark_fixture_step"
-	BenchmarkSourceFixture = "memorybench_fixture"
+	BenchmarkScopeGlobal             = "global"
+	BenchmarkEvidenceWorkingSetScope = "benchmark:evidence_working_set"
+	BenchmarkNodeKindStep            = "benchmark_fixture_step"
+	BenchmarkSourceFixture           = "memorybench_fixture"
 )
 
 type CorpusDocument struct {
@@ -51,7 +52,7 @@ func BuildCorpusDocumentsFromFixtures(scenarioFixtures []ScenarioFixture) ([]Cor
 				DocumentID:    documentID,
 				Content:       trimmedContent,
 				DocumentKind:  BenchmarkNodeKindStep,
-				Scope:         BenchmarkScenarioScope(trimmedScenarioID),
+				Scope:         BenchmarkFixtureScope(scenarioFixture),
 				CreatedAtUTC:  baseTimestampUTC.Add(time.Duration(documentOffset) * time.Minute).Format(time.RFC3339),
 				ProvenanceRef: fmt.Sprintf("fixture:%s", documentID),
 				Metadata: map[string]string{
@@ -78,6 +79,16 @@ func BenchmarkScenarioScope(scenarioID string) string {
 		return BenchmarkScopeGlobal
 	}
 	return "scenario:" + trimmedScenarioID
+}
+
+func BenchmarkFixtureScope(scenarioFixture ScenarioFixture) string {
+	if strings.TrimSpace(scenarioFixture.Metadata.Category) == CategoryMemoryEvidenceRetrieval {
+		// Evidence fixtures model broad working-set retrieval, not per-scenario slot
+		// recall. Give them a shared scope so RAG-style backends compete over one
+		// evidence corpus instead of four tiny isolated corpora.
+		return BenchmarkEvidenceWorkingSetScope
+	}
+	return BenchmarkScenarioScope(scenarioFixture.Metadata.ScenarioID)
 }
 
 func fixtureStepEligibleForCorpus(scenarioFixture ScenarioFixture, scenarioStep ScenarioStep) bool {
