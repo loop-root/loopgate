@@ -148,12 +148,14 @@ Next lift:
   production-parity retrieval now runs through `/v1/memory/discover` and
   `/v1/memory/recall`, and the current checked-in `61`-fixture scored set no
   longer needs projected-node fallback.
-  The current honest continuity rerun is `57/61` overall with `34/34` on
-  contradiction and `13/13` on task resumption.
+  The current honest continuity rerun is `61/61` overall with `8/8` on
+  poisoning, `34/34` on contradiction, and `13/13` on task resumption.
   That gain came from product changes behind the real control-plane path,
   not from restoring projected-node benchmark shortcuts.
-  On the current fixture set, the main remaining weakness is governed
-  poisoning at `4/8`, not contradiction routing.
+  The final step from `57/61` to `61/61` came from fixing benchmark candidate
+  governance so continuity-style poisoning fixtures are evaluated through the
+  real TCL policy lane instead of falling into an explicit-write validator
+  mismatch.
   before packets enter backend-owned observed continuity state, so first-class
   provenance refs only survive on supported server-loaded paths. Backend-owned
   observed packets now also allowlist source-ref kinds, so new provenance

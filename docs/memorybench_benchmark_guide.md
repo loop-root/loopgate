@@ -605,7 +605,9 @@ Important poisoning caveat:
 - the poisoning family currently measures a governance differential under the
   harness, not a neutral raw-retrieval contest
 - continuity uses the real governed candidate path
-- the current RAG comparators use a permissive benchmark governance stub
+- default RAG runs use a permissive benchmark governance stub
+- the current policy-matched fairness reruns switch RAG to
+  `-candidate-governance continuity_tcl`
 - poisoning steps are excluded from the seeded RAG corpus by design
 - if you want a policy-matched poisoning comparison, rerun RAG with
   `-candidate-governance continuity_tcl`

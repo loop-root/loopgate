@@ -477,13 +477,16 @@ Rules:
   fallback, so the honest continuity parity baseline now runs with
   `retrieval_path_mode=control_plane_memory_routes` and
   `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
-- the latest honest continuity rerun is now `57/61` overall with `34/34` on
-  contradiction, `13/13` on task resumption, and `6/6` on safety precision
+- the latest honest continuity rerun is now `61/61` overall with `8/8` on
+  poisoning, `34/34` on contradiction, `13/13` on task resumption, and `6/6`
+  on safety precision
 - that recovery came from product changes behind the real control-plane path,
   not from restoring projected-node benchmark shortcuts
 - the benchmark-local slot-preference wrapper was inert on that run because the
   checked-in scored fixture set used no projected-node fallback scopes
-- the remaining gap on the current fixture set is governed poisoning at `4/8`
+- the move from `57/61` to `61/61` came from fixing benchmark governance
+  evaluation for continuity-style candidates so the scored run now reflects the
+  real TCL policy decision instead of an explicit-write validator mismatch
 
 If a shortcut path remains for fixture speed, it should be labeled as such in
 code and output.
