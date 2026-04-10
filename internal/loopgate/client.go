@@ -333,6 +333,10 @@ func (client *Client) SandboxExport(ctx context.Context, request SandboxExportRe
 	return response, nil
 }
 
+// InspectContinuityThread calls the legacy raw continuity proposal route where the caller
+// supplies event bundles directly. This path is compatibility-only and may be disabled by
+// policy; local chat clients should prefer SubmitHavenContinuityInspectionForThread so
+// Loopgate loads the authoritative thread data server-side.
 func (client *Client) InspectContinuityThread(ctx context.Context, request ContinuityInspectRequest) (ContinuityInspectResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {

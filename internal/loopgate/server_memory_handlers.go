@@ -26,6 +26,14 @@ func (server *Server) handleContinuityInspect(writer http.ResponseWriter, reques
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
+	if !server.policy.Memory.AllowRawContinuityInspect {
+		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "raw continuity inspect is disabled by policy; use /v1/continuity/inspect-thread",
+			DenialCode:   DenialCodePolicyDenied,
+		})
+		return
+	}
 
 	var inspectRequest ContinuityInspectRequest
 	if err := decodeJSONBytes(requestBodyBytes, &inspectRequest); err != nil {

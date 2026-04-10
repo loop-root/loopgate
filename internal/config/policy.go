@@ -54,9 +54,13 @@ type Policy struct {
 	} `yaml:"logging" json:"logging"`
 
 	Memory struct {
-		AutoDistillate                bool `yaml:"auto_distillate" json:"auto_distillate"`
-		RequirePromotionApproval      bool `yaml:"require_promotion_approval" json:"require_promotion_approval"`
-		ContinuityReviewRequired      bool `yaml:"continuity_review_required" json:"continuity_review_required"`
+		AutoDistillate           bool `yaml:"auto_distillate" json:"auto_distillate"`
+		RequirePromotionApproval bool `yaml:"require_promotion_approval" json:"require_promotion_approval"`
+		ContinuityReviewRequired bool `yaml:"continuity_review_required" json:"continuity_review_required"`
+		// AllowRawContinuityInspect keeps the legacy caller-supplied event-bundle route available.
+		// Default false: supported clients should prefer server-loaded continuity sources such as
+		// /v1/continuity/inspect-thread so raw transcript/event payloads do not become the trust root.
+		AllowRawContinuityInspect     bool `yaml:"allow_raw_continuity_inspect" json:"allow_raw_continuity_inspect"`
 		SubmitPreviousMinEvents       int  `yaml:"submit_previous_min_events" json:"submit_previous_min_events"`
 		SubmitPreviousMinPayloadBytes int  `yaml:"submit_previous_min_payload_bytes" json:"submit_previous_min_payload_bytes"`
 		SubmitPreviousMinPromptTokens int  `yaml:"submit_previous_min_prompt_tokens" json:"submit_previous_min_prompt_tokens"`
@@ -76,7 +80,7 @@ type Policy struct {
 
 // PolicyLoadResult holds the parsed policy and its content hash.
 type PolicyLoadResult struct {
-	Policy     Policy
+	Policy        Policy
 	ContentSHA256 string // hex-encoded SHA-256 of raw policy bytes
 }
 

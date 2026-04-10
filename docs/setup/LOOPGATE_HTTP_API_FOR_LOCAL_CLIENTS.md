@@ -218,7 +218,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows |
 | `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft |
 | `POST /v1/sandbox/*` | import, stage, metadata, export, list |
-| `POST /v1/continuity/inspect` | Continuity thread inspection (caller supplies `events` JSON) |
+| `POST /v1/continuity/inspect` | Compatibility-only raw continuity inspection (caller supplies `events` JSON); policy-gated and disabled by default |
 | `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
 | `GET /v1/memory/wake-state` | Wake state projection |
 | `GET` / `PUT /v1/tasks` … | Task board sync |
@@ -303,6 +303,14 @@ These routes let a client using **actor label `haven`** create or complete **Tas
 - **Behavior:** Maps persisted thread events to continuity inspection input server-side and runs the same inspection pipeline as other continuity proposals. If the thread has no mappable continuity rows, returns **200** with `submit_status: "skipped_no_continuity_events"`.
 - **Success (200):** `HavenContinuityInspectThreadResponse` in `internal/loopgate/types.go` (`submit_status`, optional `inspection_id`, derivation/review fields; Go identifier retained for compatibility).
 - **Product:** Clients may call this **best-effort after a completed chat turn** when the turn did **not** stop for `approval_required`, so operators get continuity proposals without shipping raw transcripts over HTTP.
+
+### 7.3.1 Raw continuity inspection compatibility path
+
+**`POST /v1/continuity/inspect`**
+
+- **Status:** compatibility-only; **disabled by policy by default**.
+- **Why:** caller-supplied event bundles are weaker provenance than Loopgate-loaded thread or ledger records.
+- **Use:** tests and temporary migrations only while stronger authoritative source refs are being built.
 
 ### 7.4 Operator diagnostics (“doctor” / troubleshooting)
 

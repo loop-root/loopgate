@@ -124,7 +124,9 @@ Next lift:
   persisted facts directly from inline TCL analysis results. New continuity
   writes persist a Loopgate-owned canonical `observed_packet` in continuity
   JSONL instead of the raw inspect request body, and distillation derives from
-  that typed packet rather than the caller payload bundle. Remaining gaps are
+  that typed packet rather than the caller payload bundle. Raw
+  `/v1/continuity/inspect` is now a compatibility-only policy-gated path rather
+  than the default production route. Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys

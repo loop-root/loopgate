@@ -110,6 +110,20 @@ func TestMemoryWriteRoutesRequireMemoryWriteScope(t *testing.T) {
 	}
 }
 
+func TestRawContinuityInspectDisabledByPolicy(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithRawContinuityInspect(false, false))
+
+	writerClient := NewClient(client.socketPath)
+	writerClient.ConfigureSession("memory-writer", "memory-write-raw-continuity-disabled", []string{"memory.write"})
+	if _, err := writerClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure memory.write token: %v", err)
+	}
+	if _, err := writerClient.InspectContinuityThread(context.Background(), testContinuityInspectRequestForSession("inspect_policy_disabled", "thread_policy_disabled", "monitor github status", "memory-write-raw-continuity-disabled")); err == nil || !strings.Contains(err.Error(), DenialCodePolicyDenied) || !strings.Contains(err.Error(), "/v1/continuity/inspect-thread") {
+		t.Fatalf("expected raw continuity inspect policy denial directing caller to inspect-thread, got %v", err)
+	}
+}
+
 func TestMemoryGovernanceRoutesRequireReviewAndLineageScope(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

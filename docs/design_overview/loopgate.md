@@ -155,7 +155,7 @@ Implemented endpoints:
 - `POST /v1/sandbox/stage`
 - `POST /v1/sandbox/metadata`
 - `POST /v1/sandbox/export`
-- `POST /v1/continuity/inspect`
+- `POST /v1/continuity/inspect` (compatibility-only raw event route; policy-gated and disabled by default)
 - `GET /v1/memory/wake-state`
 - `POST /v1/memory/discover`
 - `POST /v1/memory/recall`

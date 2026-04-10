@@ -82,6 +82,9 @@ Completed slices in the current refactor:
   `observed_packet` record instead of storing the raw inspect request body in
   continuity JSONL, and distillation now derives from that typed packet rather
   than the caller-supplied payload bundle
+- raw `/v1/continuity/inspect` is now an explicit compatibility path controlled
+  by policy instead of a silent production default; the supported operator path
+  remains server-loaded `/v1/continuity/inspect-thread`
 
 Still not finished:
 

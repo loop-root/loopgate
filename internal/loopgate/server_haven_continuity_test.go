@@ -12,7 +12,7 @@ import (
 
 func TestHavenContinuityInspectThread_SubmittedAndSkipped(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithRawContinuityInspect(false, false))
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	wsID := server.deriveWorkspaceIDFromRepoRoot()
@@ -70,7 +70,7 @@ func TestHavenContinuityInspectThread_SubmittedAndSkipped(t *testing.T) {
 
 func TestHavenContinuityInspectThread_LegacyAliasStillWorks(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithRawContinuityInspect(false, false))
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	workspaceID := server.deriveWorkspaceIDFromRepoRoot()

@@ -48,6 +48,9 @@ memory:
   auto_distillate: true
   require_promotion_approval: true
   continuity_review_required: false
+  # Compatibility-only. The supported path is server-loaded continuity inspection
+  # via /v1/continuity/inspect-thread so clients do not submit raw event bundles.
+  allow_raw_continuity_inspect: false
   submit_previous_min_events: 3
   submit_previous_min_payload_bytes: 512
   submit_previous_min_prompt_tokens: 120
@@ -61,4 +64,3 @@ safety:
   # Optional: restrict auto-allow to named capabilities. Omit for all TrustedSandboxLocal tools; `[]` disables auto-allow.
   # haven_trusted_sandbox_auto_allow_capabilities:
   #   - "notes.write"
-
