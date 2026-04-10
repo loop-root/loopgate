@@ -75,6 +75,9 @@ Completed slices in the current refactor:
   `name`, `preferred_name`, `timezone`, and `locale`, so the current anchored
   value remains discoverable even when tag overlap is weak and heuristic
   ranking would otherwise miss it
+- continuity-derived fact analysis now runs through a backend-owned typed
+  continuity candidate helper before persistence, so `inspect` no longer
+  hand-assembles persisted facts from inline TCL analysis results
 
 Still not finished:
 

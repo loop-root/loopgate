@@ -119,7 +119,9 @@ Next lift:
   instead of blindly storing arbitrary payload shapes. Stable profile-slot
   discover is now exact-anchor-first for current `name`, `preferred_name`,
   `timezone`, and `locale` values so anchored state no longer depends on
-  lexical tag overlap alone. Remaining gaps are
+  lexical tag overlap alone. Continuity-derived fact persistence now also
+  routes through a backend-owned typed candidate helper instead of hand-building
+  persisted facts directly from inline TCL analysis results. Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.
 - TCL-informed continuity and bounded semantic compression for distillates and resonate keys

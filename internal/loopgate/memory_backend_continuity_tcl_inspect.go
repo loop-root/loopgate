@@ -2,8 +2,11 @@ package loopgate
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
+
+	tclpkg "morph/internal/tcl"
 )
 
 func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(authenticatedSession capabilityToken, rawRequest ContinuityInspectRequest) (ContinuityInspectResponse, error) {
@@ -60,7 +63,7 @@ func (backend *continuityTCLMemoryBackend) inspectContinuityAuthoritatively(auth
 		var derivedResonateKey continuityResonateKeyRecord
 		var hasDerivedArtifacts bool
 		if inspectionRecord.DerivationOutcome == continuityInspectionOutcomeDerived {
-			derivedDistillate = deriveContinuityDistillate(validatedRequest, inspectionRecord, nowUTC, backend.server.runtimeConfig, backend.server.goalAliases)
+			derivedDistillate = backend.deriveContinuityDistillate(validatedRequest, inspectionRecord, nowUTC)
 			if len(derivedDistillate.Facts) == 0 && len(derivedDistillate.GoalOps) == 0 && len(derivedDistillate.UnresolvedItemOps) == 0 {
 				inspectionRecord.DerivationOutcome = continuityInspectionOutcomeNoArtifacts
 			} else {
@@ -227,4 +230,135 @@ func validateContinuityInspectProvenance(authenticatedSession capabilityToken, v
 		previousLedgerSequence = continuityEvent.LedgerSequence
 	}
 	return nil
+}
+
+func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(validatedRequest ContinuityInspectRequest, inspectionRecord continuityInspectionRecord, now time.Time) continuityDistillateRecord {
+	distillateID := "dist_" + strings.TrimPrefix(validatedRequest.ThreadID, "thread_")
+	distillateRecord := continuityDistillateRecord{
+		SchemaVersion:       continuityMemorySchemaVersion,
+		DerivationVersion:   continuityDerivationVersion,
+		DistillateID:        distillateID,
+		InspectionID:        inspectionRecord.InspectionID,
+		ThreadID:            validatedRequest.ThreadID,
+		Scope:               validatedRequest.Scope,
+		UserImportance:      "somewhat_important",
+		CreatedAtUTC:        now.UTC().Format(time.RFC3339Nano),
+		Tags:                append([]string(nil), validatedRequest.Tags...),
+		DerivationSignature: buildDerivationSignature(validatedRequest),
+	}
+
+	discoveredTags := make(map[string]struct{}, len(validatedRequest.Tags))
+	for _, initialTag := range validatedRequest.Tags {
+		discoveredTags[initialTag] = struct{}{}
+	}
+	sourceRefSeen := map[string]struct{}{}
+	for _, continuityEvent := range validatedRequest.Events {
+		eventSourceRef := continuityArtifactSourceRef{
+			Kind:   "morph_ledger_event",
+			Ref:    fmt.Sprintf("ledger_sequence:%d", continuityEvent.LedgerSequence),
+			SHA256: continuityEvent.EventHash,
+		}
+		if _, seen := sourceRefSeen[eventSourceRef.Ref]; !seen {
+			sourceRefSeen[eventSourceRef.Ref] = struct{}{}
+			distillateRecord.SourceRefs = append(distillateRecord.SourceRefs, eventSourceRef)
+		}
+		switch continuityEvent.Type {
+		case "provider_fact_observed":
+			candidateFacts, _ := continuityEvent.Payload["facts"].(map[string]interface{})
+			factNames := make([]string, 0, len(candidateFacts))
+			for factName := range candidateFacts {
+				factNames = append(factNames, factName)
+			}
+			sort.Strings(factNames)
+			for _, factName := range factNames {
+				derivedFact, ok := backend.deriveContinuityDistillateFact(eventSourceRef.Ref, continuityEvent, factName, candidateFacts[factName])
+				if !ok {
+					continue
+				}
+				distillateRecord.Facts = append(distillateRecord.Facts, derivedFact)
+				recordLoopgateMemoryTags(discoveredTags, derivedFact.Name, fmt.Sprint(derivedFact.Value))
+			}
+		case "goal_opened":
+			goalID, _ := continuityEvent.Payload["goal_id"].(string)
+			goalText, _ := continuityEvent.Payload["text"].(string)
+			if strings.TrimSpace(goalID) != "" {
+				distillateRecord.GoalOps = append(distillateRecord.GoalOps, continuityGoalOp{
+					GoalID:             strings.TrimSpace(goalID),
+					Text:               strings.TrimSpace(goalText),
+					Action:             "opened",
+					SemanticProjection: deriveGoalOpSemanticProjection("opened", strings.TrimSpace(goalText), "continuity_inspection", tclpkg.TrustInferred),
+				})
+				if distillateRecord.GoalFamilyID == "" {
+					goalNormalization := normalizeGoalFamily(goalText, backend.server.goalAliases)
+					distillateRecord.GoalType = goalNormalization.GoalType
+					distillateRecord.GoalFamilyID = goalNormalization.GoalFamilyID
+					distillateRecord.NormalizationVersion = goalNormalization.NormalizationVersion
+				}
+				recordLoopgateMemoryTags(discoveredTags, goalID, goalText)
+			}
+		case "goal_closed":
+			goalID, _ := continuityEvent.Payload["goal_id"].(string)
+			if strings.TrimSpace(goalID) != "" {
+				distillateRecord.GoalOps = append(distillateRecord.GoalOps, continuityGoalOp{
+					GoalID:             strings.TrimSpace(goalID),
+					Action:             "closed",
+					SemanticProjection: deriveGoalOpSemanticProjection("closed", "", "continuity_inspection", tclpkg.TrustInferred),
+				})
+				recordLoopgateMemoryTags(discoveredTags, goalID)
+			}
+		case "unresolved_item_opened":
+			itemID, _ := continuityEvent.Payload["item_id"].(string)
+			itemText, _ := continuityEvent.Payload["text"].(string)
+			if strings.TrimSpace(itemID) != "" {
+				distillateRecord.UnresolvedItemOps = append(distillateRecord.UnresolvedItemOps, continuityUnresolvedItemOp{
+					ItemID:             strings.TrimSpace(itemID),
+					Text:               strings.TrimSpace(itemText),
+					Action:             "opened",
+					SemanticProjection: deriveUnresolvedItemOpSemanticProjection("opened", "", strings.TrimSpace(itemText), "continuity_inspection", tclpkg.TrustInferred),
+				})
+				recordLoopgateMemoryTags(discoveredTags, itemID, itemText)
+			}
+		case "unresolved_item_resolved":
+			itemID, _ := continuityEvent.Payload["item_id"].(string)
+			if strings.TrimSpace(itemID) != "" {
+				distillateRecord.UnresolvedItemOps = append(distillateRecord.UnresolvedItemOps, continuityUnresolvedItemOp{
+					ItemID:             strings.TrimSpace(itemID),
+					Action:             "closed",
+					SemanticProjection: deriveUnresolvedItemOpSemanticProjection("closed", "", "", "continuity_inspection", tclpkg.TrustInferred),
+				})
+				recordLoopgateMemoryTags(discoveredTags, itemID)
+			}
+		}
+	}
+
+	sort.Slice(distillateRecord.Facts, func(leftIndex int, rightIndex int) bool {
+		return distillateRecord.Facts[leftIndex].Name < distillateRecord.Facts[rightIndex].Name
+	})
+	distillateRecord.Tags = normalizeLoopgateMemoryTags(append([]string(nil), normalizedLoopgateTagSet(discoveredTags)...))
+	if distillateRecord.GoalType == "" {
+		goalNormalization := normalizeGoalFamily(strings.Join(distillateRecord.Tags, " "), backend.server.goalAliases)
+		distillateRecord.GoalType = goalNormalization.GoalType
+		distillateRecord.GoalFamilyID = goalNormalization.GoalFamilyID
+		distillateRecord.NormalizationVersion = goalNormalization.NormalizationVersion
+	}
+	distillateRecord.RetentionScore = importanceBase(backend.server.runtimeConfig, distillateRecord.UserImportance) + backend.server.runtimeConfig.Memory.Scoring.ApprovedGoalAnchor
+	distillateRecord.EffectiveHotness = hotnessBase(backend.server.runtimeConfig, distillateRecord.UserImportance)
+	distillateRecord.MemoryState = deriveMemoryState(distillateRecord.EffectiveHotness, continuityLineageStatusEligible)
+	return distillateRecord
+}
+
+func (backend *continuityTCLMemoryBackend) deriveContinuityDistillateFact(eventSourceRef string, continuityEvent ContinuityEventInput, rawFactName string, rawFactValue interface{}) (continuityDistillateFact, bool) {
+	analyzedCandidate, ok := backend.analyzeContinuityFactCandidate(rawFactName, rawFactValue)
+	if !ok {
+		return continuityDistillateFact{}, false
+	}
+
+	return continuityDistillateFact{
+		Name:               analyzedCandidate.CanonicalFactKey,
+		Value:              analyzedCandidate.CanonicalFactValue,
+		SourceRef:          eventSourceRef,
+		EpistemicFlavor:    continuityEvent.EpistemicFlavor,
+		CertaintyScore:     certaintyScoreForEpistemicFlavor(continuityEvent.EpistemicFlavor),
+		SemanticProjection: analyzedCandidate.SemanticProjection,
+	}, true
 }

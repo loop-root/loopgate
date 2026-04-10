@@ -15,6 +15,16 @@ type analyzedRememberFactCandidate struct {
 	ValidatedCandidate       tclpkg.ValidatedMemoryCandidate
 }
 
+// analyzedContinuityFactCandidate is the backend-owned, raw-text-free continuity fact
+// contract. It stays narrower than the explicit validated write contract because
+// continuity still permits bounded unanchored facts that should not be treated as
+// explicit remembered state.
+type analyzedContinuityFactCandidate struct {
+	CanonicalFactKey   string
+	CanonicalFactValue string
+	SemanticProjection *tclpkg.SemanticProjection
+}
+
 func (backend *continuityTCLMemoryBackend) normalizeRememberRequest(rawRequest MemoryRememberRequest) (MemoryRememberRequest, error) {
 	return normalizeMemoryRememberRequestForRuntime(backend.server.runtimeConfig, rawRequest)
 }
@@ -143,4 +153,86 @@ func sanitizeDeniedMemoryRememberRequest(rawRequest MemoryRememberRequest) Memor
 	sanitizedRequest.SourceText = ""
 	sanitizedRequest.Reason = ""
 	return sanitizedRequest
+}
+
+func (backend *continuityTCLMemoryBackend) analyzeContinuityFactCandidate(rawFactKey string, rawFactValue interface{}) (analyzedContinuityFactCandidate, bool) {
+	normalizedFactKey := strings.TrimSpace(rawFactKey)
+	if normalizedFactKey == "" {
+		return analyzedContinuityFactCandidate{}, false
+	}
+
+	normalizedFactValue, ok := normalizeContinuityFactValueForPersistence(rawFactValue)
+	if !ok {
+		return analyzedContinuityFactCandidate{}, false
+	}
+
+	analysisResult, err := tclpkg.AnalyzeMemoryCandidate(tclpkg.MemoryCandidateInput{
+		Source:              tclpkg.CandidateSourceContinuity,
+		SourceChannel:       "continuity_inspection",
+		NormalizedFactKey:   normalizedFactKey,
+		NormalizedFactValue: normalizedFactValue,
+		Trust:               tclpkg.TrustInferred,
+		Actor:               tclpkg.ObjectSystem,
+	})
+	if err != nil {
+		return analyzedContinuityFactCandidate{}, false
+	}
+	if analysisResult.PolicyDecision.HardDeny || analysisResult.PolicyDecision.DISP != tclpkg.DispositionKeep {
+		return analyzedContinuityFactCandidate{}, false
+	}
+
+	canonicalFactKey := tclpkg.CanonicalizeExplicitMemoryFactKey(normalizedFactKey)
+	if canonicalFactKey == "" {
+		canonicalFactKey = normalizedFactKey
+	}
+
+	return analyzedContinuityFactCandidate{
+		CanonicalFactKey:   canonicalFactKey,
+		CanonicalFactValue: normalizedFactValue,
+		SemanticProjection: cloneSemanticProjection(&analysisResult.Projection),
+	}, true
+}
+
+func normalizeContinuityFactValueForPersistence(rawFactValue interface{}) (string, bool) {
+	switch typedFactValue := rawFactValue.(type) {
+	case string:
+		normalizedFactValue := strings.TrimSpace(typedFactValue)
+		if normalizedFactValue == "" || strings.ContainsAny(normalizedFactValue, "\r\n") {
+			return "", false
+		}
+		return normalizedFactValue, true
+	case bool:
+		if typedFactValue {
+			return "true", true
+		}
+		return "false", true
+	case int:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case int8:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case int16:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case int32:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case int64:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint8:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint16:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint32:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case uint64:
+		return fmt.Sprintf("%d", typedFactValue), true
+	case float32:
+		return strings.TrimSpace(fmt.Sprintf("%g", typedFactValue)), true
+	case float64:
+		return strings.TrimSpace(fmt.Sprintf("%g", typedFactValue)), true
+	default:
+		// Continuity facts remain bounded scalar context. Persisting nested payloads here
+		// would quietly turn inspect packets into an arbitrary structured storage channel.
+		return "", false
+	}
 }
