@@ -62,6 +62,9 @@ Fresh post-hardening reruns:
 - continuity: `continuity_fixture_parity_20260409_honest_v7`
   - `retrieval_path_mode=control_plane_memory_routes`
   - `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
+- continuity synthetic control: `continuity_fixture_synth_20260409_honest_v7`
+  - `retrieval_path_mode=projected_node_sqlite_backend`
+  - `seed_path_mode=synthetic_projected_nodes`
 - RAG baseline: `rag_baseline_fixture_20260409_honest_v2`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
@@ -106,6 +109,9 @@ Current rerun artifacts:
 - Summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/summary.csv`
 - Family summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/family_summary.csv`
 - Subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_parity_20260409_honest_v7/subfamily_summary.csv`
+- Synthetic summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260409_honest_v7/summary.csv`
+- Synthetic family summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260409_honest_v7/family_summary.csv`
+- Synthetic subfamily summary: `/tmp/memorybench-live-continuity/continuity_fixture_synth_20260409_honest_v7/subfamily_summary.csv`
 - RAG baseline summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/summary.csv`
 - RAG baseline family summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/family_summary.csv`
 - RAG baseline subfamily summary: `/tmp/memorybench-live-rag/rag_baseline_fixture_20260409_honest_v2/subfamily_summary.csv`
@@ -148,6 +154,7 @@ Policy-matched summaries:
 | Backend | Overall | Poisoning / governance | Contradiction / truth maintenance | Task resumption | Safety precision |
 | --- | --- | --- | --- | --- | --- |
 | `continuity_tcl` (`production_write_parity`, honest control-plane baseline) | `61/61` | `8/8` | `34/34` | `13/13` | `6/6` |
+| `continuity_tcl` (`synthetic_projected_nodes`, honest retrieval-only control) | `54/61` | `8/8` | `27/34` | `13/13` | `6/6` |
 | `rag_baseline` (`candidate_governance=continuity_tcl`) | `33/61` | `8/8` | `19/34` | `0/13` | `6/6` |
 | `rag_stronger` (`candidate_governance=continuity_tcl`) | `29/61` | `8/8` | `15/34` | `0/13` | `6/6` |
 
@@ -182,14 +189,16 @@ Read:
 - the surviving gap is now contradiction plus task resumption
 - the honest continuity run is now `+15` over governed `rag_baseline` on
   contradiction
+- the real product path is now also `+7` over the synthetic retrieval-only
+  continuity control on contradiction, which is the clearest current measure of
+  what the control-plane memory path buys beyond pure projected-node lookup
 - the current control-plane run recovered that gap through product changes,
   not through benchmark routing shortcuts
 - the move from `57/61` to `61/61` came from fixing benchmark candidate
   governance semantics, not from a new retrieval shortcut or a doc-only
   relabel
-- synthetic continuity still remains retrieval-only control evidence rather
-  than benchmark truth and needs a fresh rerun before it should be compared
-  against the v7 policy-matched set
+- synthetic continuity is now rerun on the same governance semantics, but it
+  remains retrieval-only control evidence rather than product-truth evidence
 - continuity now clears every current fixture family in the honest scored set
 
 Policy-matched contradiction subfamilies:
