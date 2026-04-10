@@ -129,6 +129,10 @@ Next lift:
   than the default production route, and the supported server-loaded
   `/v1/continuity/inspect-thread` path now hands the backend a Loopgate-owned
   observed packet directly instead of fabricating a raw continuity request.
+  Haven-backed observed packets now also stamp the authoritative control
+  session id and carry the stable threadstore event hash on each source ref,
+  so supported continuity provenance is stronger than a bare `thread:index`
+  pointer.
   Remaining gaps are
   test-only compatibility seams, stronger authoritative provenance for
   continuity sources, and broader TCL-informed continuity derivation.

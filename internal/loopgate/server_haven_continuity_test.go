@@ -143,11 +143,17 @@ func TestHavenContinuityInspectThread_PersistsThreadstoreSourceRefs(t *testing.T
 	if observedPacket == nil || len(observedPacket.Events) == 0 {
 		t.Fatalf("expected observed packet with thread events, got %#v", authoritativeEvents[0])
 	}
+	if observedPacket.Events[0].SessionID != client.controlSessionID {
+		t.Fatalf("expected observed packet to bind authoritative control session id, got %#v", observedPacket.Events[0])
+	}
 	firstSourceRefs := observedPacket.Events[0].SourceRefs
 	if len(firstSourceRefs) != 1 {
 		t.Fatalf("expected one threadstore source ref, got %#v", firstSourceRefs)
 	}
 	if firstSourceRefs[0].Kind != havenThreadEventSourceKind || firstSourceRefs[0].Ref != summary.ThreadID+":1" {
 		t.Fatalf("expected threadstore source ref on observed packet, got %#v", firstSourceRefs[0])
+	}
+	if firstSourceRefs[0].SHA256 != observedPacket.Events[0].EventHash {
+		t.Fatalf("expected threadstore source ref to carry event hash, got %#v event=%#v", firstSourceRefs[0], observedPacket.Events[0])
 	}
 }

@@ -91,6 +91,9 @@ Completed slices in the current refactor:
 - when the supported observed packet path carries server-owned source refs,
   derived distillates and fact provenance now preserve those refs instead of
   collapsing back to synthetic `ledger_sequence:*` placeholders
+- the supported Haven `inspect-thread` path now binds observed event
+  `session_id` to the authoritative control session id and carries the stable
+  threadstore event hash on each server-owned source ref
 
 Still not finished:
 

@@ -114,13 +114,8 @@ func (server *Server) handleHavenContinuityInspectThread(writer http.ResponseWri
 		return
 	}
 
-	sessionLabel := strings.TrimSpace(tokenClaims.ClientSessionLabel)
-	if sessionLabel == "" {
-		sessionLabel = strings.TrimSpace(tokenClaims.ControlSessionID)
-	}
-
 	sealedAtUTC := server.now().UTC().Format(time.RFC3339Nano)
-	observedInspectRequest := buildObservedContinuityInspectRequestFromHavenThread(threadID, sessionLabel, makeHavenContinuityInspectionID(), sealedAtUTC, events)
+	observedInspectRequest := buildObservedContinuityInspectRequestFromHavenThread(threadID, tokenClaims.ControlSessionID, makeHavenContinuityInspectionID(), sealedAtUTC, events)
 	if len(observedInspectRequest.ObservedPacket.Events) == 0 {
 		server.writeJSON(writer, http.StatusOK, HavenContinuityInspectThreadResponse{
 			ThreadID:     threadID,
@@ -148,18 +143,18 @@ func (server *Server) handleHavenContinuityInspectThread(writer http.ResponseWri
 	})
 }
 
-func buildObservedContinuityInspectRequestFromHavenThread(threadID string, sessionID string, inspectionID string, sealedAtUTC string, events []threadstore.ConversationEvent) ObservedContinuityInspectRequest {
+func buildObservedContinuityInspectRequestFromHavenThread(threadID string, controlSessionID string, inspectionID string, sealedAtUTC string, events []threadstore.ConversationEvent) ObservedContinuityInspectRequest {
 	return ObservedContinuityInspectRequest{
 		InspectionID:   inspectionID,
 		ThreadID:       strings.TrimSpace(threadID),
 		Scope:          memoryScopeGlobal,
 		SealedAtUTC:    strings.TrimSpace(sealedAtUTC),
 		Tags:           []string{"haven", "conversation", "swift_submit"},
-		ObservedPacket: buildObservedContinuityPacketFromHavenThread(threadID, sessionID, sealedAtUTC, events),
+		ObservedPacket: buildObservedContinuityPacketFromHavenThread(threadID, controlSessionID, sealedAtUTC, events),
 	}
 }
 
-func buildObservedContinuityPacketFromHavenThread(threadID string, sessionID string, sealedAtUTC string, events []threadstore.ConversationEvent) continuityObservedPacket {
+func buildObservedContinuityPacketFromHavenThread(threadID string, controlSessionID string, sealedAtUTC string, events []threadstore.ConversationEvent) continuityObservedPacket {
 	result := continuityObservedPacket{
 		ThreadID:    strings.TrimSpace(threadID),
 		Scope:       memoryScopeGlobal,
@@ -168,7 +163,7 @@ func buildObservedContinuityPacketFromHavenThread(threadID string, sessionID str
 		Events:      make([]continuityObservedEventRecord, 0, len(events)),
 	}
 	for eventIndex, event := range events {
-		observedEvent, ok := buildObservedContinuityEventFromHavenThread(event, sessionID, eventIndex+1, threadID)
+		observedEvent, ok := buildObservedContinuityEventFromHavenThread(event, controlSessionID, eventIndex+1, threadID)
 		if !ok {
 			continue
 		}
@@ -177,7 +172,7 @@ func buildObservedContinuityPacketFromHavenThread(threadID string, sessionID str
 	return result
 }
 
-func buildObservedContinuityEventFromHavenThread(event threadstore.ConversationEvent, sessionID string, ledgerSequence int, threadID string) (continuityObservedEventRecord, bool) {
+func buildObservedContinuityEventFromHavenThread(event threadstore.ConversationEvent, controlSessionID string, ledgerSequence int, threadID string) (continuityObservedEventRecord, bool) {
 	continuityType := havenThreadstoreTypeToContinuityType(event.Type)
 	if continuityType == "" {
 		return continuityObservedEventRecord{}, false
@@ -188,20 +183,24 @@ func buildObservedContinuityEventFromHavenThread(event threadstore.ConversationE
 		eventThreadID = strings.TrimSpace(threadID)
 	}
 
+	eventHash := hashHavenThreadstoreEvent(event)
 	// Threadstore JSONL files are append-only, so the event index is a stable local
-	// provenance handle until Loopgate grows first-class thread event IDs.
+	// provenance handle until Loopgate grows first-class thread event IDs. Bind the
+	// ref to the authoritative event hash as well so replay/debug correlation stays
+	// stable even before the store has a dedicated event identifier.
 	return continuityObservedEventRecord{
 		TimestampUTC:    strings.TrimSpace(event.TS),
-		SessionID:       strings.TrimSpace(sessionID),
+		SessionID:       strings.TrimSpace(controlSessionID),
 		Type:            continuityType,
 		Scope:           memoryScopeGlobal,
 		ThreadID:        eventThreadID,
 		EpistemicFlavor: "freshly_checked",
 		LedgerSequence:  int64(ledgerSequence),
-		EventHash:       hashHavenThreadstoreEvent(event),
+		EventHash:       eventHash,
 		SourceRefs: []continuityArtifactSourceRef{{
-			Kind: havenThreadEventSourceKind,
-			Ref:  fmt.Sprintf("%s:%d", strings.TrimSpace(threadID), ledgerSequence),
+			Kind:   havenThreadEventSourceKind,
+			Ref:    fmt.Sprintf("%s:%d", strings.TrimSpace(threadID), ledgerSequence),
+			SHA256: eventHash,
 		}},
 		Payload: buildObservedContinuityEventPayload(event.Data),
 	}, true
