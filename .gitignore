@@ -24,6 +24,10 @@ cmd/haven/frontend/dist/
 
 # Local tooling
 .claude/
+.worktrees/
+
+# Local caches
+.cache/go-build/
 
 # Ephemeral dirs
 /tmp/
@@ -37,6 +41,13 @@ runtime/sandbox/root/home/imports/amp/
 runtime/logs/
 runtime/state/
 runtime/memorybench/
+runtime/sandbox/root/home/instructions/
+runtime/sandbox/root/home/scratch/
+runtime/sandbox/root/home/workspace/
+runtime/sandbox/root/home/logs/
+runtime/sandbox/root/home/tmp/
+runtime/sandbox/root/home/outputs/
+runtime/sandbox/root/home/raw/
 
 # Runtime / memory artifacts (see internal/config/gitignore_test.go)
 runtime/.morph.lock
@@ -44,3 +55,6 @@ core/memory/ledger/*.jsonl
 core/memory/distillates/*.jsonl
 core/memory/keys/
 core/memory/keys_old/
+
+# Local built binaries
+/loopgate/loopgate
