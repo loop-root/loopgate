@@ -470,6 +470,16 @@ var defaultScenarioDesignIntents = map[string]scenarioDesignIntent{
 		targetFailureMode:         "the current follow-up action is lost or visual-design chatter replaces the boundary rationale",
 		benignControlOrDistractor: "self-control: stale badge-copy task and presentation-only note stay excluded",
 	},
+	"hybrid.memory_artifact_lookup_current_contract_and_prompt_policy.v1": {
+		architecturalMechanism:    "continuity-backed current prompt-policy task plus evidence retrieval for the wake-state versus artifact-lookup contract",
+		targetFailureMode:         "the current prompt-policy task is found but the evidence side picks a UI convenience sibling note instead of the bounded lookup rationale",
+		benignControlOrDistractor: "self-control: graph-dump drawer note stays excluded",
+	},
+	"hybrid.continuity_review_restart_follow_up_and_lineage_rationale.v1": {
+		architecturalMechanism:    "continuity-backed review hardening step plus evidence retrieval for pending-review and restart-lineage rationale",
+		targetFailureMode:         "the current review task is found but the evidence side picks replay-status convenience chatter instead of the restart-lineage rationale",
+		benignControlOrDistractor: "self-control: auto-clear replay badge note stays excluded",
+	},
 }
 
 func annotateFixtureDesignIntent(fixture ScenarioFixture) ScenarioFixture {
@@ -550,6 +560,9 @@ func defaultFixtureSubfamilyID(fixture ScenarioFixture) string {
 		switch fixture.Metadata.ScenarioID {
 		case "hybrid.mount_grant_current_blocker_and_design_rationale.v1":
 			return "state_plus_design_thread"
+		case "hybrid.memory_artifact_lookup_current_contract_and_prompt_policy.v1",
+			"hybrid.continuity_review_restart_follow_up_and_lineage_rationale.v1":
+			return "state_plus_design_thread_disambiguation"
 		case "hybrid.offline_policy_follow_up_and_signature_rationale.v1":
 			return "state_plus_policy_context"
 		case "hybrid.preview_card_follow_up_and_boundary_rationale.v1":
@@ -672,6 +685,8 @@ func ExtendedScenarioFixtures() []ScenarioFixture {
 		HybridReplayRecoveryCurrentStepFixture(),
 		HybridPreviewCardFollowUpFixture(),
 		HybridOfflinePolicyFollowUpFixture(),
+		HybridMemoryArtifactLookupCurrentContractFixture(),
+		HybridContinuityReviewRestartFollowUpFixture(),
 		HybridResolvedPathFollowUpFixture(),
 	}
 	// Keep the shipped default matrix stable. Evidence and hybrid fixtures live in
@@ -3237,6 +3252,92 @@ func HybridOfflinePolicyFollowUpFixture() ScenarioFixture {
 			MustFindEvidence:      true,
 			MaxItemsReturned:      4,
 			MaxHintBytesRetrieved: 580,
+		},
+	}
+}
+
+func HybridMemoryArtifactLookupCurrentContractFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "hybrid.memory_artifact_lookup_current_contract_and_prompt_policy.v1",
+			Category:         CategoryMemoryHybridRecall,
+			Description:      "Hybrid recall should use continuity for the active memory prompt-policy task and RAG for the wake-state versus artifact-lookup rationale.",
+			ExpectedOutcome:  "the state path returns the current prompt-policy task while the evidence path returns the bounded wake-state and artifact-lookup rationale instead of the graph-dump drawer note",
+			RubricVersion:    "hybrid_recall.v1",
+			FixtureVersion:   "hybrid_fixture.v1",
+			ScenarioInputRef: "fixture:hybrid.memory_artifact_lookup_current_contract_and_prompt_policy.v1",
+		},
+		PromptBudget: 576,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Prompt-policy note: wake state should inject only current goals, tasks, projects, deadlines, and stable profile facts."},
+			{Role: "user", Content: "Demo drawer note: the memory panel should open every related graph neighbor so operators can browse the whole thread without extra clicks."},
+			{Role: "user", Content: "Lookup note: broader supporting context should stay behind explicit artifact refs and bounded get calls instead of inflating wake state."},
+			{Role: "state_probe", Content: "What is the current follow-up for the wake-state versus artifact-lookup contract?"},
+			{Role: "evidence_probe", Content: "Find the design thread about why wake state stays small while broader memory context sits behind explicit artifact lookup."},
+			{Role: "system_probe", Content: "Resume the memory UX contract work with the current follow-up and the rationale for small wake state plus explicit artifact lookup."},
+		},
+		HybridRecallExpectation: &HybridRecallExpectation{
+			RequiredStateHints: []string{
+				"Current follow-up: keep wake state limited to active goals, tasks, projects, deadlines, and stable profile facts.",
+				"Next step: wire artifact lookup refs into prompt assembly before adding any larger memory drawer surfaces.",
+			},
+			ForbiddenStateHints: []string{
+				"Current follow-up: expand wake state so the model gets every related graph neighbor automatically.",
+			},
+			RequiredEvidenceHints: []string{
+				"wake state should inject only current goals, tasks, projects, deadlines, and stable profile facts",
+				"broader supporting context should stay behind explicit artifact refs and bounded get calls",
+			},
+			ForbiddenEvidenceHints: []string{
+				"memory panel should open every related graph neighbor",
+			},
+			MustFindState:         true,
+			MustFindEvidence:      true,
+			MaxItemsReturned:      4,
+			MaxHintBytesRetrieved: 580,
+		},
+	}
+}
+
+func HybridContinuityReviewRestartFollowUpFixture() ScenarioFixture {
+	return ScenarioFixture{
+		Metadata: ScenarioMetadata{
+			ScenarioID:       "hybrid.continuity_review_restart_follow_up_and_lineage_rationale.v1",
+			Category:         CategoryMemoryHybridRecall,
+			Description:      "Hybrid recall should use continuity for the active continuity-review hardening task and RAG for the restart-lineage rationale.",
+			ExpectedOutcome:  "the state path returns the current review hardening step while the evidence path returns the pending-review and restart-lineage rationale instead of replay-status convenience chatter",
+			RubricVersion:    "hybrid_recall.v1",
+			FixtureVersion:   "hybrid_fixture.v1",
+			ScenarioInputRef: "fixture:hybrid.continuity_review_restart_follow_up_and_lineage_rationale.v1",
+		},
+		PromptBudget: 576,
+		Steps: []ScenarioStep{
+			{Role: "user", Content: "Continuity review note: pending-review inspections must stay out of wake state, discover, and recall until an operator accepts them."},
+			{Role: "user", Content: "Replay status note: the dashboard should auto-clear the scary restart badge once the threadstore looks healthy again during demos."},
+			{Role: "user", Content: "Restart note: sealed but unreviewed continuity should replay with explicit lineage and never materialize as active derived context after restart."},
+			{Role: "state_probe", Content: "What is the current follow-up for continuity review and restart hardening?"},
+			{Role: "evidence_probe", Content: "Find the design thread about why pending-review continuity stays hidden and restart replay preserves lineage instead of auto-clearing status."},
+			{Role: "system_probe", Content: "Resume the continuity review hardening work with the current follow-up and the rationale for pending-review gating plus restart lineage."},
+		},
+		HybridRecallExpectation: &HybridRecallExpectation{
+			RequiredStateHints: []string{
+				"Current follow-up: keep pending-review continuity out of wake state and artifact lookup until an explicit review decision lands.",
+				"Next step: extend restart tests for sealed-but-unreviewed continuity so lineage survives replay without reactivating soft context.",
+			},
+			ForbiddenStateHints: []string{
+				"Current follow-up: auto-clear pending-review continuity after restart if the replay badge looks healthy.",
+			},
+			RequiredEvidenceHints: []string{
+				"pending-review inspections must stay out of wake state, discover, and recall",
+				"sealed but unreviewed continuity should replay with explicit lineage and never materialize as active derived context",
+			},
+			ForbiddenEvidenceHints: []string{
+				"dashboard should auto-clear the scary restart badge",
+			},
+			MustFindState:         true,
+			MustFindEvidence:      true,
+			MaxItemsReturned:      4,
+			MaxHintBytesRetrieved: 600,
 		},
 	}
 }

@@ -59,6 +59,23 @@ The split prevents three common failure modes:
 The artifact API forces a second deliberate read. That keeps prompt costs,
 debuggability, and trust boundaries under control.
 
+## 4.1 Prompt policy
+
+The prompt policy is now explicit:
+
+- **default prompt assembly**: inject wake state only
+- **stored continuity follow-up**: use artifact lookup/get when the model needs
+  more stored state context than wake state should carry
+- **hybrid evidence**: attach bounded discover-time evidence only when a
+  current continuity state anchor already exists and the query is clearly asking
+  for supporting rationale or related background
+
+Hybrid evidence is advisory only:
+
+- it is not wake state
+- it is not a stored artifact class
+- it must not recursively expand into more graph neighbors automatically
+
 ## 5. Current API shape
 
 ### `MemoryArtifactRef`

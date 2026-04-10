@@ -161,22 +161,24 @@ func TestExtendedScenarioFixtures_AddEvidenceRetrievalMatrixWithoutMutatingDefau
 	if len(defaultFixtures) != 70 {
 		t.Fatalf("expected stable 70-fixture default baseline, got %d", len(defaultFixtures))
 	}
-	if len(extendedFixtures) != len(defaultFixtures)+11 {
-		t.Fatalf("expected eleven additional evidence and hybrid fixtures, got default=%d extended=%d", len(defaultFixtures), len(extendedFixtures))
+	if len(extendedFixtures) != len(defaultFixtures)+13 {
+		t.Fatalf("expected thirteen additional evidence and hybrid fixtures, got default=%d extended=%d", len(defaultFixtures), len(extendedFixtures))
 	}
 
 	expectedExtendedFixtureIDs := map[string]bool{
-		"evidence.semantic_paraphrase_replay_batch_root_cause.v1":    false,
-		"evidence.multi_document_mount_grant_design_thread.v1":       false,
-		"evidence.incident_qdrant_backfill_socket_stall.v1":          false,
-		"evidence.preview_card_authority_boundary_thread.v1":         false,
-		"evidence.offline_policy_signature_cache_thread.v1":          false,
-		"evidence.resolved_path_virtual_projection_thread.v1":        false,
-		"hybrid.mount_grant_current_blocker_and_design_rationale.v1": false,
-		"hybrid.replay_recovery_current_step_and_root_cause.v1":      false,
-		"hybrid.preview_card_follow_up_and_boundary_rationale.v1":    false,
-		"hybrid.offline_policy_follow_up_and_signature_rationale.v1": false,
-		"hybrid.resolved_path_follow_up_and_projection_rationale.v1": false,
+		"evidence.semantic_paraphrase_replay_batch_root_cause.v1":             false,
+		"evidence.multi_document_mount_grant_design_thread.v1":                false,
+		"evidence.incident_qdrant_backfill_socket_stall.v1":                   false,
+		"evidence.preview_card_authority_boundary_thread.v1":                  false,
+		"evidence.offline_policy_signature_cache_thread.v1":                   false,
+		"evidence.resolved_path_virtual_projection_thread.v1":                 false,
+		"hybrid.mount_grant_current_blocker_and_design_rationale.v1":          false,
+		"hybrid.replay_recovery_current_step_and_root_cause.v1":               false,
+		"hybrid.preview_card_follow_up_and_boundary_rationale.v1":             false,
+		"hybrid.offline_policy_follow_up_and_signature_rationale.v1":          false,
+		"hybrid.memory_artifact_lookup_current_contract_and_prompt_policy.v1": false,
+		"hybrid.continuity_review_restart_follow_up_and_lineage_rationale.v1": false,
+		"hybrid.resolved_path_follow_up_and_projection_rationale.v1":          false,
 	}
 	for _, extendedFixture := range extendedFixtures {
 		expectedFound, isExtendedFixture := expectedExtendedFixtureIDs[extendedFixture.Metadata.ScenarioID]

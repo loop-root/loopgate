@@ -167,8 +167,8 @@ func TestSelectScenarioFixtures_HybridRecallMatrixSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SelectScenarioFixtures: %v", err)
 	}
-	if len(selectedFixtures) != 5 {
-		t.Fatalf("expected five hybrid recall fixtures, got %d", len(selectedFixtures))
+	if len(selectedFixtures) != 7 {
+		t.Fatalf("expected seven hybrid recall fixtures, got %d", len(selectedFixtures))
 	}
 	for _, selectedFixture := range selectedFixtures {
 		if selectedFixture.Metadata.Category != CategoryMemoryHybridRecall {

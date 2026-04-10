@@ -149,13 +149,15 @@ Interpretation:
 The separate targeted buckets still show:
 
 - stronger RAG helps on broad evidence retrieval
-- hybrid helps on bounded state-plus-evidence retrieval
-- the remaining misses are design-thread disambiguation, not state recall
+- hybrid now clears the current `7`-fixture `hybrid_recall_matrix`
+- that targeted hybrid proof is stronger than it was earlier in the day, but it
+  is still not broad enough to stand in for a long-horizon evidence benchmark
 
 That is why the honest claim today is:
 
 > governed continuity plus bounded hybrid evidence is stronger than RAG-only
-> memory on long-horizon state continuity tasks
+> memory on long-horizon state continuity tasks, and the current targeted
+> hybrid slice now behaves like the architecture says it should
 
 Not:
 

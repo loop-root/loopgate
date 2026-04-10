@@ -13,6 +13,7 @@ import (
 
 	"morph/internal/config"
 	"morph/internal/memorybench"
+	"morph/internal/relationhints"
 	tclpkg "morph/internal/tcl"
 	"morph/internal/threadstore"
 )
@@ -727,6 +728,77 @@ func TestHybridMemoryDiscover_ReturnsEvidenceSidecar(t *testing.T) {
 	}
 	if !containsStringValue(discoverResponse.Evidence[0].RelatedStateKeys, discoverResponse.Items[0].KeyID) {
 		t.Fatalf("expected evidence to reference discovered state key, got %#v", discoverResponse.Evidence[0])
+	}
+	if fakeRetriever.lastMaxItems != relationhints.EvidenceSearchPoolSize(2) {
+		t.Fatalf("expected widened evidence candidate pool %d, got %d", relationhints.EvidenceSearchPoolSize(2), fakeRetriever.lastMaxItems)
+	}
+}
+
+func TestHybridMemoryDiscover_ReranksSiblingEvidenceByRelationHints(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	if _, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
+		FactKey:   "preferred_name",
+		FactValue: "Ada Jane",
+	}); err != nil {
+		t.Fatalf("remember preferred name: %v", err)
+	}
+
+	fakeRetriever := &fakeMemoryEvidenceRetriever{
+		searchResults: []memoryEvidenceSearchResult{
+			{
+				EvidenceID:    "wrong_memory_drawer",
+				SourceKind:    "design_note",
+				Scope:         memoryScopeGlobal,
+				CreatedAtUTC:  time.Now().UTC().Format(time.RFC3339Nano),
+				Snippet:       "Demo drawer note: the memory panel should open every related graph neighbor so operators can browse the whole thread without extra clicks.",
+				ProvenanceRef: "note:drawer",
+				MatchCount:    5,
+			},
+			{
+				EvidenceID:    "right_small_wake_state",
+				SourceKind:    "design_note",
+				Scope:         memoryScopeGlobal,
+				CreatedAtUTC:  time.Now().UTC().Format(time.RFC3339Nano),
+				Snippet:       "Prompt-policy note: wake state should inject only current goals, tasks, projects, deadlines, and stable profile facts.",
+				ProvenanceRef: "note:wake-state",
+				MatchCount:    4,
+			},
+			{
+				EvidenceID:    "right_artifact_lookup",
+				SourceKind:    "design_note",
+				Scope:         memoryScopeGlobal,
+				CreatedAtUTC:  time.Now().UTC().Format(time.RFC3339Nano),
+				Snippet:       "Lookup note: broader supporting context should stay behind explicit artifact refs and bounded get calls instead of inflating wake state.",
+				ProvenanceRef: "note:artifact-lookup",
+				MatchCount:    4,
+			},
+		},
+	}
+
+	server.memoryMu.Lock()
+	partition := server.memoryPartitions[memoryPartitionKey("")]
+	continuityBackend := partition.backend.(*continuityTCLMemoryBackend)
+	partition.backend = &hybridMemoryBackend{
+		continuityBackend: continuityBackend,
+		evidenceRetriever: fakeRetriever,
+		maxEvidenceItems:  2,
+		maxEvidenceBytes:  580,
+	}
+	server.memoryMu.Unlock()
+
+	discoverResponse, err := client.DiscoverMemory(context.Background(), MemoryDiscoverRequest{
+		Query: "What are my current goals and stable profile facts, and where should broader memory context come from?",
+	})
+	if err != nil {
+		t.Fatalf("hybrid discover memory: %v", err)
+	}
+	if len(discoverResponse.Evidence) != 2 {
+		t.Fatalf("expected two evidence items, got %#v", discoverResponse)
+	}
+	if discoverResponse.Evidence[0].EvidenceID != "right_small_wake_state" || discoverResponse.Evidence[1].EvidenceID != "right_artifact_lookup" {
+		t.Fatalf("expected bounded wake-state policy evidence to outrank the drawer note, got %#v", discoverResponse.Evidence)
 	}
 }
 

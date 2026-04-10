@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"morph/internal/relationhints"
 )
 
 type fakeProjectedNodeDiscoverer struct {
@@ -356,8 +358,10 @@ func TestRunScenarioFixtures_HybridRecallUsesStateAndEvidenceProbeQueries(t *tes
 	fixture := HybridMountGrantCurrentBlockerFixture()
 	var recordedStateScope string
 	var recordedStateQuery string
+	var recordedStateMaxItems int
 	var recordedEvidenceScope string
 	var recordedEvidenceQuery string
+	var recordedEvidenceMaxItems int
 
 	runResult, err := RunScenarioFixtures(context.Background(), RunnerConfig{
 		RunID:            "run_hybrid_recall_queries",
@@ -369,16 +373,18 @@ func TestRunScenarioFixtures_HybridRecallUsesStateAndEvidenceProbeQueries(t *tes
 		TokenBudget:      2048,
 		Observer:         NoopObserver{},
 		Discoverer: fakeProjectedNodeDiscoverer{
-			recordedScope: &recordedStateScope,
-			recordedQuery: &recordedStateQuery,
+			recordedScope:    &recordedStateScope,
+			recordedQuery:    &recordedStateQuery,
+			recordedMaxItems: &recordedStateMaxItems,
 			items: []ProjectedNodeDiscoverItem{
 				{NodeID: "state-1", NodeKind: BenchmarkNodeKindStep, HintText: "Current blocker: Haven renew flow still lets projected status cards look renewed even when memory.write is missing.", ProvenanceEvent: "fixture:state:1", MatchCount: 4},
 				{NodeID: "state-2", NodeKind: BenchmarkNodeKindStep, HintText: "Next step: thread the explicit renew action through the governed memory.write check and keep projected status cards visibly non-authoritative.", ProvenanceEvent: "fixture:state:2", MatchCount: 3},
 			},
 		},
 		EvidenceDiscoverer: fakeProjectedNodeDiscoverer{
-			recordedScope: &recordedEvidenceScope,
-			recordedQuery: &recordedEvidenceQuery,
+			recordedScope:    &recordedEvidenceScope,
+			recordedQuery:    &recordedEvidenceQuery,
+			recordedMaxItems: &recordedEvidenceMaxItems,
 			items: []ProjectedNodeDiscoverItem{
 				{NodeID: "evidence-1", NodeKind: BenchmarkNodeKindStep, HintText: "Design note: operator mount write grant renewal moved into the explicit UI renew action so audit append failures still block authority mutation.", ProvenanceEvent: "fixture:evidence:1", MatchCount: 4},
 				{NodeID: "evidence-2", NodeKind: BenchmarkNodeKindStep, HintText: "Design follow-up: status cards remain projected convenience views and must never imply a renewed grant on their own.", ProvenanceEvent: "fixture:evidence:2", MatchCount: 3},
@@ -401,11 +407,17 @@ func TestRunScenarioFixtures_HybridRecallUsesStateAndEvidenceProbeQueries(t *tes
 	if recordedStateQuery != "What is the current blocker and next step for the operator mount grant hardening task?" {
 		t.Fatalf("unexpected state probe query %q", recordedStateQuery)
 	}
+	if recordedStateMaxItems != 2 {
+		t.Fatalf("expected state probe to stay bounded at 2 items, got %d", recordedStateMaxItems)
+	}
 	if !strings.Contains(recordedEvidenceQuery, "Find the design thread about why write access only advances during an explicit operator refresh instead of a self-updating dashboard card.") {
 		t.Fatalf("expected base evidence probe query, got %q", recordedEvidenceQuery)
 	}
 	if !strings.Contains(recordedEvidenceQuery, "Current blocker: Haven renew flow still lets projected status cards look renewed even when memory.write is missing.") {
 		t.Fatalf("expected hybrid evidence query to carry the retrieved state hint, got %q", recordedEvidenceQuery)
+	}
+	if recordedEvidenceMaxItems != relationhints.EvidenceSearchPoolSize(2) {
+		t.Fatalf("expected widened evidence candidate pool %d, got %d", relationhints.EvidenceSearchPoolSize(2), recordedEvidenceMaxItems)
 	}
 }
 
@@ -510,6 +522,64 @@ func TestRerankHybridEvidenceItems_PrefersComplementaryCoverage(t *testing.T) {
 	}
 	if !selectedNodeIDs["right_derived_context"] || !selectedNodeIDs["right_authoritative_slot"] || selectedNodeIDs["wrong_preview_badge"] {
 		t.Fatalf("expected complementary preview evidence to outrank the demo-only badge note, got %#v", rerankedItems)
+	}
+}
+
+func TestRerankHybridEvidenceItems_PrefersBoundedWakeStateContractEvidence(t *testing.T) {
+	fixture := HybridMemoryArtifactLookupCurrentContractFixture()
+	rerankedItems := rerankHybridEvidenceItems([]ProjectedNodeDiscoverItem{
+		{
+			NodeID:     "wrong_memory_drawer",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Demo drawer note: the memory panel should open every related graph neighbor so operators can browse the whole thread without extra clicks.",
+			MatchCount: 5,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+		{
+			NodeID:     "right_small_wake_state",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Prompt-policy note: wake state should inject only current goals, tasks, projects, deadlines, and stable profile facts.",
+			MatchCount: 4,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+		{
+			NodeID:     "right_artifact_lookup",
+			NodeKind:   BenchmarkNodeKindStep,
+			HintText:   "Lookup note: broader supporting context should stay behind explicit artifact refs and bounded get calls instead of inflating wake state.",
+			MatchCount: 4,
+			Scope:      BenchmarkHybridEvidenceScope,
+		},
+	}, hybridEvidenceLookupQuery(fixture, fixture.HybridRecallExpectation.RequiredStateHints), fixture.HybridRecallExpectation.RequiredStateHints, 2)
+	if len(rerankedItems) != 2 {
+		t.Fatalf("expected two reranked evidence items, got %#v", rerankedItems)
+	}
+	selectedNodeIDs := map[string]bool{}
+	for _, rerankedItem := range rerankedItems {
+		selectedNodeIDs[rerankedItem.NodeID] = true
+	}
+	if !selectedNodeIDs["right_small_wake_state"] || !selectedNodeIDs["right_artifact_lookup"] || selectedNodeIDs["wrong_memory_drawer"] {
+		t.Fatalf("expected prompt-policy rationale to outrank graph-dump drawer note, got %#v", rerankedItems)
+	}
+}
+
+func TestRerankHybridEvidenceItems_UsesSharedRelationHintScorer(t *testing.T) {
+	rerankedCandidates := relationhints.RerankCandidates([]relationhints.Candidate{
+		{StableID: "wrong_demo_note", Text: "Replay status note: the dashboard should auto-clear the scary restart badge once the threadstore looks healthy again during demos.", MatchCount: 5},
+		{StableID: "right_pending_review", Text: "Continuity review note: pending-review inspections must stay out of wake state, discover, and recall until an operator accepts them.", MatchCount: 4},
+		{StableID: "right_restart_lineage", Text: "Restart note: sealed but unreviewed continuity should replay with explicit lineage and never materialize as active derived context after restart.", MatchCount: 4},
+	}, "Find the design thread about why pending-review continuity stays hidden and restart replay preserves lineage instead of auto-clearing status.", []string{
+		"Current follow-up: keep pending-review continuity out of wake state and artifact lookup until an explicit review decision lands.",
+		"Next step: extend restart tests for sealed-but-unreviewed continuity so lineage survives replay without reactivating soft context.",
+	}, 2)
+	if len(rerankedCandidates) != 2 {
+		t.Fatalf("expected two reranked candidates, got %#v", rerankedCandidates)
+	}
+	selectedCandidateIDs := map[string]bool{}
+	for _, rerankedCandidate := range rerankedCandidates {
+		selectedCandidateIDs[rerankedCandidate.StableID] = true
+	}
+	if !selectedCandidateIDs["right_pending_review"] || !selectedCandidateIDs["right_restart_lineage"] || selectedCandidateIDs["wrong_demo_note"] {
+		t.Fatalf("expected shared scorer to prefer review and lineage rationale, got %#v", rerankedCandidates)
 	}
 }
 

@@ -50,10 +50,10 @@ Current skeptical fixture count:
 
 Extended targeted matrix:
 
-- `81` total fixtures in `-profile extended_fixtures`
-- the extra `11` fixtures are:
+- `83` total fixtures in `-profile extended_fixtures`
+- the extra `13` fixtures are:
   - `6` `memory_evidence_retrieval`
-  - `5` `memory_hybrid_recall`
+  - `7` `memory_hybrid_recall`
 - those evidence fixtures share one benchmark working-set scope:
   `benchmark:evidence_working_set`
 

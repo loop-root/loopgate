@@ -173,13 +173,15 @@ Next lift:
   RAG beats continuity, but it is still not broad enough to count as a
   promoted headline bucket. The first
   targeted `hybrid should win` bucket now also exists as `hybrid_recall_matrix`
-  inside `extended_fixtures`. The current read there is sharper: continuity
-  control is `0/5`, baseline RAG is `0/5`, stronger RAG is `0/5`, and the
-  current hybrid path is `3/5` once retrieved continuity state hints are used
-  to shape bounded evidence reranking and complementary evidence selection.
-  That is the first checked-in result showing a real hybrid advantage over both
-  pure controls, but it still has two unresolved design-thread misses and
-  should remain targeted rather than promoted.
+  inside `extended_fixtures`. That bucket now covers `7` targeted
+  state-plus-evidence fixtures. The current read there is much stronger:
+  continuity control is `0/7`, baseline RAG is `0/7`, stronger RAG is `0/7`,
+  and the runtime `hybrid` path is `7/7` after moving to a shared
+  relation-hint scorer plus a bounded wider evidence candidate pool. That is a
+  real targeted proof that the product hybrid architecture can beat both pure
+  controls on the current state-plus-evidence slice. It should still remain
+  targeted rather than promoted until there is a broader long-horizon evidence
+  bucket and more negative-space cases.
   The `hybrid` backend is now also a real runtime backend behind the same
   Loopgate-owned memory seam. It keeps continuity authoritative for writes,
   wake state, and recall, and adds only bounded RAG evidence sidecars on
@@ -193,7 +195,11 @@ Next lift:
   through explicit lookup/get routes instead of pre-expanding more memory into
   every prompt. That keeps goals, tasks, deadlines, and stable profile facts in
   the injected state while making broader stored context a deliberate second
-  read.
+  read. The prompt policy is now explicit as well:
+  wake state is default,
+  artifact lookup is the second read for stored continuity context,
+  and hybrid evidence is advisory discover-time context only when a current
+  state anchor already exists.
   Backend-owned observed packets now also allowlist source-ref kinds, so
   first-class provenance refs only survive on supported server-loaded paths,
   and new provenance sources have to be added intentionally rather than

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"morph/internal/config"
+	"morph/internal/relationhints"
 )
 
 const memoryDiscoverRetrievalModeHybrid = "hybrid_continuity_state_plus_rag_evidence"
@@ -73,13 +74,21 @@ func (backend *hybridMemoryBackend) Discover(ctx context.Context, request Memory
 	evidenceQuery := buildHybridEvidenceLookupQuery(request.Query, relatedStateHints)
 	discoverResponse.EvidenceQuery = evidenceQuery
 
-	evidenceSearchResults, err := backend.evidenceRetriever.Search(ctx, request.Scope, evidenceQuery, maxInt(backend.maxEvidenceItems*3, backend.maxEvidenceItems))
+	evidenceSearchResults, err := backend.discoverEvidence(ctx, request.Scope, evidenceQuery)
 	if err != nil {
 		return MemoryDiscoverResponse{}, fmt.Errorf("hybrid evidence retrieval failed: %w", err)
 	}
 	rerankedEvidenceResults := rerankHybridEvidenceSearchResults(evidenceSearchResults, evidenceQuery, relatedStateHints, backend.maxEvidenceItems)
 	discoverResponse.Evidence = boundedMemoryEvidenceItems(rerankedEvidenceResults, relatedStateKeys, backend.maxEvidenceBytes)
 	return discoverResponse, nil
+}
+
+func (backend *hybridMemoryBackend) evidenceSearchPoolSize() int {
+	return relationhints.EvidenceSearchPoolSize(backend.maxEvidenceItems)
+}
+
+func (backend *hybridMemoryBackend) discoverEvidence(ctx context.Context, scope string, evidenceQuery string) ([]memoryEvidenceSearchResult, error) {
+	return backend.evidenceRetriever.Search(ctx, scope, evidenceQuery, backend.evidenceSearchPoolSize())
 }
 
 func (backend *hybridMemoryBackend) hybridStateRelationHints(ctx context.Context, scope string, discoveredStateItems []MemoryDiscoverItem) ([]string, []string, error) {
@@ -140,80 +149,32 @@ func appendUniqueMemoryHintPart(hintParts []string, rawHintPart string) []string
 }
 
 func buildHybridEvidenceLookupQuery(rawQuery string, relatedStateHints []string) string {
-	trimmedQuery := strings.TrimSpace(rawQuery)
-	trimmedRelatedStateHints := make([]string, 0, len(relatedStateHints))
-	for _, relatedStateHint := range relatedStateHints {
-		trimmedRelatedStateHint := strings.TrimSpace(relatedStateHint)
-		if trimmedRelatedStateHint == "" {
-			continue
-		}
-		trimmedRelatedStateHints = append(trimmedRelatedStateHints, trimmedRelatedStateHint)
-	}
-	if len(trimmedRelatedStateHints) == 0 {
-		return trimmedQuery
-	}
-	// Carry only the already-selected current state into evidence lookup. This
-	// keeps the graph bounded: one continuity handle expands into a small related
-	// neighborhood instead of flooding the model with the entire memory graph.
-	return trimmedQuery + "\nRelated current state:\n" + strings.Join(trimmedRelatedStateHints, "\n")
+	return relationhints.BuildLookupQuery(rawQuery, relatedStateHints)
 }
 
 func rerankHybridEvidenceSearchResults(searchResults []memoryEvidenceSearchResult, evidenceQuery string, relatedStateHints []string, maxItems int) []memoryEvidenceSearchResult {
 	if len(searchResults) == 0 {
 		return nil
 	}
-	relationTokens := hybridRelationTokenSetFromTexts(append([]string{evidenceQuery}, relatedStateHints...)...)
-	remainingSearchResults := append([]memoryEvidenceSearchResult(nil), searchResults...)
-	rerankedSearchResults := make([]memoryEvidenceSearchResult, 0, len(remainingSearchResults))
-	coveredRelationTokens := map[string]struct{}{}
-	for len(remainingSearchResults) > 0 {
-		bestIndex := 0
-		bestMarginalCoverage := -1
-		bestTotalOverlap := -1
-		bestMatchCount := -1
-		bestEvidenceID := ""
-		for currentIndex, currentItem := range remainingSearchResults {
-			currentMarginalCoverage := hybridRelationTokenMarginalCoverage(currentItem.Snippet, relationTokens, coveredRelationTokens)
-			currentTotalOverlap := hybridRelationTokenOverlapCount(currentItem.Snippet, relationTokens)
-			currentEvidenceID := strings.TrimSpace(currentItem.EvidenceID)
-			switch {
-			case currentMarginalCoverage > bestMarginalCoverage:
-				bestIndex = currentIndex
-				bestMarginalCoverage = currentMarginalCoverage
-				bestTotalOverlap = currentTotalOverlap
-				bestMatchCount = currentItem.MatchCount
-				bestEvidenceID = currentEvidenceID
-			case currentMarginalCoverage == bestMarginalCoverage && currentTotalOverlap > bestTotalOverlap:
-				bestIndex = currentIndex
-				bestMarginalCoverage = currentMarginalCoverage
-				bestTotalOverlap = currentTotalOverlap
-				bestMatchCount = currentItem.MatchCount
-				bestEvidenceID = currentEvidenceID
-			case currentMarginalCoverage == bestMarginalCoverage && currentTotalOverlap == bestTotalOverlap && currentItem.MatchCount > bestMatchCount:
-				bestIndex = currentIndex
-				bestMarginalCoverage = currentMarginalCoverage
-				bestTotalOverlap = currentTotalOverlap
-				bestMatchCount = currentItem.MatchCount
-				bestEvidenceID = currentEvidenceID
-			case currentMarginalCoverage == bestMarginalCoverage && currentTotalOverlap == bestTotalOverlap && currentItem.MatchCount == bestMatchCount && currentEvidenceID < bestEvidenceID:
-				bestIndex = currentIndex
-				bestMarginalCoverage = currentMarginalCoverage
-				bestTotalOverlap = currentTotalOverlap
-				bestMatchCount = currentItem.MatchCount
-				bestEvidenceID = currentEvidenceID
-			}
+	relationCandidates := make([]relationhints.Candidate, 0, len(searchResults))
+	candidateByEvidenceID := make(map[string]memoryEvidenceSearchResult, len(searchResults))
+	for _, searchResult := range searchResults {
+		candidateStableID := strings.TrimSpace(searchResult.EvidenceID)
+		relationCandidates = append(relationCandidates, relationhints.Candidate{
+			StableID:   candidateStableID,
+			Text:       searchResult.Snippet,
+			MatchCount: searchResult.MatchCount,
+		})
+		candidateByEvidenceID[candidateStableID] = searchResult
+	}
+	rerankedCandidates := relationhints.RerankCandidates(relationCandidates, evidenceQuery, relatedStateHints, maxItems)
+	rerankedSearchResults := make([]memoryEvidenceSearchResult, 0, len(rerankedCandidates))
+	for _, rerankedCandidate := range rerankedCandidates {
+		rerankedSearchResult, found := candidateByEvidenceID[rerankedCandidate.StableID]
+		if !found {
+			continue
 		}
-		bestItem := remainingSearchResults[bestIndex]
-		rerankedSearchResults = append(rerankedSearchResults, bestItem)
-		for coveredToken := range hybridRelationTokenSetFromTexts(bestItem.Snippet) {
-			if _, relationToken := relationTokens[coveredToken]; relationToken {
-				coveredRelationTokens[coveredToken] = struct{}{}
-			}
-		}
-		remainingSearchResults = append(remainingSearchResults[:bestIndex], remainingSearchResults[bestIndex+1:]...)
-		if maxItems > 0 && len(rerankedSearchResults) >= maxItems {
-			break
-		}
+		rerankedSearchResults = append(rerankedSearchResults, rerankedSearchResult)
 	}
 	return rerankedSearchResults
 }
@@ -288,77 +249,8 @@ func truncateStringToByteLimit(rawText string, byteLimit int) string {
 	return strings.TrimSpace(builder.String())
 }
 
-var hybridRelationStopTokens = map[string]struct{}{
-	"a": {}, "an": {}, "and": {}, "are": {}, "as": {}, "at": {}, "be": {}, "by": {}, "do": {}, "does": {}, "during": {},
-	"find": {}, "follow": {}, "for": {}, "from": {}, "how": {}, "in": {}, "instead": {}, "into": {}, "is": {}, "it": {},
-	"keep": {}, "next": {}, "note": {}, "of": {}, "on": {}, "or": {}, "our": {}, "so": {}, "state": {}, "step": {},
-	"stays": {}, "still": {}, "task": {}, "that": {}, "the": {}, "their": {}, "them": {}, "then": {}, "this": {},
-	"through": {}, "to": {}, "up": {}, "what": {}, "why": {}, "while": {}, "with": {}, "work": {},
-}
-
-func hybridRelationTokenSetFromTexts(rawTexts ...string) map[string]struct{} {
-	tokenSet := map[string]struct{}{}
-	for _, rawText := range rawTexts {
-		for _, normalizedToken := range tokenizeLoopgateMemoryText(rawText) {
-			if _, ignoredToken := hybridRelationStopTokens[normalizedToken]; ignoredToken {
-				continue
-			}
-			tokenSet[normalizedToken] = struct{}{}
-		}
-	}
-	return tokenSet
-}
-
-func hybridRelationTokenOverlapCount(rawText string, relationTokenSet map[string]struct{}) int {
-	if len(relationTokenSet) == 0 {
-		return 0
-	}
-	overlapCount := 0
-	for _, candidateToken := range tokenizeLoopgateMemoryText(rawText) {
-		if _, ignoredToken := hybridRelationStopTokens[candidateToken]; ignoredToken {
-			continue
-		}
-		if _, found := relationTokenSet[candidateToken]; found {
-			overlapCount++
-		}
-	}
-	return overlapCount
-}
-
-func hybridRelationTokenMarginalCoverage(rawText string, relationTokenSet map[string]struct{}, coveredRelationTokens map[string]struct{}) int {
-	if len(relationTokenSet) == 0 {
-		return 0
-	}
-	marginalCoverageCount := 0
-	newlyCoveredTokens := map[string]struct{}{}
-	for _, candidateToken := range tokenizeLoopgateMemoryText(rawText) {
-		if _, ignoredToken := hybridRelationStopTokens[candidateToken]; ignoredToken {
-			continue
-		}
-		if _, relationToken := relationTokenSet[candidateToken]; !relationToken {
-			continue
-		}
-		if _, alreadyCovered := coveredRelationTokens[candidateToken]; alreadyCovered {
-			continue
-		}
-		if _, alreadyCounted := newlyCoveredTokens[candidateToken]; alreadyCounted {
-			continue
-		}
-		newlyCoveredTokens[candidateToken] = struct{}{}
-		marginalCoverageCount++
-	}
-	return marginalCoverageCount
-}
-
 func minInt(leftValue int, rightValue int) int {
 	if leftValue < rightValue {
-		return leftValue
-	}
-	return rightValue
-}
-
-func maxInt(leftValue int, rightValue int) int {
-	if leftValue > rightValue {
 		return leftValue
 	}
 	return rightValue

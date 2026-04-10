@@ -82,6 +82,8 @@ var builtInScenarioSets = map[string][]string{
 		"hybrid.replay_recovery_current_step_and_root_cause.v1",
 		"hybrid.preview_card_follow_up_and_boundary_rationale.v1",
 		"hybrid.offline_policy_follow_up_and_signature_rationale.v1",
+		"hybrid.memory_artifact_lookup_current_contract_and_prompt_policy.v1",
+		"hybrid.continuity_review_restart_follow_up_and_lineage_rationale.v1",
 		"hybrid.resolved_path_follow_up_and_projection_rationale.v1",
 	},
 	"long_horizon_matrix": {

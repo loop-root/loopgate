@@ -1357,8 +1357,8 @@ func TestBenchmarkFixturesForProfile_ExtendedFixturesIncludesHybridMatrix(t *tes
 	if err != nil {
 		t.Fatalf("benchmarkFixturesForProfile extended_fixtures: %v", err)
 	}
-	if len(selectedFixtures) != 5 {
-		t.Fatalf("expected five hybrid fixtures in extended profile, got %d", len(selectedFixtures))
+	if len(selectedFixtures) != 7 {
+		t.Fatalf("expected seven hybrid fixtures in extended profile, got %d", len(selectedFixtures))
 	}
 	for _, selectedFixture := range selectedFixtures {
 		if selectedFixture.Metadata.Category != memorybench.CategoryMemoryHybridRecall {

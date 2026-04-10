@@ -258,52 +258,49 @@ bucket. These fixtures intentionally require:
 
 Final `2026-04-10` hybrid runs:
 
-- continuity control: `continuity_hybrid_matrix_20260410_v5`
+- continuity control: `continuity_hybrid_matrix_20260410_v7`
   - `retrieval_path_mode=control_plane_memory_routes`
   - `seed_path_mode=control_plane_memory_and_todo_workflow_routes`
-- RAG baseline: `rag_baseline_hybrid_matrix_20260410_v5`
+- RAG baseline: `rag_baseline_hybrid_matrix_20260410_v7`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
-- stronger RAG: `rag_stronger_hybrid_matrix_20260410_v5`
+- stronger RAG: `rag_stronger_hybrid_matrix_20260410_v7`
   - `retrieval_path_mode=rag_search_helper`
   - `seed_path_mode=python_rag_fixture_seed`
-- stronger hybrid: `hybrid_stronger_hybrid_matrix_20260410_v7`
+- hybrid: `hybrid_hybrid_matrix_20260410_v7`
   - `retrieval_path_mode=hybrid_continuity_state_plus_rag_evidence`
   - `seed_path_mode=control_plane_state_and_rag_fixture_corpus`
 
 Current hybrid-matrix counts:
 
-| Backend | Overall | Mount grant blocker + rationale | Replay recovery step + root cause | Preview-card follow-up + boundary rationale | Offline policy follow-up + rationale | Resolved-path follow-up + rationale |
+| Backend | Overall | Mount grant blocker + rationale | Replay recovery step + root cause | Preview-card follow-up + boundary rationale | Offline policy follow-up + rationale | Prompt policy + artifact lookup | Review restart + lineage rationale | Resolved-path follow-up + rationale |
 | --- | --- | --- | --- | --- | --- | --- |
-| `continuity_tcl` (`production_write_parity`) | `0/5` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
-| `rag_baseline` (`candidate_governance=continuity_tcl`) | `0/5` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
-| `rag_stronger` (`candidate_governance=continuity_tcl`) | `0/5` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
-| `hybrid` (continuity state + stronger RAG evidence) | `3/5` | `0/1` | `1/1` | `1/1` | `1/1` | `0/1` |
+| `continuity_tcl` (`production_write_parity`) | `0/7` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
+| `rag_baseline` (`candidate_governance=continuity_tcl`) | `0/7` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
+| `rag_stronger` (`candidate_governance=continuity_tcl`) | `0/7` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` | `0/1` |
+| `hybrid` (continuity state + stronger RAG evidence) | `7/7` | `1/1` | `1/1` | `1/1` | `1/1` | `1/1` | `1/1` | `1/1` |
 
 Read:
 
-- this is the first checked-in bucket where the hybrid path beats both pure
-  controls instead of merely tying them
+- the targeted hybrid bucket is now broad enough to cover both the earlier
+  design-thread misses and two new UI-facing ambiguity cases
 - continuity-only fails for the expected reason: it can recover the current
   state node, but it does not have the broader supporting evidence corpus
 - RAG-only fails for the opposite reason: it can retrieve evidence, but it
   lacks the canonical current blocker or next-step state that continuity keeps
   current
-- the bounded hybrid combiner now uses retrieved continuity state hints to
-  shape evidence lookup, then greedily selects complementary evidence instead
-  of just taking the two individually highest-overlap notes
-- the new offline-policy case now passes cleanly because the hybrid path finds
-  both the current follow-up state and the signed-cache rationale
-- the remaining mount-grant and resolved-path misses are still useful: in both
-  cases the hybrid path finds the right current state, but it still picks the
-  wrong second supporting note inside a related design thread
+- the bounded hybrid combiner now uses shared relation-hint scoring plus a
+  bounded wider candidate pool so it can disambiguate sibling rationale notes
+  inside the same design thread without widening the final prompt payload
+- the current targeted proof is strong for the MVP claim, but it is still a
+  targeted bucket, not a universal statement about every evidence problem
 
 Hybrid-matrix artifacts:
 
-- `/tmp/memorybench-live-continuity/continuity_hybrid_matrix_20260410_v5/*`
-- `/tmp/memorybench-live-rag/rag_baseline_hybrid_matrix_20260410_v5/*`
-- `/tmp/memorybench-live-rag/rag_stronger_hybrid_matrix_20260410_v5/*`
-- `/tmp/memorybench-live-hybrid/hybrid_stronger_hybrid_matrix_20260410_v7/*`
+- `/tmp/memorybench-live-continuity/continuity_hybrid_matrix_20260410_v7/*`
+- `/tmp/memorybench-live-rag/rag_baseline_hybrid_matrix_20260410_v7/*`
+- `/tmp/memorybench-live-rag/rag_stronger_hybrid_matrix_20260410_v7/*`
+- `/tmp/memorybench-live-hybrid/hybrid_hybrid_matrix_20260410_v7/*`
 
 ## Preserved prior honest rerun set (61-fixture matrix)
 
