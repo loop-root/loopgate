@@ -450,32 +450,58 @@ memory:
 	}
 }
 
-func TestLoadRuntimeConfig_RejectsUnknownMemoryBackend(t *testing.T) {
-	repoRoot := t.TempDir()
-	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
-	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
+func TestLoadRuntimeConfig_RejectsUnsupportedMemoryBackend(t *testing.T) {
+	testCases := []struct {
+		name         string
+		backendName  string
+		wantFragment string
+	}{
+		{
+			name:         "unknown_backend",
+			backendName:  "mystery_backend",
+			wantFragment: "memory.backend must be continuity_tcl",
+		},
+		{
+			name:         "benchmark_only_rag_baseline",
+			backendName:  "rag_baseline",
+			wantFragment: benchmarkOnlyMemoryBackendErrorSuffix,
+		},
+		{
+			name:         "benchmark_only_hybrid",
+			backendName:  "hybrid",
+			wantFragment: benchmarkOnlyMemoryBackendErrorSuffix,
+		},
 	}
 
-	raw := `version: "1"
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
+			if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+
+			raw := `version: "1"
 memory:
-  backend: "mystery_backend"
+  backend: "` + testCase.backendName + `"
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
   soft_morphling_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
-	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
-		t.Fatalf("write runtime config: %v", err)
-	}
+			if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
+				t.Fatalf("write runtime config: %v", err)
+			}
 
-	_, err := LoadRuntimeConfig(repoRoot)
-	if err == nil {
-		t.Fatal("expected unknown memory backend to fail closed")
-	}
-	if !strings.Contains(err.Error(), "memory.backend") {
-		t.Fatalf("unexpected error: %v", err)
+			_, err := LoadRuntimeConfig(repoRoot)
+			if err == nil {
+				t.Fatal("expected unsupported memory backend to fail closed")
+			}
+			if !strings.Contains(err.Error(), testCase.wantFragment) {
+				t.Fatalf("expected error containing %q, got %v", testCase.wantFragment, err)
+			}
+		})
 	}
 }
 

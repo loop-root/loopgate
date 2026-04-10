@@ -478,9 +478,9 @@ func TestNewMemoryBackend_RejectsUnimplementedBackend(t *testing.T) {
 
 	_, err := newMemoryBackendForPartition(server, partition)
 	if err == nil {
-		t.Fatal("expected unimplemented backend to fail closed")
+		t.Fatal("expected benchmark-only backend to fail closed")
 	}
-	if !strings.Contains(err.Error(), memoryBackendRAGBaseline) {
+	if !strings.Contains(err.Error(), memoryBackendRAGBaseline) || !strings.Contains(err.Error(), "benchmark-only") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

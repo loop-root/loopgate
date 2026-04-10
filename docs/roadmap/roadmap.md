@@ -160,6 +160,8 @@ Next lift:
 - define a swappable memory backend boundary and benchmark harness so
   `continuity_tcl` can be compared fairly against a `rag_baseline`; see
   `docs/rfcs/0011-swappable-memory-backends-and-benchmark-harness.md`
+- keep benchmark comparator labels benchmark-only until they exist as real
+  runtime backends behind the same Loopgate-owned seam
 - define the authoritative storage/query shape for the `continuity_tcl`
   backend so it can evolve past JSON snapshots while keeping Loopgate in
   control; see `docs/rfcs/0013-continuity-tcl-storage-and-query-backend.md`

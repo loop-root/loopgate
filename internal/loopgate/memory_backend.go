@@ -4,8 +4,11 @@ import "context"
 
 const (
 	memoryBackendContinuityTCL = "continuity_tcl"
-	memoryBackendRAGBaseline   = "rag_baseline"
-	memoryBackendHybrid        = "hybrid"
+	// Benchmark-only backend labels are kept here so stale runtime configs fail
+	// closed with an explicit message instead of silently degrading into the
+	// default continuity backend.
+	memoryBackendRAGBaseline = "rag_baseline"
+	memoryBackendHybrid      = "hybrid"
 )
 
 // MemoryBackend is the internal Loopgate boundary for governed memory storage,

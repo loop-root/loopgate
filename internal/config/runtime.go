@@ -17,6 +17,7 @@ const runtimeConfigVersion = "1"
 
 const DefaultSupersededLineageRetentionWindow = 30 * 24 * time.Hour
 const DefaultMemoryBackend = "continuity_tcl"
+const benchmarkOnlyMemoryBackendErrorSuffix = "is benchmark-only; runtime config currently supports only continuity_tcl"
 
 // DiagnosticLogging configures optional text log files (slog) for local troubleshooting.
 // DefaultLevel: error | warn | info | debug | trace (trace is finer than debug).
@@ -46,9 +47,9 @@ type DiagnosticFiles struct {
 // IntervalEvents zero/unset defaults to 256 in applyRuntimeConfigDefaults; negative values are rejected at validate.
 // The signing key is loaded via secret_ref (macOS: macos_keychain; CI/tests: env with account_name = env var name).
 type AuditLedgerHMACCheckpoint struct {
-	Enabled        bool                       `yaml:"enabled" json:"enabled"`
-	IntervalEvents int                        `yaml:"interval_events" json:"interval_events"`
-	SecretRef      *AuditLedgerHMACSecretRef  `yaml:"secret_ref,omitempty" json:"secret_ref,omitempty"`
+	Enabled        bool                      `yaml:"enabled" json:"enabled"`
+	IntervalEvents int                       `yaml:"interval_events" json:"interval_events"`
+	SecretRef      *AuditLedgerHMACSecretRef `yaml:"secret_ref,omitempty" json:"secret_ref,omitempty"`
 }
 
 // AuditLedgerHMACSecretRef references secret material for audit ledger checkpoint HMAC (same shape as secrets.SecretRef).
@@ -384,10 +385,15 @@ func validateRuntimeConfig(runtimeConfig RuntimeConfig) error {
 	if runtimeConfig.Memory.CandidatePanelSize <= 0 {
 		return fmt.Errorf("candidate_panel_size must be positive")
 	}
-	switch strings.TrimSpace(runtimeConfig.Memory.Backend) {
-	case "continuity_tcl", "rag_baseline", "hybrid":
+	switch trimmedMemoryBackend := strings.TrimSpace(runtimeConfig.Memory.Backend); trimmedMemoryBackend {
+	case DefaultMemoryBackend:
 	default:
-		return fmt.Errorf("memory.backend must be one of continuity_tcl, rag_baseline, hybrid")
+		switch trimmedMemoryBackend {
+		case "rag_baseline", "hybrid":
+			return fmt.Errorf("memory.backend %q %s", trimmedMemoryBackend, benchmarkOnlyMemoryBackendErrorSuffix)
+		default:
+			return fmt.Errorf("memory.backend must be %s", DefaultMemoryBackend)
+		}
 	}
 	if runtimeConfig.Memory.SoftMorphlingConcurrency <= 0 {
 		return fmt.Errorf("soft_morphling_concurrency must be positive")

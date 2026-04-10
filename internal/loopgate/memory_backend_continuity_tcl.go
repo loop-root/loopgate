@@ -38,7 +38,7 @@ func newMemoryBackendForPartition(server *Server, partition *memoryPartition) (M
 			buildValidatedRememberCandidateFn: buildValidatedMemoryRememberCandidate,
 		}, nil
 	case memoryBackendRAGBaseline, memoryBackendHybrid:
-		return nil, fmt.Errorf("memory backend %q is configured but not implemented yet", selectedBackendName)
+		return nil, fmt.Errorf("memory backend %q is benchmark-only and not available for runtime partitions", selectedBackendName)
 	default:
 		return nil, fmt.Errorf("unknown memory backend %q", selectedBackendName)
 	}

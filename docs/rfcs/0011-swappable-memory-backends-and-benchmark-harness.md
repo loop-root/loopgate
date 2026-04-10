@@ -531,11 +531,17 @@ Suggested shape:
 
 ```yaml
 memory:
-  backend: continuity_tcl   # continuity_tcl | rag_baseline | rag_stronger | hybrid
+  backend: continuity_tcl
   benchmark_profile: default
 ```
 
-Loopgate should fail closed on unknown backend names.
+Current implementation note:
+
+- product runtime config currently accepts only `continuity_tcl`
+- `rag_baseline`, `rag_stronger`, and `hybrid` remain benchmark labels until a
+  second backend is actually implemented behind the same governed Loopgate seam
+
+Loopgate should fail closed on unknown or benchmark-only runtime backend names.
 
 ## 11. Storage expectations
 
