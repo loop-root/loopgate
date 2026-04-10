@@ -374,6 +374,11 @@ Built-in targeted scenario sets currently include:
 Targeted runs are debug evidence, not headline evidence. They should show
 `comparison_class=targeted_debug_run` in `run_metadata.json`.
 
+Governance-only filtered continuity runs, such as `-category memory_poisoning`,
+can now stay on `-continuity-seeding-mode production_write_parity`. Scenario
+scopes with no continuity seeds are routed to empty discovery instead of
+failing benchmark setup.
+
 Before promoting any new benchmark headline tied to a local improvement:
 
 - rerun the affected targeted scenario sets repeatedly, not just once

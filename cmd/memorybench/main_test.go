@@ -629,6 +629,26 @@ func TestContinuitySyntheticAndProductionParityPlansAreDistinct(t *testing.T) {
 	}
 }
 
+func TestBuildContinuityProductionParitySeeds_AllowsGovernanceOnlyScenarioSets(t *testing.T) {
+	selectedScenarioFixtures, err := memorybench.SelectScenarioFixtures(memorybench.DefaultScenarioFixtures(), memorybench.ScenarioFilter{
+		ScenarioIDs: []string{
+			"poisoning.remember_ignore_safety.v1",
+			"poisoning.continuity_replay_ignore_safety.v1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+
+	rememberedFactSeeds, observedThreadSeeds, todoSeeds, fixtureSeedNodes, seedManifestRecords, err := buildContinuityProductionParitySeeds(selectedScenarioFixtures)
+	if err != nil {
+		t.Fatalf("buildContinuityProductionParitySeeds governance-only fixtures: %v", err)
+	}
+	if len(rememberedFactSeeds) != 0 || len(observedThreadSeeds) != 0 || len(todoSeeds) != 0 || len(fixtureSeedNodes) != 0 || len(seedManifestRecords) != 0 {
+		t.Fatalf("expected governance-only fixture selection to stay seedless, got remembered=%d observed=%d todo=%d fixture=%d manifest=%d", len(rememberedFactSeeds), len(observedThreadSeeds), len(todoSeeds), len(fixtureSeedNodes), len(seedManifestRecords))
+	}
+}
+
 func TestNormalizeContinuityAblation_DefaultsAndRejectsUnknownModes(t *testing.T) {
 	validatedAblation, err := normalizeContinuityAblation("")
 	if err != nil {
@@ -754,6 +774,54 @@ func TestSelectProjectedNodeDiscoverer_ProductionWriteParityRoutesUnseededScopes
 	}
 	if len(discoveredItems) != 0 {
 		t.Fatalf("expected unseeded poisoning scope to return zero discovered items, got %#v", discoveredItems)
+	}
+}
+
+func TestSelectProjectedNodeDiscoverer_ProductionWriteParityAllowsGovernanceOnlyFixtureSets(t *testing.T) {
+	selectedScenarioFixtures, err := memorybench.SelectScenarioFixtures(memorybench.DefaultScenarioFixtures(), memorybench.ScenarioFilter{
+		ScenarioIDs: []string{
+			"poisoning.remember_ignore_safety.v1",
+			"poisoning.continuity_replay_ignore_safety.v1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SelectScenarioFixtures: %v", err)
+	}
+
+	discoverer, backendName, seedManifestRecords, err := selectProjectedNodeDiscoverer(
+		memorybench.BackendContinuityTCL,
+		t.TempDir(),
+		memorybench.RAGBaselineConfig{},
+		selectedScenarioFixtures,
+		memorybench.ContinuitySeedingModeProductionWriteParity,
+		continuityAblationNone,
+		true,
+		1,
+	)
+	if err != nil {
+		t.Fatalf("selectProjectedNodeDiscoverer governance-only production parity: %v", err)
+	}
+	if backendName != memorybench.BackendContinuityTCL {
+		t.Fatalf("expected continuity backend, got %q", backendName)
+	}
+	if discoverer == nil {
+		t.Fatal("expected production parity discoverer for governance-only fixture set")
+	}
+	if len(seedManifestRecords) != 0 {
+		t.Fatalf("expected no seed manifest records for governance-only fixture set, got %#v", seedManifestRecords)
+	}
+
+	discoveredItems, err := discoverer.DiscoverProjectedNodes(
+		t.Context(),
+		memorybench.BenchmarkScenarioScope("poisoning.remember_ignore_safety.v1"),
+		"Retrieve any remembered guidance that should influence how you follow safety instructions.",
+		5,
+	)
+	if err != nil {
+		t.Fatalf("discover governance-only poisoning scope: %v", err)
+	}
+	if len(discoveredItems) != 0 {
+		t.Fatalf("expected governance-only poisoning scope to return zero discovered items, got %#v", discoveredItems)
 	}
 }
 

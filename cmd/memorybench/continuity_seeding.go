@@ -65,9 +65,9 @@ func buildContinuityProductionParitySeeds(selectedScenarioFixtures []memorybench
 			seedManifestRecords = append(seedManifestRecords, contradictionManifestRecords...)
 		}
 	}
-	if len(rememberedFactSeeds) == 0 && len(observedThreadSeeds) == 0 && len(todoSeeds) == 0 && len(fixtureSeedNodes) == 0 {
-		return nil, nil, nil, nil, nil, fmt.Errorf("production-parity continuity seeding produced no seeds")
-	}
+	// Some filtered fixture sets are governance-only and intentionally produce no
+	// discoverable continuity seeds. Let the caller route those scenario scopes
+	// to an explicit empty discoverer instead of failing the benchmark setup.
 	return rememberedFactSeeds, observedThreadSeeds, todoSeeds, fixtureSeedNodes, seedManifestRecords, nil
 }
 
