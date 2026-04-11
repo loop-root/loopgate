@@ -143,7 +143,10 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_memory_handlers.go` — memory endpoints (see Memory section below)
 - `server_haven_memory_handlers.go` — UI memory inventory/reset handlers; projects redacted manageable objects and owns demo reset paths
 - `server_capability_handlers.go` — capability execution
-- `morphlings.go` / `morphling_workers.go` — lifecycle, worker IPC; `morphlingSummaryFromRecord` + `morphlingProjectionStatusText` project operator-facing summaries without raw model memory strings or termination prose
+- `morphling_state.go`
+  - morphling record schema, validation, signed on-disk persistence, tenant checks, and operator-facing summary projection helpers
+- `morphlings.go` / `morphling_workers.go`
+  - morphling lifecycle transitions, approval/review handling, recovery, and worker IPC
 - `server_morphling_handlers.go` / `server_morphling_worker_handlers.go` — morphling lifecycle and workers
 - `server_model_handlers.go` — model connection APIs; **session open** stamps `TenantID` / `UserID` from `config/runtime.yaml` → `tenancy` (see `docs/setup/TENANCY.md`, ADR 0004)
 - `server_config_handlers.go` — configuration
