@@ -48,12 +48,7 @@ func (server *Server) handleHavenModelSettingsGet(writer http.ResponseWriter, re
 	if !ok {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "model settings requires actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "model settings require trusted Haven session") {
 		return
 	}
 	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelSettingsRead) {
@@ -114,12 +109,7 @@ func (server *Server) handleHavenModelSettingsPost(writer http.ResponseWriter, r
 	if !ok {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "model settings requires actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "model settings require trusted Haven session") {
 		return
 	}
 	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelSettingsWrite) {

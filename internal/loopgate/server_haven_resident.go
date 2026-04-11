@@ -135,12 +135,7 @@ func (server *Server) handleHavenJournalResidentTick(writer http.ResponseWriter,
 	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelReply) {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "resident journal tick requires actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "resident journal tick requires trusted Haven session") {
 		return
 	}
 

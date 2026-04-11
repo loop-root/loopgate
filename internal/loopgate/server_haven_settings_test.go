@@ -19,7 +19,8 @@ func TestHavenSettingsIdleFailsClosedOnCorruptPrefs(t *testing.T) {
 		t.Fatalf("write corrupt prefs: %v", err)
 	}
 
-	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	havenClient := NewClient(client.socketPath)
 	havenClient.ConfigureSession("haven", "idle-settings-test", advertisedSessionCapabilityNames(status))
 	token, err := havenClient.ensureCapabilityToken(context.Background())

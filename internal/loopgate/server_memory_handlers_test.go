@@ -134,6 +134,7 @@ func TestMemoryReadRoutesRequireMemoryReadScope(t *testing.T) {
 func TestMemoryWriteRoutesRequireMemoryWriteScope(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	threadID, workspaceID := createContinuityInspectThreadForTests(t, server, repoRoot)
 
 	deniedClient := NewClient(client.socketPath)
@@ -190,6 +191,7 @@ func TestRawContinuityInspectRouteIsRemoved(t *testing.T) {
 func TestMemoryGovernanceRoutesRequireReviewAndLineageScope(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	threadID, workspaceID := createContinuityInspectThreadForTests(t, server, repoRoot)
 
 	writerClient := NewClient(client.socketPath)

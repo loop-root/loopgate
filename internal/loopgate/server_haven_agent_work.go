@@ -26,12 +26,7 @@ func (server *Server) handleHavenAgentWorkItemEnsure(writer http.ResponseWriter,
 	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIWrite) {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "agent work-item ensure requires actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "agent work-item ensure requires trusted Haven session") {
 		return
 	}
 	if !capabilityScopeAllowed(tokenClaims, "todo.add") {
@@ -137,12 +132,7 @@ func (server *Server) handleHavenAgentWorkItemComplete(writer http.ResponseWrite
 	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIWrite) {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "agent work-item complete requires actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "agent work-item complete requires trusted Haven session") {
 		return
 	}
 	if !capabilityScopeAllowed(tokenClaims, "todo.complete") {

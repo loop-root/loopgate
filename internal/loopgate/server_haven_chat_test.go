@@ -79,6 +79,7 @@ func TestBuildResidentCapabilityFacts_MemoryRememberHintMatchesRegistry(t *testi
 func TestHavenChat_EnablesToolsAndExecutesMemoryRemember(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	provider := &sequenceModelProvider{
@@ -159,6 +160,7 @@ func TestHavenChat_EnablesToolsAndExecutesMemoryRemember(t *testing.T) {
 func TestHavenChat_KeepsApprovalRequiredToolPending(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 	server.registry.Register(fakeLoopgateTool{
 		name:        "external_write",
@@ -265,6 +267,7 @@ func TestHavenHostFolderProseNudgeApplies(t *testing.T) {
 func TestHavenChat_HostFolderProseNudgeTriggersToolRound(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	baseCaps := advertisedSessionCapabilityNames(status)
@@ -336,6 +339,7 @@ func TestHavenChat_HostFolderProseNudgeTriggersToolRound(t *testing.T) {
 func TestHavenChat_OrganizePlanProseNudgesHostPlanApply(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 	sharedHostPath := filepath.Join(repoRoot, defaultSharedFolderName)
 	if err := os.MkdirAll(sharedHostPath, 0o755); err != nil {
@@ -427,6 +431,7 @@ func TestHavenIsNonUserFacingAssistantPlaceholder(t *testing.T) {
 func TestHavenChat_PlaceholderAssistantTextBecomesFriendlyReply(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	provider := &sequenceModelProvider{

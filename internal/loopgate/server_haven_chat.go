@@ -321,18 +321,18 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	diagControlSessionID = tokenClaims.ControlSessionID
 	diagTenantID = tokenClaims.TenantID
 	diagUserID = tokenClaims.UserID
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
+	if !server.hasTrustedHavenSession(tokenClaims) {
 		if server.diagnostic != nil && server.diagnostic.Server != nil {
-			args := append([]any{"reason", "haven chat requires actor haven"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
+			args := append([]any{"reason", "haven chat requires trusted Haven session"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
 			server.diagnostic.Server.Warn("haven_chat_denied", args...)
 		}
 		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
 			"denial_code": DenialCodeCapabilityTokenInvalid,
-			"reason":      "haven chat requires actor haven",
+			"reason":      "haven chat requires trusted Haven session",
 		})
 		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
 			Status:       ResponseStatusDenied,
-			DenialReason: "haven chat requires actor haven",
+			DenialReason: "haven chat requires trusted Haven session",
 			DenialCode:   DenialCodeCapabilityTokenInvalid,
 		})
 		return
@@ -698,12 +698,7 @@ func (server *Server) handleOpenAICompatibleModels(writer http.ResponseWriter, r
 	if !ok {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "model listing requires actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "model listing requires trusted Haven session") {
 		return
 	}
 	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionWrite) {

@@ -79,6 +79,7 @@ func TestHavenChat_ConcurrentReadOnlyToolsRunFasterThanSerial(t *testing.T) {
 
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	server.registry.Register(slowFakeLoopgateTool{
@@ -158,6 +159,7 @@ func TestHavenChat_SerialWriteToolsRunInOrder(t *testing.T) {
 
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	var mu sync.Mutex
@@ -240,6 +242,7 @@ func TestHavenChat_SerialWriteToolsRunInOrder(t *testing.T) {
 func TestHavenChat_ToolResultsRetainInputOrder(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	// Two reads with opposite delays so they naturally finish in reverse order.

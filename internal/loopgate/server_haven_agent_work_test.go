@@ -9,7 +9,8 @@ import (
 
 func TestHavenAgentWorkItemEnsureAndComplete(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	client.ConfigureSession("haven", "haven-agent-work-test", advertisedSessionCapabilityNames(status))
 	ctx := context.Background()
 	token, err := client.ensureCapabilityToken(ctx)

@@ -13,6 +13,7 @@ import (
 func TestHavenContinuityInspectThread_SubmittedAndSkipped(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	wsID := server.deriveWorkspaceIDFromRepoRoot()
@@ -71,6 +72,7 @@ func TestHavenContinuityInspectThread_SubmittedAndSkipped(t *testing.T) {
 func TestHavenContinuityInspectThread_LegacyAliasStillWorks(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	workspaceID := server.deriveWorkspaceIDFromRepoRoot()
@@ -108,6 +110,7 @@ func TestHavenContinuityInspectThread_LegacyAliasStillWorks(t *testing.T) {
 func TestHavenContinuityInspectThread_PersistsThreadstoreSourceRefs(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	workspaceID := server.deriveWorkspaceIDFromRepoRoot()
@@ -161,6 +164,7 @@ func TestHavenContinuityInspectThread_PersistsThreadstoreSourceRefs(t *testing.T
 func TestHavenContinuityInspectThread_DerivesFactsFromToolResultFacts(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	workspaceID := server.deriveWorkspaceIDFromRepoRoot()

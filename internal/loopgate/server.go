@@ -2417,6 +2417,35 @@ func isHighRiskCapability(tool toolspkg.Tool, policyDecision policypkg.CheckResu
 	return tool.Operation() == toolspkg.OpWrite
 }
 
+func (server *Server) hasTrustedHavenSession(tokenClaims capabilityToken) bool {
+	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
+		return false
+	}
+	server.mu.Lock()
+	controlSession, sessionFound := server.sessions[tokenClaims.ControlSessionID]
+	server.mu.Unlock()
+	if !sessionFound {
+		return false
+	}
+	return controlSession.TrustedHavenClient
+}
+
+func (server *Server) requireTrustedHavenSession(writer http.ResponseWriter, tokenClaims capabilityToken, denialReason string) bool {
+	if server.hasTrustedHavenSession(tokenClaims) {
+		return true
+	}
+	normalizedDenialReason := strings.TrimSpace(denialReason)
+	if normalizedDenialReason == "" {
+		normalizedDenialReason = "trusted Haven session required"
+	}
+	server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
+		Status:       ResponseStatusDenied,
+		DenialReason: normalizedDenialReason,
+		DenialCode:   DenialCodeCapabilityTokenInvalid,
+	})
+	return false
+}
+
 func (server *Server) shouldAutoAllowTrustedSandboxCapability(tokenClaims capabilityToken, capabilityName string, tool toolspkg.Tool, policyDecision policypkg.CheckResult) bool {
 	if policyDecision.Decision != policypkg.NeedsApproval {
 		return false
@@ -2433,13 +2462,7 @@ func (server *Server) shouldAutoAllowTrustedSandboxCapability(tokenClaims capabi
 	if !server.policy.HavenTrustedSandboxAutoAllowMatchesCapability(capabilityName) {
 		return false
 	}
-	if tokenClaims.ActorLabel != "haven" {
-		return false
-	}
-	server.mu.Lock()
-	trustedHavenClient := server.sessions[tokenClaims.ControlSessionID].TrustedHavenClient
-	server.mu.Unlock()
-	if !trustedHavenClient {
+	if !server.hasTrustedHavenSession(tokenClaims) {
 		return false
 	}
 	trustedTool, ok := tool.(interface{ TrustedSandboxLocal() bool })

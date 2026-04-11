@@ -94,6 +94,8 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 
 **Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch, or inability to resolve the connecting executable, returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable. Haven-specific `operator_mount_paths` bindings are rejected unless this pin is configured.
 
+**Trusted Haven session requirement:** Haven-only helper routes such as `/v1/chat`, `/v1/resident/journal-tick`, `/v1/model/settings`, `/v1/settings/*`, `/v1/agent/work-item/*`, and `/v1/continuity/inspect-thread` now require a session that opened as `actor: "haven"` **and** matched the pinned expected client executable. A spoofed actor label is not enough for those product-surface routes.
+
 **Haven trusted-sandbox auto-allow:** If the session **`actor`** is **`haven`**, the session opened under the pinned expected Haven executable, and a tool implements **`TrustedSandboxLocal()`**, Loopgate may treat **`NeedsApproval`** policy as **`Allow`** for that capability (audit still records the decision). Operators can tighten this in **`core/policy/policy.yaml`** → **`safety`**: **`haven_trusted_sandbox_auto_allow`** (`false` to disable), and optionally **`haven_trusted_sandbox_auto_allow_capabilities`** (omit = all such tools; `[]` = none; non-empty list = allowlist by capability name).
 
 ---

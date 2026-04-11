@@ -19,7 +19,8 @@ import (
 
 func TestHavenMemoryUIRoutesRequireScopedCapabilities(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 
 	inventoryDeniedClient := NewClient(client.socketPath)
 	inventoryDeniedClient.ConfigureSession("haven", "ui-memory-read-denied", []string{"fs_read"})
@@ -128,7 +129,8 @@ func TestSiteRoutesRequireScopedCapabilities(t *testing.T) {
 
 func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 
 	deniedClient := NewClient(client.socketPath)
 	deniedClient.ConfigureSession("test-actor", "diagnostic-read-denied", []string{controlCapabilityConnectionRead})
@@ -254,7 +256,8 @@ func TestHavenModelRoutesRequireScopedCapabilities(t *testing.T) {
 		t.Fatalf("seed persisted model config: %v", err)
 	}
 
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 
 	settingsReadDeniedClient := NewClient(client.socketPath)
 	settingsReadDeniedClient.ConfigureSession("haven", "model-settings-read-denied", []string{controlCapabilityConnectionWrite})
@@ -374,9 +377,38 @@ func TestHavenModelRoutesRequireScopedCapabilities(t *testing.T) {
 	}
 }
 
+func TestHavenRoutesRequireTrustedHavenSession(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	untrustedHavenClient := NewClient(client.socketPath)
+	untrustedHavenClient.ConfigureSession("haven", "haven-untrusted-route-check", advertisedSessionCapabilityNames(status))
+	if _, err := untrustedHavenClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure untrusted haven token: %v", err)
+	}
+
+	if err := untrustedHavenClient.doJSON(context.Background(), http.MethodGet, "/v1/settings/idle", untrustedHavenClient.capabilityToken, nil, &havenIdleSettingsResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenInvalid) {
+		t.Fatalf("expected trusted Haven denial for idle settings, got %v", err)
+	}
+	if err := untrustedHavenClient.doJSON(context.Background(), http.MethodGet, "/v1/model/settings", untrustedHavenClient.capabilityToken, nil, &HavenModelSettingsResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenInvalid) {
+		t.Fatalf("expected trusted Haven denial for model settings, got %v", err)
+	}
+	if err := untrustedHavenClient.doJSON(context.Background(), http.MethodPost, "/v1/agent/work-item/ensure", untrustedHavenClient.capabilityToken, HavenAgentWorkEnsureRequest{
+		Text: "untrusted haven should not reach helper routes",
+	}, &HavenAgentWorkItemResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenInvalid) {
+		t.Fatalf("expected trusted Haven denial for agent work ensure, got %v", err)
+	}
+	if err := untrustedHavenClient.doJSON(context.Background(), http.MethodPost, "/v1/chat", untrustedHavenClient.capabilityToken, havenChatRequest{
+		Message: "untrusted haven should not reach chat",
+	}, &CapabilityResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenInvalid) {
+		t.Fatalf("expected trusted Haven denial for chat, got %v", err)
+	}
+}
+
 func TestHavenConvenienceRoutesRequireUIWriteScope(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
 	workspaceID := server.deriveWorkspaceIDFromRepoRoot()
@@ -1131,7 +1163,8 @@ func TestHavenProjectionRoutesRequireCapabilityScopes(t *testing.T) {
 
 func TestHavenSettingsRoutesRequireConfigScopes(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 
 	readDeniedClient := NewClient(client.socketPath)
 	readDeniedClient.ConfigureSession("haven", "haven-settings-read-denied", []string{"fs_list"})

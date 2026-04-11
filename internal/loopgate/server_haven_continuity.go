@@ -39,12 +39,7 @@ func (server *Server) handleHavenContinuityInspectThread(writer http.ResponseWri
 	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryWrite) {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "continuity inspect-thread requires actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "continuity inspect-thread requires trusted Haven session") {
 		return
 	}
 

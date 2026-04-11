@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"morph/internal/config"
 	modelruntime "morph/internal/modelruntime"
@@ -39,12 +38,7 @@ func (server *Server) handleHavenSettingsShellDev(writer http.ResponseWriter, re
 	if !ok {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "shell dev settings require actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "shell dev settings require trusted Haven session") {
 		return
 	}
 
@@ -140,12 +134,7 @@ func (server *Server) handleHavenSettingsIdle(writer http.ResponseWriter, reques
 	if !ok {
 		return
 	}
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "idle settings require actor haven",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	if !server.requireTrustedHavenSession(writer, tokenClaims, "idle settings require trusted Haven session") {
 		return
 	}
 

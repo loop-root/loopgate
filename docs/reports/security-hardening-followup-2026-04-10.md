@@ -352,6 +352,41 @@ Why this matters:
 - this keeps the auto-allow optimization aligned with a real authority signal:
   a Haven session opened by the pinned Haven executable
 
+## Later hardening on Haven-only route identity
+
+The next review slice found one more compatibility-era drift pattern:
+
+- several Haven-only helper routes still trusted `actor: haven` directly even
+  though Loopgate had already introduced a stronger server-owned
+  `TrustedHavenClient` session bit
+
+Affected route families included:
+
+- `/v1/chat`
+- `/v1/resident/journal-tick`
+- `/v1/model/settings`
+- `/v1/model/openai/models`
+- `/v1/settings/shell-dev`
+- `/v1/settings/idle`
+- `/v1/agent/work-item/*`
+- `/v1/continuity/inspect-thread`
+
+What changed:
+
+- those handlers now require a trusted Haven session instead of a raw
+  client-declared actor label
+- the shared server helper checks both `actor: haven` and the authoritative
+  session state stamped at `POST /v1/session/open`
+
+Why this matters:
+
+- these routes are product-surface affordances, not generic control-plane
+  endpoints
+- a generic local client should not be able to claim `actor: haven` and reach
+  Haven-only chat, settings, continuity, or work-helper flows
+- this keeps Haven-only behavior aligned with the same server-owned trust source
+  already used for trusted-sandbox auto-allow
+
 ## Later hardening on executable pin fail-closed behavior
 
 The same session-open review found one smaller fail-open edge:
