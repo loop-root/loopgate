@@ -265,8 +265,11 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - projected-node discovery path used by the benchmark harness
 
 - `memory_sqlite_store.go`
-  - derived SQLite store for projected continuity classes
-  - current benchmark-friendly projected-node search surface
+  - derived SQLite store open/init path and shared schema/types
+- `memory_sqlite_store_benchmark.go`
+  - benchmark and fixture seeding path for projected-node SQLite tests and memorybench scenarios
+- `memory_sqlite_store_projection.go`
+  - authoritative projected-node sync from continuity state into SQLite-backed search classes
 - `memory_sqlite_store_search.go`
   - projected-node list/search/debug logic, including slot-preference ranking for exact state queries
 
