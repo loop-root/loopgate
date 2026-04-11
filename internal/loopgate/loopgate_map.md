@@ -71,18 +71,16 @@ For integrators it matters in four ways:
   - `/v1/status`
   - current global capability inventory surface
 - `types.go`
-  - core control-plane and memory request/response structs, including:
+  - core control-plane request/response structs, including:
     - `CapabilitySummary`
-    - `MemoryRememberRequest`
-    - `MemoryRememberResponse`
-    - `TodoAddRequest`
-    - `TodoCompleteRequest`
-    - `TodoListResponse`
-    - `MemoryWakeStateResponse`
-    - `MemoryDiagnosticWakeResponse`
-  - now carries richer task-board metadata in `TodoAddRequest`, `TodoAddResponse`, and `MemoryWakeStateOpenItem`
+    - `OpenSessionRequest`
+    - `CapabilityRequest`
+    - `CapabilityResponse`
+    - sandbox, connection, and site-inspection envelopes
 - `types_haven_ui.go`
   - Haven UI, task-board projection, desk-note, journal, working-note, workspace, and presence wire contracts
+- `types_memory.go`
+  - continuity inspection, wake-state, memory lookup/recall/artifact, and todo wire contracts plus request validation helpers
 - `types_morphling.go`
   - morphling lifecycle wire contracts and morphling request validation helpers
 

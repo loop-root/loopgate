@@ -433,6 +433,9 @@ Start in:
 - `internal/loopgate/server.go`
 - `internal/loopgate/server_*_handlers.go`
 - `internal/loopgate/types.go`
+- `internal/loopgate/types_memory.go`
+- `internal/loopgate/types_haven_ui.go`
+- `internal/loopgate/types_morphling.go`
 - `internal/loopgate/ui_client.go`
 - tests in the same package
 
