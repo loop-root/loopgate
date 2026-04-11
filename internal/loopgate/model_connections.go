@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -231,8 +232,8 @@ func (server *Server) StoreModelConnection(ctx context.Context, request ModelCon
 	updatedModelConnections[record.ConnectionID] = record
 	if err := saveModelConnectionRecords(server.modelConnectionPath, updatedModelConnections); err != nil {
 		server.modelConnectionsMu.Unlock()
-		_ = secretStore.Delete(ctx, secretRef)
-		return ModelConnectionStatus{}, err
+		cleanupErr := deleteModelConnectionSecretForRollback(ctx, secretStore, secretRef)
+		return ModelConnectionStatus{}, errors.Join(err, cleanupErr)
 	}
 	server.modelConnections = updatedModelConnections
 	server.modelConnectionsMu.Unlock()
@@ -247,14 +248,23 @@ func (server *Server) StoreModelConnection(ctx context.Context, request ModelCon
 		server.modelConnectionsMu.Lock()
 		rollbackConnections := cloneModelConnectionRecords(server.modelConnections)
 		delete(rollbackConnections, record.ConnectionID)
-		_ = saveModelConnectionRecords(server.modelConnectionPath, rollbackConnections)
-		server.modelConnections = rollbackConnections
+		saveErr := saveModelConnectionRecords(server.modelConnectionPath, rollbackConnections)
+		if saveErr == nil {
+			server.modelConnections = rollbackConnections
+		}
 		server.modelConnectionsMu.Unlock()
-		_ = secretStore.Delete(ctx, secretRef)
-		return ModelConnectionStatus{}, err
+		cleanupErr := deleteModelConnectionSecretForRollback(ctx, secretStore, secretRef)
+		return ModelConnectionStatus{}, errors.Join(err, saveErr, cleanupErr)
 	}
 
 	return record.statusSummary(), nil
+}
+
+func deleteModelConnectionSecretForRollback(ctx context.Context, secretStore secrets.SecretStore, secretRef secrets.SecretRef) error {
+	if err := secretStore.Delete(ctx, secretRef); err != nil {
+		return fmt.Errorf("delete model connection secret during rollback: %w", err)
+	}
+	return nil
 }
 
 func (server *Server) ValidateModelConnection(ctx context.Context, connectionID string) (ModelConnectionStatus, error) {

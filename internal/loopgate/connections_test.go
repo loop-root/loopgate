@@ -269,6 +269,46 @@ func TestUpsertConnectionCredential_PersistsOnlySecretRefMetadata(t *testing.T) 
 	}
 }
 
+func TestUpsertConnectionCredential_AuditFailureSurfacesSecretCleanupError(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	fakeStore := &fakeConnectionSecretStore{deleteErr: errors.New("delete failed")}
+	server.resolveSecretStore = func(validatedRef secrets.SecretRef) (secrets.SecretStore, error) {
+		return fakeStore, nil
+	}
+
+	appendAuditEvent := server.appendAuditEvent
+	server.appendAuditEvent = func(path string, ledgerEvent ledger.Event) error {
+		if ledgerEvent.Type == "connection.credential_upserted" {
+			return errors.New("audit unavailable")
+		}
+		return appendAuditEvent(path, ledgerEvent)
+	}
+
+	_, err := server.UpsertConnectionCredential(context.Background(), connectionRegistration{
+		Provider:  "github",
+		GrantType: GrantTypeClientCredentials,
+		Subject:   "repo-bot",
+		Scopes:    []string{"repo.read"},
+		Credential: secrets.SecretRef{
+			ID:          "github-bot-token",
+			Backend:     secrets.BackendSecure,
+			AccountName: "loopgate.github.repo-bot",
+			Scope:       "github.repo_read",
+		},
+	}, []byte("ghp-super-secret-value"))
+	if err == nil {
+		t.Fatal("expected upsert to fail closed when audit is unavailable")
+	}
+	if !strings.Contains(err.Error(), "audit unavailable") {
+		t.Fatalf("expected audit failure in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "delete failed") {
+		t.Fatalf("expected secret cleanup failure in error, got %v", err)
+	}
+}
+
 func TestValidateConnection_UpdatesStatusAndValidationTimestamp(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

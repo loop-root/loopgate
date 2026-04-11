@@ -391,8 +391,8 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 	updatedConnections[connectionKey] = record
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
 		server.connectionsMu.Unlock()
-		_ = secretStore.Delete(ctx, normalizedRegistration.Credential)
-		return ConnectionStatus{}, err
+		cleanupErr := deleteConnectionSecretForRollback(ctx, secretStore, normalizedRegistration.Credential)
+		return ConnectionStatus{}, errors.Join(err, cleanupErr)
 	}
 	server.connections = updatedConnections
 	server.connectionsMu.Unlock()
@@ -408,11 +408,13 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 		server.connectionsMu.Lock()
 		rollbackConnections := cloneConnectionRecords(server.connections)
 		delete(rollbackConnections, connectionKey)
-		_ = saveConnectionRecords(server.connectionPath, rollbackConnections)
-		server.connections = rollbackConnections
+		saveErr := saveConnectionRecords(server.connectionPath, rollbackConnections)
+		if saveErr == nil {
+			server.connections = rollbackConnections
+		}
 		server.connectionsMu.Unlock()
-		_ = secretStore.Delete(ctx, normalizedRegistration.Credential)
-		return ConnectionStatus{}, err
+		cleanupErr := deleteConnectionSecretForRollback(ctx, secretStore, normalizedRegistration.Credential)
+		return ConnectionStatus{}, errors.Join(err, saveErr, cleanupErr)
 	}
 	server.invalidateProviderAccessToken(connectionKey)
 
@@ -681,6 +683,13 @@ func cloneConnectionRecords(source map[string]connectionRecord) map[string]conne
 func (server *Server) restoreConnectionSecret(ctx context.Context, secretStore secrets.SecretStore, validatedRef secrets.SecretRef, rawSecretBytes []byte) error {
 	if _, err := secretStore.Put(ctx, validatedRef, rawSecretBytes); err != nil {
 		return fmt.Errorf("restore previous connection secret after failed rotation: %w", err)
+	}
+	return nil
+}
+
+func deleteConnectionSecretForRollback(ctx context.Context, secretStore secrets.SecretStore, validatedRef secrets.SecretRef) error {
+	if err := secretStore.Delete(ctx, validatedRef); err != nil {
+		return fmt.Errorf("delete connection secret during rollback: %w", err)
 	}
 	return nil
 }

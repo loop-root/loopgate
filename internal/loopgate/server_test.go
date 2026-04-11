@@ -919,6 +919,40 @@ func TestNewModelClientFromRuntimeConfig_AnthropicModelConnectionUsesSecretStore
 	}
 }
 
+func TestStoreModelConnection_AuditFailureSurfacesSecretCleanupError(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	fakeStore := &fakeConnectionSecretStore{deleteErr: errors.New("delete failed")}
+	server.resolveSecretStore = func(validatedRef secrets.SecretRef) (secrets.SecretStore, error) {
+		return fakeStore, nil
+	}
+
+	appendAuditEvent := server.appendAuditEvent
+	server.appendAuditEvent = func(path string, ledgerEvent ledger.Event) error {
+		if ledgerEvent.Type == "model.connection_stored" {
+			return errors.New("audit unavailable")
+		}
+		return appendAuditEvent(path, ledgerEvent)
+	}
+
+	_, err := server.StoreModelConnection(context.Background(), ModelConnectionStoreRequest{
+		ConnectionID: "anthropic-primary",
+		ProviderName: "anthropic",
+		BaseURL:      "https://api.anthropic.com/v1",
+		SecretValue:  "anthropic-secret",
+	})
+	if err == nil {
+		t.Fatal("expected model connection store to fail closed when audit is unavailable")
+	}
+	if !strings.Contains(err.Error(), "audit unavailable") {
+		t.Fatalf("expected audit failure in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "delete failed") {
+		t.Fatalf("expected secret cleanup failure in error, got %v", err)
+	}
+}
+
 func TestSandboxExportDeniesNonOutputsPath(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
