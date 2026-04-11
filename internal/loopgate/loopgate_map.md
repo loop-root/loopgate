@@ -83,7 +83,9 @@ For integrators it matters in four ways:
 - `server_haven_chat_thread.go`
   - thread bootstrap, workspace binding handoff, and user-message persistence into threadstore
 - `server_haven_chat_runtime_setup.go`
-  - runtime bootstrap: persona, model runtime config, wake summary, attachment shaping, and tool catalog preparation
+  - model/runtime bootstrap: persona, model runtime config, wake summary, attachment shaping, and timeout setup
+- `server_haven_chat_tool_setup.go`
+  - tool bootstrap for Haven chat: allowed capability filtering, native tool definitions, and runtime-fact assembly inputs
 - `server_haven_chat_loop_state.go`
   - per-turn loop state (conversation growth, follow-up nudges, pending approval outcome shaping)
 - `server_haven_chat_results.go`

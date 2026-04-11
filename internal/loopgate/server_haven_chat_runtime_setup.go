@@ -64,25 +64,7 @@ func (server *Server) prepareHavenChatRuntimeState(writer http.ResponseWriter, t
 		return havenChatRuntimeState{}, false
 	}
 
-	allowedCapabilitySummaries := filterHavenCapabilitySummaries(server.capabilitySummaries(), tokenClaims.AllowedCapabilities)
-	if shellDevEnabled, err := config.IsShellDevModeEnabled(server.repoRoot); err == nil && !shellDevEnabled {
-		allowedCapabilitySummaries = havenFilterOutCapability(allowedCapabilitySummaries, "shell_exec")
-	}
-
-	availableToolDefs := buildHavenToolDefinitions(allowedCapabilitySummaries)
-	nativeToolDefs := modelpkg.BuildNativeToolDefsForAllowedNamesWithOptions(server.registry, capabilityNamesFromSummaries(allowedCapabilitySummaries), modelpkg.NativeToolDefBuildOptions{
-		HavenUserIntentGuards: true,
-		CompactNativeTools:    useCompactHavenNativeTools,
-	})
-	if useCompactHavenNativeTools {
-		availableToolDefs = buildCompactInvokeCapabilityToolDefinitions(capabilityNamesFromSummaries(allowedCapabilitySummaries))
-	}
-
-	runtimeFacts := server.buildHavenRuntimeFacts(allowedCapabilitySummaries, runtimeConfig.ProviderName, runtimeConfig.ModelName, req.ProjectPath, req.ProjectName, req.GitBranch, req.AdditionalPaths)
-	allowedCapabilityNames := make(map[string]struct{}, len(allowedCapabilitySummaries))
-	for _, summary := range allowedCapabilitySummaries {
-		allowedCapabilityNames[summary.Name] = struct{}{}
-	}
+	toolState := server.buildHavenChatToolState(tokenClaims, req, runtimeConfig)
 
 	return havenChatRuntimeState{
 		persona:                            persona,
@@ -90,10 +72,10 @@ func (server *Server) prepareHavenChatRuntimeState(writer http.ResponseWriter, t
 		modelClient:                        modelClient,
 		wakeText:                           wakeText,
 		modelAttachments:                   havenChatAttachmentsFromRequest(req.Attachments),
-		availableToolDefs:                  availableToolDefs,
-		nativeToolDefs:                     nativeToolDefs,
-		runtimeFacts:                       runtimeFacts,
-		hostFolderOrganizeToolkitAvailable: hasAllHavenCapabilities(allowedCapabilityNames, "host.folder.list", "host.folder.read", "host.organize.plan", "host.plan.apply"),
+		availableToolDefs:                  toolState.availableToolDefs,
+		nativeToolDefs:                     toolState.nativeToolDefs,
+		runtimeFacts:                       toolState.runtimeFacts,
+		hostFolderOrganizeToolkitAvailable: toolState.hostFolderOrganizeToolkitAvailable,
 		timeoutWindow:                      havenChatTimeoutWindow(runtimeConfig),
 	}, true
 }
