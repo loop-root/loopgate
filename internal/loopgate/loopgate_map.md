@@ -193,6 +193,8 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - that tie-break only reorders already-eligible discover results; it is not an admission path and must not bypass lineage or review filters
   - now rehydrates task metadata for unresolved items from continuity facts
   - durable mutation ordering: audit before continuity JSONL append; `saveContinuityMemoryState(..., nowUTC)` for testable / consistent artifact timestamps
+- `continuity_memory_records.go`
+  - continuity inspect / lineage record types, schema constants, and distillate-record JSON compatibility helpers
 - `continuity_memory_wake.go`
   - core Loopgate wake-state builder and diagnostic-wake assembly
 - `continuity_memory_wake_selection.go`
