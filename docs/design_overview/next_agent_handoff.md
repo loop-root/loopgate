@@ -1,190 +1,157 @@
-**Last updated:** 2026-03-24
+**Last updated:** 2026-04-10
 
 # Next Agent Handoff
 
-This document is a current-state handoff for the next coding agent. It is not a north-star RFC. It should describe:
+This is the current-state engineering handoff for the next coding agent.
+It is not a target-state RFC. It should answer three things:
 
-- what is already implemented
-- what is partially in progress
-- what the next recommended slice is
+- what is already landed and trustworthy
+- what changed recently and why it matters
+- what the next bounded slice should be
 
-For target-state design, prefer the RFC tracks:
+For target-state design, prefer:
 
-- [Implementation RFCs](../rfcs/)
-- [AMP Docs](../AMP/README.md)
-- [Product RFCs](../product-rfcs/)
+- [Loopgate design overview](/Users/adalaide/Dev/loopgate/docs/design_overview/loopgate.md)
+- [Roadmap](/Users/adalaide/Dev/loopgate/docs/roadmap/roadmap.md)
+- [Memory v1 handoff](/Users/adalaide/Dev/loopgate/docs/reports/memory-v1-handoff-2026-04-10.md)
+- [Current security review](/Users/adalaide/Dev/loopgate/docs/reports/security-review-current-state-2026-04-10.md)
 
-Protocol note:
+## Current repo state
 
-- AMP is vendor-neutral
-- Operator clients and Loopgate may keep historical names in code where the RFC does not
-  require exact wire/object names
-- RFC `MUST` and `MUST NOT` requirements are still binding even when local
-  naming differs
+As of `2026-04-10`:
 
-## Current Product Shape
+- the worktree is clean
+- `go test ./...` is green
+- the current control plane remains local HTTP over the Unix domain socket
+- in-tree MCP server support remains removed; do not reintroduce alternate authority paths casually
 
-The project now has three clear layers:
+## Current product shape
 
-1. Operator client (unprivileged runtime)
-   - persistent operator shell
-   - planning/orchestration
-   - answer shaping
-   - bounded continuity presentation
-2. `Loopgate`
-   - privileged control plane
-   - policy, approvals, execution, secrets, model proxying, quarantine, promotion, sandbox crossing
-3. `AMP`
-   - neutral protocol/object model layer
-   - sessions, capability tokens, approvals, artifacts, denials, references
+The repo is now strongest as:
 
-The current MVP is strongest as a secure kernel plus narrow workflows. It is weaker as a broad assistant.
+1. Loopgate as the authority kernel
+   - policy
+   - approvals
+   - secrets
+   - sandbox mediation
+   - continuity memory
+   - append-only audit
+2. governed assistant behavior on top of Loopgate
+3. UI / operator surfaces as projections, not authority
 
-## Ship plan and engineering status (2026-03-24)
+The project is no longer blocked on basic memory plumbing. The main open work is now read-side policy breadth, stale compatibility cleanup, and deeper security review.
 
-- **Public engineering snapshot:** `docs/roadmap/roadmap.md` and `docs/design_overview/loopgate.md`. Dated execution plans (if you keep them) live under a local-only `docs/superpowers/` tree — see `docs/DOCUMENTATION_SCOPE.md`.
-- **v1 transport:** Local control plane is **HTTP over the Unix socket** (not Apple XPC). Native/Swift clients: `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`.
-- Several items the plan lists as “post-launch Tier 1” (e.g. sandbox `EvalSymlinks` fail-closed, deny-list fail-closed, ledger `fsync`, morphling summary projection hygiene) are **already implemented**; treat the plan’s Post-Launch table as the checklist, not “all future.”
+## Memory v1 status
 
-## Current Working Features
+Memory is in a truthful `v1` state for prototype integration.
 
-Implemented and working:
+Landed and important:
 
-- local control-plane auth, signed requests, and opaque scoped tokens
-- Loopgate-owned model inference and model-secret handling
-- quarantine, promotion, and blob-ref handling
-- bounded memory continuity:
-  - explicit typed continuity threads:
-    - `current`
-    - `next`
-    - `previous`
-  - continuity-tagged ledger events with explicit `thread_id`
-  - Loopgate-owned sealed-thread inspection
-  - Loopgate-owned distillates, resonate keys, wake-state projection, discovery, and recall
-  - split memory runtime artifacts under `runtime/state/memory/`
-  - deterministic goal-family normalization from `config/goal_aliases.yaml`
-  - centralized memory scoring/configuration from `config/runtime.yaml`
-  - Client-local prompt projection of live thread context
-- narrow extractor contracts:
-  - JSON allowlists
-  - markdown frontmatter
-  - markdown section selector
-  - narrow HTML metadata extraction
-- sandbox-first mediated file crossing:
-  - `/sandbox import`
-  - `/sandbox stage`
-  - `/sandbox metadata`
-  - `/sandbox export`
-- RFC-MORPH-0008 morphling convergence in code:
-  - authoritative class policy loaded from `core/policy/morphling_classes.yaml`
-  - Loopgate-owned lifecycle records with formal monotonic states
-  - request-level denial distinct from instantiated morphling termination
-  - raw goal text kept out of append-only audit via `goal_hmac`
-  - restart recovery resolves nonterminal records before accepting new work
-- lifecycle-aware morphling pool management:
-  - `/morphling spawn`
-  - `/morphling status`
-  - `/morphling terminate`
-  - sandbox working dirs under `/morph/home/agents`
-  - operator-facing morphling **summaries** use projection (lifecycle-oriented `status_text`, `memory_string_count`; raw worker/model strings are not exposed in summaries)
-  - append-only hash-linked audit for `morphling.spawn_requested` through `morphling.terminated`
-- narrow live workflows:
-  - status check
-  - repo/issues summary
+- backend-owned memory authority path for `remember`, `inspect`, `discover`, `recall`, review, tombstone, and purge
+- wake-state split between `authoritative_state` and `derived_context`
+- exact-first retrieval for stable profile slots
+- runtime `hybrid` backend:
+  - continuity remains authoritative for durable state
+  - bounded RAG evidence is advisory only
+- bounded artifact APIs:
+  - `POST /v1/memory/artifacts/lookup`
+  - `POST /v1/memory/artifacts/get`
 
-## Current Pivot
+Do not regress this boundary:
 
-The project has pivoted away from adding more kernel primitives first.
+- wake state should stay small and current-state focused
+- recalled evidence is not authority
+- model inference is not persisted memory
+- hybrid evidence must remain bounded and non-authoritative
 
-Current priority order is:
+See:
 
-1. sandbox-first operator model
-2. explicit approval classes
-3. socket-bound morphling execution handshake
-4. workflow usefulness and orchestration quality
+- [Memory v1 handoff](/Users/adalaide/Dev/loopgate/docs/reports/memory-v1-handoff-2026-04-10.md)
+- [Memorybench running results](/Users/adalaide/Dev/loopgate/docs/memorybench_running_results.md)
 
-## Approval Class Slice
+## Current benchmark truth
 
-This slice is partially implemented and should be treated as the current immediate boundary.
+Current honest headline on the `70`-fixture scored matrix:
 
-Already landed in code:
+- continuity product path: `70/70`
+- governed RAG baseline: `42/70`
+- governed stronger RAG: `38/70`
 
-- approval classes exist in [approval_classes.go](../../internal/loopgate/approval_classes.go)
-- capability approval metadata now carries `approval_class`
-- approval audit events now carry `approval_class`
-- generic Loopgate capability approval cards show the approval class
+Important targeted slices:
 
-This handoff also completed the remaining local approval UX alignment:
+- long-horizon state continuity:
+  - continuity `8/8`
+  - hybrid `8/8`
+  - governed RAG baseline `2/8`
+  - governed stronger RAG `2/8`
+- hybrid recall bucket:
+  - continuity `0/7`
+  - RAG baseline `0/7`
+  - stronger RAG `0/7`
+  - hybrid `7/7`
 
-- `/site trust-draft` now uses the typed approval card
-- `/sandbox export` now uses the typed approval card
+Interpretation:
 
-## Next Recommended Slice
+- continuity is materially better than RAG-only on durable state continuity
+- stronger RAG still helps on broad evidence retrieval
+- bounded hybrid composition is the current honest MVP path
 
-The RFC-MORPH-0008 class/lifecycle convergence work and the first socket-bound
-worker handshake are now in place. The next slice should stay inside the same
-trust boundary and make the memory path converge with the newer continuity
-design.
+Do not oversell this as universal semantic-memory victory. It is a real state-memory win plus a targeted hybrid-retrieval win.
 
-Recommended order:
+## Recent security hardening now landed
 
-1. keep v1 distillation field-first and deterministic; do not let model prose
-   become durable memory by default
-2. extend restart and replay tests around sealed-but-uninspected and
-   inspected-but-not-yet-acknowledged threads
-3. add client-side projection for Loopgate continuity review and lineage status
-   without moving durable-memory authority out of Loopgate
-4. avoid widening public surface area while continuity semantics are still
-   converging
+The latest hardening passes closed several real loopholes and should be treated as the new baseline:
 
-## Morphling MVP Constraints
+- explicit scoped control capabilities across drifting control-plane routes:
+  - memory
+  - connection
+  - model
+  - diagnostic
+  - site trust / inspect
+  - sandbox
+  - UI projection and UI write routes
+- startup socket path validation and safe stale-socket removal
+- Haven preferences now fail closed on corrupt state and write `0600`
+- UI presence projection now normalizes bounded state instead of replaying raw file text
+- sandbox import/export are now bound to operator mounts, and export additionally requires an active write grant
+- `session.open` now restores the replaced session if audit append for the replacement fails
+- secret rollback cleanup failures are now surfaced instead of silently swallowed
 
-The first morphling slice should be intentionally narrow:
+These are no longer speculative review items. They are landed behavior and test-covered.
 
-- single explicit goal
-- sandbox-scoped working directory
-- class-based capability envelope
-- explicit lifecycle states
-- explicit audit events
-- socket-only Loopgate control surface
-- no policy mutation
-- no direct persistent state mutation
-- no direct host filesystem access outside sandbox boundaries
+## Highest-value next slice
 
-Suggested classes:
+The next review slice should be conservative and security-oriented:
 
-- reviewer
-- editor
-- tester
-- researcher
-- builder
+1. delegated-session / tenancy drift audit
+2. stale compatibility ballast sweep
+3. route-to-capability parity spot-check for any newly added surfaces
 
-## Current Known Drift / Follow-Up
+Specific suspicion to review next:
 
-These are still worth revisiting after the RFC-MORPH-0008 convergence work:
+- stale or misleading compatibility fields around delegated session config
+- tenant/user propagation assumptions across delegated worker or task-plan flows
+- dead or semi-dead compatibility code that still appears security-relevant even if it no longer carries authority
 
-- continuity review, tombstone, and purge flows now exist on the local Loopgate control plane
-- current durable wake-state projection is global-scope only; thread/task scope
-  activation is still missing
-- the local transport path is conceptually AMP-aligned but not yet RFC 0001/0004
-  conformant on exact version/profile negotiation and canonical request envelope
-- the approval subsystem is still product-specific rather than fully RFC 0005
-  manifest-bound and consumed-state-driven
-- artifact/reference types are still implementation-specific rather than unified AMP envelopes
-- morphling state is materialized in a state file for fast lookup, while the
-  cryptographically verifiable audit source of truth remains the hash-linked
-  Loopgate event ledger
-- the first local worker handshake now drives `running`, `completing`, and
-  `pending_review`, but there is still no broader worker engine or chaining
-- broader HTML extraction should remain frozen unless a real workflow requires it
-- workflow usefulness is still more important than adding more extraction or protocol surface
+This is a review / cleanup slice first, not a large feature slice.
 
-## Local Runtime Artifacts
+## What not to do next
 
-There are often local untracked runtime artifacts in developer worktrees such as:
+Do not:
 
-- `core/memory/`
+- widen wake-state payloads for convenience
+- make hybrid evidence authoritative
+- reintroduce a parallel authority path around Loopgate
+- treat UI-visible state as audit truth
+- add background lifecycle daemons or autonomous workers without explicit design review
+- claim TCL generalized semantic memory is "solved"
+
+## Local runtime artifacts
+
+Runtime artifacts may appear locally, including under:
+
+- `runtime/`
 - `loopgate/`
-- `test.txt`
+- `.cache/`
 
-Treat these as local runtime artifacts unless the user explicitly asks you to inspect, clean, or commit them.
+Treat them as local runtime state unless the user explicitly asks to inspect or clean them.
