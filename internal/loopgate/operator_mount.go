@@ -75,6 +75,8 @@ func canonicalizeOperatorMountPath(raw string) (string, error) {
 }
 
 // normalizeOperatorMountPathsForSession validates and deduplicates paths for actor "haven" only.
+// Session-open still requires a server-side expected-client executable pin before these
+// mounts are accepted into authoritative control-session state.
 func normalizeOperatorMountPathsForSession(actor string, rawPaths []string) ([]string, error) {
 	if len(rawPaths) == 0 {
 		return nil, nil

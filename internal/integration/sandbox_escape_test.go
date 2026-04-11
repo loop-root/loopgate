@@ -9,13 +9,22 @@ import (
 	"strings"
 	"testing"
 
+	"morph/internal/config"
 	"morph/internal/loopgate"
 )
 
 func TestSandboxImportRejectsHostDirectoryWithSymlinkOverRealSocket(t *testing.T) {
 	skipIfSymlinkUnsupported(t)
 
-	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
+	testExecutablePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	harness := newLoopgateHarnessWithSetup(t, integrationPolicyYAML(true), func(repoRoot string) error {
+		runtimeConfig := config.DefaultRuntimeConfig()
+		runtimeConfig.ControlPlane.ExpectedSessionClientExecutable = testExecutablePath
+		return config.WriteRuntimeConfigYAML(repoRoot, runtimeConfig)
+	})
 	status := harness.waitForStatus(t)
 	hostDirectory := filepath.Join(t.TempDir(), "import-dir")
 	client := harness.newClient("haven", "integration-sandbox-import", capabilityNames(status.Capabilities))
@@ -36,7 +45,7 @@ func TestSandboxImportRejectsHostDirectoryWithSymlinkOverRealSocket(t *testing.T
 		t.Fatalf("create hostile symlink: %v", err)
 	}
 
-	_, err := client.SandboxImport(context.Background(), loopgate.SandboxImportRequest{
+	_, err = client.SandboxImport(context.Background(), loopgate.SandboxImportRequest{
 		HostSourcePath:  hostDirectory,
 		DestinationName: "hostile-import",
 	})

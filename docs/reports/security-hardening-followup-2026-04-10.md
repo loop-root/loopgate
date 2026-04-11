@@ -278,6 +278,58 @@ Why this matters:
 - the session-open path should be recoverable and monotonic; a denied re-open
   must not destroy an already-authoritative control session
 
+## Later hardening on client-declared workspace binding
+
+Another follow-up review found that `POST /v1/session/open` still accepted a
+client-declared `workspace_id` and stored it directly on the control session.
+That mattered because Haven chat and continuity routes later used the session's
+workspace binding to scope threadstore access.
+
+What changed:
+
+- Loopgate now derives the authoritative workspace ID from `repoRoot` at
+  session open
+- the compatibility `workspace_id` field is accepted only when it matches the
+  server-derived binding
+- mismatches now fail closed with `control_session_binding_invalid`
+
+Why this matters:
+
+- workspace scoping is an authority boundary, not client-owned metadata
+- a spoofed `workspace_id` should not be able to steer Haven chat or
+  continuity routes toward another workspace's thread namespace within the same
+  local threadstore root
+
+## Later hardening on client-declared operator mount binding
+
+Another follow-up review found a second `session.open` authority leak:
+
+- `operator_mount_paths` and `primary_operator_mount_path` were accepted from
+  the request body whenever `actor` was `haven`
+- `actor` is client-declared compatibility metadata, not a trustworthy proof
+  that the connecting process is the shipped Haven surface
+- that meant an unpinned local client could self-assert `actor: haven`, bind
+  arbitrary host directories into the control session, and reach
+  `operator_mount.fs_read` / `operator_mount.fs_list` against those roots
+
+What changed:
+
+- Loopgate now rejects `operator_mount_paths` unless
+  `control_plane.expected_session_client_executable` is configured
+- when the pin is configured, the existing executable-path binding check
+  remains the authority gate for Haven-style operator mounts
+- sandbox/import/export and the relevant client/docs/tests were updated to
+  reflect the pinned-client requirement
+
+Why this matters:
+
+- host-directory bindings are an authority boundary, not client-owned metadata
+- `actor: haven` is not enough; the connecting process must match a
+  server-pinned Haven executable before Loopgate will accept host-root mounts
+- this keeps operator mount tools aligned with the project rule that the
+  governed execution path must be the real authority path, not a spoofable
+  compatibility label
+
 ## Later execution-path hardening for approval-disabled helper routes
 
 The next execution-path review found a subtler issue than route scopes:

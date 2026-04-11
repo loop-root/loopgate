@@ -113,7 +113,7 @@ The latest hardening passes closed several real loopholes and should be treated 
 - startup socket path validation and safe stale-socket removal
 - Haven preferences now fail closed on corrupt state and write `0600`
 - UI presence projection now normalizes bounded state instead of replaying raw file text
-- sandbox import/export are now bound to operator mounts, and export additionally requires an active write grant
+- sandbox import/export are now bound to operator mounts from pinned Haven sessions, and export additionally requires an active write grant
 - `session.open` now restores the replaced session if audit append for the replacement fails
 - secret rollback cleanup failures are now surfaced instead of silently swallowed
 

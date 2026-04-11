@@ -92,7 +92,7 @@ Loopgate records the **Unix socket peer identity** (e.g. UID/PID on macOS) when 
 
 Design your Swift app so the **same process** that called `/v1/session/open` performs subsequent signed requests (or you refresh the session from that same process).
 
-**Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable.
+**Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable. Haven-specific `operator_mount_paths` bindings are rejected unless this pin is configured.
 
 **Haven trusted-sandbox auto-allow:** If the session **`actor`** is **`haven`** and a tool implements **`TrustedSandboxLocal()`**, Loopgate may treat **`NeedsApproval`** policy as **`Allow`** for that capability (audit still records the decision). Operators can tighten this in **`core/policy/policy.yaml`** → **`safety`**: **`haven_trusted_sandbox_auto_allow`** (`false` to disable), and optionally **`haven_trusted_sandbox_auto_allow_capabilities`** (omit = all such tools; `[]` = none; non-empty list = allowlist by capability name).
 
@@ -112,7 +112,9 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 | `actor` | Yes | Stable label for audit (safe identifier; see `identifiers` package rules in Go). |
 | `session_id` | Yes | Client-side session label (safe identifier). |
 | `requested_capabilities` | Yes | **Non-empty** array of capability **names** to request. Must be a subset of what the server exposes. **Unknown names are rejected.** |
-| `workspace_id` | No | Optional workspace binding when used by multi-surface clients. |
+| `workspace_id` | No | Compatibility workspace hint for multi-surface clients. Loopgate derives the authoritative workspace binding from the current repo/runtime and rejects mismatches. |
+| `operator_mount_paths` | No | Haven compatibility field for host-directory bindings. Loopgate canonicalizes and rejects unsafe paths, but only accepts them when the server is pinning the expected Haven executable for session open. |
+| `primary_operator_mount_path` | No | Optional default root for relative `operator_mount.fs_*` paths. Must match one of `operator_mount_paths` after Loopgate canonicalization and is accepted only with the same pinned Haven binding. |
 | `correlation_id` | No | Optional tracing. |
 
 **Capability names for `requested_capabilities`:** you must use names the server’s tool registry actually registers. **Ship a fixed allowlist** in your client (recommended), or call **`GET /v1/status` after** `POST /v1/session/open` with a **minimal bootstrap** session (e.g. one known tool such as `fs_list`) and the **signed GET envelope** (§6). The status response includes `capabilities[]` with a `name` field per tool. **Unauthenticated `GET /v1/status` is not supported** — it returns **401** without `Authorization` and the HMAC headers.
@@ -218,7 +220,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/connections/validate` | Validate a configured connection — **`connection.write`** |
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows — **`connection.write`** |
 | `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft — **`site.inspect`** / **`site.trust.write`** |
-| `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`**; host import/export additionally require Haven session `operator_mount_paths`, and export requires an active operator-mount write grant |
+| `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`**; host import/export additionally require a pinned-Haven session bound to matching `operator_mount_paths`, and export requires an active operator-mount write grant |
 | `POST /v1/sandbox/metadata` | Sandbox artifact metadata — **`fs_read`** |
 | `POST /v1/sandbox/list` | Sandbox directory listing — **`fs_list`** |
 | `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; requires **`ui.write`** + **`memory.write`**; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
@@ -411,7 +413,7 @@ cross the public control-plane surface.
 - `POST /v1/sandbox/import`, `POST /v1/sandbox/stage`, and `POST /v1/sandbox/export`
   - require **`fs_write`**
   - mutate sandbox or host-adjacent artifact state through Loopgate-owned paths
-  - `import` and `export` fail closed unless the control session is bound to matching Haven `operator_mount_paths`
+  - `import` and `export` fail closed unless the control session is bound to matching Haven `operator_mount_paths` from a session opened by the pinned expected client executable
   - `export` also requires an active operator-mount write grant for the matched root; otherwise Loopgate returns `approval_required`
 - `POST /v1/sandbox/metadata`
   - requires **`fs_read`**

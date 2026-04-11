@@ -117,6 +117,14 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		})
 		return
 	}
+	if len(normalizedOperatorMounts) > 0 && strings.TrimSpace(server.expectedClientPath) == "" {
+		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "operator mount binding requires expected client executable pinning",
+			DenialCode:   DenialCodeControlSessionBindingInvalid,
+		})
+		return
+	}
 
 	if server.expectedClientPath != "" && server.resolveExePath != nil {
 		exePath, exeErr := server.resolveExePath(requestPeerIdentity.PID)
@@ -142,6 +150,16 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	}
 
 	nowUTC := server.now().UTC()
+	authoritativeWorkspaceID := server.deriveWorkspaceIDFromRepoRoot()
+	requestedWorkspaceID := strings.TrimSpace(openRequest.WorkspaceID)
+	if requestedWorkspaceID != "" && requestedWorkspaceID != authoritativeWorkspaceID {
+		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "workspace binding does not match this Loopgate runtime",
+			DenialCode:   DenialCodeControlSessionBindingInvalid,
+		})
+		return
+	}
 	server.mu.Lock()
 	server.pruneExpiredLocked()
 
@@ -292,7 +310,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		ID:                       controlSessionID,
 		ActorLabel:               tokenClaims.ActorLabel,
 		ClientSessionLabel:       tokenClaims.ClientSessionLabel,
-		WorkspaceID:              strings.TrimSpace(openRequest.WorkspaceID),
+		WorkspaceID:              authoritativeWorkspaceID,
 		OperatorMountPaths:       normalizedOperatorMounts,
 		PrimaryOperatorMountPath: normalizedPrimaryOperatorMount,
 		RequestedCapabilities:    capabilitySet(grantedCapabilities),
@@ -315,7 +333,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		"actor_label":                tokenClaims.ActorLabel,
 		"client_session_label":       tokenClaims.ClientSessionLabel,
 		"control_session_id":         controlSessionID,
-		"workspace_id":               strings.TrimSpace(openRequest.WorkspaceID),
+		"workspace_id":               authoritativeWorkspaceID,
 		"operator_mount_count":       len(normalizedOperatorMounts),
 		"requested_capability_count": len(normalizedCapabilities),
 		"granted_capability_count":   len(grantedCapabilities),

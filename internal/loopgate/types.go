@@ -274,13 +274,17 @@ type OpenSessionRequest struct {
 	SessionID             string   `json:"session_id"`
 	RequestedCapabilities []string `json:"requested_capabilities"`
 	CorrelationID         string   `json:"correlation_id"`
-	WorkspaceID           string   `json:"workspace_id,omitempty"`
-	// OperatorMountPaths binds Haven-granted host directories to this control session
-	// (actor haven only). Loopgate canonicalizes and rejects unsafe paths.
+	// WorkspaceID is a compatibility hint for multi-surface clients. Loopgate derives the
+	// authoritative workspace binding from repoRoot at session open and rejects mismatches.
+	WorkspaceID string `json:"workspace_id,omitempty"`
+	// OperatorMountPaths binds Haven-granted host directories to this control session.
+	// Loopgate canonicalizes and rejects unsafe paths, and only accepts them when the
+	// server is pinning the expected Haven executable for session open.
 	OperatorMountPaths []string `json:"operator_mount_paths,omitempty"`
 	// PrimaryOperatorMountPath selects the default repo root for relative
 	// operator_mount.fs_* paths. It must match one of OperatorMountPaths after
-	// Loopgate canonicalization; it never widens scope.
+	// Loopgate canonicalization; it never widens scope and is accepted only with
+	// the same pinned-client operator mount binding.
 	PrimaryOperatorMountPath string `json:"primary_operator_mount_path,omitempty"`
 }
 

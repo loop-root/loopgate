@@ -659,6 +659,7 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("eval host root symlinks: %v", err)
 	}
+	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
 	client.ConfigureSession("haven", "haven-sandbox-flow", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
@@ -794,8 +795,9 @@ func TestSandboxImportRequiresBoundOperatorMountPath(t *testing.T) {
 
 func TestSandboxExportRequiresOperatorMountWriteGrant(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	hostRootPath := t.TempDir()
+	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
 	client.ConfigureSession("haven", "haven-sandbox-export-needs-grant", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
@@ -955,8 +957,9 @@ func TestStoreModelConnection_AuditFailureSurfacesSecretCleanupError(t *testing.
 
 func TestSandboxExportDeniesNonOutputsPath(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	hostRootPath := t.TempDir()
+	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
 	client.ConfigureSession("haven", "haven-sandbox-export-non-outputs", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
@@ -990,6 +993,7 @@ func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	hostRootPath := t.TempDir()
+	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
 	client.ConfigureSession("haven", "haven-sandbox-export-orphan", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
@@ -1017,8 +1021,9 @@ func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 
 func TestMorphlingSpawnStatusAndTerminate(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, _ := startLoopgateServer(t, repoRoot, loopgateMorphlingPolicyYAML(false, true, 5))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgateMorphlingPolicyYAML(false, true, 5))
 	hostRootPath := t.TempDir()
+	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
 	client.ConfigureSession("haven", "haven-morphling-import", advertisedSessionCapabilityNames(status))
 	hostSourcePath := filepath.Join(hostRootPath, "spec.md")
@@ -3479,6 +3484,36 @@ func TestOpenSessionRejectsTraversalAndShellLikeLabels(t *testing.T) {
 	}
 }
 
+func TestOpenSessionRejectsMismatchedWorkspaceBinding(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	client.SetWorkspaceID("workspace-other-repo")
+	client.ConfigureSession("safe-actor", "safe-session", capabilityNames(status.Capabilities))
+	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeControlSessionBindingInvalid) {
+		t.Fatalf("expected mismatched workspace binding denial, got %v", err)
+	}
+
+	matchingClient := NewClient(server.socketPath)
+	matchingClient.SetWorkspaceID(server.deriveWorkspaceIDFromRepoRoot())
+	matchingClient.ConfigureSession("safe-actor", "safe-session", capabilityNames(status.Capabilities))
+	if _, err := matchingClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("expected matching workspace binding to succeed, got %v", err)
+	}
+}
+
+func TestOpenSessionRejectsOperatorMountBindingWithoutExpectedClientPin(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	hostRootPath := t.TempDir()
+
+	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
+	client.ConfigureSession("haven", "haven-operator-mount-unpinned", []string{"fs_list"})
+	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeControlSessionBindingInvalid) {
+		t.Fatalf("expected operator mount binding denial without expected client pin, got %v", err)
+	}
+}
+
 func TestOpenSessionRateLimitByPeerUID(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -5478,6 +5513,20 @@ func ageQuarantineRecordForPrune(t *testing.T, repoRoot string, quarantineRef st
 
 func startLoopgateServer(t *testing.T, repoRoot string, policyYAML string) (*Client, StatusResponse, *Server) {
 	return startLoopgateServerWithRuntime(t, repoRoot, policyYAML, nil, true)
+}
+
+func pinTestProcessAsExpectedClient(t *testing.T, server *Server) {
+	t.Helper()
+
+	testExecutablePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	normalizedExecutablePath := normalizeSessionExecutablePinPath(testExecutablePath)
+	if strings.TrimSpace(normalizedExecutablePath) == "" {
+		t.Fatal("expected normalized test executable path")
+	}
+	server.expectedClientPath = normalizedExecutablePath
 }
 
 // startLoopgateServerWithRuntime starts Loopgate in a temp repo. When runSessionBootstrap is false,

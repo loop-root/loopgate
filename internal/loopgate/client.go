@@ -637,19 +637,19 @@ func (client *Client) ConfigureSession(actor string, sessionID string, requested
 	client.requestedCapabilities = append([]string(nil), requestedCapabilities...)
 }
 
-// SetWorkspaceID sets the workspace identity that will be included in the
-// session open request to Loopgate. The workspace ID should be a deterministic
-// hash derived from the workspace root (e.g., SHA256 of absolute repo path),
-// not a caller-chosen arbitrary string. This binds the Loopgate session to
-// a specific workspace for audit and isolation purposes.
+// SetWorkspaceID sets the workspace identity hint that will be included in the
+// session open request to Loopgate. The server derives the authoritative
+// workspace binding from repoRoot and rejects mismatches, so this remains a
+// compatibility field rather than a client-owned authority input.
 func (client *Client) SetWorkspaceID(workspaceID string) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	client.workspaceID = workspaceID
 }
 
-// SetOperatorMountPaths binds Haven-approved host directories to the next control-session
-// open request. Export still requires a separate write grant for the matched root.
+// SetOperatorMountPaths includes Haven-approved host directories on the next control-session
+// open request. Loopgate only honors these bindings when the server pins the expected Haven
+// executable at session open; export still requires a separate write grant for the matched root.
 func (client *Client) SetOperatorMountPaths(operatorMountPaths []string, primaryOperatorMountPath string) {
 	client.mu.Lock()
 	defer client.mu.Unlock()

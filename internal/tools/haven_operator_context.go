@@ -16,7 +16,7 @@ const HavenOperatorContextGuideVersion = "2026-04-08"
 const havenOperatorGuideBody = `Haven operator guide (from Loopgate; authoritative for harness behavior)
 
 MOUNTS / ADDITIONAL DIRECTORIES
-- The Haven app may send additional_paths on each chat turn and binds the same paths to the Loopgate session as operator_mount_paths. Use operator_mount.fs_list / operator_mount.fs_read (and write tools when policy allows) for those trees; shell_exec is optional for builds and git.
+- The Haven app may send additional_paths on each chat turn and binds the same paths to the Loopgate session as operator_mount_paths, but Loopgate only accepts that binding when the session is opened by the pinned Haven client executable. Use operator_mount.fs_list / operator_mount.fs_read (and write tools when policy allows) for those trees; shell_exec is optional for builds and git.
 - Directory grants are intended to be time-bounded; when a path disappears from the request, treat it as no longer in scope for new work until the operator re-grants it in Haven (/adir or setup). Loopgate may enforce its own grant store in a future release.
 - Paths are normalized on the client (symlinks resolved; unsafe system roots rejected). If the operator hits "not permitted", they chose a blocked path.
 

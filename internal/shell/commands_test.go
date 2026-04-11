@@ -1137,6 +1137,15 @@ func startTestLoopgate(t *testing.T, repoRoot string, policyYAML string) (*loopg
 		t.Fatalf("write policy: %v", err)
 	}
 	writeTestMorphlingClassPolicy(t, repoRoot)
+	testExecutablePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	runtimeConfig := config.DefaultRuntimeConfig()
+	runtimeConfig.ControlPlane.ExpectedSessionClientExecutable = testExecutablePath
+	if err := config.WriteRuntimeConfigYAML(repoRoot, runtimeConfig); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
 
 	socketPath := filepath.Join(os.TempDir(), fmt.Sprintf("lg-shell-%d-%d.sock", os.Getpid(), time.Now().UnixNano()))
 	_ = os.Remove(socketPath)

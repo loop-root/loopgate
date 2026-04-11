@@ -809,6 +809,7 @@ func TestMorphlingRoutesRequireScopedCapabilities(t *testing.T) {
 func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
 	if err := server.sandboxPaths.Ensure(); err != nil {
 		t.Fatalf("ensure sandbox paths: %v", err)
 	}
