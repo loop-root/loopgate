@@ -77,6 +77,8 @@ Security-relevant denials and many successes append via `logEvent` / ledger path
 
 - `/v1/diagnostic/report` should require **`diagnostic.read`**
 - `/v1/model/reply` should require **`model.reply`**
+- `/v1/agent/work-item/ensure` / `complete` should require **`ui.write`** in addition to the underlying `todo.*` capability
+- `/v1/continuity/inspect-thread` should require **`ui.write`** in addition to **`memory.write`**
 - `/v1/model/validate` should require **`model.validate`**
 - `/v1/model/connections/store` should require **`connection.write`**
 - `/v1/model/settings` should require actor **`haven`** plus **`model.settings.read`** / **`model.settings.write`**

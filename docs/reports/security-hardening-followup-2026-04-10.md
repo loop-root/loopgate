@@ -250,6 +250,34 @@ Why this matters:
   of the UI projection surface instead of disclosing resolved host paths to any
   session with `fs_list`
 
+## Later hardening on Haven helper routes and session-open replacement safety
+
+One more sweep found two smaller but real issues:
+
+- `POST /v1/agent/work-item/ensure`, `POST /v1/agent/work-item/complete`, and
+  `POST /v1/continuity/inspect-thread` still trusted actor `haven` plus the
+  underlying `todo.*` / `memory.write` capability without an explicit UI route
+  scope
+- `POST /v1/session/open` tore down an existing same-label session before later
+  failure paths such as session-open rate limiting had committed a replacement,
+  so a denied re-open could destroy a still-valid session
+
+What changed:
+
+- gated the Haven helper routes behind `ui.write` while keeping the existing
+  actor and underlying capability checks in place
+- changed session replacement to defer old-session teardown until the new
+  control session is fully minted and ready to install
+- added a regression test proving a rate-limited re-open leaves the original
+  session and token usable
+
+Why this matters:
+
+- actor labels are compatibility identifiers, not route authority; `actor:
+  haven` must not be enough to reach Haven-only mutation helpers
+- the session-open path should be recoverable and monotonic; a denied re-open
+  must not destroy an already-authoritative control session
+
 ## Later execution-path hardening for approval-disabled helper routes
 
 The next execution-path review found a subtler issue than route scopes:

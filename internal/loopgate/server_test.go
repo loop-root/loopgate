@@ -3552,6 +3552,42 @@ func TestSessionOpenAuditFailureRestoresReplacedSession(t *testing.T) {
 	}
 }
 
+func TestSessionOpenRateLimitDenialPreservesExistingSession(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	server.sessionOpenMinInterval = time.Hour
+	server.maxActiveSessionsPerUID = 32
+
+	firstClient := NewClient(server.socketPath)
+	firstClient.ConfigureSession("reopen-actor", "reopen-session", capabilityNames(status.Capabilities))
+	if _, err := firstClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure original capability token: %v", err)
+	}
+	originalControlSessionID := firstClient.controlSessionID
+	originalCapabilityToken := firstClient.capabilityToken
+
+	replacingClient := NewClient(server.socketPath)
+	replacingClient.ConfigureSession("reopen-actor", "reopen-session", capabilityNames(status.Capabilities))
+	if _, err := replacingClient.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeSessionOpenRateLimited) {
+		t.Fatalf("expected session open rate-limit denial, got %v", err)
+	}
+
+	server.mu.Lock()
+	_, originalSessionStillPresent := server.sessions[originalControlSessionID]
+	_, originalTokenStillPresent := server.tokens[originalCapabilityToken]
+	server.mu.Unlock()
+	if !originalSessionStillPresent {
+		t.Fatalf("expected original session %q to remain after replacement rate-limit denial", originalControlSessionID)
+	}
+	if !originalTokenStillPresent {
+		t.Fatalf("expected original capability token for %q to remain valid after replacement rate-limit denial", originalControlSessionID)
+	}
+
+	if _, err := firstClient.Status(context.Background()); err != nil {
+		t.Fatalf("expected original client status to succeed after replacement rate-limit denial: %v", err)
+	}
+}
+
 func TestPruneExpiredLockedSkipsBeforeScheduledSweep(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

@@ -144,7 +144,8 @@ Do not blend scored continuity runs and debug continuity runs into one number.
     `RememberMemoryFact` HTTP-over-UDS writes against product-valid `global`
     scope
   - supported continuity proposals are seeded through Haven's real
-    `/v1/continuity/inspect-thread` path
+    `/v1/continuity/inspect-thread` path, which now requires both `ui.write`
+    and `memory.write`
   - supported task-resumption seeds are seeded through real `todo.add` and
     `todo.complete` capability execution
   - supported seeded scenarios are retrieved through the real

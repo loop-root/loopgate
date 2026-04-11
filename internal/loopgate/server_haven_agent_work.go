@@ -23,6 +23,9 @@ func (server *Server) handleHavenAgentWorkItemEnsure(writer http.ResponseWriter,
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIWrite) {
+		return
+	}
 	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
 		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -67,9 +70,9 @@ func (server *Server) handleHavenAgentWorkItemEnsure(writer http.ResponseWriter,
 	}
 
 	capReq := CapabilityRequest{
-		RequestID: fmt.Sprintf("haven-agent-ensure-%d", time.Now().UTC().UnixNano()),
-		SessionID: tokenClaims.ControlSessionID,
-		Actor:     tokenClaims.ActorLabel,
+		RequestID:  fmt.Sprintf("haven-agent-ensure-%d", time.Now().UTC().UnixNano()),
+		SessionID:  tokenClaims.ControlSessionID,
+		Actor:      tokenClaims.ActorLabel,
 		Capability: "todo.add",
 		Arguments: map[string]string{
 			"text":        text,
@@ -109,10 +112,10 @@ func (server *Server) handleHavenAgentWorkItemEnsure(writer http.ResponseWriter,
 	}
 
 	_ = server.logEvent("haven.agent_work_ensure", tokenClaims.ControlSessionID, map[string]interface{}{
-		"item_id":              itemID,
-		"already_present":      already,
-		"control_session_id":   tokenClaims.ControlSessionID,
-		"text_len":             len([]rune(text)),
+		"item_id":            itemID,
+		"already_present":    already,
+		"control_session_id": tokenClaims.ControlSessionID,
+		"text_len":           len([]rune(text)),
 	})
 
 	server.writeJSON(writer, http.StatusOK, HavenAgentWorkItemResponse{
@@ -129,6 +132,9 @@ func (server *Server) handleHavenAgentWorkItemComplete(writer http.ResponseWrite
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIWrite) {
 		return
 	}
 	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {

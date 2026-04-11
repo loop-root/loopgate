@@ -33,6 +33,9 @@ func (server *Server) handleHavenContinuityInspectThread(writer http.ResponseWri
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIWrite) {
+		return
+	}
 	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryWrite) {
 		return
 	}

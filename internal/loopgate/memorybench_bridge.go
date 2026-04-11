@@ -559,7 +559,7 @@ func seedBenchmarkScenarioOverControlPlane(repoRoot string, benchmarkScope strin
 	benchmarkServer, benchmarkClient, stopBenchmarkServer, err := startBenchmarkControlPlaneServerWithSession(
 		isolatedBenchmarkRepoRoot,
 		"haven",
-		[]string{controlCapabilityMemoryRead, controlCapabilityMemoryWrite, "todo.add", "todo.complete"},
+		[]string{controlCapabilityUIWrite, controlCapabilityMemoryRead, controlCapabilityMemoryWrite, "todo.add", "todo.complete"},
 	)
 	if err != nil {
 		_ = os.RemoveAll(isolatedBenchmarkRepoRoot)

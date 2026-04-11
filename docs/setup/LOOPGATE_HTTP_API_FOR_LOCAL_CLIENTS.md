@@ -221,7 +221,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`**; host import/export additionally require Haven session `operator_mount_paths`, and export requires an active operator-mount write grant |
 | `POST /v1/sandbox/metadata` | Sandbox artifact metadata — **`fs_read`** |
 | `POST /v1/sandbox/list` | Sandbox directory listing — **`fs_list`** |
-| `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; requires `memory.write`; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
+| `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; requires **`ui.write`** + **`memory.write`**; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
 | `GET /v1/memory/wake-state` | Wake state projection |
 | `GET /v1/tasks` / `PUT /v1/tasks/{id}/status` | Task board sync (**`tasks.read`** / **`tasks.write`**) |
 | `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
@@ -254,8 +254,8 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET; **`ui.read`**); Loopgate normalizes the file into a bounded state/anchor projection instead of replaying raw freeform text |
 | `GET /v1/ui/morph-sleep` | Same normalized snapshot as presence plus `is_sleeping` / `is_resting` (signed GET; **`ui.read`**) |
 | `POST /v1/resident/journal-tick` | Haven resident journal helper — actor **`haven`** + **`model.reply`**; internal model use still requires explicit route scope |
-| `POST /v1/agent/work-item/ensure` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
-| `POST /v1/agent/work-item/complete` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.complete`** for a task-board item id |
+| `POST /v1/agent/work-item/ensure` | **Actor `haven` only** for the current compatibility gate — signed POST; requires **`ui.write`** + **`todo.add`**; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
+| `POST /v1/agent/work-item/complete` | **Actor `haven` only** for the current compatibility gate — signed POST; requires **`ui.write`** + **`todo.complete`**; runs **`todo.complete`** for a task-board item id |
 | `GET` / `PUT /v1/ui/task-standing-grants` | Task standing-grant controls (**`task_standing_grant.read`** / **`task_standing_grant.write`**) |
 
 For **request/response JSON shapes**, use `internal/loopgate/types.go` as the source of truth (field names are `json` tagged).
@@ -329,18 +329,18 @@ explicitly capability-gated like the rest of the control plane.
 
 ### 7.2 Agent work-item helpers (bounded task board; actor `haven`)
 
-These routes let a client using **actor label `haven`** create or complete **Task Board** items through the **same** capability execution path as `POST /v1/capabilities/execute` for `todo.add` / `todo.complete` — policy, audit, and continuity hooks apply unchanged. They do **not** grant new authority; the session token must already include **`todo.add`** (ensure) or **`todo.complete`** (complete).
+These routes let a client using **actor label `haven`** create or complete **Task Board** items through the **same** capability execution path as `POST /v1/capabilities/execute` for `todo.add` / `todo.complete` — policy, audit, and continuity hooks apply unchanged. They do **not** grant new authority; the session token must already include **`ui.write`** plus **`todo.add`** (ensure) or **`todo.complete`** (complete).
 
 **`POST /v1/agent/work-item/ensure`**
 
-- **Auth:** `Authorization: Bearer` + **signed body** (same rules as other signed POSTs for this actor; see §6).
+- **Auth:** `Authorization: Bearer` + **signed body** + **`ui.write`** (same rules as other signed POSTs for this actor; see §6).
 - **Body:** `{ "text": "<required>", "next_step": "<optional>" }` — `text` is the human-visible task line (trimmed server-side).
 - **Behavior:** Executes `todo.add` with `task_kind` carry-over, `source_kind: haven_agent`, and optional `next_step`. If an equivalent item already exists, the structured result sets `already_present: true` and returns the same `item_id`.
 - **Success (200):** `{ "item_id": "…", "text": "…", "already_present": bool }` — see `HavenAgentWorkItemResponse` in `internal/loopgate/types.go` (Go identifier retained for compatibility).
 
 **`POST /v1/agent/work-item/complete`**
 
-- **Auth:** same as ensure; requires **`todo.complete`** on the token.
+- **Auth:** same as ensure; requires **`ui.write`** + **`todo.complete`** on the token.
 - **Body:** `{ "item_id": "<required>", "reason": "<optional>" }` — default reason if omitted: `haven_agent_work_completed`.
 - **Success (200):** same JSON shape as ensure (`already_present` is always false on this path).
 
@@ -361,7 +361,7 @@ These routes let a client using **actor label `haven`** create or complete **Tas
 
 **`POST /v1/continuity/inspect-thread`**
 
-- **Auth:** Actor label **`haven`** + **signed body** + **`memory.write`** control capability (same signed-request pattern as `POST /v1/chat` for the current compatibility gate).
+- **Auth:** Actor label **`haven`** + **signed body** + **`ui.write`** + **`memory.write`** control capabilities (same signed-request pattern as `POST /v1/chat` for the current compatibility gate).
 - **Body:** `{ "thread_id": "<required>" }` — must match a thread in Loopgate’s threadstore for the session workspace (on-disk implementation under `internal/threadstore`; default paths may use a **`.haven`** segment as a historical directory name—treat as an implementation detail, not a product name).
 - **Behavior:** Loads persisted thread events, canonicalizes them into a Loopgate-owned observed packet server-side, and runs the same inspection pipeline as other continuity proposals. If the thread has no mappable continuity rows, returns **200** with `submit_status: "skipped_no_continuity_events"`.
 - **Success (200):** `HavenContinuityInspectThreadResponse` in `internal/loopgate/types.go` (`submit_status`, optional `inspection_id`, derivation/review fields; Go identifier retained for compatibility).

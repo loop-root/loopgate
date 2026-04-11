@@ -154,7 +154,7 @@ func TestMemoryWriteRoutesRequireMemoryWriteScope(t *testing.T) {
 
 	allowedClient := NewClient(client.socketPath)
 	allowedClient.SetWorkspaceID(workspaceID)
-	allowedClient.ConfigureSession("haven", "memory-write-allowed", []string{"memory.write"})
+	allowedClient.ConfigureSession("haven", "memory-write-allowed", []string{controlCapabilityUIWrite, "memory.write"})
 	if _, err := allowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure memory.write token: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestMemoryGovernanceRoutesRequireReviewAndLineageScope(t *testing.T) {
 
 	writerClient := NewClient(client.socketPath)
 	writerClient.SetWorkspaceID(workspaceID)
-	writerClient.ConfigureSession("haven", "memory-governance-writer", []string{"memory.write"})
+	writerClient.ConfigureSession("haven", "memory-governance-writer", []string{controlCapabilityUIWrite, "memory.write"})
 	if _, err := writerClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure memory.write token: %v", err)
 	}

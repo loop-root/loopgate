@@ -152,9 +152,10 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	previousSessionOpenAtUTC, hadPreviousSessionOpenAt := server.sessionOpenByUID[requestPeerIdentity.UID]
 
 	// Idempotent re-open: if the same (UID, ClientSessionLabel) pair already has
-	// an active session, close the old one before creating the replacement. This
-	// prevents session accumulation from client retries, capability expansion, or
-	// reconnects, while keeping audit logs unambiguous.
+	// an active session, replace it once the new session is ready. This prevents
+	// session accumulation from client retries, capability expansion, or
+	// reconnects, while keeping later denial paths from destroying the still-live
+	// authoritative session.
 	clientLabel := defaultLabel(openRequest.SessionID, "session")
 	for csID, existingSession := range server.sessions {
 		if existingSession.PeerIdentity.UID == requestPeerIdentity.UID &&
@@ -162,20 +163,23 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 			replacedSessionID = csID
 			replacedSession = existingSession
 			hadReplacedSession = true
-			// Revoke old session's tokens and clean up.
 			for tokenString, tokenClaims := range server.tokens {
 				if tokenClaims.ControlSessionID == csID {
 					replacedSessionTokens[tokenString] = tokenClaims
-					delete(server.tokens, tokenString)
 				}
 			}
-			delete(server.approvalTokenIndex, approvalTokenHash(existingSession.ApprovalToken))
-			delete(server.sessions, csID)
 			break // at most one match per (UID, label)
 		}
 	}
 
-	if server.maxTotalControlSessions > 0 && len(server.sessions) >= server.maxTotalControlSessions {
+	activeSessionCountForUID := server.activeSessionsForPeerUIDLocked(requestPeerIdentity.UID)
+	totalSessionCount := len(server.sessions)
+	if hadReplacedSession {
+		activeSessionCountForUID--
+		totalSessionCount--
+	}
+
+	if server.maxTotalControlSessions > 0 && totalSessionCount >= server.maxTotalControlSessions {
 		server.mu.Unlock()
 		server.writeJSON(writer, http.StatusTooManyRequests, CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -185,7 +189,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		return
 	}
 
-	if server.maxActiveSessionsPerUID > 0 && server.activeSessionsForPeerUIDLocked(requestPeerIdentity.UID) >= server.maxActiveSessionsPerUID {
+	if server.maxActiveSessionsPerUID > 0 && activeSessionCountForUID >= server.maxActiveSessionsPerUID {
 		server.mu.Unlock()
 		server.writeJSON(writer, http.StatusTooManyRequests, CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -277,6 +281,13 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		ExpiresAt:           expiresAt,
 	}
 
+	if hadReplacedSession {
+		for replacedTokenString := range replacedSessionTokens {
+			delete(server.tokens, replacedTokenString)
+		}
+		delete(server.approvalTokenIndex, approvalTokenHash(replacedSession.ApprovalToken))
+		delete(server.sessions, replacedSessionID)
+	}
 	server.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
 		ActorLabel:               tokenClaims.ActorLabel,

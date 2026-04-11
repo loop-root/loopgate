@@ -14,6 +14,7 @@ import (
 	"morph/internal/config"
 	modelpkg "morph/internal/model"
 	modelruntime "morph/internal/modelruntime"
+	"morph/internal/threadstore"
 )
 
 func TestHavenMemoryUIRoutesRequireScopedCapabilities(t *testing.T) {
@@ -370,6 +371,75 @@ func TestHavenModelRoutesRequireScopedCapabilities(t *testing.T) {
 	}
 	if residentResponse.Status != "skipped" || !strings.Contains(residentResponse.Reason, "fs_write") {
 		t.Fatalf("expected resident tick to continue past scope gate and skip without fs_write, got %#v", residentResponse)
+	}
+}
+
+func TestHavenConvenienceRoutesRequireUIWriteScope(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
+
+	workspaceID := server.deriveWorkspaceIDFromRepoRoot()
+	threadStoreRoot := filepath.Join(repoRoot, ".haven", "threads")
+	store, err := threadstore.NewStore(threadStoreRoot, workspaceID)
+	if err != nil {
+		t.Fatalf("thread store: %v", err)
+	}
+	summary, err := store.NewThread()
+	if err != nil {
+		t.Fatalf("new thread: %v", err)
+	}
+	_ = store.AppendEvent(summary.ThreadID, threadstore.ConversationEvent{
+		Type: threadstore.EventUserMessage,
+		Data: map[string]interface{}{"text": "route scope check"},
+	})
+
+	agentWorkDeniedClient := NewClient(client.socketPath)
+	agentWorkDeniedClient.ConfigureSession("haven", "agent-work-ui-write-denied", []string{"todo.add"})
+	if _, err := agentWorkDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied agent-work token: %v", err)
+	}
+	if err := agentWorkDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/agent/work-item/ensure", agentWorkDeniedClient.capabilityToken, HavenAgentWorkEnsureRequest{
+		Text: "Route scope check",
+	}, &HavenAgentWorkItemResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.write scope denial for haven agent-work ensure, got %v", err)
+	}
+
+	continuityDeniedClient := NewClient(client.socketPath)
+	continuityDeniedClient.SetWorkspaceID(workspaceID)
+	continuityDeniedClient.ConfigureSession("haven", "continuity-ui-write-denied", []string{"memory.write"})
+	if _, err := continuityDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied continuity token: %v", err)
+	}
+	if err := continuityDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/continuity/inspect-thread", continuityDeniedClient.capabilityToken, HavenContinuityInspectThreadRequest{
+		ThreadID: summary.ThreadID,
+	}, &HavenContinuityInspectThreadResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.write scope denial for haven continuity inspect-thread, got %v", err)
+	}
+
+	agentWorkAllowedClient := NewClient(client.socketPath)
+	agentWorkAllowedClient.ConfigureSession("haven", "agent-work-ui-write-allowed", []string{controlCapabilityUIWrite, "todo.add"})
+	if _, err := agentWorkAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure allowed agent-work token: %v", err)
+	}
+	var ensureResponse HavenAgentWorkItemResponse
+	if err := agentWorkAllowedClient.doJSON(context.Background(), http.MethodPost, "/v1/agent/work-item/ensure", agentWorkAllowedClient.capabilityToken, HavenAgentWorkEnsureRequest{
+		Text: "Route scope allow check",
+	}, &ensureResponse, nil); err != nil {
+		t.Fatalf("haven agent-work ensure with ui.write + todo.add: %v", err)
+	}
+	if strings.TrimSpace(ensureResponse.ItemID) == "" {
+		t.Fatalf("expected agent-work ensure to return item_id, got %#v", ensureResponse)
+	}
+
+	continuityAllowedClient := NewClient(client.socketPath)
+	continuityAllowedClient.SetWorkspaceID(workspaceID)
+	continuityAllowedClient.ConfigureSession("haven", "continuity-ui-write-allowed", []string{controlCapabilityUIWrite, "memory.write"})
+	if _, err := continuityAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure allowed continuity token: %v", err)
+	}
+	if _, err := continuityAllowedClient.SubmitHavenContinuityInspectionForThread(context.Background(), summary.ThreadID); err != nil {
+		t.Fatalf("haven continuity inspect-thread with ui.write + memory.write: %v", err)
 	}
 }
 
