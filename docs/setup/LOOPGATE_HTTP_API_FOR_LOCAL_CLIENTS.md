@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-07
+**Last updated:** 2026-04-11
 
 # Loopgate local HTTP API — guide for HTTP-native clients
 
@@ -400,14 +400,17 @@ cross the public control-plane surface.
   - requires **`connection.write`**
   - stores provider credentials through Loopgate’s secure connection path
 - `GET /v1/model/settings`
-  - requires actor **`haven`** and **`model.settings.read`**
+  - requires a **trusted Haven session**
+  - also requires **`model.settings.read`**
   - returns the Haven-facing model settings projection
 - `POST /v1/model/settings`
-  - requires actor **`haven`** and **`model.settings.write`**
+  - requires a **trusted Haven session**
+  - also requires **`model.settings.write`**
   - updates the Haven-facing model settings projection
   - when the request stores a new non-loopback provider credential, it also requires **`connection.write`**
 - `GET /v1/model/openai/models` and `GET /v1/model/ollama/tags`
-  - require actor **`haven`** and **`connection.write`**
+  - require a **trusted Haven session**
+  - also require **`connection.write`**
   - probe an OpenAI-compatible `/models` endpoint for setup UX
 
 ### 7.6 Sandbox and Haven filesystem projection routes
@@ -436,10 +439,12 @@ cross the public control-plane surface.
   - also requires **`notes.write`**
   - saves a working note through the same governed capability path as `notes.write`
 - `GET /v1/settings/shell-dev` and `GET /v1/settings/idle`
-  - require actor **`haven`** and **`config.read`**
+  - require a **trusted Haven session**
+  - also require **`config.read`**
   - expose Haven-facing settings projections only
 - `POST /v1/settings/shell-dev` and `POST /v1/settings/idle`
-  - require actor **`haven`** and **`config.write`**
+  - require a **trusted Haven session**
+  - also require **`config.write`**
   - update Haven-facing settings through Loopgate-owned config paths
 
 ---

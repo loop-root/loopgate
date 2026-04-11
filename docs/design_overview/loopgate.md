@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-03
+**Last updated:** 2026-04-11
 
 # Loopgate
 
@@ -130,7 +130,7 @@ Implemented endpoints:
 
 - `GET /v1/health` (liveness, no auth)
 - `GET /v1/status` (Bearer + signed GET — full inventory)
-- `POST /v1/chat` (actor `haven` + `model.reply`)
+- `POST /v1/chat` (trusted Haven session + `model.reply`)
 - `GET /v1/ui/status` (`ui.read`)
 - `GET /v1/ui/events` (`ui.read`)
 - `GET /v1/ui/approvals` (approval-token authenticated UI route)
@@ -154,13 +154,13 @@ Implemented endpoints:
 - `POST /v1/quarantine/prune` (`quarantine.write`)
 - `POST /v1/sites/inspect` (`site.inspect`)
 - `POST /v1/sites/trust-draft` (`site.trust.write`)
-- `POST /v1/resident/journal-tick` (actor `haven` + `model.reply`)
-- `POST /v1/agent/work-item/ensure`, `POST /v1/agent/work-item/complete` (actor `haven` + `ui.write` + `todo.add` / `todo.complete`)
+- `POST /v1/resident/journal-tick` (trusted Haven session + `model.reply`)
+- `POST /v1/agent/work-item/ensure`, `POST /v1/agent/work-item/complete` (trusted Haven session + `ui.write` + `todo.add` / `todo.complete`)
 - `POST /v1/sandbox/import` (`fs_write`; host source must be inside the control session's bound operator mounts from a pinned Haven session)
 - `POST /v1/sandbox/stage`
 - `POST /v1/sandbox/metadata`
 - `POST /v1/sandbox/export` (`fs_write`; host destination must match a bound operator mount from a pinned Haven session and an active write grant)
-- `POST /v1/continuity/inspect-thread` (actor `haven` + `ui.write` + `memory.write`)
+- `POST /v1/continuity/inspect-thread` (trusted Haven session + `ui.write` + `memory.write`)
 - `GET /v1/memory/wake-state`
 - `POST /v1/memory/discover`
 - `POST /v1/memory/recall`

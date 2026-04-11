@@ -406,6 +406,40 @@ Follow-up:
 - the HTTP API contract was updated to describe those routes in terms of the
   real enforced boundary: trusted Haven session + explicit control scopes
 
+## Later approval/bootstrap provenance review result
+
+The next review slice checked the remaining approval and delegated-bootstrap
+paths for a same-user peer hop or bridge/bootstrap bypass.
+
+Result:
+
+- no new live approval or bootstrap bypass was found
+- pending approval decisions are still validated against the originating
+  control session before Loopgate consumes the grant or executes the approved
+  request
+- the generic delegated-session helper still preserves peer binding and does
+  not reopen sessions when delegated credentials expire
+- the earlier `workspace_id` and `operator_mount_paths` findings did not turn
+  into a filesystem escape after the session-open hardening:
+  - `workspace_id` is server-derived from the authoritative repo-root binding
+  - operator mount paths are canonicalized server-side and only accepted for a
+    pinned Haven executable
+
+Why this matters:
+
+- it narrows the current residual risk to the real remaining problem:
+  launch-bound client identity and explicit UI-channel provenance for any
+  future browser / `morphui` bootstrap
+- it avoids treating a documented future-risk area as a currently exploitable
+  bug when the present code still enforces same-control-session approval
+  ownership and same-peer delegated-session reuse
+
+Follow-up:
+
+- the threat model and API/design docs were updated to record this result
+- the browser/bootstrap identity problem remains open by design and should stay
+  in the threat model until a launch-bound bridge path actually exists in code
+
 ## Later hardening on executable pin fail-closed behavior
 
 The same session-open review found one smaller fail-open edge:
