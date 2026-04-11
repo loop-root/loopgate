@@ -167,7 +167,9 @@ Key files:
 - `server.go`: central server object, session/token state, audit chain
 - `server_*_handlers.go`: split handlers by concern
 - `ui_client.go` and `ui_types.go`: display-safe control-plane queries for local clients
-- `client.go`: Go HTTP client for Loopgate (**HTTP on Unix domain socket** for v1; used by tests and tooling — see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`; optional future XPC adapter TBD — see `docs/rfcs/0001-loopgate-token-policy.md`)
+- `client.go`: Go HTTP client public wrapper surface for Loopgate (**HTTP on Unix domain socket** for v1; used by tests and tooling — see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`; optional future XPC adapter TBD — see `docs/rfcs/0001-loopgate-token-policy.md`)
+- `client_session.go`: session bootstrap, delegated-session state, capability execution, and approval decision client logic
+- `client_transport.go`: signed transport, retries, and request-signature implementation
 - `shared_folder.go`: default shared-space mediation
 - `folder_access.go`: explicit host-folder grant storage and compare-before-sync mirror logic
 - `continuity_memory.go`: Loopgate-owned durable memory selection and task-board wake-state reconstruction
