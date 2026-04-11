@@ -6,15 +6,14 @@ import (
 	"strings"
 
 	modelpkg "morph/internal/model"
-	"morph/internal/threadstore"
 )
 
 // havenFilterOutCapability returns a copy of summaries without any entry whose Name matches name.
 func havenFilterOutCapability(summaries []CapabilitySummary, name string) []CapabilitySummary {
 	filtered := make([]CapabilitySummary, 0, len(summaries))
-	for _, s := range summaries {
-		if s.Name != name {
-			filtered = append(filtered, s)
+	for _, summary := range summaries {
+		if summary.Name != name {
+			filtered = append(filtered, summary)
 		}
 	}
 	return filtered
@@ -209,139 +208,4 @@ func formatHavenHumanList(items []string) string {
 	default:
 		return strings.Join(items[:len(items)-1], ", ") + ", and " + items[len(items)-1]
 	}
-}
-
-// havenIsNonUserFacingAssistantPlaceholder reports literals that some model stacks echo
-// instead of true empty content. They must not reach the Haven UI as assistant text.
-func havenIsNonUserFacingAssistantPlaceholder(s string) bool {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "(no text in model response)":
-		return true
-	default:
-		return false
-	}
-}
-
-// havenUserMessageLikelyHostFolderAction is a narrow client-agnostic heuristic for when
-// the operator probably expects host.folder.* / host.organize.* tools rather than chat-only.
-func havenUserMessageLikelyHostFolderAction(raw string) bool {
-	t := strings.TrimSpace(strings.ToLower(raw))
-	if t == "" {
-		return false
-	}
-	wantsHostWork := strings.Contains(t, "organize") || strings.Contains(t, "organise") ||
-		strings.Contains(t, "cleanup") || strings.Contains(t, "clean up") ||
-		strings.Contains(t, "clear out") || strings.Contains(t, "tidy") ||
-		(strings.Contains(t, "list") && (strings.Contains(t, "file") || strings.Contains(t, "folder") || strings.Contains(t, "download"))) ||
-		strings.Contains(t, "sort my") || strings.Contains(t, "declutter")
-	hostScope := strings.Contains(t, "download") || strings.Contains(t, "desktop") ||
-		strings.Contains(t, "file") || strings.Contains(t, "folder") ||
-		strings.Contains(t, "mac") || strings.Contains(t, "disk") || strings.Contains(t, "drive") ||
-		strings.Contains(t, "finder")
-	return wantsHostWork && hostScope
-}
-
-// havenThreadHasPriorAssistantWork returns true if the conversation contains at least one
-// non-empty assistant turn — indicating the model has already done some work (e.g. listed the folder).
-func havenThreadHasPriorAssistantWork(conversation []modelpkg.ConversationTurn) bool {
-	for _, turn := range conversation {
-		if turn.Role == "assistant" && strings.TrimSpace(turn.Content) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func havenThreadContainsHostFolderUserIntent(conversation []modelpkg.ConversationTurn) bool {
-	for _, turn := range conversation {
-		if turn.Role != "user" {
-			continue
-		}
-		if havenUserMessageLikelyHostFolderAction(turn.Content) {
-			return true
-		}
-	}
-	return false
-}
-
-func havenIsShortAffirmation(raw string) bool {
-	t := strings.TrimSpace(strings.ToLower(raw))
-	if t == "" {
-		return false
-	}
-	switch t {
-	case "y", "yes", "yeah", "yep", "sure", "ok", "okay", "please", "please do", "go ahead", "do it",
-		"sounds good", "sounds great", "confirm", "confirmed", "proceed", "mhm", "uh huh":
-		return true
-	}
-	if (strings.HasPrefix(t, "yes ") || strings.HasPrefix(t, "ok ") || strings.HasPrefix(t, "sure ")) && len(t) < 40 {
-		return true
-	}
-	return false
-}
-
-// havenHostFolderProseNudgeApplies decides whether to auto-continue when the model answered with
-// prose only. Follow-ups like "yes" do not match havenUserMessageLikelyHostFolderAction alone, but
-// still need tool pressure when the thread already asked to organize Downloads/Desktop.
-func havenHostFolderProseNudgeApplies(initialUserMessage string, conversationWithCurrentUser []modelpkg.ConversationTurn) bool {
-	if havenUserMessageLikelyHostFolderAction(initialUserMessage) {
-		return true
-	}
-	if !havenThreadContainsHostFolderUserIntent(conversationWithCurrentUser) {
-		return false
-	}
-	t := strings.TrimSpace(strings.ToLower(initialUserMessage))
-	if len(t) > 160 {
-		return false
-	}
-	if havenIsShortAffirmation(t) {
-		return true
-	}
-	if len(t) < 120 && (strings.Contains(t, "nicer") || strings.Contains(t, "neater") || strings.Contains(t, "whatever") ||
-		strings.Contains(t, "you decide") || strings.Contains(t, "your call") || strings.Contains(t, "up to you")) {
-		return true
-	}
-	return false
-}
-
-func havenBuildConversationFromThread(store *threadstore.Store, threadID string) []modelpkg.ConversationTurn {
-	events, err := store.LoadThread(threadID)
-	if err != nil {
-		return nil
-	}
-
-	var conversation []modelpkg.ConversationTurn
-	for _, event := range events {
-		if !threadstore.IsUserVisible(event.Type) {
-			continue
-		}
-		text, _ := event.Data["text"].(string)
-		switch event.Type {
-		case threadstore.EventUserMessage:
-			conversation = append(conversation, modelpkg.ConversationTurn{
-				Role:      "user",
-				Content:   text,
-				Timestamp: event.TS,
-			})
-		case threadstore.EventAssistantMessage:
-			conversation = append(conversation, modelpkg.ConversationTurn{
-				Role:      "assistant",
-				Content:   text,
-				Timestamp: event.TS,
-			})
-		}
-	}
-
-	if len(conversation) > 0 && conversation[len(conversation)-1].Role == "user" {
-		conversation = conversation[:len(conversation)-1]
-	}
-
-	return conversation
-}
-
-func havenWindowConversationForModel(turns []modelpkg.ConversationTurn, maxTurns int) []modelpkg.ConversationTurn {
-	if maxTurns <= 0 || len(turns) <= maxTurns {
-		return turns
-	}
-	return turns[len(turns)-maxTurns:]
 }
