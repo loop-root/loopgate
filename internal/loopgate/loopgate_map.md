@@ -244,8 +244,10 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - wake-state projection helpers and token-budget trimming
 - `continuity_mutation_ordering_test.go`
   - `TestMutateContinuityMemory_*`, `TestContinuityInspectRequest_*`, corrupt-replay coverage per Phase 1 Tasks 1 and 5
+- `continuity_runtime_contract.go`
+  - continuity runtime constants, replay/event contract structs, and partition artifact-path layout
 - `continuity_runtime.go`
-  - event-log replay and wake reconstruction
+  - event-log replay, artifact writing, and current-snapshot reconstruction
   - important when new continuity event types are introduced
   - now projects structured task snapshots instead of only item IDs and text
 
