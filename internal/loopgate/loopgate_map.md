@@ -91,7 +91,9 @@ For integrators it matters in four ways:
 - `server_haven_chat_tool_defs.go`
   - capability-summary filtering and model-facing tool definition shaping
 - `server_haven_chat_runtime_facts.go`
-  - base runtime facts injected into the Haven chat context
+  - Haven chat runtime-fact assembly
+- `server_haven_chat_context_facts.go`
+  - stable session/runtime facts plus project and granted-path context facts
 - `server_haven_chat_capability_facts.go`
   - capability-specific guidance facts, grouped by product/tool family
 - `server_haven_chat_heuristics.go`
