@@ -70,6 +70,8 @@ For integrators it matters in four ways:
 - `server_connection_handlers.go`
   - `/v1/status`
   - current global capability inventory surface
+- `server_audit_runtime.go`
+  - append-only audit chain state, persisted audit-event recording, and operator diagnostic log helpers
 - `types.go`
   - core control-plane request/response structs, including:
     - `CapabilitySummary`
