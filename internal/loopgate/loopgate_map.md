@@ -52,6 +52,10 @@ For integrators it matters in four ways:
   - bridges Todo tool calls onto explicit continuity mutations and wake-state reads
   - now persists task metadata into continuity distillates so wake-state can reconstruct a real task substrate
   - now also persists task execution classes so approval posture survives restart and wake-state rebuild
+- `todo_projection.go`
+  - continuity-backed task board projection, recent completion shaping, and explicit todo state discovery
+- `todo_render.go`
+  - bounded todo success text and prompt/JSON rendering helpers for `todo.list`
 - `task_standing_grants.go`
   - Loopgate-owned standing-approval catalog for safe **actor-scoped** task execution classes (e.g. low-friction paths gated to the `haven` actor)
   - persists operator-visible “always allowed” class sets and audits changes
@@ -159,8 +163,14 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - desk-note handlers and persistence for the operator desk surface
 - `server_haven_presence.go`
   - normalized Haven presence and morph-sleep projections
-- `server_haven_ui_handlers.go`
-  - remaining Haven UI projections: journal, working notes, workspace, and shared file-preview helpers
+- `server_haven_journal.go`
+  - Haven journal listing, entry loading, and journal preview/title helpers
+- `server_haven_working_notes.go`
+  - working-note list/load/save handlers and title/preview/path derivation helpers
+- `server_haven_workspace.go`
+  - workspace listing, host-layout projection, preview handlers, and Haven workspace path mapping
+- `server_haven_file_access.go`
+  - shared file-read capability bridge for Haven UI projections
 - `ui_types.go`
   - client-facing UI summaries and event envelopes
   - includes folder-access sync/status response types used by **local HTTP clients**
