@@ -112,12 +112,12 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
   - four lease states: `issued → executing → consumed | expired`
   - typed `json.RawMessage` envelopes for provider output to preserve deterministic hashing
   - append-only audit events: `task.plan.validated`, `task.lease.issued`, `task.step.executed`, `task.lease.completed`
-- `cmd/morphling-runner` binary proving morphling execution in a separate local process:
+- `cmd/morphling-runner` binary preserving the old task-plan runner stdin/stdout interface:
   - reads `TaskPlanRunnerConfig` as JSON from stdin
-  - connects to Loopgate via delegated session credentials over the Unix socket
+  - reuses delegated session credentials over the Unix socket
   - calls `/v1/task/execute` then `/v1/task/complete`
   - writes `TaskPlanRunnerResult` as JSON to stdout
-  - documents peer-identity binding constraint (subprocess PID differs from session creator)
+  - a distinct subprocess is expected to hit peer-binding denial; real cross-process execution uses the morphling worker launch/open flow
 
 Current TaskPlan limitations (intentionally deferred):
   - morphling is a logical identity, not a separate isolated process

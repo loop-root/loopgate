@@ -29,6 +29,15 @@ This RFC does not cover:
 - bridge UI rendering behavior
 - third-party OAuth provider tokens
 
+Current implementation note:
+
+- this RFC defines the delegated credential envelope and refresh contract
+- it does **not** weaken Loopgate's Unix peer binding
+- generic delegated-session reuse currently works only when requests continue
+  under the same peer identity as the original session
+- a distinct OS subprocess still needs its own process-specific bootstrap path
+  or worker session
+
 ## 3. Core rules
 
 - A bridge MUST NOT open its own independent `/v1/session/open`.
@@ -101,6 +110,8 @@ Delegated Loopgate clients:
 
 - MAY be constructed from a delegated credential set
 - MAY be updated in-process when the operator client sends a fresh credential set
+- MUST still satisfy the same peer-binding checks as the original session unless
+  a different process-specific bootstrap path is introduced
 - MUST continue using the normal signed-request path with fresh request nonces
 - MUST fail closed if the delegated credential set expires before a refresh
   arrives

@@ -114,3 +114,35 @@ Follow-up pass completed after this report:
 
 That closes the leftover signed-only UI mutation path and removes one more
 client/file-originated text leak from the public projection surface.
+
+## Later drift cleanup on delegated sessions
+
+Another follow-up sweep found contract drift rather than a live tenant bypass:
+
+- `DelegatedSessionConfig` still exposed `TenantID` / `UserID` fields even
+  though the delegated-session envelope, validation, and client state never
+  used them
+- several docs and comments still described generic delegated-session reuse as
+  if it were the current cross-process bridge/bootstrap story
+- the repo still carried `cmd/morphling-runner` and `taskplan_runner.go` as a
+  compatibility/task-plan seam, but the current peer-binding rules mean a
+  distinct subprocess reusing a parent process's delegated capability token is
+  expected to fail
+
+What changed:
+
+- removed the stale tenant/user fields from `DelegatedSessionConfig`
+- updated the delegated-session RFC and HTTP docs to say explicitly that the
+  generic helper preserves peer binding and is only appropriate for same-peer
+  continuation today
+- updated task-plan runner comments and repo maps so `cmd/morphling-runner` is
+  no longer described as the real cross-process execution path
+
+Why this matters:
+
+- it removes a misleading compatibility surface that implied delegated
+  credentials carried more authority than they do
+- it aligns the docs with the actual security model instead of leaving a future
+  bridge story sounding already implemented
+- it keeps the real cross-process path explicit: dedicated morphling worker
+  launch/open sessions, not generic delegated-session reuse

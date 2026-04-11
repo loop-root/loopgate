@@ -136,9 +136,11 @@ The local control-plane server.
 
 ### `cmd/morphling-runner/`
 
-Separate-process runner for a morphling task plan lease.
+Task-plan runner interface binary for the older lease-driven runner seam.
 
-This is a thin execution wrapper, not a full isolation boundary by itself.
+It is a thin execution wrapper, not an isolation boundary. Under current peer
+binding, a distinct subprocess reusing another process's delegated session
+credentials is expected to be denied.
 
 ## Internal Package Map
 

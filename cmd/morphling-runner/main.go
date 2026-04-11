@@ -1,12 +1,14 @@
-// morphling-runner is a minimal separate-process morphling executor.
+// morphling-runner is a minimal task-plan runner interface binary.
 //
 // It reads a TaskPlanRunnerConfig as JSON from stdin, executes the lease-bound
 // capability through Loopgate mediation, finalizes the lease, and writes a
 // TaskPlanRunnerResult as JSON to stdout before exiting.
 //
-// This binary proves that morphling execution can occur in a separate process
-// communicating with Loopgate via the Unix domain socket. It does NOT implement
-// process isolation, sandboxing, or IDE integration.
+// Important current constraint:
+// this binary does not bypass Loopgate peer binding. When invoked as a distinct
+// OS process with a parent process's delegated session credentials, execution is
+// expected to fail with peer-binding denial. The real cross-process path is the
+// morphling worker launch/open flow, not generic delegated-session reuse.
 //
 // Usage:
 //

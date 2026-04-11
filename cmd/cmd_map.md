@@ -24,7 +24,8 @@ Use it when changing:
 
 - `main.go`
   - reads JSON `TaskPlanRunnerConfig` from **stdin**, calls `loopgate.RunMorphlingRunnerProcess`, writes JSON result to **stdout**
-  - separate process for lease-bound morphling execution; **not** a sandbox boundary by itself (see file comment)
+  - preserves the task-plan runner subprocess interface for tests and compatibility
+  - generic delegated-session reuse remains peer-bound; separate-process worker execution should use the dedicated morphling worker session flow instead
 
 ## Relationship Notes
 

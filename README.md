@@ -158,7 +158,7 @@ Full endpoint list: `docs/design_overview/loopgate.md`.
 
 ```
 cmd/loopgate/          control-plane service
-cmd/morphling-runner/  lease-bound runner subprocess
+cmd/morphling-runner/  legacy task-plan runner interface binary
 internal/loopgate/     server implementation
 core/policy/           capability policy and morphling class definitions
 persona/               default operator persona

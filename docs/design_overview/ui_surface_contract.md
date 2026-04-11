@@ -127,8 +127,10 @@ The bridge bootstrap path must also preserve the control-plane boundary:
   authority
 - a bridge should receive delegated transport credentials from the operator client over a
   launch-bound local channel
-- delegated bridge clients should use the existing Loopgate delegated-session
-  client path rather than `/v1/session/open`
+- the existing delegated-session client path preserves peer binding; it is not
+  a cross-process bypass
+- today, generic delegated-session reuse is only appropriate for same-peer
+  continuation, not for an arbitrary separate process
 - delegated credential updates should use the typed contract defined in
   [RFC 0002](../rfcs/0002-delegated-session-refresh.md)
 - if delegated credentials are unavailable or invalid, the bridge should fail

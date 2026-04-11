@@ -11,11 +11,18 @@ import (
 // =============================================================================
 // Morphling Runner — Minimal local-process executor for TaskPlan leases.
 //
-// The runner is a separate process that:
+// The runner is a minimal task-plan execution helper that:
 //   1. Receives a TaskPlanRunnerConfig (socket path, session credentials, lease details)
 //   2. Calls POST /v1/task/execute (mediated capability call through Loopgate)
 //   3. Calls POST /v1/task/complete (finalize lease consumption)
 //   4. Exits cleanly with a result or error
+//
+// Important current constraint:
+//   - This helper reuses delegated control-session credentials, so it only
+//     works when subsequent requests preserve the same peer binding as the
+//     original session. A distinct OS subprocess will be denied by peer
+//     binding. Real cross-process morphling execution uses the dedicated
+//     morphling worker launch/open flow instead.
 //
 // The runner does NOT:
 //   - Execute providers directly (Loopgate mediates all capability execution)
@@ -54,8 +61,9 @@ type TaskPlanRunnerResult struct {
 }
 
 // RunTaskPlanMorphling executes the morphling runner logic. This function is
-// designed to be called from a separate process (cmd/morphling-runner) or
-// from a goroutine in integration tests.
+// designed to be called from the same peer-bound process, or from a goroutine
+// in integration tests. A distinct OS subprocess is expected to hit peer
+// binding denial when using these delegated session credentials.
 //
 // The runner connects to Loopgate via the Unix socket, authenticates using the
 // delegated session credentials, executes the lease-bound capability via
@@ -184,4 +192,3 @@ func RunMorphlingRunnerProcess(ctx context.Context, configJSON []byte) ([]byte, 
 	}
 	return resultBytes, nil
 }
-

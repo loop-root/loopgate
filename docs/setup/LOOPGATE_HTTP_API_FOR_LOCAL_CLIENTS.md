@@ -411,7 +411,15 @@ cross the public control-plane surface.
 
 ## 9. Delegated sessions (advanced)
 
-If a parent process opens Loopgate and passes tokens to a child via a **launch-bound channel**, follow [RFC 0002: Delegated Session Refresh and Pipe Contract](../rfcs/0002-delegated-session-refresh.md). The Go helper is `NewClientFromDelegatedSession`.
+If a component needs to keep using an already-opened Loopgate session without calling
+`/v1/session/open` again, follow [RFC 0002: Delegated Session Refresh and Pipe Contract](../rfcs/0002-delegated-session-refresh.md). The Go helper is `NewClientFromDelegatedSession`.
+
+Important current constraint:
+
+- the generic delegated-session helper does **not** relax Unix peer binding
+- a distinct OS subprocess reusing another process's capability token will still be denied
+- today this helper is only appropriate for same-peer / same-process continuation
+- real cross-process worker execution uses a dedicated process-specific session path such as the morphling worker launch/open flow
 
 ---
 

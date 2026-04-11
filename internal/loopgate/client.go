@@ -57,13 +57,14 @@ type Client struct {
 	tokenExpiresAt           time.Time
 }
 
+// DelegatedSessionConfig carries only the already-minted transport credentials.
+// It does not carry tenant or user identity; those are stamped server-side at
+// session open and enforced from the control session / capability token.
 type DelegatedSessionConfig struct {
 	ControlSessionID string
 	CapabilityToken  string
 	ApprovalToken    string
 	SessionMACKey    string
-	TenantID         string
-	UserID           string
 	ExpiresAt        time.Time
 }
 
