@@ -70,8 +70,8 @@ If you are new to the repo, read in this order:
 3. `AGENTS/AGENTS.md` (optional local copy under ignored `AGENTS/`)
 4. `AGENTS/ARCHITECTURE.md` — enterprise architecture, deployment models, component boundaries
 5. `AGENTS/BUILD_NOW.md` — current implementation slice and priorities
-6. `internal/loopgate/server.go` — central server object, session/token state, mux registration
-7. `internal/loopgate/continuity_memory.go` — memory and wake-state
+6. `internal/loopgate/server.go` — central authority runtime: server construction, serve loop, and capability execution core
+7. `internal/loopgate/loopgate_map.md` — current module map for the split Loopgate package
 8. `internal/tcl/` — Thought Compression Language: memory normalization, anchors, policy
 9. `docs/reviews/memory_reviewGaps.md` — documented memory system gaps and fixes
 10. `docs/plans/` — session handoff docs (if present)
@@ -164,7 +164,8 @@ What lives here:
 
 Key files:
 
-- `server.go`: central server object, session/token state, audit chain
+- `server.go`: central authority runtime, session/token state, serve loop, and capability execution core
+- `server_audit_runtime.go`, `server_response_runtime.go`, `capability_result_runtime.go`, `capability_execution_runtime.go`, `request_body_runtime.go`: split runtime helpers peeled out of the authority core
 - `server_*_handlers.go`: split handlers by concern
 - `ui_client.go` and `ui_types.go`: display-safe control-plane queries for local clients
 - `client.go`: Go HTTP client public wrapper surface for Loopgate (**HTTP on Unix domain socket** for v1; used by tests and tooling — see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`; optional future XPC adapter TBD — see `docs/rfcs/0001-loopgate-token-policy.md`)
@@ -431,6 +432,7 @@ Start in:
 
 - `internal/tools/`
 - `internal/loopgate/server.go`
+- `internal/loopgate/loopgate_map.md`
 - `internal/loopgate/server_*_handlers.go`
 - `internal/loopgate/types.go`
 - `internal/loopgate/types_memory.go`

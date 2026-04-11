@@ -72,6 +72,16 @@ For integrators it matters in four ways:
   - current global capability inventory surface
 - `server_audit_runtime.go`
   - append-only audit chain state, persisted audit-event recording, and operator diagnostic log helpers
+- `server_response_runtime.go`
+  - JSON response writing, audit-unavailable responses, and control-plane denial-to-HTTP status mapping
+- `approval_flow.go`
+  - approval token authentication, approval state transitions, approval manifest verification, and approval metadata / operator-facing reason shaping
+- `capability_result_runtime.go`
+  - result classification, structured result shaping, and per-field metadata derivation for capability execution and configured remote capabilities
+- `capability_execution_runtime.go`
+  - capability-risk classification, trusted-Haven session helpers, execution-token derivation, capability request normalization, and capability-set helpers
+- `request_body_runtime.go`
+  - strict JSON body decode and signed-body verification helpers shared across HTTP handlers
 - `types.go`
   - core control-plane request/response structs, including:
     - `CapabilitySummary`

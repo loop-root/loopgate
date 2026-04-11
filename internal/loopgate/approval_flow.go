@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	policypkg "morph/internal/policy"
+	"morph/internal/secrets"
 )
 
 type approvalExecutionContext struct {
@@ -166,6 +169,59 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	}
 	server.mu.Unlock()
 	return activeSession, true
+}
+
+func interfaceStringValue(rawValue interface{}) string {
+	stringValue, ok := rawValue.(string)
+	if !ok {
+		return ""
+	}
+	return stringValue
+}
+
+func (server *Server) approvalMetadata(controlSessionID string, capabilityRequest CapabilityRequest) map[string]interface{} {
+	metadata := map[string]interface{}{
+		"capability": capabilityRequest.Capability,
+	}
+	if approvalClass := server.approvalClassForCapability(capabilityRequest.Capability); approvalClass != "" {
+		metadata["approval_class"] = approvalClass
+	}
+	if pathValue := strings.TrimSpace(capabilityRequest.Arguments["path"]); pathValue != "" {
+		metadata["path"] = pathValue
+	}
+	if contentValue, hasContent := capabilityRequest.Arguments["content"]; hasContent {
+		metadata["content_bytes"] = len(contentValue)
+	}
+	redactedArguments := secrets.RedactStringMap(capabilityRequest.Arguments)
+	for argumentKey, argumentValue := range redactedArguments {
+		if argumentKey == "path" || argumentKey == "content" {
+			continue
+		}
+		metadata["arg_"+argumentKey] = argumentValue
+	}
+	if operatorMountGrant, _, err := operatorMountWriteGrantForRequest(server, controlSessionID, capabilityRequest); err == nil && strings.TrimSpace(operatorMountGrant.root) != "" {
+		metadata["grant_root"] = operatorMountGrant.root
+		metadata["grant_ttl_seconds"] = int(operatorMountWriteGrantTTL / time.Second)
+	}
+	if capabilityRequest.Capability == "host.plan.apply" {
+		for k, v := range server.hostPlanApplyApprovalOperatorFields(capabilityRequest.Arguments["plan_id"]) {
+			metadata[k] = v
+		}
+	}
+	return metadata
+}
+
+func approvalReasonForCapability(policyDecision policypkg.CheckResult, metadata map[string]interface{}, capabilityRequest CapabilityRequest) string {
+	grantRootPath := strings.TrimSpace(stringMetadataValue(metadata, "grant_root"))
+	if grantRootPath == "" {
+		return policyDecision.Reason
+	}
+	switch capabilityRequest.Capability {
+	case "operator_mount.fs_write", "operator_mount.fs_mkdir":
+		return fmt.Sprintf("Grant write access to %s for 8 hours", grantRootPath)
+	default:
+		return policyDecision.Reason
+	}
 }
 
 func buildApprovalGrantedAuditData(approvalID string, pendingApproval pendingApproval) map[string]interface{} {
