@@ -56,6 +56,9 @@ func (server *Server) handleHavenModelSettingsGet(writer http.ResponseWriter, re
 		})
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelSettingsRead) {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -117,6 +120,9 @@ func (server *Server) handleHavenModelSettingsPost(writer http.ResponseWriter, r
 			DenialReason: "model settings requires actor haven",
 			DenialCode:   DenialCodeCapabilityTokenInvalid,
 		})
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelSettingsWrite) {
 		return
 	}
 
@@ -199,6 +205,9 @@ func (server *Server) handleHavenModelSettingsPost(writer http.ResponseWriter, r
 			next.ModelConnectionID = ""
 			next.APIKeyEnvVar = ""
 		} else if openAIAPIKey != "" {
+			if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionWrite) {
+				return
+			}
 			next.ModelConnectionID = fmt.Sprintf("openai_compatible:%d", time.Now().UTC().UnixNano())
 			if _, err := server.StoreModelConnection(request.Context(), ModelConnectionStoreRequest{
 				ConnectionID: next.ModelConnectionID,
@@ -235,6 +244,9 @@ func (server *Server) handleHavenModelSettingsPost(writer http.ResponseWriter, r
 			Timeout:         havenPickModelTimeout(existing.Timeout, 120*time.Second),
 		}
 		if apiKey != "" {
+			if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionWrite) {
+				return
+			}
 			next.ModelConnectionID = fmt.Sprintf("anthropic:%d", time.Now().UTC().UnixNano())
 			if _, err := server.StoreModelConnection(request.Context(), ModelConnectionStoreRequest{
 				ConnectionID: next.ModelConnectionID,

@@ -115,6 +115,9 @@ func (server *Server) handleFolderAccessSync(writer http.ResponseWriter, request
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityFolderAccessWrite) {
+		return
+	}
 	requestBodyBytes, denialResponse, verified := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -152,6 +155,9 @@ func (server *Server) handleFolderAccess(writer http.ResponseWriter, request *ht
 
 	switch request.Method {
 	case http.MethodGet:
+		if !server.requireControlCapability(writer, tokenClaims, controlCapabilityFolderAccessRead) {
+			return
+		}
 		if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 			server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 			return
@@ -167,6 +173,9 @@ func (server *Server) handleFolderAccess(writer http.ResponseWriter, request *ht
 		}
 		server.writeJSON(writer, http.StatusOK, statusResponse)
 	case http.MethodPut:
+		if !server.requireControlCapability(writer, tokenClaims, controlCapabilityFolderAccessWrite) {
+			return
+		}
 		requestBodyBytes, denialResponse, verified := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 		if !verified {
 			server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)

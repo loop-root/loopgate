@@ -308,6 +308,9 @@ func (server *Server) handleHavenJournalEntries(writer http.ResponseWriter, requ
 	if !ok {
 		return
 	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -384,6 +387,9 @@ func (server *Server) handleHavenJournalEntry(writer http.ResponseWriter, reques
 	if !ok {
 		return
 	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_read") {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -423,6 +429,9 @@ func (server *Server) handleHavenWorkingNotes(writer http.ResponseWriter, reques
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
 		return
 	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
@@ -478,6 +487,9 @@ func (server *Server) handleHavenWorkingNotesEntry(writer http.ResponseWriter, r
 	if !ok {
 		return
 	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_read") {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -514,6 +526,9 @@ func (server *Server) handleHavenWorkingNotesSave(writer http.ResponseWriter, re
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "notes.write") {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
@@ -596,6 +611,9 @@ func (server *Server) handleHavenWorkspaceList(writer http.ResponseWriter, reque
 	if !ok {
 		return
 	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -627,6 +645,9 @@ func (server *Server) handleHavenWorkspaceHostLayout(writer http.ResponseWriter,
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
 		return
 	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
@@ -786,6 +807,9 @@ func (server *Server) handleHavenWorkspacePreview(writer http.ResponseWriter, re
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_read") {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)

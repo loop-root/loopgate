@@ -191,8 +191,20 @@ func (client *Client) StoreModelConnection(ctx context.Context, request ModelCon
 		return ModelConnectionStatus{}, err
 	}
 
+	type modelConnectionStoreWire struct {
+		ConnectionID string `json:"connection_id"`
+		ProviderName string `json:"provider_name"`
+		BaseURL      string `json:"base_url"`
+		SecretValue  string `json:"secret_value"`
+	}
+
 	var response ModelConnectionStatus
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/model/connections/store", capabilityToken, request, &response, nil); err != nil {
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/model/connections/store", capabilityToken, modelConnectionStoreWire{
+		ConnectionID: request.ConnectionID,
+		ProviderName: request.ProviderName,
+		BaseURL:      request.BaseURL,
+		SecretValue:  request.SecretValue,
+	}, &response, nil); err != nil {
 		return ModelConnectionStatus{}, err
 	}
 	return response, nil
@@ -1091,7 +1103,11 @@ func (client *Client) attachRequestSignature(httpRequest *http.Request, path str
 		return fmt.Errorf("generate request nonce: %w", err)
 	}
 	requestTimestamp := time.Now().UTC().Format(time.RFC3339Nano)
-	requestSignature := computeRequestSignature(sessionMACKey, httpRequest.Method, path, controlSessionID, requestTimestamp, requestNonce, bodyBytes)
+	canonicalPath := strings.TrimSpace(httpRequest.URL.Path)
+	if canonicalPath == "" {
+		canonicalPath = path
+	}
+	requestSignature := computeRequestSignature(sessionMACKey, httpRequest.Method, canonicalPath, controlSessionID, requestTimestamp, requestNonce, bodyBytes)
 
 	httpRequest.Header.Set("X-Loopgate-Control-Session", controlSessionID)
 	httpRequest.Header.Set("X-Loopgate-Request-Timestamp", requestTimestamp)

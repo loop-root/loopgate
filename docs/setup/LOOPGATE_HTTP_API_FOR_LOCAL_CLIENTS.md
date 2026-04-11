@@ -210,17 +210,19 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `GET /v1/status` | Capability inventory, policy snapshot, counts — **Bearer + signed GET** |
 | `GET /v1/connections/status` | Connection summaries — **Bearer + signed GET** + **`connection.read`** |
 | `POST /v1/session/open` | Obtain tokens and MAC key |
-| `POST /v1/model/reply` | Model round-trip through Loopgate |
-| `POST /v1/model/validate` | Validate runtime model config |
-| `POST /v1/model/connections/store` | Store provider credentials (secret handled server-side) |
+| `POST /v1/model/reply` | Model round-trip through Loopgate — **`model.reply`** |
+| `POST /v1/model/validate` | Validate runtime model config — **`model.validate`** |
+| `POST /v1/model/connections/store` | Store provider credentials (secret handled server-side) — **`connection.write`** |
 | `POST /v1/capabilities/execute` | Execute a registered capability |
 | `POST /v1/connections/validate` | Validate a configured connection — **`connection.write`** |
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows — **`connection.write`** |
 | `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft — **`site.inspect`** / **`site.trust.write`** |
-| `POST /v1/sandbox/*` | import, stage, metadata, export, list |
+| `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`** |
+| `POST /v1/sandbox/metadata` | Sandbox artifact metadata — **`fs_read`** |
+| `POST /v1/sandbox/list` | Sandbox directory listing — **`fs_list`** |
 | `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; requires `memory.write`; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
 | `GET /v1/memory/wake-state` | Wake state projection |
-| `GET` / `PUT /v1/tasks` … | Task board sync |
+| `GET /v1/tasks` / `PUT /v1/tasks/{id}/status` | Task board sync (**`tasks.read`** / **`tasks.write`**) |
 | `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
 | `POST /v1/memory/discover` / `recall` / `remember` | Memory surfaces |
 | `POST /v1/memory/inspections/…` | Inspection governance |
@@ -232,23 +234,23 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `GET /v1/ui/status` / `events` | Display-safe UI observation (signed Bearer routes) |
 | `GET /v1/ui/approvals` | Pending UI approvals for the current control session (**signed + `X-Loopgate-Approval-Token`**) |
 | `POST /v1/ui/approvals/{id}/decision` | UI approval path (**signed + `X-Loopgate-Approval-Token`**, body `{ "approved": bool }`) |
-| `GET` / `POST /v1/ui/folder-access*` | Folder access UI helpers |
+| `GET` / `PUT /v1/ui/folder-access`, `POST /v1/ui/folder-access/sync`, `GET /v1/ui/shared-folder`, `POST /v1/ui/shared-folder/sync` | Folder access UI helpers (**`folder_access.read`** / **`folder_access.write`**) |
 | `GET /v1/ui/desk-notes` | Active desk (sticky) notes from `runtime/state/haven_desk_notes.json` (signed GET) |
 | `POST /v1/ui/desk-notes/dismiss` | Archive a desk note by id (signed POST) |
 | `GET /v1/ui/memory` | Display-safe memory inventory for operator UI controls (signed GET; **`memory.read`**; manageable objects, counts, redacted summaries) |
 | `POST /v1/ui/memory/reset` | Archive current memory state and start fresh for demo/operator reset (signed POST; **`memory.reset`**; body `operation_id`, `reason`) |
-| `GET /v1/ui/journal/entries` | Journal entry summaries (signed GET; lists sandbox `scratch/journal`) |
-| `GET /v1/ui/journal/entry` | Single journal file (signed GET; query selects entry) |
-| `GET /v1/ui/working-notes` | Working-note summaries (signed GET; `scratch/notes`) |
-| `GET /v1/ui/working-notes/entry` | Single working note (signed GET) |
+| `GET /v1/ui/journal/entries` | Journal entry summaries (signed GET; lists sandbox `scratch/journal`; **`fs_list`**) |
+| `GET /v1/ui/journal/entry` | Single journal file (signed GET; query selects entry; **`fs_read`**) |
+| `GET /v1/ui/working-notes` | Working-note summaries (signed GET; `scratch/notes`; **`fs_list`**) |
+| `GET /v1/ui/working-notes/entry` | Single working note (signed GET; **`fs_read`**) |
 | `POST /v1/ui/working-notes/save` | Save working note content (signed POST; uses `notes.write` capability) |
-| `POST /v1/ui/workspace/list` | Workspace listing for sandbox virtual paths (signed POST; body `path`; root lists `projects`, `imports`, `artifacts`, `research`, `agents`, and optional `shared`) |
-| `POST /v1/ui/workspace/preview` | Read workspace file preview (signed POST; body `path`, using the same virtual path mapping as the list route) |
+| `POST /v1/ui/workspace/list` | Workspace listing for sandbox virtual paths (signed POST; body `path`; **`fs_list`**; root lists `projects`, `imports`, `artifacts`, `research`, `agents`, and optional `shared`) |
+| `POST /v1/ui/workspace/preview` | Read workspace file preview (signed POST; body `path`; **`fs_read`**; using the same virtual path mapping as the list route) |
 | `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET); written by clients that implement presence |
 | `GET /v1/ui/morph-sleep` | Same snapshot as presence plus `is_sleeping` / `is_resting` (signed GET) |
 | `POST /v1/agent/work-item/ensure` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
 | `POST /v1/agent/work-item/complete` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.complete`** for a task-board item id |
-| … | Other `/v1/ui/*` task standing grants, shared folder — see `server.go` |
+| `GET` / `PUT /v1/ui/task-standing-grants` | Task standing-grant controls (**`task_standing_grant.read`** / **`task_standing_grant.write`**) |
 
 For **request/response JSON shapes**, use `internal/loopgate/types.go` as the source of truth (field names are `json` tagged).
 
@@ -279,6 +281,27 @@ silently delete memory in place.
 `GET /v1/status` only includes connection summaries when the session token
 includes **`connection.read`**. Use `GET /v1/connections/status` when the client
 explicitly needs the connection surface.
+
+### 7.1.1 Task board, folder access, and standing-grant control routes
+
+- `GET /v1/tasks`
+  - requires **`tasks.read`**
+  - returns the display-safe task-board projection
+- `PUT /v1/tasks/{id}/status`
+  - requires **`tasks.write`**
+  - updates the workflow status for an existing task-board item
+- `GET /v1/ui/folder-access` and `GET /v1/ui/shared-folder`
+  - require **`folder_access.read`**
+  - return display-safe folder-access and shared-folder status projections
+- `PUT /v1/ui/folder-access`, `POST /v1/ui/folder-access/sync`, and `POST /v1/ui/shared-folder/sync`
+  - require **`folder_access.write`**
+  - update or synchronize Loopgate-managed folder-access state
+- `GET /v1/ui/task-standing-grants`
+  - requires **`task_standing_grant.read`**
+  - returns standing-grant status for supported task execution classes
+- `PUT /v1/ui/task-standing-grants`
+  - requires **`task_standing_grant.write`**
+  - updates standing-grant status for a supported task execution class
 
 ### 7.2 Agent work-item helpers (bounded task board; actor `haven`)
 
@@ -321,9 +344,59 @@ cross the public control-plane surface.
 **`GET /v1/diagnostic/report`**
 
 - **Auth:** `Authorization: Bearer` with a valid **capability token** (same peer binding rules as other privileged routes).
+- **Scope:** **`diagnostic.read`**
 - **Response:** JSON aggregate for operators and in-app doctor UIs: ledger chain verification summary (`ledger_verify`), active audit JSONL line count and top event types (`ledger_active`), diagnostic logging flags (`diagnostics`). **No** raw audit JSONL, tool payloads, or secrets.
 - **Go client:** `(*loopgate.Client).FetchDiagnosticReport(ctx, &dest)` unmarshals the same JSON.
 - **CLI (no server):** `go run ./cmd/loopgate-doctor report` and `go run ./cmd/loopgate-doctor bundle -out /path/to/dir` write `report.json` plus optional tails of configured diagnostic `*.log` files.
+
+### 7.5 Model control routes
+
+- `POST /v1/model/reply`
+  - requires **`model.reply`**
+  - runs a model round-trip through Loopgate’s runtime and audit path
+- `POST /v1/model/validate`
+  - requires **`model.validate`**
+  - validates runtime model configuration without executing a model round-trip
+- `POST /v1/model/connections/store`
+  - requires **`connection.write`**
+  - stores provider credentials through Loopgate’s secure connection path
+- `GET /v1/model/settings`
+  - requires actor **`haven`** and **`model.settings.read`**
+  - returns the Haven-facing model settings projection
+- `POST /v1/model/settings`
+  - requires actor **`haven`** and **`model.settings.write`**
+  - updates the Haven-facing model settings projection
+  - when the request stores a new non-loopback provider credential, it also requires **`connection.write`**
+- `GET /v1/model/openai/models` and `GET /v1/model/ollama/tags`
+  - require actor **`haven`** and **`connection.write`**
+  - probe an OpenAI-compatible `/models` endpoint for setup UX
+
+### 7.6 Sandbox and Haven filesystem projection routes
+
+- `POST /v1/sandbox/import`, `POST /v1/sandbox/stage`, and `POST /v1/sandbox/export`
+  - require **`fs_write`**
+  - mutate sandbox or host-adjacent artifact state through Loopgate-owned paths
+- `POST /v1/sandbox/metadata`
+  - requires **`fs_read`**
+  - returns metadata for a staged output artifact
+- `POST /v1/sandbox/list`
+  - requires **`fs_list`**
+  - returns a directory listing inside the sandbox home
+- `GET /v1/ui/journal/entries`, `GET /v1/ui/working-notes`, and `POST /v1/ui/workspace/list`
+  - require **`fs_list`**
+  - return display-safe projections over sandbox directory structure
+- `GET /v1/ui/journal/entry`, `GET /v1/ui/working-notes/entry`, and `POST /v1/ui/workspace/preview`
+  - require **`fs_read`**
+  - return bounded file content projections through Loopgate
+- `POST /v1/ui/working-notes/save`
+  - requires **`notes.write`**
+  - saves a working note through the same governed capability path as `notes.write`
+- `GET /v1/settings/shell-dev` and `GET /v1/settings/idle`
+  - require actor **`haven`** and **`config.read`**
+  - expose Haven-facing settings projections only
+- `POST /v1/settings/shell-dev` and `POST /v1/settings/idle`
+  - require actor **`haven`** and **`config.write`**
+  - update Haven-facing settings through Loopgate-owned config paths
 
 ---
 

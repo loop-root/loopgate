@@ -64,9 +64,20 @@ func TestStatusAdvertisesAdditionalControlCapabilities(t *testing.T) {
 	for _, requiredCapability := range []string{
 		controlCapabilityConnectionRead,
 		controlCapabilityConnectionWrite,
+		controlCapabilityDiagnosticRead,
+		controlCapabilityFolderAccessRead,
+		controlCapabilityFolderAccessWrite,
+		controlCapabilityModelReply,
+		controlCapabilityModelSettingsRead,
+		controlCapabilityModelSettingsWrite,
+		controlCapabilityModelValidate,
 		controlCapabilityOperatorMountWriteGrant,
 		controlCapabilitySiteInspect,
 		controlCapabilitySiteTrustWrite,
+		controlCapabilityTaskStandingGrantRead,
+		controlCapabilityTaskStandingGrantWrite,
+		controlCapabilityTasksRead,
+		controlCapabilityTasksWrite,
 	} {
 		if !containsCapability(status.ControlCapabilities, requiredCapability) {
 			t.Fatalf("expected control capability %q in status payload, got %#v", requiredCapability, status.ControlCapabilities)

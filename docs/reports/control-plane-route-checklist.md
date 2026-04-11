@@ -72,3 +72,20 @@ The following paths are registered next to `NewServer` (search for `mux.HandleFu
 ## Audit reminder
 
 Security-relevant denials and many successes append via `logEvent` / ledger paths. If a new route performs capability execution, approvals, morphling lifecycle, or secret-adjacent work, confirm the audit event is not skipped on failure modes that must fail closed (see `AGENTS.md`).
+
+## Current explicit control-scope reminders
+
+- `/v1/diagnostic/report` should require **`diagnostic.read`**
+- `/v1/model/reply` should require **`model.reply`**
+- `/v1/model/validate` should require **`model.validate`**
+- `/v1/model/connections/store` should require **`connection.write`**
+- `/v1/model/settings` should require actor **`haven`** plus **`model.settings.read`** / **`model.settings.write`**
+- `/v1/model/openai/models` and `/v1/model/ollama/tags` should require actor **`haven`** plus **`connection.write`**
+- `/v1/sandbox/import`, `/v1/sandbox/stage`, and `/v1/sandbox/export` should require **`fs_write`**
+- `/v1/sandbox/metadata` should require **`fs_read`**
+- `/v1/sandbox/list` should require **`fs_list`**
+- `/v1/settings/shell-dev` and `/v1/settings/idle` should require actor **`haven`** plus **`config.read`** / **`config.write`**
+- Haven filesystem projection routes should use the same route scopes as their underlying capability class:
+  - listing surfaces => **`fs_list`**
+  - file content surfaces => **`fs_read`**
+  - working-note save => **`notes.write`**

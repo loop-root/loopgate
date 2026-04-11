@@ -23,6 +23,9 @@ func (server *Server) handleSandboxImport(writer http.ResponseWriter, request *h
 	if !ok {
 		return
 	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_write") {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -70,6 +73,9 @@ func (server *Server) handleSandboxStage(writer http.ResponseWriter, request *ht
 	if !ok {
 		return
 	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_write") {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -115,6 +121,9 @@ func (server *Server) handleSandboxMetadata(writer http.ResponseWriter, request 
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_read") {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
@@ -180,6 +189,9 @@ func (server *Server) handleSandboxExport(writer http.ResponseWriter, request *h
 	if !ok {
 		return
 	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_write") {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -225,6 +237,9 @@ func (server *Server) handleSandboxList(writer http.ResponseWriter, request *htt
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)

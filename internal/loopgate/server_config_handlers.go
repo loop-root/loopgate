@@ -107,12 +107,20 @@ func (server *Server) handleConfigPut(w http.ResponseWriter, section string, bod
 }
 
 func (server *Server) requireControlCapability(writer http.ResponseWriter, tokenClaims capabilityToken, requiredCapability string) bool {
+	return server.requireScopedCapability(writer, tokenClaims, requiredCapability, "control-plane action")
+}
+
+func (server *Server) requireCapabilityScope(writer http.ResponseWriter, tokenClaims capabilityToken, requiredCapability string) bool {
+	return server.requireScopedCapability(writer, tokenClaims, requiredCapability, "capability-scoped route")
+}
+
+func (server *Server) requireScopedCapability(writer http.ResponseWriter, tokenClaims capabilityToken, requiredCapability string, denialContext string) bool {
 	if capabilityScopeAllowed(tokenClaims, requiredCapability) {
 		return true
 	}
 	if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 		"capability":           requiredCapability,
-		"reason":               "capability token scope denied control-plane action",
+		"reason":               fmt.Sprintf("capability token scope denied %s", denialContext),
 		"denial_code":          DenialCodeCapabilityTokenScopeDenied,
 		"actor_label":          tokenClaims.ActorLabel,
 		"client_session_label": tokenClaims.ClientSessionLabel,

@@ -7,6 +7,9 @@ const (
 	controlCapabilityConfigWrite             = "config.write"
 	controlCapabilityConnectionRead          = "connection.read"
 	controlCapabilityConnectionWrite         = "connection.write"
+	controlCapabilityDiagnosticRead          = "diagnostic.read"
+	controlCapabilityFolderAccessRead        = "folder_access.read"
+	controlCapabilityFolderAccessWrite       = "folder_access.write"
 	controlCapabilityGoalSet                 = "goal.set"
 	controlCapabilityGoalClose               = "goal.close"
 	controlCapabilityMemoryRead              = "memory.read"
@@ -14,9 +17,17 @@ const (
 	controlCapabilityMemoryReset             = "memory.reset"
 	controlCapabilityMemoryReview            = "memory.review"
 	controlCapabilityMemoryLineage           = "memory.lineage"
+	controlCapabilityModelReply              = "model.reply"
+	controlCapabilityModelSettingsRead       = "model.settings.read"
+	controlCapabilityModelSettingsWrite      = "model.settings.write"
+	controlCapabilityModelValidate           = "model.validate"
 	controlCapabilityOperatorMountWriteGrant = "operator_mount.write_grant"
 	controlCapabilitySiteInspect             = "site.inspect"
 	controlCapabilitySiteTrustWrite          = "site.trust.write"
+	controlCapabilityTaskStandingGrantRead   = "task_standing_grant.read"
+	controlCapabilityTaskStandingGrantWrite  = "task_standing_grant.write"
+	controlCapabilityTasksRead               = "tasks.read"
+	controlCapabilityTasksWrite              = "tasks.write"
 )
 
 var internalControlCapabilityCatalog = map[string]CapabilitySummary{
@@ -43,6 +54,24 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "connection",
 		Operation:   "write",
 		Description: "Validate or update provider connection state, including OAuth PKCE helper flows, through the local control plane.",
+	},
+	controlCapabilityDiagnosticRead: {
+		Name:        controlCapabilityDiagnosticRead,
+		Category:    "diagnostic",
+		Operation:   "read",
+		Description: "Read aggregated operator diagnostic projections through the local control plane.",
+	},
+	controlCapabilityFolderAccessRead: {
+		Name:        controlCapabilityFolderAccessRead,
+		Category:    "filesystem",
+		Operation:   "read",
+		Description: "Read folder-access and shared-folder status projections through the local control plane.",
+	},
+	controlCapabilityFolderAccessWrite: {
+		Name:        controlCapabilityFolderAccessWrite,
+		Category:    "filesystem",
+		Operation:   "write",
+		Description: "Update or sync folder-access and shared-folder state through the local control plane.",
 	},
 	controlCapabilityGoalSet: {
 		Name:        controlCapabilityGoalSet,
@@ -86,6 +115,30 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Operation:   "write",
 		Description: "Apply lineage transitions such as tombstone or purge to governed memory artifacts through the local control plane.",
 	},
+	controlCapabilityModelReply: {
+		Name:        controlCapabilityModelReply,
+		Category:    "model",
+		Operation:   "execute",
+		Description: "Run a model round-trip through the Loopgate-governed local control plane.",
+	},
+	controlCapabilityModelSettingsRead: {
+		Name:        controlCapabilityModelSettingsRead,
+		Category:    "model",
+		Operation:   "read",
+		Description: "Read Haven-facing model settings through the local control plane.",
+	},
+	controlCapabilityModelSettingsWrite: {
+		Name:        controlCapabilityModelSettingsWrite,
+		Category:    "model",
+		Operation:   "write",
+		Description: "Update Haven-facing model settings through the local control plane.",
+	},
+	controlCapabilityModelValidate: {
+		Name:        controlCapabilityModelValidate,
+		Category:    "model",
+		Operation:   "validate",
+		Description: "Validate runtime model configuration through the local control plane without executing a model round-trip.",
+	},
 	controlCapabilityOperatorMountWriteGrant: {
 		Name:        controlCapabilityOperatorMountWriteGrant,
 		Category:    "filesystem",
@@ -103,6 +156,30 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "site",
 		Operation:   "write",
 		Description: "Create site trust drafts through the local control plane.",
+	},
+	controlCapabilityTaskStandingGrantRead: {
+		Name:        controlCapabilityTaskStandingGrantRead,
+		Category:    "task",
+		Operation:   "read",
+		Description: "Read task standing-grant configuration through the local control plane.",
+	},
+	controlCapabilityTaskStandingGrantWrite: {
+		Name:        controlCapabilityTaskStandingGrantWrite,
+		Category:    "task",
+		Operation:   "write",
+		Description: "Update task standing-grant configuration through the local control plane.",
+	},
+	controlCapabilityTasksRead: {
+		Name:        controlCapabilityTasksRead,
+		Category:    "task",
+		Operation:   "read",
+		Description: "Read the task-board projection through the local control plane.",
+	},
+	controlCapabilityTasksWrite: {
+		Name:        controlCapabilityTasksWrite,
+		Category:    "task",
+		Operation:   "write",
+		Description: "Update task-board workflow state through the local control plane.",
 	},
 }
 

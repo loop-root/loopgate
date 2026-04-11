@@ -345,6 +345,9 @@ func (server *Server) handleModelReply(writer http.ResponseWriter, request *http
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelReply) {
+		return
+	}
 
 	verifyRequestStart := time.Now()
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxModelReplyBodyBytes, tokenClaims.ControlSessionID)
@@ -452,6 +455,9 @@ func (server *Server) handleModelValidate(writer http.ResponseWriter, request *h
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelValidate) {
+		return
+	}
 
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
@@ -510,6 +516,9 @@ func (server *Server) handleModelConnectionStore(writer http.ResponseWriter, req
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionWrite) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)

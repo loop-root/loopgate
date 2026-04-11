@@ -50,6 +50,9 @@ func (server *Server) handleHavenSettingsShellDev(writer http.ResponseWriter, re
 
 	switch request.Method {
 	case http.MethodGet:
+		if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConfigRead) {
+			return
+		}
 		if _, denial, ok := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !ok {
 			server.writeJSON(writer, signedRequestHTTPStatus(denial.DenialCode), denial)
 			return
@@ -66,6 +69,9 @@ func (server *Server) handleHavenSettingsShellDev(writer http.ResponseWriter, re
 		server.writeJSON(writer, http.StatusOK, shellDevResponseFor(enabled))
 
 	case http.MethodPost:
+		if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConfigWrite) {
+			return
+		}
 		body, denial, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 		if !ok {
 			server.writeJSON(writer, signedRequestHTTPStatus(denial.DenialCode), denial)
@@ -145,6 +151,9 @@ func (server *Server) handleHavenSettingsIdle(writer http.ResponseWriter, reques
 
 	switch request.Method {
 	case http.MethodGet:
+		if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConfigRead) {
+			return
+		}
 		if _, denial, ok := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !ok {
 			server.writeJSON(writer, signedRequestHTTPStatus(denial.DenialCode), denial)
 			return
@@ -161,6 +170,9 @@ func (server *Server) handleHavenSettingsIdle(writer http.ResponseWriter, reques
 		server.writeJSON(writer, http.StatusOK, response)
 
 	case http.MethodPost:
+		if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConfigWrite) {
+			return
+		}
 		body, denial, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 		if !ok {
 			server.writeJSON(writer, signedRequestHTTPStatus(denial.DenialCode), denial)

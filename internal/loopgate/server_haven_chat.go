@@ -703,6 +703,9 @@ func (server *Server) handleOpenAICompatibleModels(writer http.ResponseWriter, r
 		})
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionWrite) {
+		return
+	}
 
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)

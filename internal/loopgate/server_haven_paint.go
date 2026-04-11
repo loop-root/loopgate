@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	havenPaintSandboxDir   = "outputs/paintings"
-	maxHavenPaintGallery   = 24
-	maxHavenPaintSVGBytes  = 512 * 1024
+	havenPaintSandboxDir  = "outputs/paintings"
+	maxHavenPaintGallery  = 24
+	maxHavenPaintSVGBytes = 512 * 1024
 )
 
 // HavenPaintEntry is a single painting in the gallery.
@@ -38,6 +38,12 @@ func (server *Server) handleHavenPaintGallery(writer http.ResponseWriter, reques
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
+		return
+	}
+	if !server.requireCapabilityScope(writer, tokenClaims, "fs_read") {
 		return
 	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {

@@ -133,6 +133,9 @@ func (server *Server) handleTaskStandingGrants(writer http.ResponseWriter, reque
 
 	switch request.Method {
 	case http.MethodGet:
+		if !server.requireControlCapability(writer, tokenClaims, controlCapabilityTaskStandingGrantRead) {
+			return
+		}
 		if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 			server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 			return
@@ -148,6 +151,9 @@ func (server *Server) handleTaskStandingGrants(writer http.ResponseWriter, reque
 		}
 		server.writeJSON(writer, http.StatusOK, statusResponse)
 	case http.MethodPut:
+		if !server.requireControlCapability(writer, tokenClaims, controlCapabilityTaskStandingGrantWrite) {
+			return
+		}
 		requestBodyBytes, denialResponse, verified := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 		if !verified {
 			server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
