@@ -155,6 +155,12 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - `POST /v1/ui/memory/reset`
   - display-safe memory inventory for **operator-facing** memory controls
   - auditable archive-and-fresh-start reset for demo prep
+- `server_haven_desk_notes.go`
+  - desk-note handlers and persistence for the operator desk surface
+- `server_haven_presence.go`
+  - normalized Haven presence and morph-sleep projections
+- `server_haven_ui_handlers.go`
+  - remaining Haven UI projections: journal, working notes, workspace, and shared file-preview helpers
 - `ui_types.go`
   - client-facing UI summaries and event envelopes
   - includes folder-access sync/status response types used by **local HTTP clients**
