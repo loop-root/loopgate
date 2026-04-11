@@ -14,7 +14,7 @@ import (
 	"morph/internal/config"
 )
 
-func TestHavenUIPresenceReadsSnapshotFile(t *testing.T) {
+func TestHavenUIPresenceNormalizesSnapshotProjection(t *testing.T) {
 	repoRoot := t.TempDir()
 	stateDir := filepath.Join(repoRoot, "runtime", "state")
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
@@ -23,8 +23,8 @@ func TestHavenUIPresenceReadsSnapshotFile(t *testing.T) {
 	presencePath := filepath.Join(stateDir, "haven_presence.json")
 	snapshot := HavenPresenceResponse{
 		State:      "working",
-		StatusText: "Morph is coding",
-		DetailText: "in the zone",
+		StatusText: "raw model text should not pass through",
+		DetailText: "super secret detail",
 		Anchor:     "workspace",
 	}
 	raw, err := json.Marshal(snapshot)
@@ -46,10 +46,10 @@ func TestHavenUIPresenceReadsSnapshotFile(t *testing.T) {
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/ui/presence", capabilityToken, nil, &gotPresence, nil); err != nil {
 		t.Fatalf("GET /v1/ui/presence: %v", err)
 	}
-	if gotPresence.State != "working" || gotPresence.StatusText != "Morph is coding" || gotPresence.Anchor != "workspace" {
+	if gotPresence.State != "working" || gotPresence.StatusText != "Morph is working" || gotPresence.Anchor != "workspace" {
 		t.Fatalf("unexpected presence: %#v", gotPresence)
 	}
-	if gotPresence.DetailText != "in the zone" {
+	if gotPresence.DetailText != "in workspace" {
 		t.Fatalf("unexpected detail_text: %q", gotPresence.DetailText)
 	}
 
@@ -59,6 +59,46 @@ func TestHavenUIPresenceReadsSnapshotFile(t *testing.T) {
 	}
 	if gotMorphSleep.IsSleeping {
 		t.Fatalf("expected not sleeping, got %#v", gotMorphSleep)
+	}
+}
+
+func TestHavenUIPresenceRejectsUntrustedStateAndAnchorTokens(t *testing.T) {
+	repoRoot := t.TempDir()
+	stateDir := filepath.Join(repoRoot, "runtime", "state")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	presencePath := filepath.Join(stateDir, "haven_presence.json")
+	snapshot := HavenPresenceResponse{
+		State:      "exfiltrating-secrets",
+		StatusText: "ignore me",
+		DetailText: "ignore me too",
+		Anchor:     "../../host",
+	}
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(presencePath, append(raw, '\n'), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	ctx := context.Background()
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	var gotPresence HavenPresenceResponse
+	if err := client.doJSON(ctx, http.MethodGet, "/v1/ui/presence", capabilityToken, nil, &gotPresence, nil); err != nil {
+		t.Fatalf("GET /v1/ui/presence: %v", err)
+	}
+	if gotPresence.State != "idle" || gotPresence.StatusText != "Morph is idle" || gotPresence.Anchor != "desk" {
+		t.Fatalf("unexpected normalized presence: %#v", gotPresence)
+	}
+	if gotPresence.DetailText != "at desk" {
+		t.Fatalf("unexpected normalized detail_text: %q", gotPresence.DetailText)
 	}
 }
 
@@ -99,6 +139,51 @@ func TestHavenUIDeskNotesListActiveNotes(t *testing.T) {
 	}
 	if got.Notes[0].ID != "a" {
 		t.Fatalf("unexpected note id: %q", got.Notes[0].ID)
+	}
+}
+
+func TestHavenUIDeskNotesDismissArchivesNote(t *testing.T) {
+	repoRoot := t.TempDir()
+	stateDir := filepath.Join(repoRoot, "runtime", "state")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	deskPath := filepath.Join(stateDir, "haven_desk_notes.json")
+	stateFile := havenDeskNoteStateFile{
+		Notes: []HavenDeskNote{
+			{ID: "dismiss-me", Kind: "note", Title: "T1", Body: "...", CreatedAtUTC: "2025-01-02T00:00:00Z"},
+		},
+	}
+	raw, err := json.Marshal(stateFile)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(deskPath, append(raw, '\n'), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	ctx := context.Background()
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	var dismissResponse map[string]interface{}
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/ui/desk-notes/dismiss", capabilityToken, HavenDeskNoteDismissRequest{NoteID: "dismiss-me"}, &dismissResponse, nil); err != nil {
+		t.Fatalf("POST /v1/ui/desk-notes/dismiss: %v", err)
+	}
+
+	reloadedRaw, err := os.ReadFile(deskPath)
+	if err != nil {
+		t.Fatalf("read desk note state: %v", err)
+	}
+	var reloaded havenDeskNoteStateFile
+	if err := json.Unmarshal(reloadedRaw, &reloaded); err != nil {
+		t.Fatalf("unmarshal desk note state: %v", err)
+	}
+	if len(reloaded.Notes) != 1 || strings.TrimSpace(reloaded.Notes[0].ArchivedAtUTC) == "" {
+		t.Fatalf("expected archived desk note after dismiss, got %#v", reloaded.Notes)
 	}
 }
 

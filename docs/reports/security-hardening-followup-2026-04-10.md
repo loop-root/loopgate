@@ -98,14 +98,19 @@ go test ./...
 
 ## Remaining lower-risk review surface
 
-The remaining signed-only Haven projection endpoints are smaller-risk UI state
-surfaces rather than direct authority or filesystem mutation paths. Examples:
+Follow-up pass completed after this report:
 
-- `/v1/ui/status`
-- `/v1/ui/events`
-- `/v1/ui/desk-notes`
-- `/v1/ui/presence`
-- `/v1/ui/morph-sleep`
+- Added `ui.read` / `ui.write` and applied them to the previously signed-only UI
+  projection routes:
+  - `/v1/ui/status`
+  - `/v1/ui/events`
+  - `/v1/ui/desk-notes`
+  - `/v1/ui/desk-notes/dismiss`
+  - `/v1/ui/presence`
+  - `/v1/ui/morph-sleep`
+- Tightened `haven_presence.json` handling so Loopgate now projects only a
+  normalized state/anchor summary instead of replaying raw `status_text` /
+  `detail_text` from an untrusted runtime file.
 
-Those may still merit a future least-privilege pass, but they are not the same
-class of direct bypass as the routes remediated here.
+That closes the leftover signed-only UI mutation path and removes one more
+client/file-originated text leak from the public projection surface.

@@ -51,6 +51,9 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -521,6 +524,9 @@ func (server *Server) handleUIEvents(writer http.ResponseWriter, request *http.R
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
 		return
 	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {

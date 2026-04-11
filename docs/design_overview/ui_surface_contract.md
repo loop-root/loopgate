@@ -46,18 +46,18 @@ Required pattern:
 
 Current implemented UI API in this repository:
 
-- `GET /v1/ui/status`
-- `GET /v1/ui/events`
+- `GET /v1/ui/status` (`ui.read`)
+- `GET /v1/ui/events` (`ui.read`)
 - `GET /v1/ui/approvals` using `X-Loopgate-Approval-Token` for the current control session
 - `POST /v1/ui/approvals/{id}/decision` using `X-Loopgate-Approval-Token` and body `{ "approved": bool }`
 - `POST /v1/ui/workspace/list` for local-client workspace roots and mapped sandbox paths
 - `POST /v1/ui/workspace/preview` for local-client file preview
 - `GET /v1/ui/working-notes`, `GET /v1/ui/working-notes/entry`, `POST /v1/ui/working-notes/save`
 - `GET /v1/ui/journal/entries`, `GET /v1/ui/journal/entry`
-- `GET /v1/ui/desk-notes`, `POST /v1/ui/desk-notes/dismiss`
+- `GET /v1/ui/desk-notes` (`ui.read`), `POST /v1/ui/desk-notes/dismiss` (`ui.write`)
 - `GET /v1/ui/memory` for display-safe memory inventory and operator-manageable memory objects
 - `POST /v1/ui/memory/reset` for auditable archive-and-fresh-start demo resets
-- `GET /v1/ui/presence`, `GET /v1/ui/morph-sleep`
+- `GET /v1/ui/presence`, `GET /v1/ui/morph-sleep` (`ui.read`; normalized projection only, not raw file text)
 
 The memory inventory/reset routes exist so UI clients can inspect, tombstone,
 purge, and reset memory through Loopgate's typed contract rather than direct

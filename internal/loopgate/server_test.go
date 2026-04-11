@@ -2897,7 +2897,7 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 		description: "test-only remote fetch stand-in",
 		output:      "raw remote payload",
 	})
-	capabilities := append(capabilityNames(status.Capabilities), "remote_fetch")
+	capabilities := append(capabilityNames(status.Capabilities), "remote_fetch", controlCapabilityUIRead)
 	client.ConfigureSession("test-actor", "test-session", capabilities)
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure capability token: %v", err)

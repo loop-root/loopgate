@@ -78,6 +78,8 @@ func TestStatusAdvertisesAdditionalControlCapabilities(t *testing.T) {
 		controlCapabilityTaskStandingGrantWrite,
 		controlCapabilityTasksRead,
 		controlCapabilityTasksWrite,
+		controlCapabilityUIRead,
+		controlCapabilityUIWrite,
 	} {
 		if !containsCapability(status.ControlCapabilities, requiredCapability) {
 			t.Fatalf("expected control capability %q in status payload, got %#v", requiredCapability, status.ControlCapabilities)

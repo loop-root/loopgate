@@ -130,18 +130,18 @@ Implemented endpoints:
 
 - `GET /v1/health` (liveness, no auth)
 - `GET /v1/status` (Bearer + signed GET — full inventory)
-- `GET /v1/ui/status`
-- `GET /v1/ui/events`
+- `GET /v1/ui/status` (`ui.read`)
+- `GET /v1/ui/events` (`ui.read`)
 - `GET /v1/ui/approvals` (approval-token authenticated UI route)
 - `POST /v1/ui/approvals/{id}/decision` (approval-token authenticated; body `{ "approved": bool }`)
 - `POST /v1/ui/workspace/list`
 - `POST /v1/ui/workspace/preview`
 - `GET /v1/ui/working-notes`, `GET /v1/ui/working-notes/entry`, `POST /v1/ui/working-notes/save`
 - `GET /v1/ui/journal/entries`, `GET /v1/ui/journal/entry`
-- `GET /v1/ui/desk-notes`, `POST /v1/ui/desk-notes/dismiss`
+- `GET /v1/ui/desk-notes` (`ui.read`), `POST /v1/ui/desk-notes/dismiss` (`ui.write`)
 - `GET /v1/ui/memory`
 - `POST /v1/ui/memory/reset`
-- `GET /v1/ui/presence`, `GET /v1/ui/morph-sleep`
+- `GET /v1/ui/presence`, `GET /v1/ui/morph-sleep` (`ui.read`; normalized projection, not raw presence-file text)
 - `GET /v1/connections/status` (Bearer + signed GET + `connection.read`)
 - `POST /v1/connections/validate` (`connection.write`)
 - `POST /v1/connections/pkce/start` (`connection.write`)

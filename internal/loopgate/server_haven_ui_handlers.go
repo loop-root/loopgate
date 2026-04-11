@@ -41,6 +41,28 @@ var havenWorkspaceDisplayToSandbox = map[string]string{
 	"agents":    "agents",
 }
 
+var havenPresenceAllowedStates = map[string]string{
+	"blocked":   "Morph is blocked",
+	"focused":   "Morph is focused",
+	"idle":      "Morph is idle",
+	"paused":    "Morph is paused",
+	"planning":  "Morph is planning",
+	"reviewing": "Morph is reviewing",
+	"sleeping":  "Morph is sleeping",
+	"working":   "Morph is working",
+}
+
+var havenPresenceAllowedAnchors = map[string]string{
+	"chat":      "in chat",
+	"desk":      "at desk",
+	"memory":    "in memory",
+	"project":   "in a project",
+	"review":    "in review",
+	"settings":  "in settings",
+	"task":      "on a task",
+	"workspace": "in workspace",
+}
+
 type havenDeskNoteStateFile struct {
 	Notes []HavenDeskNote `json:"notes"`
 }
@@ -60,6 +82,9 @@ func (server *Server) handleHavenDeskNotes(writer http.ResponseWriter, request *
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
 		return
 	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
@@ -98,6 +123,9 @@ func (server *Server) handleHavenDeskNotesDismiss(writer http.ResponseWriter, re
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIWrite) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
@@ -859,6 +887,9 @@ func (server *Server) handleHavenPresence(writer http.ResponseWriter, request *h
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -874,6 +905,9 @@ func (server *Server) handleHavenMorphSleep(writer http.ResponseWriter, request 
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
 		return
 	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
@@ -897,30 +931,43 @@ func (server *Server) loadHavenPresenceSnapshot() HavenPresenceResponse {
 	path := server.havenPresencePath()
 	rawBytes, err := os.ReadFile(path)
 	if err != nil {
-		return HavenPresenceResponse{
-			State:      "idle",
-			StatusText: "Morph is idle",
-			Anchor:     "desk",
-		}
+		return normalizedHavenPresenceSnapshot(HavenPresenceResponse{})
 	}
 	var snapshot HavenPresenceResponse
 	if err := json.Unmarshal(rawBytes, &snapshot); err != nil {
-		return HavenPresenceResponse{
-			State:      "idle",
-			StatusText: "Morph is idle",
-			Anchor:     "desk",
-		}
+		return normalizedHavenPresenceSnapshot(HavenPresenceResponse{})
 	}
-	if strings.TrimSpace(snapshot.State) == "" {
-		snapshot.State = "idle"
+	return normalizedHavenPresenceSnapshot(snapshot)
+}
+
+func normalizedHavenPresenceSnapshot(rawSnapshot HavenPresenceResponse) HavenPresenceResponse {
+	normalizedState := normalizeHavenPresenceState(rawSnapshot.State)
+	normalizedAnchor := normalizeHavenPresenceAnchor(rawSnapshot.Anchor)
+	normalizedSnapshot := HavenPresenceResponse{
+		State:      normalizedState,
+		StatusText: havenPresenceAllowedStates[normalizedState],
+		Anchor:     normalizedAnchor,
 	}
-	if strings.TrimSpace(snapshot.StatusText) == "" {
-		snapshot.StatusText = "Morph is idle"
+	if detailText, found := havenPresenceAllowedAnchors[normalizedAnchor]; found && detailText != "" {
+		normalizedSnapshot.DetailText = detailText
 	}
-	if strings.TrimSpace(snapshot.Anchor) == "" {
-		snapshot.Anchor = "desk"
+	return normalizedSnapshot
+}
+
+func normalizeHavenPresenceState(rawState string) string {
+	normalizedState := strings.ToLower(strings.TrimSpace(rawState))
+	if _, found := havenPresenceAllowedStates[normalizedState]; found {
+		return normalizedState
 	}
-	return snapshot
+	return "idle"
+}
+
+func normalizeHavenPresenceAnchor(rawAnchor string) string {
+	normalizedAnchor := strings.ToLower(strings.TrimSpace(rawAnchor))
+	if _, found := havenPresenceAllowedAnchors[normalizedAnchor]; found {
+		return normalizedAnchor
+	}
+	return "desk"
 }
 
 func (server *Server) havenReadFileViaCapability(ctx context.Context, tokenClaims capabilityToken, sandboxPath string) (string, error) {

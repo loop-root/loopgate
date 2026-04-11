@@ -231,12 +231,12 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/task/plan` / `lease` / `execute` / `complete` / `result` | Task-plan vertical slice |
 | `GET` / `PUT /v1/config/…` | Policy, runtime, connections, etc. (capability-gated) |
 | `POST /v1/approvals/{id}/decision` | Approval decisions (approval token + manifest binding) |
-| `GET /v1/ui/status` / `events` | Display-safe UI observation (signed Bearer routes) |
+| `GET /v1/ui/status` / `events` | Display-safe UI observation (signed Bearer routes; **`ui.read`**) |
 | `GET /v1/ui/approvals` | Pending UI approvals for the current control session (**signed + `X-Loopgate-Approval-Token`**) |
 | `POST /v1/ui/approvals/{id}/decision` | UI approval path (**signed + `X-Loopgate-Approval-Token`**, body `{ "approved": bool }`) |
 | `GET` / `PUT /v1/ui/folder-access`, `POST /v1/ui/folder-access/sync`, `GET /v1/ui/shared-folder`, `POST /v1/ui/shared-folder/sync` | Folder access UI helpers (**`folder_access.read`** / **`folder_access.write`**) |
-| `GET /v1/ui/desk-notes` | Active desk (sticky) notes from `runtime/state/haven_desk_notes.json` (signed GET) |
-| `POST /v1/ui/desk-notes/dismiss` | Archive a desk note by id (signed POST) |
+| `GET /v1/ui/desk-notes` | Active desk (sticky) notes from `runtime/state/haven_desk_notes.json` (signed GET; **`ui.read`**) |
+| `POST /v1/ui/desk-notes/dismiss` | Archive a desk note by id (signed POST; **`ui.write`**) |
 | `GET /v1/ui/memory` | Display-safe memory inventory for operator UI controls (signed GET; **`memory.read`**; manageable objects, counts, redacted summaries) |
 | `POST /v1/ui/memory/reset` | Archive current memory state and start fresh for demo/operator reset (signed POST; **`memory.reset`**; body `operation_id`, `reason`) |
 | `GET /v1/ui/journal/entries` | Journal entry summaries (signed GET; lists sandbox `scratch/journal`; **`fs_list`**) |
@@ -246,8 +246,8 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/ui/working-notes/save` | Save working note content (signed POST; uses `notes.write` capability) |
 | `POST /v1/ui/workspace/list` | Workspace listing for sandbox virtual paths (signed POST; body `path`; **`fs_list`**; root lists `projects`, `imports`, `artifacts`, `research`, `agents`, and optional `shared`) |
 | `POST /v1/ui/workspace/preview` | Read workspace file preview (signed POST; body `path`; **`fs_read`**; using the same virtual path mapping as the list route) |
-| `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET); written by clients that implement presence |
-| `GET /v1/ui/morph-sleep` | Same snapshot as presence plus `is_sleeping` / `is_resting` (signed GET) |
+| `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET; **`ui.read`**); Loopgate normalizes the file into a bounded state/anchor projection instead of replaying raw freeform text |
+| `GET /v1/ui/morph-sleep` | Same normalized snapshot as presence plus `is_sleeping` / `is_resting` (signed GET; **`ui.read`**) |
 | `POST /v1/agent/work-item/ensure` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
 | `POST /v1/agent/work-item/complete` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.complete`** for a task-board item id |
 | `GET` / `PUT /v1/ui/task-standing-grants` | Task standing-grant controls (**`task_standing_grant.read`** / **`task_standing_grant.write`**) |

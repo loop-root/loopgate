@@ -28,6 +28,8 @@ const (
 	controlCapabilityTaskStandingGrantWrite  = "task_standing_grant.write"
 	controlCapabilityTasksRead               = "tasks.read"
 	controlCapabilityTasksWrite              = "tasks.write"
+	controlCapabilityUIRead                  = "ui.read"
+	controlCapabilityUIWrite                 = "ui.write"
 )
 
 var internalControlCapabilityCatalog = map[string]CapabilitySummary{
@@ -180,6 +182,18 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "task",
 		Operation:   "write",
 		Description: "Update task-board workflow state through the local control plane.",
+	},
+	controlCapabilityUIRead: {
+		Name:        controlCapabilityUIRead,
+		Category:    "ui",
+		Operation:   "read",
+		Description: "Read display-safe Loopgate and Haven UI projections through the local control plane.",
+	},
+	controlCapabilityUIWrite: {
+		Name:        controlCapabilityUIWrite,
+		Category:    "ui",
+		Operation:   "write",
+		Description: "Update non-authoritative Loopgate and Haven UI state projections through the local control plane.",
 	},
 }
 

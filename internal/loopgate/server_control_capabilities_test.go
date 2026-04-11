@@ -659,6 +659,83 @@ func TestHavenProjectionRoutesRequireCapabilityScopes(t *testing.T) {
 	}, &HavenWorkingNoteSaveResponse{}, nil); err != nil {
 		t.Fatalf("working note save with notes.write: %v", err)
 	}
+
+	uiReadDeniedClient := NewClient(client.socketPath)
+	uiReadDeniedClient.ConfigureSession("haven", "haven-ui-read-denied", []string{"fs_list"})
+	if _, err := uiReadDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied ui.read token: %v", err)
+	}
+	if _, err := uiReadDeniedClient.UIStatus(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.read scope denial for ui status, got %v", err)
+	}
+	uiEventsDeniedRequest, err := http.NewRequestWithContext(context.Background(), http.MethodGet, uiReadDeniedClient.baseURL+"/v1/ui/events", nil)
+	if err != nil {
+		t.Fatalf("build denied ui events request: %v", err)
+	}
+	uiEventsDeniedRequest.Header.Set("Authorization", "Bearer "+uiReadDeniedClient.capabilityToken)
+	if err := uiReadDeniedClient.attachRequestSignature(uiEventsDeniedRequest, "/v1/ui/events", nil); err != nil {
+		t.Fatalf("attach denied ui events signature: %v", err)
+	}
+	uiEventsDeniedResponse, err := uiReadDeniedClient.httpClient.Do(uiEventsDeniedRequest)
+	if err != nil {
+		t.Fatalf("do denied ui events request: %v", err)
+	}
+	if uiEventsDeniedResponse.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected ui.read scope denial HTTP status for ui events, got %d", uiEventsDeniedResponse.StatusCode)
+	}
+	_ = uiEventsDeniedResponse.Body.Close()
+	if err := uiReadDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/desk-notes", uiReadDeniedClient.capabilityToken, nil, &HavenDeskNotesResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.read scope denial for desk notes, got %v", err)
+	}
+	if err := uiReadDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/presence", uiReadDeniedClient.capabilityToken, nil, &HavenPresenceResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.read scope denial for presence, got %v", err)
+	}
+	if err := uiReadDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/morph-sleep", uiReadDeniedClient.capabilityToken, nil, &HavenMorphSleepResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.read scope denial for morph sleep, got %v", err)
+	}
+
+	uiReadAllowedClient := NewClient(client.socketPath)
+	uiReadAllowedClient.ConfigureSession("haven", "haven-ui-read-allowed", []string{controlCapabilityUIRead})
+	if _, err := uiReadAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure ui.read token: %v", err)
+	}
+	if _, err := uiReadAllowedClient.UIStatus(context.Background()); err != nil {
+		t.Fatalf("ui status with ui.read: %v", err)
+	}
+	uiEventsAllowedRequest, err := http.NewRequestWithContext(context.Background(), http.MethodGet, uiReadAllowedClient.baseURL+"/v1/ui/events", nil)
+	if err != nil {
+		t.Fatalf("build allowed ui events request: %v", err)
+	}
+	uiEventsAllowedRequest.Header.Set("Authorization", "Bearer "+uiReadAllowedClient.capabilityToken)
+	if err := uiReadAllowedClient.attachRequestSignature(uiEventsAllowedRequest, "/v1/ui/events", nil); err != nil {
+		t.Fatalf("attach allowed ui events signature: %v", err)
+	}
+	uiEventsAllowedResponse, err := uiReadAllowedClient.httpClient.Do(uiEventsAllowedRequest)
+	if err != nil {
+		t.Fatalf("do allowed ui events request: %v", err)
+	}
+	if uiEventsAllowedResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected ui events success with ui.read, got %d", uiEventsAllowedResponse.StatusCode)
+	}
+	_ = uiEventsAllowedResponse.Body.Close()
+	if err := uiReadAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/desk-notes", uiReadAllowedClient.capabilityToken, nil, &HavenDeskNotesResponse{}, nil); err != nil {
+		t.Fatalf("desk notes with ui.read: %v", err)
+	}
+	if err := uiReadAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/presence", uiReadAllowedClient.capabilityToken, nil, &HavenPresenceResponse{}, nil); err != nil {
+		t.Fatalf("presence with ui.read: %v", err)
+	}
+	if err := uiReadAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/morph-sleep", uiReadAllowedClient.capabilityToken, nil, &HavenMorphSleepResponse{}, nil); err != nil {
+		t.Fatalf("morph sleep with ui.read: %v", err)
+	}
+
+	uiWriteDeniedClient := NewClient(client.socketPath)
+	uiWriteDeniedClient.ConfigureSession("haven", "haven-ui-write-denied", []string{controlCapabilityUIRead})
+	if _, err := uiWriteDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied ui.write token: %v", err)
+	}
+	if err := uiWriteDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/ui/desk-notes/dismiss", uiWriteDeniedClient.capabilityToken, HavenDeskNoteDismissRequest{NoteID: "missing"}, &map[string]interface{}{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.write scope denial for desk-note dismiss, got %v", err)
+	}
 }
 
 func TestHavenSettingsRoutesRequireConfigScopes(t *testing.T) {
