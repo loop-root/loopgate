@@ -88,8 +88,10 @@ For integrators it matters in four ways:
   - per-turn loop state (conversation growth, follow-up nudges, pending approval outcome shaping)
 - `server_haven_chat_results.go`
   - tool-result shaping, approval wait UX, prompt-eligible result filtering, and SSE previews
+- `server_haven_chat_tool_defs.go`
+  - capability-summary filtering and model-facing tool definition shaping
 - `server_haven_chat_runtime_facts.go`
-  - runtime facts, capability guidance, and native tool definition shaping
+  - runtime facts and capability guidance injected into the Haven chat context
 - `server_haven_chat_heuristics.go`
   - host-folder and follow-up intent heuristics
 - `server_haven_chat_conversation.go`
