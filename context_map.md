@@ -173,9 +173,12 @@ Key files:
 - `continuity_memory.go`: Loopgate-owned durable memory selection and task-board wake-state reconstruction
 - `continuity_runtime.go`: wake-state/runtime projection helpers; now part of the task-metadata and future scheduler groundwork
 - `todo_execution.go`: capability-entry surface for task and goal actions
+- `todo_contract.go`: shared task/todo constants and active-item record contract
+- `todo_request.go`: todo request normalization and validation helpers
 - `todo_mutation.go`: continuity-backed task mutation and status authority
+- `todo_task_facts.go`: explicit todo task-fact derivation for continuity records
 - `goal_mutation.go`: continuity-backed goal mutation authority
-- `morphlings.go`, `morphling_workers.go`: bounded worker lifecycle
+- `morphling_spawn.go`, `morphling_status.go`, `morphling_workers.go`: bounded worker spawn/status/IPC flow
 
 Important note:
 

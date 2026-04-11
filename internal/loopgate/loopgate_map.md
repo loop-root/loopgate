@@ -50,8 +50,14 @@ For integrators it matters in four ways:
 - `todo_execution.go`
   - capability-entry wrappers for `todo.add`, `todo.complete`, `todo.list`, `goal.set`, and `goal.close`
   - owns result shaping, audit/error surfacing, and UI tool-event emission for task/goal capability execution
+- `todo_contract.go`
+  - shared explicit-todo constants, workflow/status vocabulary, and active-item record shape used across mutation, projection, and continuity paths
+- `todo_request.go`
+  - todo request normalization and workflow/task validation helpers shared by handlers and projections
 - `todo_mutation.go`
-  - continuity-backed todo mutation path, request normalization, status updates, and task fact derivation
+  - continuity-backed todo mutation path and status updates
+- `todo_task_facts.go`
+  - explicit todo task-fact construction and semantic projection helpers for continuity records
 - `goal_mutation.go`
   - continuity-backed goal open/close mutation path
 - `todo_projection.go`
