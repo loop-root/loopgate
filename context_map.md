@@ -450,7 +450,11 @@ Start in:
 
 Start in:
 
-- `internal/loopgate/morphlings.go`
+- `internal/loopgate/morphling_state.go`
+- `internal/loopgate/morphling_spawn.go`
+- `internal/loopgate/morphling_status.go`
+- `internal/loopgate/morphling_transition.go`
+- `internal/loopgate/morphling_termination.go`
 - `internal/loopgate/morphling_workers.go`
 - `internal/loopgate/morphling_classes.go`
 - `cmd/morphling-runner/main.go`
