@@ -71,7 +71,7 @@ For integrators it matters in four ways:
   - `/v1/status`
   - current global capability inventory surface
 - `types.go`
-  - request/response structs, including:
+  - core control-plane and memory request/response structs, including:
     - `CapabilitySummary`
     - `MemoryRememberRequest`
     - `MemoryRememberResponse`
@@ -81,6 +81,10 @@ For integrators it matters in four ways:
     - `MemoryWakeStateResponse`
     - `MemoryDiagnosticWakeResponse`
   - now carries richer task-board metadata in `TodoAddRequest`, `TodoAddResponse`, and `MemoryWakeStateOpenItem`
+- `types_haven_ui.go`
+  - Haven UI, task-board projection, desk-note, journal, working-note, workspace, and presence wire contracts
+- `types_morphling.go`
+  - morphling lifecycle wire contracts and morphling request validation helpers
 
 ### Haven Chat (agentic tool execution)
 
