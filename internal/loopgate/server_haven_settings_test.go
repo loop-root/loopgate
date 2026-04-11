@@ -34,6 +34,39 @@ func TestHavenSettingsIdleFailsClosedOnCorruptPrefs(t *testing.T) {
 	}
 }
 
+func TestHavenSettingsIdleReadDoesNotExposePrefsPath(t *testing.T) {
+	repoRoot := t.TempDir()
+	stateDir := filepath.Join(repoRoot, "runtime", "state")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatalf("mkdir state dir: %v", err)
+	}
+	prefsPath := filepath.Join(stateDir, "haven_preferences.json")
+	if err := os.Mkdir(prefsPath, 0o700); err != nil {
+		t.Fatalf("mkdir prefs path as directory: %v", err)
+	}
+
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	pinTestProcessAsExpectedClient(t, server)
+	havenClient := NewClient(client.socketPath)
+	havenClient.ConfigureSession("haven", "idle-settings-path-redaction", advertisedSessionCapabilityNames(status))
+	token, err := havenClient.ensureCapabilityToken(context.Background())
+	if err != nil {
+		t.Fatalf("ensure haven token: %v", err)
+	}
+
+	var response havenIdleSettingsResponse
+	err = havenClient.doJSON(context.Background(), http.MethodGet, "/v1/settings/idle", token, nil, &response, nil)
+	if err == nil {
+		t.Fatal("expected idle settings read to fail when prefs path is unreadable")
+	}
+	if !strings.Contains(err.Error(), havenIdleSettingsLoadFailureText) {
+		t.Fatalf("expected stable load failure text, got %v", err)
+	}
+	if strings.Contains(err.Error(), prefsPath) || strings.Contains(err.Error(), "haven_preferences.json") {
+		t.Fatalf("expected prefs path to stay redacted, got %v", err)
+	}
+}
+
 func TestWriteIdleSettingsUses0600PrefsFile(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

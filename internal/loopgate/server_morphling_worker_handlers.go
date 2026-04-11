@@ -74,6 +74,11 @@ func (server *Server) handleMorphlingWorkerOpen(writer http.ResponseWriter, requ
 
 	var openRequest MorphlingWorkerOpenRequest
 	if err := server.decodeJSONBody(writer, request, maxCapabilityBodyBytes, &openRequest); err != nil {
+		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		})
 		return
 	}
 	if err := openRequest.Validate(); err != nil {

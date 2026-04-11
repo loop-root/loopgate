@@ -5356,6 +5356,46 @@ func TestHookPreValidateWritesAuditSequenceMetadata(t *testing.T) {
 	}
 }
 
+func TestMorphlingWorkerOpenMalformedBodyReturnsBadRequest(t *testing.T) {
+	repoRoot := t.TempDir()
+	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
+	if err := os.MkdirAll(filepath.Join(repoRoot, "core", "policy"), 0o700); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "core", "policy", "policy.yaml"), []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+	writeTestMorphlingClassPolicy(t, repoRoot)
+
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/morphlings/worker/open", bytes.NewBufferString("{"))
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+
+	server.handleMorphlingWorkerOpen(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response CapabilityResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.DenialCode != DenialCodeMalformedRequest {
+		t.Fatalf("expected malformed request denial, got %#v", response)
+	}
+	if !strings.Contains(response.DenialReason, "invalid request body") {
+		t.Fatalf("expected invalid request body reason, got %#v", response)
+	}
+}
+
 func TestNewServerLoadsLegacyHookAuditTailWithoutAuditSequence(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")

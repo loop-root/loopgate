@@ -11,6 +11,13 @@ import (
 	modelruntime "morph/internal/modelruntime"
 )
 
+const (
+	havenShellDevSettingsLoadFailureText   = "failed to load shell dev settings"
+	havenShellDevSettingsUpdateFailureText = "failed to update shell dev settings"
+	havenIdleSettingsLoadFailureText       = "failed to load Haven idle settings"
+	havenIdleSettingsUpdateFailureText     = "failed to update Haven idle settings"
+)
+
 // havenShellDevResponse is the JSON body for GET and POST /v1/settings/shell-dev.
 // The legacy /v1/haven/settings/shell-dev alias uses the same payload.
 type havenShellDevResponse struct {
@@ -55,8 +62,9 @@ func (server *Server) handleHavenSettingsShellDev(writer http.ResponseWriter, re
 		if err != nil {
 			server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 				Status:       ResponseStatusError,
-				DenialReason: err.Error(),
+				DenialReason: havenShellDevSettingsLoadFailureText,
 				DenialCode:   DenialCodeExecutionFailed,
+				Redacted:     true,
 			})
 			return
 		}
@@ -89,8 +97,9 @@ func (server *Server) handleHavenSettingsShellDev(writer http.ResponseWriter, re
 		if saveErr != nil {
 			server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 				Status:       ResponseStatusError,
-				DenialReason: saveErr.Error(),
+				DenialReason: havenShellDevSettingsUpdateFailureText,
 				DenialCode:   DenialCodeExecutionFailed,
+				Redacted:     true,
 			})
 			return
 		}
@@ -151,8 +160,9 @@ func (server *Server) handleHavenSettingsIdle(writer http.ResponseWriter, reques
 		if err != nil {
 			server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 				Status:       ResponseStatusError,
-				DenialReason: err.Error(),
+				DenialReason: havenIdleSettingsLoadFailureText,
 				DenialCode:   DenialCodeExecutionFailed,
+				Redacted:     true,
 			})
 			return
 		}
@@ -179,8 +189,9 @@ func (server *Server) handleHavenSettingsIdle(writer http.ResponseWriter, reques
 		if err := server.writeIdleSettings(req.IdleEnabled, req.AmbientEnabled); err != nil {
 			server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 				Status:       ResponseStatusError,
-				DenialReason: err.Error(),
+				DenialReason: havenIdleSettingsUpdateFailureText,
 				DenialCode:   DenialCodeExecutionFailed,
+				Redacted:     true,
 			})
 			return
 		}
