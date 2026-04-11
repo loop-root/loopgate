@@ -2,11 +2,8 @@ package loopgate
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -188,67 +185,6 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 		args = append(args, diagnosticSlogTenantUser(tokenClaims.TenantID, tokenClaims.UserID)...)
 		server.diagnostic.Server.Debug("haven_chat_sse_stream_done", args...)
 	}
-}
-
-func (server *Server) deriveWorkspaceIDFromRepoRoot() string {
-	abs, err := filepath.Abs(server.repoRoot)
-	if err != nil {
-		abs = server.repoRoot
-	}
-	sum := sha256.Sum256([]byte(abs))
-	return hex.EncodeToString(sum[:])
-}
-
-func (server *Server) havenWakeStateSummaryText(tenantID string) (string, error) {
-	wake, err := server.loadMemoryWakeState(tenantID)
-	if err != nil {
-		return "", err
-	}
-	if len(wake.RecentFacts) == 0 && len(wake.ActiveGoals) == 0 && len(wake.UnresolvedItems) == 0 {
-		return "", nil
-	}
-
-	var sb strings.Builder
-
-	// Remembered facts (operator preferences, profile, routines).
-	var factParts []string
-	for _, f := range wake.RecentFacts {
-		if len(factParts) >= 12 {
-			break
-		}
-		factParts = append(factParts, fmt.Sprintf("  %s: %v", f.Name, f.Value))
-	}
-	if len(factParts) > 0 {
-		sb.WriteString("REMEMBERED CONTINUITY (authoritative):\n")
-		sb.WriteString(strings.Join(factParts, "\n"))
-	} else {
-		sb.WriteString("Wake-state is loaded with continuity metadata.")
-	}
-
-	// Active goals — persist across sessions.
-	if len(wake.ActiveGoals) > 0 {
-		sb.WriteString("\n\nACTIVE GOALS:\n")
-		for _, g := range wake.ActiveGoals {
-			sb.WriteString(fmt.Sprintf("  - %s\n", g))
-		}
-	}
-
-	// Open tasks — the live task board the operator can track.
-	if len(wake.UnresolvedItems) > 0 {
-		sb.WriteString("\n\nOPEN TASKS (task board — use todo.list to get IDs, todo.complete to close):\n")
-		for _, item := range wake.UnresolvedItems {
-			line := fmt.Sprintf("  [%s] %s", item.ID, item.Text)
-			if item.ScheduledForUTC != "" {
-				line += fmt.Sprintf(" (due: %s)", item.ScheduledForUTC)
-			}
-			if item.NextStep != "" {
-				line += fmt.Sprintf(" — next: %s", item.NextStep)
-			}
-			sb.WriteString(line + "\n")
-		}
-	}
-
-	return sb.String(), nil
 }
 
 // runHavenChatToolLoop is Loopgate's supervised agent runtime for Haven turns.

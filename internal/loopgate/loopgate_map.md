@@ -75,9 +75,32 @@ For integrators it matters in four ways:
 - `server_haven_chat.go`
   - Haven chat HTTP handler and SSE streaming loop
   - `runHavenChatToolLoop` — the agent loop; now delegates to `executeHavenToolCallsConcurrent`
+  - now mostly holds only the request lifecycle and main loop
+- `server_haven_chat_setup.go`
+  - request decode, thread bootstrap, and runtime bootstrap
+- `server_haven_chat_loop_state.go`
+  - per-turn loop state (conversation growth, follow-up nudges, pending approval outcome shaping)
+- `server_haven_chat_results.go`
+  - tool-result shaping, approval wait UX, prompt-eligible result filtering, and SSE previews
+- `server_haven_chat_runtime_facts.go`
+  - runtime facts, capability guidance, and native tool definition shaping
+- `server_haven_chat_heuristics.go`
+  - host-folder and follow-up intent heuristics
+- `server_haven_chat_conversation.go`
+  - threadstore conversation reconstruction and model windowing
+- `server_haven_chat_transport.go`
+  - SSE transport types and emitter
+- `server_haven_chat_tools.go`
   - `executeHavenToolCallsConcurrent` — fans out read-only tool calls in parallel (Phase 1: reads), then runs write/execute/unknown calls serially (Phase 2: writes). Each goroutine emits its own `tool_result` SSE event inline as it finishes, giving the operator live feedback.
   - `executeHavenToolCalls` — retained as the simple serial reference implementation; no longer called by the chat loop but kept for direct-call tests and future fallback use
-  - `havenSSEEmitter` — now carries a `sync.Mutex` on the struct; `emit()` is goroutine-safe so concurrent read goroutines can stream events without corrupting SSE frames
+- `server_haven_model_catalog.go`
+  - Haven-facing model catalog discovery
+- `server_haven_wake_context.go`
+  - renders continuity wake state into the compact Haven-facing memory summary used by chat and resident flows
+- `workspace_binding.go`
+  - authoritative workspace ID derivation from the repo root
+- `havenSSEEmitter`
+  - now carries a `sync.Mutex` on the struct; `emit()` is goroutine-safe so concurrent read goroutines can stream events without corrupting SSE frames
 - `tool_classification.go` (**new**)
   - `capabilityClass` struct: `readOnly bool` — derived from Loopgate's own `OpRead` / `OpWrite` / `OpExecute` taxonomy
   - `classifyCapability(registry, capabilityName)` — pure, fail-closed: unregistered → serial (readOnly=false); OpRead → readOnly=true; OpWrite/OpExecute → readOnly=false
