@@ -208,15 +208,15 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 |------|-------------|
 | `GET /v1/health` | Liveness only: `version`, `ok` — **no token**, **no** policy/capability/connection data |
 | `GET /v1/status` | Capability inventory, policy snapshot, counts — **Bearer + signed GET** |
-| `GET /v1/connections/status` | Connection summaries — **Bearer + signed GET** |
+| `GET /v1/connections/status` | Connection summaries — **Bearer + signed GET** + **`connection.read`** |
 | `POST /v1/session/open` | Obtain tokens and MAC key |
 | `POST /v1/model/reply` | Model round-trip through Loopgate |
 | `POST /v1/model/validate` | Validate runtime model config |
 | `POST /v1/model/connections/store` | Store provider credentials (secret handled server-side) |
 | `POST /v1/capabilities/execute` | Execute a registered capability |
-| `POST /v1/connections/validate` | Validate a configured connection |
-| `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows |
-| `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft |
+| `POST /v1/connections/validate` | Validate a configured connection — **`connection.write`** |
+| `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows — **`connection.write`** |
+| `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft — **`site.inspect`** / **`site.trust.write`** |
 | `POST /v1/sandbox/*` | import, stage, metadata, export, list |
 | `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; requires `memory.write`; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
 | `GET /v1/memory/wake-state` | Wake state projection |
@@ -235,8 +235,8 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `GET` / `POST /v1/ui/folder-access*` | Folder access UI helpers |
 | `GET /v1/ui/desk-notes` | Active desk (sticky) notes from `runtime/state/haven_desk_notes.json` (signed GET) |
 | `POST /v1/ui/desk-notes/dismiss` | Archive a desk note by id (signed POST) |
-| `GET /v1/ui/memory` | Display-safe memory inventory for operator UI controls (signed GET; manageable objects, counts, redacted summaries) |
-| `POST /v1/ui/memory/reset` | Archive current memory state and start fresh for demo/operator reset (signed POST; body `operation_id`, `reason`) |
+| `GET /v1/ui/memory` | Display-safe memory inventory for operator UI controls (signed GET; **`memory.read`**; manageable objects, counts, redacted summaries) |
+| `POST /v1/ui/memory/reset` | Archive current memory state and start fresh for demo/operator reset (signed POST; **`memory.reset`**; body `operation_id`, `reason`) |
 | `GET /v1/ui/journal/entries` | Journal entry summaries (signed GET; lists sandbox `scratch/journal`) |
 | `GET /v1/ui/journal/entry` | Single journal file (signed GET; query selects entry) |
 | `GET /v1/ui/working-notes` | Working-note summaries (signed GET; `scratch/notes`) |
@@ -258,12 +258,14 @@ These routes exist so native clients can manage memory through Loopgate's typed
 surface instead of direct runtime-state reads or writes.
 
 - `GET /v1/ui/memory`
+  - requires **`memory.read`**
   - returns a display-safe memory inventory
   - includes wake-state counts plus a list of manageable memory objects
   - object summaries are redacted for UI safety
   - each object carries booleans such as `can_review`, `can_tombstone`, and
     `can_purge`
 - `POST /v1/ui/memory/reset`
+  - requires **`memory.reset`**
   - performs an operator-visible "fresh start" reset
   - archives the previous memory root under
     `runtime/state/memory_archives/<archive_id>`
@@ -273,6 +275,10 @@ surface instead of direct runtime-state reads or writes.
 
 This reset path is intentionally fail-closed and auditable. It does **not**
 silently delete memory in place.
+
+`GET /v1/status` only includes connection summaries when the session token
+includes **`connection.read`**. Use `GET /v1/connections/status` when the client
+explicitly needs the connection surface.
 
 ### 7.2 Agent work-item helpers (bounded task board; actor `haven`)
 

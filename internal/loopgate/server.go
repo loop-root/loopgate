@@ -320,6 +320,10 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	if err := verifySupportedExecutionPlatform(); err != nil {
 		return nil, err
 	}
+	validatedSocketPath, err := validateServerSocketPath(repoRoot, socketPath)
+	if err != nil {
+		return nil, fmt.Errorf("validate socket path: %w", err)
+	}
 
 	configStateDir := filepath.Join(repoRoot, "runtime", "state", "config")
 
@@ -385,7 +389,7 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	}
 	server := &Server{
 		repoRoot:                   repoRoot,
-		socketPath:                 socketPath,
+		socketPath:                 validatedSocketPath,
 		configStateDir:             configStateDir,
 		auditPath:                  filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
 		noncePath:                  filepath.Join(repoRoot, "runtime", "state", "nonce_replay.json"),
@@ -729,7 +733,7 @@ func (server *Server) Serve(ctx context.Context) error {
 	if err := os.MkdirAll(server.derivedArtifactDir, 0o700); err != nil {
 		return fmt.Errorf("create derived artifact dir: %w", err)
 	}
-	if err := os.RemoveAll(server.socketPath); err != nil {
+	if err := removeStaleSocketPath(server.socketPath); err != nil {
 		return fmt.Errorf("remove stale socket: %w", err)
 	}
 

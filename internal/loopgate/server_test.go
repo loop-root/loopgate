@@ -2338,18 +2338,11 @@ func TestUpdateUIOperatorMountWriteGrantRevokesAndRenews(t *testing.T) {
 	server.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
-	renewedResponse, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
 		RootPath: resolvedRepoRoot,
 		Action:   OperatorMountWriteGrantActionRenew,
-	})
-	if err != nil {
-		t.Fatalf("renew write grant: %v", err)
-	}
-	if len(renewedResponse.Grants) != 1 {
-		t.Fatalf("expected one grant after renew, got %#v", renewedResponse.Grants)
-	}
-	if renewedResponse.Grants[0].RootPath != resolvedRepoRoot {
-		t.Fatalf("renewed root = %q want %q", renewedResponse.Grants[0].RootPath, resolvedRepoRoot)
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeApprovalRequired) {
+		t.Fatalf("expected renew to require fresh approval, got %v", err)
 	}
 }
 
@@ -3321,15 +3314,17 @@ func TestOpenSessionRejectsTraversalAndShellLikeLabels(t *testing.T) {
 
 func TestOpenSessionRateLimitByPeerUID(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	_, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	server.sessionOpenMinInterval = time.Hour
 	server.maxActiveSessionsPerUID = 32
 
-	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+	firstClient := NewClient(server.socketPath)
+	firstClient.ConfigureSession("first-actor", "first-session", capabilityNames(status.Capabilities))
+	if _, err := firstClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("first session open: %v", err)
 	}
 
-	secondClient := NewClient(client.socketPath)
+	secondClient := NewClient(server.socketPath)
 	secondClient.ConfigureSession("second-actor", "second-session", capabilityNames(status.Capabilities))
 	_, err := secondClient.ensureCapabilityToken(context.Background())
 	if err == nil || !strings.Contains(err.Error(), DenialCodeSessionOpenRateLimited) {
@@ -5318,6 +5313,10 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 		t.Fatalf("bootstrap status after session: %v", err)
 	}
 	client.ConfigureSession("test-actor", "test-session", advertisedSessionCapabilityNames(status))
+	status, err = client.Status(context.Background())
+	if err != nil {
+		t.Fatalf("final status after advertised session bootstrap: %v", err)
+	}
 	// Bootstrap performed two session opens; clear open-spacing state so tests that tighten
 	// sessionOpenMinInterval observe only their own opens.
 	server.mu.Lock()

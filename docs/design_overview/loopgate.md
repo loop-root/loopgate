@@ -142,15 +142,15 @@ Implemented endpoints:
 - `GET /v1/ui/memory`
 - `POST /v1/ui/memory/reset`
 - `GET /v1/ui/presence`, `GET /v1/ui/morph-sleep`
-- `GET /v1/connections/status` (Bearer + signed GET)
-- `POST /v1/connections/validate`
-- `POST /v1/connections/pkce/start`
-- `POST /v1/connections/pkce/complete`
+- `GET /v1/connections/status` (Bearer + signed GET + `connection.read`)
+- `POST /v1/connections/validate` (`connection.write`)
+- `POST /v1/connections/pkce/start` (`connection.write`)
+- `POST /v1/connections/pkce/complete` (`connection.write`)
 - `POST /v1/quarantine/metadata`
 - `POST /v1/quarantine/view`
 - `POST /v1/quarantine/prune`
-- `POST /v1/sites/inspect`
-- `POST /v1/sites/trust-draft`
+- `POST /v1/sites/inspect` (`site.inspect`)
+- `POST /v1/sites/trust-draft` (`site.trust.write`)
 - `POST /v1/sandbox/import`
 - `POST /v1/sandbox/stage`
 - `POST /v1/sandbox/metadata`
@@ -167,9 +167,10 @@ Implemented endpoints:
 The display-safe memory UI routes are intentionally operator-oriented:
 
 - `GET /v1/ui/memory` returns a redacted inventory of manageable memory objects
-  and wake-state counts
+  and wake-state counts; requires `memory.read`
 - `POST /v1/ui/memory/reset` archives the previous memory root and reinitializes
-  continuity state for a fresh-start demo or operator cleanup flow
+  continuity state for a fresh-start demo or operator cleanup flow; requires
+  `memory.reset`
 - `POST /v1/morphlings/spawn`
 - `POST /v1/morphlings/status`
 - `POST /v1/morphlings/review`

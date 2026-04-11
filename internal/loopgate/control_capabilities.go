@@ -3,14 +3,20 @@ package loopgate
 import "sort"
 
 const (
-	controlCapabilityConfigRead    = "config.read"
-	controlCapabilityConfigWrite   = "config.write"
-	controlCapabilityGoalSet       = "goal.set"
-	controlCapabilityGoalClose     = "goal.close"
-	controlCapabilityMemoryRead    = "memory.read"
-	controlCapabilityMemoryWrite   = "memory.write"
-	controlCapabilityMemoryReview  = "memory.review"
-	controlCapabilityMemoryLineage = "memory.lineage"
+	controlCapabilityConfigRead              = "config.read"
+	controlCapabilityConfigWrite             = "config.write"
+	controlCapabilityConnectionRead          = "connection.read"
+	controlCapabilityConnectionWrite         = "connection.write"
+	controlCapabilityGoalSet                 = "goal.set"
+	controlCapabilityGoalClose               = "goal.close"
+	controlCapabilityMemoryRead              = "memory.read"
+	controlCapabilityMemoryWrite             = "memory.write"
+	controlCapabilityMemoryReset             = "memory.reset"
+	controlCapabilityMemoryReview            = "memory.review"
+	controlCapabilityMemoryLineage           = "memory.lineage"
+	controlCapabilityOperatorMountWriteGrant = "operator_mount.write_grant"
+	controlCapabilitySiteInspect             = "site.inspect"
+	controlCapabilitySiteTrustWrite          = "site.trust.write"
 )
 
 var internalControlCapabilityCatalog = map[string]CapabilitySummary{
@@ -25,6 +31,18 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "control",
 		Operation:   "write",
 		Description: "Write Loopgate configuration state through the local control plane.",
+	},
+	controlCapabilityConnectionRead: {
+		Name:        controlCapabilityConnectionRead,
+		Category:    "connection",
+		Operation:   "read",
+		Description: "Read connection summaries and provider status through the local control plane.",
+	},
+	controlCapabilityConnectionWrite: {
+		Name:        controlCapabilityConnectionWrite,
+		Category:    "connection",
+		Operation:   "write",
+		Description: "Validate or update provider connection state, including OAuth PKCE helper flows, through the local control plane.",
 	},
 	controlCapabilityGoalSet: {
 		Name:        controlCapabilityGoalSet,
@@ -50,6 +68,12 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Operation:   "write",
 		Description: "Submit explicit or continuity-derived memory candidates for governed persistence through the local control plane.",
 	},
+	controlCapabilityMemoryReset: {
+		Name:        controlCapabilityMemoryReset,
+		Category:    "memory",
+		Operation:   "write",
+		Description: "Archive and reinitialize authoritative memory state through the local control plane.",
+	},
 	controlCapabilityMemoryReview: {
 		Name:        controlCapabilityMemoryReview,
 		Category:    "memory",
@@ -61,6 +85,24 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "memory",
 		Operation:   "write",
 		Description: "Apply lineage transitions such as tombstone or purge to governed memory artifacts through the local control plane.",
+	},
+	controlCapabilityOperatorMountWriteGrant: {
+		Name:        controlCapabilityOperatorMountWriteGrant,
+		Category:    "filesystem",
+		Operation:   "write",
+		Description: "Update session-scoped operator mount write-grant state through the local control plane.",
+	},
+	controlCapabilitySiteInspect: {
+		Name:        controlCapabilitySiteInspect,
+		Category:    "site",
+		Operation:   "read",
+		Description: "Inspect a remote site through the local control plane using the bounded site-inspection path.",
+	},
+	controlCapabilitySiteTrustWrite: {
+		Name:        controlCapabilitySiteTrustWrite,
+		Category:    "site",
+		Operation:   "write",
+		Description: "Create site trust drafts through the local control plane.",
 	},
 }
 

@@ -39,6 +39,7 @@ type uiEventSubscriber struct {
 }
 
 var errOperatorMountWriteGrantNotFound = errors.New("operator mount write grant not found")
+var errOperatorMountWriteGrantRenewalRequiresApproval = errors.New("operator mount write grant renewal requires a fresh approval path")
 
 func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
@@ -104,6 +105,9 @@ func (server *Server) handleUIOperatorMountWriteGrants(writer http.ResponseWrite
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityOperatorMountWriteGrant) {
+		return
+	}
 
 	switch request.Method {
 	case http.MethodPut:
@@ -136,6 +140,9 @@ func (server *Server) handleUIOperatorMountWriteGrants(writer http.ResponseWrite
 			if errors.Is(err, errOperatorMountWriteGrantNotFound) {
 				statusCode = http.StatusNotFound
 				denialCode = DenialCodeMalformedRequest
+			} else if errors.Is(err, errOperatorMountWriteGrantRenewalRequiresApproval) {
+				statusCode = http.StatusForbidden
+				denialCode = DenialCodeApprovalRequired
 			}
 			server.writeJSON(writer, statusCode, CapabilityResponse{
 				Status:       ResponseStatusError,
@@ -209,8 +216,7 @@ func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken,
 	case OperatorMountWriteGrantActionRevoke:
 		delete(controlSession.OperatorMountWriteGrants, normalizedRootPath)
 	case OperatorMountWriteGrantActionRenew:
-		updatedGrantExpiresAtUTC = nowUTC.Add(operatorMountWriteGrantTTL)
-		controlSession.OperatorMountWriteGrants[normalizedRootPath] = updatedGrantExpiresAtUTC
+		return UIOperatorMountWriteGrantStatusResponse{}, errOperatorMountWriteGrantRenewalRequiresApproval
 	default:
 		return UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("unsupported operator mount write grant action %q", updateRequest.Action)
 	}

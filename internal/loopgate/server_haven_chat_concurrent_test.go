@@ -127,7 +127,7 @@ func TestHavenChat_ConcurrentReadOnlyToolsRunFasterThanSerial(t *testing.T) {
 	}
 
 	client.ConfigureSession("haven", "concurrent-reads-test",
-		append(capabilityNames(status.Capabilities), "slow_read_a", "slow_read_b"))
+		append(advertisedSessionCapabilityNames(status), "slow_read_a", "slow_read_b"))
 	capabilityToken, err := client.ensureCapabilityToken(context.Background())
 	if err != nil {
 		t.Fatalf("ensure capability token: %v", err)
@@ -208,7 +208,7 @@ func TestHavenChat_SerialWriteToolsRunInOrder(t *testing.T) {
 	}
 
 	client.ConfigureSession("haven", "serial-writes-test",
-		append(capabilityNames(status.Capabilities), "tracked_write_a", "tracked_write_b"))
+		append(advertisedSessionCapabilityNames(status), "tracked_write_a", "tracked_write_b"))
 	capabilityToken, err := client.ensureCapabilityToken(context.Background())
 	if err != nil {
 		t.Fatalf("ensure capability token: %v", err)
@@ -283,7 +283,7 @@ func TestHavenChat_ToolResultsRetainInputOrder(t *testing.T) {
 	}
 
 	client.ConfigureSession("haven", "result-order-test",
-		append(capabilityNames(status.Capabilities), "slow_first", "fast_second"))
+		append(advertisedSessionCapabilityNames(status), "slow_first", "fast_second"))
 	capTok, err := client.ensureCapabilityToken(context.Background())
 	if err != nil {
 		t.Fatalf("ensure capability token: %v", err)

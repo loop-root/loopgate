@@ -1187,8 +1187,14 @@ func writeTestMorphlingClassPolicy(t *testing.T, repoRoot string) {
 }
 
 func capabilityNamesFromStatus(status loopgate.StatusResponse) []string {
-	names := make([]string, 0, len(status.Capabilities))
+	names := make([]string, 0, len(status.Capabilities)+len(status.ControlCapabilities))
 	for _, capability := range status.Capabilities {
+		names = append(names, capability.Name)
+	}
+	// Shell integration tests need the same full control-session envelope as the live
+	// client surface. Restricting this helper to executable capabilities silently drops
+	// scoped control-plane routes like site.inspect and causes false-negative test drift.
+	for _, capability := range status.ControlCapabilities {
 		names = append(names, capability.Name)
 	}
 	return names

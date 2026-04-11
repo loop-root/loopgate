@@ -571,17 +571,17 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(observedPa
 			distillateRecord.SourceRefs = append(distillateRecord.SourceRefs, eventSourceRef)
 		}
 		switch continuityEvent.Type {
-		case "provider_fact_observed":
+		case "provider_fact_observed", "tool_executed":
 			for _, observedFact := range continuityEvent.payloadFacts() {
 				derivedFact, ok := backend.deriveContinuityDistillateFact(observedContinuityEventPrimaryFactSourceRef(continuityEvent), continuityEvent, observedFact)
 				if !ok {
 					continue
 				}
 				distillateRecord.Facts = append(distillateRecord.Facts, derivedFact)
-				// Observed facts remain derived context, but their surrounding event text is
-				// still useful retrieval evidence. Preserve bounded source words like
-				// "preview card" or "teammate" in the distillate tags so same-key distractors
-				// do not collapse to bare value-only ranking.
+				// Haven threadstore tool-result rows can carry bounded observed facts plus
+				// useful surrounding context text. Preserve that text as tags so preview-card
+				// or teammate-style distractors stay distinguishable at discover time instead
+				// of collapsing into bare value-only ranking.
 				recordLoopgateMemoryTags(
 					discoveredTags,
 					derivedFact.Name,

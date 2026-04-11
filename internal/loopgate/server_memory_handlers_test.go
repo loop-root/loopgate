@@ -31,7 +31,7 @@ func TestStatusAdvertisesMemoryControlCapabilities(t *testing.T) {
 		t.Fatalf("expected control_capabilities array, got %#v", rawControlCapabilities)
 	}
 
-	for _, requiredCapability := range []string{"memory.read", "memory.write", "memory.review", "memory.lineage"} {
+	for _, requiredCapability := range []string{"memory.read", "memory.write", "memory.reset", "memory.review", "memory.lineage"} {
 		found = false
 		for _, rawCapability := range controlCapabilities {
 			capabilityMap, ok := rawCapability.(map[string]interface{})
@@ -45,6 +45,31 @@ func TestStatusAdvertisesMemoryControlCapabilities(t *testing.T) {
 		}
 		if !found {
 			t.Fatalf("expected control capability %q in status payload, got %#v", requiredCapability, controlCapabilities)
+		}
+	}
+}
+
+func TestStatusAdvertisesAdditionalControlCapabilities(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	status, err := client.Status(context.Background())
+	if err != nil {
+		t.Fatalf("GET /v1/status: %v", err)
+	}
+
+	for _, requiredCapability := range []string{
+		controlCapabilityConnectionRead,
+		controlCapabilityConnectionWrite,
+		controlCapabilityOperatorMountWriteGrant,
+		controlCapabilitySiteInspect,
+		controlCapabilitySiteTrustWrite,
+	} {
+		if !containsCapability(status.ControlCapabilities, requiredCapability) {
+			t.Fatalf("expected control capability %q in status payload, got %#v", requiredCapability, status.ControlCapabilities)
 		}
 	}
 }

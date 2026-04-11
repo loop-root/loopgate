@@ -41,7 +41,7 @@ func main() {
 
 	socketPath := filepath.Join(repoRoot, "runtime", "state", "loopgate.sock")
 	if envSocket := strings.TrimSpace(os.Getenv("LOOPGATE_SOCKET")); envSocket != "" {
-		socketPath = filepath.Clean(envSocket)
+		socketPath = envSocket
 	}
 	server, err := loopgate.NewServerWithOptions(repoRoot, socketPath, *acceptPolicy)
 	if err != nil {

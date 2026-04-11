@@ -108,7 +108,7 @@ func TestHavenChat_EnablesToolsAndExecutesMemoryRemember(t *testing.T) {
 		return modelpkg.NewClient(provider), modelruntime.Config{ProviderName: "stub", ModelName: "stub", Timeout: time.Second}, nil
 	}
 
-	client.ConfigureSession("haven", "haven-chat-test", capabilityNames(status.Capabilities))
+	client.ConfigureSession("haven", "haven-chat-test", advertisedSessionCapabilityNames(status))
 	capabilityToken, err := client.ensureCapabilityToken(context.Background())
 	if err != nil {
 		t.Fatalf("ensure capability token: %v", err)
@@ -182,7 +182,7 @@ func TestHavenChat_KeepsApprovalRequiredToolPending(t *testing.T) {
 		return modelpkg.NewClient(provider), modelruntime.Config{ProviderName: "stub", ModelName: "stub", Timeout: time.Second}, nil
 	}
 
-	client.ConfigureSession("haven", "haven-chat-approval-test", append(capabilityNames(status.Capabilities), "external_write"))
+	client.ConfigureSession("haven", "haven-chat-approval-test", append(advertisedSessionCapabilityNames(status), "external_write"))
 	capabilityToken, err := client.ensureCapabilityToken(context.Background())
 	if err != nil {
 		t.Fatalf("ensure capability token: %v", err)
@@ -267,7 +267,7 @@ func TestHavenChat_HostFolderProseNudgeTriggersToolRound(t *testing.T) {
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
 
-	baseCaps := capabilityNames(status.Capabilities)
+	baseCaps := advertisedSessionCapabilityNames(status)
 	hostCaps := []string{"host.folder.list", "host.folder.read", "host.organize.plan", "host.plan.apply"}
 	allCaps := append(append([]string{}, baseCaps...), hostCaps...)
 
@@ -342,7 +342,7 @@ func TestHavenChat_OrganizePlanProseNudgesHostPlanApply(t *testing.T) {
 		t.Fatalf("mkdir shared host folder: %v", err)
 	}
 
-	baseCaps := capabilityNames(status.Capabilities)
+	baseCaps := advertisedSessionCapabilityNames(status)
 	hostCaps := []string{"host.folder.list", "host.folder.read", "host.organize.plan", "host.plan.apply"}
 	allCaps := append(append([]string{}, baseCaps...), hostCaps...)
 
@@ -443,7 +443,7 @@ func TestHavenChat_PlaceholderAssistantTextBecomesFriendlyReply(t *testing.T) {
 		return modelpkg.NewClient(provider), modelruntime.Config{ProviderName: "stub", ModelName: "stub", Timeout: time.Second}, nil
 	}
 
-	client.ConfigureSession("haven", "haven-chat-placeholder-test", capabilityNames(status.Capabilities))
+	client.ConfigureSession("haven", "haven-chat-placeholder-test", advertisedSessionCapabilityNames(status))
 	capabilityToken, err := client.ensureCapabilityToken(context.Background())
 	if err != nil {
 		t.Fatalf("ensure capability token: %v", err)

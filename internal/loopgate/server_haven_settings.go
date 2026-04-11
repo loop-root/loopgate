@@ -149,7 +149,16 @@ func (server *Server) handleHavenSettingsIdle(writer http.ResponseWriter, reques
 			server.writeJSON(writer, signedRequestHTTPStatus(denial.DenialCode), denial)
 			return
 		}
-		server.writeJSON(writer, http.StatusOK, server.readIdleSettings())
+		response, err := server.readIdleSettings()
+		if err != nil {
+			server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
+				Status:       ResponseStatusError,
+				DenialReason: err.Error(),
+				DenialCode:   DenialCodeExecutionFailed,
+			})
+			return
+		}
+		server.writeJSON(writer, http.StatusOK, response)
 
 	case http.MethodPost:
 		body, denial, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
@@ -184,35 +193,44 @@ func (server *Server) handleHavenSettingsIdle(writer http.ResponseWriter, reques
 	}
 }
 
-func (server *Server) readIdleSettings() havenIdleSettingsResponse {
+func (server *Server) readIdleSettings() (havenIdleSettingsResponse, error) {
 	server.havenPreferencesMu.Lock()
 	defer server.havenPreferencesMu.Unlock()
-	prefs := server.loadHavenPrefs()
+	prefs, err := server.loadHavenPrefs()
+	if err != nil {
+		return havenIdleSettingsResponse{}, err
+	}
 	return havenIdleSettingsResponse{
 		IdleEnabled:    boolHavenPref(prefs, "idle_enabled", true),
 		AmbientEnabled: boolHavenPref(prefs, "ambient_enabled", server.havenDefaultAmbientEnabled()),
-	}
+	}, nil
 }
 
 func (server *Server) writeIdleSettings(idleEnabled, ambientEnabled bool) error {
 	server.havenPreferencesMu.Lock()
 	defer server.havenPreferencesMu.Unlock()
-	prefs := server.loadHavenPrefs()
+	prefs, err := server.loadHavenPrefs()
+	if err != nil {
+		return err
+	}
 	prefs["idle_enabled"] = idleEnabled
 	prefs["ambient_enabled"] = ambientEnabled
 	return server.saveHavenPrefs(prefs)
 }
 
-func (server *Server) loadHavenPrefs() map[string]interface{} {
+func (server *Server) loadHavenPrefs() (map[string]interface{}, error) {
 	data, err := os.ReadFile(server.havenPrefsPath())
 	if err != nil {
-		return make(map[string]interface{})
+		if os.IsNotExist(err) {
+			return make(map[string]interface{}), nil
+		}
+		return nil, fmt.Errorf("read preferences: %w", err)
 	}
 	var prefs map[string]interface{}
 	if err := json.Unmarshal(data, &prefs); err != nil {
-		return make(map[string]interface{})
+		return nil, fmt.Errorf("parse preferences: %w", err)
 	}
-	return prefs
+	return prefs, nil
 }
 
 func (server *Server) saveHavenPrefs(prefs map[string]interface{}) error {
@@ -224,7 +242,7 @@ func (server *Server) saveHavenPrefs(prefs map[string]interface{}) error {
 	if err != nil {
 		return fmt.Errorf("marshal preferences: %w", err)
 	}
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, data, 0o600)
 }
 
 func (server *Server) havenPrefsPath() string {

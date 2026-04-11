@@ -70,7 +70,9 @@ func (server *Server) handleStatus(writer http.ResponseWriter, request *http.Req
 		ControlCapabilities: controlCapabilitySummaries(),
 		PendingApprovals:    pendingCount,
 		ActiveMorphlings:    server.activeMorphlingCount(server.now().UTC()),
-		Connections:         server.connectionStatuses(),
+	}
+	if capabilityScopeAllowed(tokenClaims, controlCapabilityConnectionRead) {
+		response.Connections = server.connectionStatuses()
 	}
 	server.writeJSON(writer, http.StatusOK, response)
 }
@@ -83,6 +85,9 @@ func (server *Server) handleConnectionsStatus(writer http.ResponseWriter, reques
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionRead) {
 		return
 	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
@@ -103,6 +108,9 @@ func (server *Server) handleConnectionValidate(writer http.ResponseWriter, reque
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionWrite) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)
@@ -143,6 +151,9 @@ func (server *Server) handleConnectionPKCEStart(writer http.ResponseWriter, requ
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionWrite) {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -181,6 +192,9 @@ func (server *Server) handleConnectionPKCEComplete(writer http.ResponseWriter, r
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityConnectionWrite) {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -217,6 +231,9 @@ func (server *Server) handleSiteInspect(writer http.ResponseWriter, request *htt
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilitySiteInspect) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)
@@ -285,6 +302,9 @@ func (server *Server) handleSiteTrustDraft(writer http.ResponseWriter, request *
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilitySiteTrustWrite) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxApprovalBodyBytes, tokenClaims.ControlSessionID)

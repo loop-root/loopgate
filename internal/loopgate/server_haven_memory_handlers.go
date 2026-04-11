@@ -31,6 +31,9 @@ func (server *Server) handleHavenMemoryInventory(writer http.ResponseWriter, req
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryRead) {
+		return
+	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
@@ -59,6 +62,9 @@ func (server *Server) handleHavenMemoryReset(writer http.ResponseWriter, request
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMemoryReset) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
