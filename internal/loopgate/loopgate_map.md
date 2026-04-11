@@ -267,6 +267,8 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `memory_sqlite_store.go`
   - derived SQLite store for projected continuity classes
   - current benchmark-friendly projected-node search surface
+- `memory_sqlite_store_search.go`
+  - projected-node list/search/debug logic, including slot-preference ranking for exact state queries
 
 - `memorybench_bridge.go`
   - narrow internal bridge that lets `cmd/memorybench` read the `continuity_tcl`
