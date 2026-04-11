@@ -824,7 +824,9 @@ func TestHandleCommand_SiteTrustDraftRequiresInteractivePrompt(t *testing.T) {
 func TestHandleCommand_SandboxImportCopiesIntoSandbox(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status := startTestLoopgate(t, repoRoot, testPolicyYAML(false))
-	hostSourcePath := filepath.Join(t.TempDir(), "notes.txt")
+	hostRootPath := t.TempDir()
+	configureHavenSandboxSession(client, status, "shell-sandbox-import", hostRootPath)
+	hostSourcePath := filepath.Join(hostRootPath, "notes.txt")
 	if err := os.WriteFile(hostSourcePath, []byte("hello sandbox"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}
@@ -854,7 +856,9 @@ func TestHandleCommand_SandboxImportCopiesIntoSandbox(t *testing.T) {
 func TestHandleCommand_SandboxStageCopiesIntoOutputs(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status := startTestLoopgate(t, repoRoot, testPolicyYAML(false))
-	hostSourcePath := filepath.Join(t.TempDir(), "stage-me.txt")
+	hostRootPath := t.TempDir()
+	configureHavenSandboxSession(client, status, "shell-sandbox-stage", hostRootPath)
+	hostSourcePath := filepath.Join(hostRootPath, "stage-me.txt")
 	if err := os.WriteFile(hostSourcePath, []byte("stage contents"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}
@@ -899,7 +903,9 @@ func TestHandleCommand_SandboxStageCopiesIntoOutputs(t *testing.T) {
 func TestHandleCommand_SandboxMetadataShowsStagedArtifact(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status := startTestLoopgate(t, repoRoot, testPolicyYAML(false))
-	hostSourcePath := filepath.Join(t.TempDir(), "stage-me.txt")
+	hostRootPath := t.TempDir()
+	configureHavenSandboxSession(client, status, "shell-sandbox-metadata", hostRootPath)
+	hostSourcePath := filepath.Join(hostRootPath, "stage-me.txt")
 	if err := os.WriteFile(hostSourcePath, []byte("stage contents"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}
@@ -969,7 +975,9 @@ func TestHandleCommand_MorphlingSpawnRequiresInteractivePrompt(t *testing.T) {
 func TestHandleCommand_MorphlingStatusShowsPool(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status := startTestLoopgate(t, repoRoot, testPolicyYAMLWithMorphlings(false, true, 5))
-	hostSourcePath := filepath.Join(t.TempDir(), "spec.md")
+	hostRootPath := t.TempDir()
+	configureHavenSandboxSession(client, status, "shell-morphling-status", hostRootPath)
+	hostSourcePath := filepath.Join(hostRootPath, "spec.md")
 	if err := os.WriteFile(hostSourcePath, []byte("hello morphling"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}
@@ -1168,6 +1176,11 @@ func startTestLoopgate(t *testing.T, repoRoot string, policyYAML string) (*loopg
 	}
 	client.ConfigureSession("test", "session-test", capabilityNamesFromStatus(status))
 	return client, status
+}
+
+func configureHavenSandboxSession(client *loopgate.Client, status loopgate.StatusResponse, sessionID string, hostRootPath string) {
+	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
+	client.ConfigureSession("haven", sessionID, capabilityNamesFromStatus(status))
 }
 
 func writeTestMorphlingClassPolicy(t *testing.T, repoRoot string) {

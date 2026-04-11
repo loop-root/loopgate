@@ -40,19 +40,21 @@ type Client struct {
 	defaultRequestTimeout time.Duration
 	modelReplyTimeout     time.Duration
 
-	mu                     sync.Mutex
-	delegatedSession       bool
-	actor                  string
-	clientSessionID        string
-	controlSessionID       string
-	workspaceID            string
-	requestedCapabilities  []string
-	capabilityToken        string
-	approvalToken          string
-	approvalDecisionNonce  map[string]string
-	approvalManifestSHA256 map[string]string
-	sessionMACKey          string
-	tokenExpiresAt         time.Time
+	mu                       sync.Mutex
+	delegatedSession         bool
+	actor                    string
+	clientSessionID          string
+	controlSessionID         string
+	workspaceID              string
+	operatorMountPaths       []string
+	primaryOperatorMountPath string
+	requestedCapabilities    []string
+	capabilityToken          string
+	approvalToken            string
+	approvalDecisionNonce    map[string]string
+	approvalManifestSHA256   map[string]string
+	sessionMACKey            string
+	tokenExpiresAt           time.Time
 }
 
 type DelegatedSessionConfig struct {
@@ -645,6 +647,19 @@ func (client *Client) SetWorkspaceID(workspaceID string) {
 	client.workspaceID = workspaceID
 }
 
+// SetOperatorMountPaths binds Haven-approved host directories to the next control-session
+// open request. Export still requires a separate write grant for the matched root.
+func (client *Client) SetOperatorMountPaths(operatorMountPaths []string, primaryOperatorMountPath string) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	if !sameStrings(client.operatorMountPaths, operatorMountPaths) || client.primaryOperatorMountPath != primaryOperatorMountPath {
+		client.resetSessionCredentialsLocked()
+	}
+	client.operatorMountPaths = append([]string(nil), operatorMountPaths...)
+	client.primaryOperatorMountPath = primaryOperatorMountPath
+}
+
 // CloseIdleConnections releases idle HTTP connections held by the local client.
 func (client *Client) CloseIdleConnections() {
 	if client.httpClient != nil {
@@ -769,10 +784,12 @@ func (client *Client) ensureCapabilityToken(ctx context.Context) (string, error)
 		return token, nil
 	}
 	openRequest := OpenSessionRequest{
-		Actor:                 client.actor,
-		SessionID:             client.clientSessionID,
-		RequestedCapabilities: append([]string(nil), client.requestedCapabilities...),
-		WorkspaceID:           client.workspaceID,
+		Actor:                    client.actor,
+		SessionID:                client.clientSessionID,
+		RequestedCapabilities:    append([]string(nil), client.requestedCapabilities...),
+		WorkspaceID:              client.workspaceID,
+		OperatorMountPaths:       append([]string(nil), client.operatorMountPaths...),
+		PrimaryOperatorMountPath: client.primaryOperatorMountPath,
 	}
 	client.mu.Unlock()
 

@@ -10,6 +10,8 @@ import (
 )
 
 var errSandboxHostDestinationInvalid = errors.New("sandbox host destination is invalid")
+var errSandboxHostPathUnbound = errors.New("sandbox host path is outside session operator mounts")
+var errSandboxHostWriteGrantRequired = errors.New("sandbox export requires an operator mount write grant")
 var errSandboxAuditUnavailable = errors.New("sandbox audit is unavailable")
 var errSandboxArtifactNotStaged = errors.New("sandbox output is not staged")
 
@@ -342,6 +344,9 @@ func (server *Server) importIntoSandbox(tokenClaims capabilityToken, importReque
 	if err != nil {
 		return SandboxOperationResponse{}, err
 	}
+	if _, err := operatorMountRootForResolvedHostPath(server, tokenClaims.ControlSessionID, resolvedSourcePath); err != nil {
+		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostPathUnbound, err)
+	}
 	destinationAbsolutePath, destinationRelativePath, err := server.sandboxPaths.BuildImportDestination(importRequest.DestinationName)
 	if err != nil {
 		return SandboxOperationResponse{}, err
@@ -437,6 +442,15 @@ func (server *Server) exportSandboxArtifact(tokenClaims capabilityToken, exportR
 	if err != nil {
 		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostDestinationInvalid, err)
 	}
+	matchedRootPath, err := operatorMountRootForResolvedHostPath(server, tokenClaims.ControlSessionID, resolvedDestinationPath)
+	if err != nil {
+		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostPathUnbound, err)
+	}
+	if _, granted, err := operatorMountWriteGrantForRoot(server, tokenClaims.ControlSessionID, matchedRootPath); err != nil {
+		return SandboxOperationResponse{}, err
+	} else if !granted {
+		return SandboxOperationResponse{}, fmt.Errorf("%w: %s", errSandboxHostWriteGrantRequired, matchedRootPath)
+	}
 	entryType, err := sandbox.CopyPathAtomic(resolvedSourcePath, resolvedDestinationPath)
 	if err != nil {
 		return SandboxOperationResponse{}, err
@@ -484,6 +498,9 @@ func sandboxHTTPStatus(err error) int {
 		errors.Is(err, sandbox.ErrSymlinkNotAllowed),
 		errors.Is(err, errSandboxHostDestinationInvalid):
 		return http.StatusBadRequest
+	case errors.Is(err, errSandboxHostPathUnbound),
+		errors.Is(err, errSandboxHostWriteGrantRequired):
+		return http.StatusForbidden
 	case errors.Is(err, errSandboxAuditUnavailable):
 		return http.StatusServiceUnavailable
 	default:
@@ -501,8 +518,12 @@ func sandboxDenialCode(err error) string {
 		return DenialCodeSandboxDestinationExists
 	case errors.Is(err, errSandboxHostDestinationInvalid):
 		return DenialCodeSandboxHostDestinationInvalid
+	case errors.Is(err, errSandboxHostPathUnbound):
+		return DenialCodeControlSessionBindingInvalid
 	case errors.Is(err, sandbox.ErrSymlinkNotAllowed):
 		return DenialCodeSandboxSymlinkNotAllowed
+	case errors.Is(err, errSandboxHostWriteGrantRequired):
+		return DenialCodeApprovalRequired
 	case errors.Is(err, errSandboxAuditUnavailable):
 		return DenialCodeAuditUnavailable
 	case errors.Is(err, sandbox.ErrSandboxPathInvalid), errors.Is(err, sandbox.ErrSandboxPathOutsideRoot):
@@ -523,6 +544,10 @@ func redactSandboxError(err error) string {
 		return sandbox.ErrSandboxDestinationExists.Error()
 	case errors.Is(err, errSandboxHostDestinationInvalid):
 		return errSandboxHostDestinationInvalid.Error()
+	case errors.Is(err, errSandboxHostPathUnbound):
+		return errSandboxHostPathUnbound.Error()
+	case errors.Is(err, errSandboxHostWriteGrantRequired):
+		return errSandboxHostWriteGrantRequired.Error()
 	case errors.Is(err, sandbox.ErrSymlinkNotAllowed):
 		return sandbox.ErrSymlinkNotAllowed.Error()
 	case errors.Is(err, sandbox.ErrSandboxPathInvalid):

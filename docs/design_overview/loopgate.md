@@ -151,10 +151,10 @@ Implemented endpoints:
 - `POST /v1/quarantine/prune`
 - `POST /v1/sites/inspect` (`site.inspect`)
 - `POST /v1/sites/trust-draft` (`site.trust.write`)
-- `POST /v1/sandbox/import`
+- `POST /v1/sandbox/import` (`fs_write`; host source must be inside the control session's bound operator mounts)
 - `POST /v1/sandbox/stage`
 - `POST /v1/sandbox/metadata`
-- `POST /v1/sandbox/export`
+- `POST /v1/sandbox/export` (`fs_write`; host destination must match a bound operator mount and an active write grant)
 - `POST /v1/continuity/inspect-thread`
 - `GET /v1/memory/wake-state`
 - `POST /v1/memory/discover`

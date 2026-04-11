@@ -134,6 +134,8 @@ type operatorMountWriteGrant struct {
 	expiresAt time.Time
 }
 
+var errOperatorMountPathUnbound = errors.New("host path is outside session operator mounts")
+
 func operatorMountBindingFromContext(server *Server, ctx context.Context) (operatorMountSessionBinding, error) {
 	sid, _ := ctx.Value(operatorMountCtxKey{}).(string)
 	sid = strings.TrimSpace(sid)
@@ -184,6 +186,42 @@ func operatorMountBindingForControlSession(server *Server, controlSessionID stri
 	}, nil
 }
 
+func operatorMountMatchedRootPath(boundRootPaths []string, resolvedHostPath string) (string, error) {
+	resolvedHostPath = filepath.Clean(strings.TrimSpace(resolvedHostPath))
+	if resolvedHostPath == "" {
+		return "", fmt.Errorf("%w: missing resolved host path", errOperatorMountPathUnbound)
+	}
+
+	var matchedRootPath string
+	for _, boundRootPath := range boundRootPaths {
+		boundRootPath = filepath.Clean(strings.TrimSpace(boundRootPath))
+		if boundRootPath == "" {
+			continue
+		}
+		if resolvedHostPath != boundRootPath && !strings.HasPrefix(resolvedHostPath, boundRootPath+string(filepath.Separator)) {
+			continue
+		}
+		if len(boundRootPath) > len(matchedRootPath) {
+			matchedRootPath = boundRootPath
+		}
+	}
+	if matchedRootPath == "" {
+		return "", fmt.Errorf("%w: %s", errOperatorMountPathUnbound, resolvedHostPath)
+	}
+	return matchedRootPath, nil
+}
+
+func operatorMountRootForResolvedHostPath(server *Server, controlSessionID string, resolvedHostPath string) (string, error) {
+	binding, err := operatorMountBindingForControlSession(server, controlSessionID)
+	if err != nil {
+		return "", err
+	}
+	if len(binding.paths) == 0 {
+		return "", fmt.Errorf("%w: no operator directory grants for this session", errOperatorMountPathUnbound)
+	}
+	return operatorMountMatchedRootPath(binding.paths, resolvedHostPath)
+}
+
 func operatorMountWriteGrantForRequest(server *Server, controlSessionID string, capabilityRequest CapabilityRequest) (operatorMountWriteGrant, bool, error) {
 	if capabilityRequest.Capability != "operator_mount.fs_write" && capabilityRequest.Capability != "operator_mount.fs_mkdir" {
 		return operatorMountWriteGrant{}, false, nil
@@ -213,6 +251,34 @@ func operatorMountWriteGrantForRequest(server *Server, controlSessionID string, 
 	}
 	server.mu.Lock()
 	defer server.mu.Unlock()
+	controlSession, found := server.sessions[controlSessionID]
+	if !found {
+		return operatorMountWriteGrant{}, false, fmt.Errorf("unknown control session")
+	}
+	if controlSession.OperatorMountWriteGrants == nil {
+		return operatorMountWriteGrant{root: matchedRoot}, false, nil
+	}
+	expiresAt, granted := controlSession.OperatorMountWriteGrants[matchedRoot]
+	if !granted {
+		return operatorMountWriteGrant{root: matchedRoot}, false, nil
+	}
+	if !expiresAt.IsZero() && server.now().UTC().After(expiresAt) {
+		delete(controlSession.OperatorMountWriteGrants, matchedRoot)
+		server.sessions[controlSessionID] = controlSession
+		return operatorMountWriteGrant{root: matchedRoot}, false, nil
+	}
+	return operatorMountWriteGrant{root: matchedRoot, expiresAt: expiresAt}, true, nil
+}
+
+func operatorMountWriteGrantForRoot(server *Server, controlSessionID string, matchedRoot string) (operatorMountWriteGrant, bool, error) {
+	matchedRoot = filepath.Clean(strings.TrimSpace(matchedRoot))
+	if matchedRoot == "" {
+		return operatorMountWriteGrant{}, false, fmt.Errorf("missing operator mount root")
+	}
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
 	controlSession, found := server.sessions[controlSessionID]
 	if !found {
 		return operatorMountWriteGrant{}, false, fmt.Errorf("unknown control session")

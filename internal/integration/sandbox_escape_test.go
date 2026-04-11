@@ -17,14 +17,15 @@ func TestSandboxImportRejectsHostDirectoryWithSymlinkOverRealSocket(t *testing.T
 
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	client := harness.newClient("integration-actor", "integration-sandbox-import", capabilityNames(status.Capabilities))
+	hostDirectory := filepath.Join(t.TempDir(), "import-dir")
+	client := harness.newClient("haven", "integration-sandbox-import", capabilityNames(status.Capabilities))
+	client.SetOperatorMountPaths([]string{hostDirectory}, hostDirectory)
 
 	outsidePath := filepath.Join(t.TempDir(), "outside.txt")
 	if err := os.WriteFile(outsidePath, []byte("outside"), 0o600); err != nil {
 		t.Fatalf("write outside file: %v", err)
 	}
 
-	hostDirectory := filepath.Join(t.TempDir(), "import-dir")
 	if err := os.MkdirAll(hostDirectory, 0o700); err != nil {
 		t.Fatalf("mkdir host directory: %v", err)
 	}

@@ -653,8 +653,19 @@ func TestShouldAutoAllowTrustedSandboxCapability_DeniesOperatorMountWrites(t *te
 
 func TestSandboxImportAndStageAndExport(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	hostSourcePath := filepath.Join(t.TempDir(), "example.txt")
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	hostRootPath := t.TempDir()
+	resolvedHostRootPath, err := filepath.EvalSymlinks(hostRootPath)
+	if err != nil {
+		t.Fatalf("eval host root symlinks: %v", err)
+	}
+	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
+	client.ConfigureSession("haven", "haven-sandbox-flow", advertisedSessionCapabilityNames(status))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure haven sandbox token: %v", err)
+	}
+
+	hostSourcePath := filepath.Join(hostRootPath, "example.txt")
 	if err := os.WriteFile(hostSourcePath, []byte("sandbox flow"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}
@@ -712,7 +723,16 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 		t.Fatalf("expected virtual metadata source path, got %#v", metadataResponse)
 	}
 
-	hostDestinationPath := filepath.Join(t.TempDir(), "exported.txt")
+	server.mu.Lock()
+	controlSession := server.sessions[client.controlSessionID]
+	if controlSession.OperatorMountWriteGrants == nil {
+		controlSession.OperatorMountWriteGrants = make(map[string]time.Time)
+	}
+	controlSession.OperatorMountWriteGrants[resolvedHostRootPath] = server.now().UTC().Add(operatorMountWriteGrantTTL)
+	server.sessions[client.controlSessionID] = controlSession
+	server.mu.Unlock()
+
+	hostDestinationPath := filepath.Join(hostRootPath, "exported.txt")
 	exportResponse, err := client.SandboxExport(context.Background(), SandboxExportRequest{
 		SandboxSourcePath:   "/morph/home/outputs/export-me.txt",
 		HostDestinationPath: hostDestinationPath,
@@ -744,6 +764,70 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 		if !strings.Contains(auditText, expectedEventType) {
 			t.Fatalf("expected audit to contain %s, got %s", expectedEventType, auditText)
 		}
+	}
+}
+
+func TestSandboxImportRequiresBoundOperatorMountPath(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client.ConfigureSession("haven", "haven-sandbox-import-unbound", advertisedSessionCapabilityNames(status))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure haven sandbox token: %v", err)
+	}
+
+	hostSourcePath := filepath.Join(t.TempDir(), "example.txt")
+	if err := os.WriteFile(hostSourcePath, []byte("sandbox flow"), 0o600); err != nil {
+		t.Fatalf("write host source: %v", err)
+	}
+
+	_, err := client.SandboxImport(context.Background(), SandboxImportRequest{
+		HostSourcePath:  hostSourcePath,
+		DestinationName: "example.txt",
+	})
+	if err == nil {
+		t.Fatal("expected sandbox import denial without operator mount binding")
+	}
+	if !strings.Contains(err.Error(), DenialCodeControlSessionBindingInvalid) {
+		t.Fatalf("expected control session binding denial, got %v", err)
+	}
+}
+
+func TestSandboxExportRequiresOperatorMountWriteGrant(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	hostRootPath := t.TempDir()
+	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
+	client.ConfigureSession("haven", "haven-sandbox-export-needs-grant", advertisedSessionCapabilityNames(status))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure haven sandbox token: %v", err)
+	}
+
+	hostSourcePath := filepath.Join(hostRootPath, "example.txt")
+	if err := os.WriteFile(hostSourcePath, []byte("sandbox flow"), 0o600); err != nil {
+		t.Fatalf("write host source: %v", err)
+	}
+	if _, err := client.SandboxImport(context.Background(), SandboxImportRequest{
+		HostSourcePath:  hostSourcePath,
+		DestinationName: "example.txt",
+	}); err != nil {
+		t.Fatalf("sandbox import: %v", err)
+	}
+	if _, err := client.SandboxStage(context.Background(), SandboxStageRequest{
+		SandboxSourcePath: "/morph/home/imports/example.txt",
+		OutputName:        "export-me.txt",
+	}); err != nil {
+		t.Fatalf("sandbox stage: %v", err)
+	}
+
+	_, err := client.SandboxExport(context.Background(), SandboxExportRequest{
+		SandboxSourcePath:   "/morph/home/outputs/export-me.txt",
+		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
+	})
+	if err == nil {
+		t.Fatal("expected sandbox export denial without operator mount write grant")
+	}
+	if !strings.Contains(err.Error(), DenialCodeApprovalRequired) {
+		t.Fatalf("expected approval-required denial, got %v", err)
 	}
 }
 
@@ -837,8 +921,15 @@ func TestNewModelClientFromRuntimeConfig_AnthropicModelConnectionUsesSecretStore
 
 func TestSandboxExportDeniesNonOutputsPath(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	hostSourcePath := filepath.Join(t.TempDir(), "example.txt")
+	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	hostRootPath := t.TempDir()
+	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
+	client.ConfigureSession("haven", "haven-sandbox-export-non-outputs", advertisedSessionCapabilityNames(status))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure haven sandbox token: %v", err)
+	}
+
+	hostSourcePath := filepath.Join(hostRootPath, "example.txt")
 	if err := os.WriteFile(hostSourcePath, []byte("sandbox flow"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}
@@ -851,7 +942,7 @@ func TestSandboxExportDeniesNonOutputsPath(t *testing.T) {
 
 	_, err := client.SandboxExport(context.Background(), SandboxExportRequest{
 		SandboxSourcePath:   "/morph/home/imports/example.txt",
-		HostDestinationPath: filepath.Join(t.TempDir(), "exported.txt"),
+		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
 	})
 	if err == nil {
 		t.Fatal("expected sandbox export denial for non-outputs path")
@@ -863,7 +954,13 @@ func TestSandboxExportDeniesNonOutputsPath(t *testing.T) {
 
 func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	hostRootPath := t.TempDir()
+	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
+	client.ConfigureSession("haven", "haven-sandbox-export-orphan", advertisedSessionCapabilityNames(status))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure haven sandbox token: %v", err)
+	}
 	orphanPath := filepath.Join(server.sandboxPaths.Home, "outputs", "orphan.txt")
 	if err := os.MkdirAll(filepath.Dir(orphanPath), 0o700); err != nil {
 		t.Fatalf("mkdir outputs: %v", err)
@@ -874,7 +971,7 @@ func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 
 	_, err := client.SandboxExport(context.Background(), SandboxExportRequest{
 		SandboxSourcePath:   "/morph/home/outputs/orphan.txt",
-		HostDestinationPath: filepath.Join(t.TempDir(), "exported.txt"),
+		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
 	})
 	if err == nil {
 		t.Fatal("expected sandbox export denial for orphaned output")
@@ -886,8 +983,11 @@ func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 
 func TestMorphlingSpawnStatusAndTerminate(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgateMorphlingPolicyYAML(false, true, 5))
-	hostSourcePath := filepath.Join(t.TempDir(), "spec.md")
+	client, status, _ := startLoopgateServer(t, repoRoot, loopgateMorphlingPolicyYAML(false, true, 5))
+	hostRootPath := t.TempDir()
+	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
+	client.ConfigureSession("haven", "haven-morphling-import", advertisedSessionCapabilityNames(status))
+	hostSourcePath := filepath.Join(hostRootPath, "spec.md")
 	if err := os.WriteFile(hostSourcePath, []byte("sandbox spec"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}

@@ -217,7 +217,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/connections/validate` | Validate a configured connection — **`connection.write`** |
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows — **`connection.write`** |
 | `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft — **`site.inspect`** / **`site.trust.write`** |
-| `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`** |
+| `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`**; host import/export additionally require Haven session `operator_mount_paths`, and export requires an active operator-mount write grant |
 | `POST /v1/sandbox/metadata` | Sandbox artifact metadata — **`fs_read`** |
 | `POST /v1/sandbox/list` | Sandbox directory listing — **`fs_list`** |
 | `POST /v1/continuity/inspect-thread` | **Actor `haven` only** for the current compatibility gate — signed POST; body `{ "thread_id": "…" }`; requires `memory.write`; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
@@ -376,6 +376,8 @@ cross the public control-plane surface.
 - `POST /v1/sandbox/import`, `POST /v1/sandbox/stage`, and `POST /v1/sandbox/export`
   - require **`fs_write`**
   - mutate sandbox or host-adjacent artifact state through Loopgate-owned paths
+  - `import` and `export` fail closed unless the control session is bound to matching Haven `operator_mount_paths`
+  - `export` also requires an active operator-mount write grant for the matched root; otherwise Loopgate returns `approval_required`
 - `POST /v1/sandbox/metadata`
   - requires **`fs_read`**
   - returns metadata for a staged output artifact
