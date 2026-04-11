@@ -286,6 +286,9 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	sessionMACKey := server.sessionMACKeyForControlSessionAtEpoch(controlSessionID, server.currentSessionMACEpochIndex())
 	deploymentTenantID := strings.TrimSpace(server.runtimeConfig.Tenancy.DeploymentTenantID)
 	deploymentUserID := strings.TrimSpace(server.runtimeConfig.Tenancy.DeploymentUserID)
+	trustedHavenClient := strings.EqualFold(defaultLabel(openRequest.Actor, "client"), "haven") &&
+		strings.TrimSpace(server.expectedClientPath) != "" &&
+		server.resolveExePath != nil
 	tokenClaims := capabilityToken{
 		TokenID:             tokenID,
 		Token:               capabilityTokenString,
@@ -311,6 +314,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		ActorLabel:               tokenClaims.ActorLabel,
 		ClientSessionLabel:       tokenClaims.ClientSessionLabel,
 		WorkspaceID:              authoritativeWorkspaceID,
+		TrustedHavenClient:       trustedHavenClient,
 		OperatorMountPaths:       normalizedOperatorMounts,
 		PrimaryOperatorMountPath: normalizedPrimaryOperatorMount,
 		RequestedCapabilities:    capabilitySet(grantedCapabilities),
@@ -334,6 +338,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		"client_session_label":       tokenClaims.ClientSessionLabel,
 		"control_session_id":         controlSessionID,
 		"workspace_id":               authoritativeWorkspaceID,
+		"trusted_haven_client":       trustedHavenClient,
 		"operator_mount_count":       len(normalizedOperatorMounts),
 		"requested_capability_count": len(normalizedCapabilities),
 		"granted_capability_count":   len(grantedCapabilities),

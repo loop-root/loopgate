@@ -330,6 +330,28 @@ Why this matters:
   governed execution path must be the real authority path, not a spoofable
   compatibility label
 
+## Later hardening on Haven trusted-sandbox auto-allow
+
+Another follow-up review found that the trusted-sandbox friction-reduction path
+was still keyed only on `actor: haven` plus tool metadata.
+
+What changed:
+
+- Loopgate now records whether a control session is a trusted Haven client at
+  session open
+- that state is true only when the session actor is `haven` and the connecting
+  process matched the pinned expected client executable
+- `shouldAutoAllowTrustedSandboxCapability` now requires that server-owned
+  session bit instead of trusting the client-declared actor label alone
+
+Why this matters:
+
+- approval-friction reduction is a privilege decision, not UI decoration
+- a generic local client should not be able to claim `actor: haven` and gain
+  the trusted-sandbox auto-allow path
+- this keeps the auto-allow optimization aligned with a real authority signal:
+  a Haven session opened by the pinned Haven executable
+
 ## Later execution-path hardening for approval-disabled helper routes
 
 The next execution-path review found a subtler issue than route scopes:

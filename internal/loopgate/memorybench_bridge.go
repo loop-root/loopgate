@@ -508,6 +508,11 @@ func startBenchmarkControlPlaneServerWithSession(repoRoot string, actor string, 
 	benchmarkServer.resolveUserHomeDir = func() (string, error) {
 		return repoRoot, nil
 	}
+	testExecutablePath, err := os.Executable()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("resolve benchmark executable: %w", err)
+	}
+	benchmarkServer.expectedClientPath = normalizeSessionExecutablePinPath(testExecutablePath)
 
 	serverContext, cancelServer := context.WithCancel(context.Background())
 	serverDone := make(chan struct{})

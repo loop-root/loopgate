@@ -203,6 +203,10 @@ type controlSession struct {
 	ActorLabel         string
 	ClientSessionLabel string
 	WorkspaceID        string
+	// TrustedHavenClient is true only when the session opened as actor haven and
+	// the connecting process matched Loopgate's pinned expected client executable.
+	// It gates friction-reduction paths such as trusted-sandbox auto-allow.
+	TrustedHavenClient bool
 	// OperatorMountPaths are absolute host directories bound from a pinned Haven client at
 	// session open. They scope operator_mount.fs_* tools — never from model text or a
 	// generic unpinned local client.
@@ -2430,6 +2434,12 @@ func (server *Server) shouldAutoAllowTrustedSandboxCapability(tokenClaims capabi
 		return false
 	}
 	if tokenClaims.ActorLabel != "haven" {
+		return false
+	}
+	server.mu.Lock()
+	trustedHavenClient := server.sessions[tokenClaims.ControlSessionID].TrustedHavenClient
+	server.mu.Unlock()
+	if !trustedHavenClient {
 		return false
 	}
 	trustedTool, ok := tool.(interface{ TrustedSandboxLocal() bool })
