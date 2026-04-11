@@ -200,10 +200,15 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - includes folder-access sync/status response types used by **local HTTP clients**
   - now also includes standing task grant summaries for the Security room
 - `client.go`
-  - public Go client surface over the Unix socket (`NewClient` plus endpoint wrappers) — **wire reference** for non-Go integrators; see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`
-  - methods used by local clients and test harnesses (not authority)
+  - public Go client surface core (`Client`, constructors, model/connections/site wrappers) over the Unix socket — **wire reference** for non-Go integrators; see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`
 - `client_session.go`
   - control-session bootstrap, delegated-session refresh state, approval-token flows, and capability-execution wrappers
+- `client_memory.go`
+  - continuity, wake, task-board, and memory governance wrappers used by Haven and test harnesses
+- `client_morphling.go`
+  - morphling lifecycle and quarantine wrappers, including cached approval metadata for pending spawn reviews
+- `client_sandbox.go`
+  - sandbox import/export/list/metadata wrappers over the signed local control plane
 - `client_transport.go`
   - signed HTTP transport, retry-on-token-refresh behavior, SSE chat reader, and request-signature helpers
 - `configured_capability_runtime.go`
