@@ -3517,6 +3517,18 @@ func TestOpenSessionRejectsOperatorMountBindingWithoutExpectedClientPin(t *testi
 	}
 }
 
+func TestOpenSessionRejectsPinnedClientWhenExecutableResolverUnavailable(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServerWithRuntime(t, repoRoot, loopgatePolicyYAML(false), nil, false)
+	server.expectedClientPath = "/Applications/Haven.app/Contents/MacOS/Haven"
+	server.resolveExePath = nil
+
+	client.ConfigureSession("safe-actor", "safe-session", []string{"fs_list"})
+	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeProcessBindingRejected) {
+		t.Fatalf("expected process binding rejection when resolver is unavailable, got %v", err)
+	}
+}
+
 func TestOpenSessionRateLimitByPeerUID(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

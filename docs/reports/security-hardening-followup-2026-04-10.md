@@ -352,6 +352,26 @@ Why this matters:
 - this keeps the auto-allow optimization aligned with a real authority signal:
   a Haven session opened by the pinned Haven executable
 
+## Later hardening on executable pin fail-closed behavior
+
+The same session-open review found one smaller fail-open edge:
+
+- if `control_plane.expected_session_client_executable` was configured but the
+  server had no executable resolver available, `session.open` would skip the
+  comparison instead of denying
+
+What changed:
+
+- `POST /v1/session/open` now fails closed with `process_binding_rejected`
+  whenever executable pinning is configured but the server cannot resolve the
+  connecting process executable
+
+Why this matters:
+
+- executable pinning is a real binding rule, not best-effort telemetry
+- if the server cannot verify the pinned client executable, it should not mint
+  a privileged control session anyway
+
 ## Later execution-path hardening for approval-disabled helper routes
 
 The next execution-path review found a subtler issue than route scopes:

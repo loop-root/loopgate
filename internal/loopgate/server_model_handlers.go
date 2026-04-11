@@ -126,7 +126,15 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		return
 	}
 
-	if server.expectedClientPath != "" && server.resolveExePath != nil {
+	if server.expectedClientPath != "" {
+		if server.resolveExePath == nil {
+			server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
+				Status:       ResponseStatusDenied,
+				DenialReason: "cannot resolve connecting process executable",
+				DenialCode:   DenialCodeProcessBindingRejected,
+			})
+			return
+		}
 		exePath, exeErr := server.resolveExePath(requestPeerIdentity.PID)
 		if exeErr != nil {
 			server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
