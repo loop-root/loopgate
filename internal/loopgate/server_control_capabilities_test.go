@@ -479,6 +479,132 @@ func TestTaskRoutesRequireScopedCapabilities(t *testing.T) {
 	}
 }
 
+func TestTaskPlanRoutesRequireScopedCapabilities(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	readOnlyClient := NewClient(client.socketPath)
+	readOnlyClient.ConfigureSession("test-actor", "task-plan-read-only", []string{controlCapabilityTaskPlanRead})
+	if _, err := readOnlyClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure task_plan.read token: %v", err)
+	}
+	steps := []TaskPlanStep{
+		{StepIndex: 0, Capability: "echo.generate_summary", Arguments: map[string]string{"input_text": "scope check"}},
+	}
+	submitRequest := SubmitTaskPlanRequest{
+		GoalText:      "task-plan scope check",
+		Steps:         steps,
+		CanonicalHash: computeCanonicalHash("task-plan scope check", steps),
+	}
+	if err := readOnlyClient.doJSONWithHeaders(context.Background(), httpMethodPost, "/v1/task/plan", readOnlyClient.capabilityToken, submitRequest, &SubmitTaskPlanResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected task_plan.write scope denial for submit, got %v", err)
+	}
+	if err := readOnlyClient.doJSONWithHeaders(context.Background(), httpMethodPost, "/v1/task/execute", readOnlyClient.capabilityToken, ExecuteTaskLeaseRequest{
+		LeaseID:     "lease-read-only",
+		MorphlingID: "morphling-read-only",
+	}, &ExecuteTaskLeaseResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected task_plan.write scope denial for execute, got %v", err)
+	}
+
+	writeOnlyClient := NewClient(client.socketPath)
+	writeOnlyClient.ConfigureSession("test-actor", "task-plan-write-only", []string{controlCapabilityTaskPlanWrite})
+	if _, err := writeOnlyClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure task_plan.write token: %v", err)
+	}
+	if err := writeOnlyClient.doJSONWithHeaders(context.Background(), httpMethodPost, "/v1/task/result", writeOnlyClient.capabilityToken, TaskPlanResultRequest{
+		PlanID: "plan-write-only",
+	}, &TaskPlanResultResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected task_plan.read scope denial for result, got %v", err)
+	}
+
+	readWriteClient := NewClient(client.socketPath)
+	readWriteClient.ConfigureSession("test-actor", "task-plan-read-write", []string{controlCapabilityTaskPlanRead, controlCapabilityTaskPlanWrite})
+	if _, err := readWriteClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure task_plan read/write token: %v", err)
+	}
+	planResponse := submitTaskPlanForTest(t, readWriteClient, "task-plan allowed")
+	if planResponse.Status != taskPlanStateValidated {
+		t.Fatalf("expected validated plan status, got %#v", planResponse)
+	}
+	resultRequest := TaskPlanResultRequest{PlanID: planResponse.PlanID}
+	var resultResponse TaskPlanResultResponse
+	if err := readWriteClient.doJSONWithHeaders(context.Background(), httpMethodPost, "/v1/task/result", readWriteClient.capabilityToken, resultRequest, &resultResponse, nil); err != nil {
+		t.Fatalf("task/result with task_plan.read: %v", err)
+	}
+	if resultResponse.PlanID != planResponse.PlanID {
+		t.Fatalf("expected task result for %q, got %#v", planResponse.PlanID, resultResponse)
+	}
+}
+
+func TestQuarantineRoutesRequireScopedCapabilities(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	quarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+		RequestID:  "req-quarantine-scope",
+		Capability: "remote_fetch",
+	}, "quarantined payload")
+	if err != nil {
+		t.Fatalf("store quarantined payload: %v", err)
+	}
+
+	readDeniedClient := NewClient(client.socketPath)
+	readDeniedClient.ConfigureSession("test-actor", "quarantine-read-denied", []string{"fs_read"})
+	if _, err := readDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied quarantine.read token: %v", err)
+	}
+	if _, err := readDeniedClient.QuarantineMetadata(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected quarantine.read scope denial for metadata, got %v", err)
+	}
+	if _, err := readDeniedClient.ViewQuarantinedPayload(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected quarantine.read scope denial for view, got %v", err)
+	}
+
+	writeDeniedClient := NewClient(client.socketPath)
+	writeDeniedClient.ConfigureSession("test-actor", "quarantine-write-denied", []string{controlCapabilityQuarantineRead})
+	if _, err := writeDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied quarantine.write token: %v", err)
+	}
+	if _, err := writeDeniedClient.PruneQuarantinedPayload(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected quarantine.write scope denial for prune, got %v", err)
+	}
+
+	readAllowedClient := NewClient(client.socketPath)
+	readAllowedClient.ConfigureSession("test-actor", "quarantine-read-allowed", []string{controlCapabilityQuarantineRead})
+	if _, err := readAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure quarantine.read token: %v", err)
+	}
+	metadataResponse, err := readAllowedClient.QuarantineMetadata(context.Background(), quarantineRef)
+	if err != nil {
+		t.Fatalf("quarantine metadata with quarantine.read: %v", err)
+	}
+	if metadataResponse.QuarantineRef != quarantineRef {
+		t.Fatalf("expected metadata for %q, got %#v", quarantineRef, metadataResponse)
+	}
+	viewResponse, err := readAllowedClient.ViewQuarantinedPayload(context.Background(), quarantineRef)
+	if err != nil {
+		t.Fatalf("quarantine view with quarantine.read: %v", err)
+	}
+	if viewResponse.Metadata.QuarantineRef != quarantineRef {
+		t.Fatalf("expected view metadata for %q, got %#v", quarantineRef, viewResponse)
+	}
+
+	ageQuarantineRecordForPrune(t, repoRoot, quarantineRef)
+
+	writeAllowedClient := NewClient(client.socketPath)
+	writeAllowedClient.ConfigureSession("test-actor", "quarantine-write-allowed", []string{controlCapabilityQuarantineWrite})
+	if _, err := writeAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure quarantine.write token: %v", err)
+	}
+	prunedMetadata, err := writeAllowedClient.PruneQuarantinedPayload(context.Background(), quarantineRef)
+	if err != nil {
+		t.Fatalf("quarantine prune with quarantine.write: %v", err)
+	}
+	if prunedMetadata.StorageState != quarantineStorageStateBlobPruned {
+		t.Fatalf("expected blob_pruned storage state, got %#v", prunedMetadata)
+	}
+}
+
 func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

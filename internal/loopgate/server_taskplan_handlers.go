@@ -166,6 +166,9 @@ func (server *Server) handleTaskPlanSubmit(writer http.ResponseWriter, request *
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityTaskPlanWrite) {
+		return
+	}
 
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxTaskPlanBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
@@ -294,6 +297,9 @@ func (server *Server) handleTaskLeaseRequest(writer http.ResponseWriter, request
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityTaskPlanWrite) {
 		return
 	}
 
@@ -470,6 +476,9 @@ func (server *Server) handleTaskLeaseExecute(writer http.ResponseWriter, request
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityTaskPlanWrite) {
 		return
 	}
 
@@ -735,6 +744,9 @@ func (server *Server) handleTaskLeaseComplete(writer http.ResponseWriter, reques
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityTaskPlanWrite) {
+		return
+	}
 
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxTaskPlanBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
@@ -877,6 +889,9 @@ func (server *Server) handleTaskPlanResult(writer http.ResponseWriter, request *
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityTaskPlanRead) {
 		return
 	}
 

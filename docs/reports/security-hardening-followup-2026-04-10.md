@@ -146,3 +146,59 @@ Why this matters:
   bridge story sounding already implemented
 - it keeps the real cross-process path explicit: dedicated morphling worker
   launch/open sessions, not generic delegated-session reuse
+
+## Later route-scope cleanup on task-plan prototype routes
+
+Another follow-up sweep found one more live signed-only route class:
+
+- `/v1/task/plan`
+- `/v1/task/lease`
+- `/v1/task/execute`
+- `/v1/task/complete`
+- `/v1/task/result`
+
+These handlers were already session-bound and request-MAC protected, but they
+were not explicitly control-capability gated.
+
+What changed:
+
+- added `task_plan.write` for submit / lease / execute / complete
+- added `task_plan.read` for result lookup
+- updated status capability advertising and route-scope regressions
+- updated the HTTP and design docs so the task-plan seam no longer looks like a
+  signed-only exception
+
+Why this matters:
+
+- it closes another route-governance drift path where signed transport could be
+  mistaken for sufficient authority
+- it keeps the prototype seam aligned with the same least-privilege rules as
+  the rest of the control plane
+
+## Later route-scope cleanup on quarantine routes
+
+The next parity sweep found the quarantine handlers were still signed-only:
+
+- `/v1/quarantine/metadata`
+- `/v1/quarantine/view`
+- `/v1/quarantine/prune`
+
+That meant any signed session token could inspect quarantined payload metadata,
+read bounded quarantined content, or prune stored blobs without an explicit
+route scope.
+
+What changed:
+
+- added `quarantine.read` for metadata and view
+- added `quarantine.write` for prune
+- updated status capability advertising and route-scope regressions
+- updated quarantine integration coverage to request the new control scopes
+- updated HTTP/design/checklist docs so quarantine is no longer documented like
+  a signed-only exception
+
+Why this matters:
+
+- quarantined payloads are exact evidence records; reading or pruning them is a
+  privileged operator action, not something any signed session should inherit
+- this closes another authority leak where transport integrity existed without
+  least-privilege route binding

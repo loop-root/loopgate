@@ -60,7 +60,7 @@ func TestQuarantineLifecycleOverRealSocket(t *testing.T) {
 		t.Fatalf("expected status capabilities to include %q, got %#v", capabilityName, status.Capabilities)
 	}
 
-	client := harness.newClient("integration-actor", "integration-quarantine", capabilityNames(status.Capabilities))
+	client := harness.newClient("integration-actor", "integration-quarantine", advertisedSessionCapabilityNames(status))
 	executeResponse, err := client.ExecuteCapability(context.Background(), loopgate.CapabilityRequest{
 		RequestID:  "req-quarantine",
 		Capability: capabilityName,

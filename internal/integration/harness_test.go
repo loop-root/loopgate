@@ -367,6 +367,12 @@ func capabilityNames(capabilities []loopgate.CapabilitySummary) []string {
 	return names
 }
 
+func advertisedSessionCapabilityNames(status loopgate.StatusResponse) []string {
+	advertisedCapabilities := capabilityNames(status.Capabilities)
+	advertisedCapabilities = append(advertisedCapabilities, capabilityNames(status.ControlCapabilities)...)
+	return advertisedCapabilities
+}
+
 func decodeJSON(t *testing.T, bodyBytes []byte, target interface{}) {
 	t.Helper()
 	if err := json.Unmarshal(bodyBytes, target); err != nil {

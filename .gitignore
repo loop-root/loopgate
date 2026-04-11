@@ -7,6 +7,7 @@
 .DS_Store
 .idea/
 .vscode/
+docs/.obsidian/
 
 # Go
 *.exe

@@ -22,10 +22,14 @@ const (
 	controlCapabilityModelSettingsWrite      = "model.settings.write"
 	controlCapabilityModelValidate           = "model.validate"
 	controlCapabilityOperatorMountWriteGrant = "operator_mount.write_grant"
+	controlCapabilityQuarantineRead          = "quarantine.read"
+	controlCapabilityQuarantineWrite         = "quarantine.write"
 	controlCapabilitySiteInspect             = "site.inspect"
 	controlCapabilitySiteTrustWrite          = "site.trust.write"
 	controlCapabilityTaskStandingGrantRead   = "task_standing_grant.read"
 	controlCapabilityTaskStandingGrantWrite  = "task_standing_grant.write"
+	controlCapabilityTaskPlanRead            = "task_plan.read"
+	controlCapabilityTaskPlanWrite           = "task_plan.write"
 	controlCapabilityTasksRead               = "tasks.read"
 	controlCapabilityTasksWrite              = "tasks.write"
 	controlCapabilityUIRead                  = "ui.read"
@@ -147,6 +151,18 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Operation:   "write",
 		Description: "Update session-scoped operator mount write-grant state through the local control plane.",
 	},
+	controlCapabilityQuarantineRead: {
+		Name:        controlCapabilityQuarantineRead,
+		Category:    "quarantine",
+		Operation:   "read",
+		Description: "Read quarantined payload metadata and bounded payload views through the local control plane.",
+	},
+	controlCapabilityQuarantineWrite: {
+		Name:        controlCapabilityQuarantineWrite,
+		Category:    "quarantine",
+		Operation:   "write",
+		Description: "Prune quarantined payload blobs through the local control plane while preserving authoritative metadata.",
+	},
 	controlCapabilitySiteInspect: {
 		Name:        controlCapabilitySiteInspect,
 		Category:    "site",
@@ -170,6 +186,18 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "task",
 		Operation:   "write",
 		Description: "Update task standing-grant configuration through the local control plane.",
+	},
+	controlCapabilityTaskPlanRead: {
+		Name:        controlCapabilityTaskPlanRead,
+		Category:    "task",
+		Operation:   "read",
+		Description: "Read task-plan execution results through the local control plane.",
+	},
+	controlCapabilityTaskPlanWrite: {
+		Name:        controlCapabilityTaskPlanWrite,
+		Category:    "task",
+		Operation:   "write",
+		Description: "Submit, lease, execute, and complete task-plan prototype flows through the local control plane.",
 	},
 	controlCapabilityTasksRead: {
 		Name:        controlCapabilityTasksRead,

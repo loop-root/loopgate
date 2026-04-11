@@ -32,7 +32,7 @@ import (
 func TestTaskPlanGoldenPath(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-taskplan", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-taskplan", advertisedSessionCapabilityNames(status))
 
 	// Step 1: Compute canonical hash and submit plan.
 	steps := []loopgate.TaskPlanStep{
@@ -207,7 +207,7 @@ func TestTaskPlanGoldenPath(t *testing.T) {
 func TestTaskPlanUnknownCapabilityDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-taskplan-deny-cap", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-taskplan-deny-cap", advertisedSessionCapabilityNames(status))
 
 	steps := []loopgate.TaskPlanStep{
 		{StepIndex: 0, Capability: "unknown.capability", Arguments: map[string]string{}},
@@ -235,7 +235,7 @@ func TestTaskPlanUnknownCapabilityDenied(t *testing.T) {
 func TestTaskPlanHashMismatchDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-taskplan-hash", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-taskplan-hash", advertisedSessionCapabilityNames(status))
 
 	steps := []loopgate.TaskPlanStep{
 		{StepIndex: 0, Capability: "echo.generate_summary", Arguments: map[string]string{"input_text": "test"}},
@@ -263,7 +263,7 @@ func TestTaskPlanHashMismatchDenied(t *testing.T) {
 func TestTaskLeaseWrongPlanHashDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-lease-hash", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-lease-hash", advertisedSessionCapabilityNames(status))
 
 	planID := submitValidatedPlan(t, harness, credentials)
 
@@ -290,9 +290,9 @@ func TestTaskLeaseWrongPlanHashDenied(t *testing.T) {
 func TestTaskPlanCrossSessionAccessDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	ownerCredentials := harness.openSession(t, "integration-owner", "integration-owner-taskplan", capabilityNames(status.Capabilities))
+	ownerCredentials := harness.openSession(t, "integration-owner", "integration-owner-taskplan", advertisedSessionCapabilityNames(status))
 	time.Sleep(600 * time.Millisecond)
-	otherCredentials := harness.openSession(t, "integration-other", "integration-other-taskplan", capabilityNames(status.Capabilities))
+	otherCredentials := harness.openSession(t, "integration-other", "integration-other-taskplan", advertisedSessionCapabilityNames(status))
 
 	planID, canonicalHash := submitValidatedPlanWithHash(t, harness, ownerCredentials)
 
@@ -339,7 +339,7 @@ func TestTaskPlanCrossSessionAccessDenied(t *testing.T) {
 func TestTaskLeaseNonExistentPlanDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-lease-404", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-lease-404", advertisedSessionCapabilityNames(status))
 
 	leaseRequest := loopgate.RequestTaskLeaseRequest{
 		PlanID:    "nonexistent-plan-id",
@@ -364,7 +364,7 @@ func TestTaskLeaseNonExistentPlanDenied(t *testing.T) {
 func TestTaskLeaseAlreadyLeasedPlanDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-double-lease", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-double-lease", advertisedSessionCapabilityNames(status))
 
 	planID, canonicalHash := submitValidatedPlanWithHash(t, harness, credentials)
 
@@ -401,7 +401,7 @@ func TestTaskLeaseAlreadyLeasedPlanDenied(t *testing.T) {
 func TestTaskExecuteWrongMorphlingIDDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-wrong-morphling", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-wrong-morphling", advertisedSessionCapabilityNames(status))
 
 	_, leaseID, _ := submitPlanAndLease(t, harness, credentials)
 
@@ -427,7 +427,7 @@ func TestTaskExecuteWrongMorphlingIDDenied(t *testing.T) {
 func TestTaskDoubleExecuteDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-double-execute", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-double-execute", advertisedSessionCapabilityNames(status))
 
 	_, leaseID, morphlingID := submitPlanAndLease(t, harness, credentials)
 
@@ -464,7 +464,7 @@ func TestTaskDoubleExecuteDenied(t *testing.T) {
 func TestTaskDoubleCompleteDenied(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "integration-actor", "integration-double-complete", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "integration-actor", "integration-double-complete", advertisedSessionCapabilityNames(status))
 
 	_, leaseID, morphlingID := submitPlanAndLease(t, harness, credentials)
 

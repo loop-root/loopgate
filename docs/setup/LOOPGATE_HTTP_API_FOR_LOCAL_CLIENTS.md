@@ -227,8 +227,10 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/memory/discover` / `recall` / `remember` | Memory surfaces |
 | `POST /v1/memory/inspections/…` | Inspection governance |
 | `POST /v1/morphlings/*` | Bounded worker (**morphling**) lifecycle + worker IPC |
-| `POST /v1/quarantine/*` | Quarantine metadata / view / prune |
-| `POST /v1/task/plan` / `lease` / `execute` / `complete` / `result` | Task-plan vertical slice |
+| `POST /v1/quarantine/metadata` / `view` | Quarantine metadata / bounded payload view (**`quarantine.read`**) |
+| `POST /v1/quarantine/prune` | Quarantine blob prune while preserving metadata (**`quarantine.write`**) |
+| `POST /v1/task/plan` / `lease` / `execute` / `complete` | Task-plan vertical slice (**`task_plan.write`**) |
+| `POST /v1/task/result` | Task-plan result lookup (**`task_plan.read`**) |
 | `GET` / `PUT /v1/config/…` | Policy, runtime, connections, etc. (capability-gated) |
 | `POST /v1/approvals/{id}/decision` | Approval decisions (approval token + manifest binding) |
 | `GET /v1/ui/status` / `events` | Display-safe UI observation (signed Bearer routes; **`ui.read`**) |
@@ -302,6 +304,24 @@ explicitly needs the connection surface.
 - `PUT /v1/ui/task-standing-grants`
   - requires **`task_standing_grant.write`**
   - updates standing-grant status for a supported task execution class
+
+### 7.1.2 Task-plan prototype routes
+
+The task-plan vertical slice is a compatibility / integration seam, not a
+general-purpose public worker API.
+
+- `POST /v1/task/plan`
+- `POST /v1/task/lease`
+- `POST /v1/task/execute`
+- `POST /v1/task/complete`
+  - require **`task_plan.write`**
+  - submit, lease, execute, and finalize the bounded task-plan flow
+- `POST /v1/task/result`
+  - requires **`task_plan.read`**
+  - returns the current result projection for a submitted plan
+
+Signed local transport is not sufficient on this surface; these routes are
+explicitly capability-gated like the rest of the control plane.
 
 ### 7.2 Agent work-item helpers (bounded task board; actor `haven`)
 

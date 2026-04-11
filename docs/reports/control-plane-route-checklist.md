@@ -89,3 +89,7 @@ Security-relevant denials and many successes append via `logEvent` / ledger path
   - listing surfaces => **`fs_list`**
   - file content surfaces => **`fs_read`**
   - working-note save => **`notes.write`**
+- `/v1/task/plan`, `/v1/task/lease`, `/v1/task/execute`, and `/v1/task/complete` should require **`task_plan.write`**
+- `/v1/task/result` should require **`task_plan.read`**
+- `/v1/quarantine/metadata` and `/v1/quarantine/view` should require **`quarantine.read`**
+- `/v1/quarantine/prune` should require **`quarantine.write`**

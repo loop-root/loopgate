@@ -146,9 +146,9 @@ Implemented endpoints:
 - `POST /v1/connections/validate` (`connection.write`)
 - `POST /v1/connections/pkce/start` (`connection.write`)
 - `POST /v1/connections/pkce/complete` (`connection.write`)
-- `POST /v1/quarantine/metadata`
-- `POST /v1/quarantine/view`
-- `POST /v1/quarantine/prune`
+- `POST /v1/quarantine/metadata` (`quarantine.read`)
+- `POST /v1/quarantine/view` (`quarantine.read`)
+- `POST /v1/quarantine/prune` (`quarantine.write`)
 - `POST /v1/sites/inspect` (`site.inspect`)
 - `POST /v1/sites/trust-draft` (`site.trust.write`)
 - `POST /v1/sandbox/import` (`fs_write`; host source must be inside the control session's bound operator mounts)
@@ -184,11 +184,11 @@ The display-safe memory UI routes are intentionally operator-oriented:
 - `POST /v1/model/validate`
 - `POST /v1/model/reply`
 - `POST /v1/capabilities/execute`
-- `POST /v1/task/plan`
-- `POST /v1/task/lease`
-- `POST /v1/task/execute`
-- `POST /v1/task/complete`
-- `POST /v1/task/result`
+- `POST /v1/task/plan` (`task_plan.write`)
+- `POST /v1/task/lease` (`task_plan.write`)
+- `POST /v1/task/execute` (`task_plan.write`)
+- `POST /v1/task/complete` (`task_plan.write`)
+- `POST /v1/task/result` (`task_plan.read`)
 - `POST /v1/approvals/{id}/decision`
 
 Current authenticated request shape for privileged POSTs:
@@ -219,6 +219,13 @@ Current morphling implementation note:
 - morphling completions that require review now move through
   `running -> completing -> pending_review -> terminating -> terminated` on the
   real socket path rather than only in the persisted state model
+
+Task-plan prototype note:
+
+- the task-plan routes remain a bounded compatibility seam for integration and
+  testing, not the future cross-process worker authority model
+- they are now explicitly capability-gated with `task_plan.write` /
+  `task_plan.read` rather than relying on signed transport alone
 
 Not yet implemented:
 

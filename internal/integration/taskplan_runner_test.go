@@ -35,7 +35,7 @@ import (
 func TestMorphlingRunnerGoldenPath(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "runner-actor", "runner-golden", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "runner-actor", "runner-golden", advertisedSessionCapabilityNames(status))
 
 	planID, leaseID, morphlingID := submitPlanAndLease(t, harness, credentials)
 
@@ -104,7 +104,7 @@ func TestMorphlingRunnerSubprocessBuild(t *testing.T) {
 
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "subprocess-actor", "subprocess-build", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "subprocess-actor", "subprocess-build", advertisedSessionCapabilityNames(status))
 
 	_, leaseID, morphlingID := submitPlanAndLease(t, harness, credentials)
 
@@ -146,7 +146,7 @@ func TestMorphlingRunnerSubprocessBuild(t *testing.T) {
 func TestMorphlingRunnerLeaseExpired(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "expiry-actor", "expiry-session", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "expiry-actor", "expiry-session", advertisedSessionCapabilityNames(status))
 
 	_, leaseID, morphlingID := submitPlanAndLease(t, harness, credentials)
 
@@ -170,7 +170,7 @@ func TestMorphlingRunnerLeaseExpired(t *testing.T) {
 func TestMorphlingRunnerDuplicateCompletion(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "dup-actor", "dup-session", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "dup-actor", "dup-session", advertisedSessionCapabilityNames(status))
 
 	_, leaseID, morphlingID := submitPlanAndLease(t, harness, credentials)
 
@@ -210,7 +210,7 @@ func TestMorphlingRunnerDuplicateCompletion(t *testing.T) {
 func TestMorphlingRunnerCrashAfterExecute(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "crash-actor", "crash-session", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "crash-actor", "crash-session", advertisedSessionCapabilityNames(status))
 
 	planID, leaseID, morphlingID := submitPlanAndLease(t, harness, credentials)
 
@@ -295,7 +295,7 @@ func TestMorphlingRunnerCrashAfterExecute(t *testing.T) {
 func TestMorphlingRunnerConcurrentExecute(t *testing.T) {
 	harness := newLoopgateHarness(t, integrationPolicyYAML(true))
 	status := harness.waitForStatus(t)
-	credentials := harness.openSession(t, "concurrent-actor", "concurrent-session", capabilityNames(status.Capabilities))
+	credentials := harness.openSession(t, "concurrent-actor", "concurrent-session", advertisedSessionCapabilityNames(status))
 
 	_, leaseID, morphlingID := submitPlanAndLease(t, harness, credentials)
 
