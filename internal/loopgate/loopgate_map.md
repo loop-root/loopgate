@@ -165,7 +165,10 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_model_handlers.go` — model connection APIs; **session open** stamps `TenantID` / `UserID` from `config/runtime.yaml` → `tenancy` (see `docs/setup/TENANCY.md`, ADR 0004)
 - `server_config_handlers.go` — configuration
 - `server_connection_handlers.go` — `/v1/status` and connection surface
-- `server_taskplan_handlers.go` — task plan execution
+- `server_taskplan_contract.go`
+  - task-plan request/response envelopes and audit-unavailable response helpers
+- `server_taskplan_handlers.go`
+  - task-plan submission, lease issuance, execution, completion, and result handlers
 - `server_quarantine_handlers.go` — quarantine flows
 - `server_host_access_handlers.go` — explicit host-access / folder-grant operations beyond simple mirror
 
