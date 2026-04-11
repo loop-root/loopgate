@@ -183,14 +183,18 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `continuity_memory.go`
   - thread distillation
   - explicit remembered facts
-  - wake-state generation
-  - wake-state diagnostics
   - explicit remember persistence now revalidates and consumes `tcl.ValidatedMemoryCandidate` directly; request normalization is preflight only
   - timezone/locale alias handling ends at the adapter boundary, so persistence only sees canonical `profile.timezone` / `profile.locale`
   - discover-memory retrieval remains tag-overlap first, with a narrow slot-preference tie-break for a tiny allowlist of stable profile slots (`name`, `preferred_name`, `timezone`, `locale`)
   - that tie-break only reorders already-eligible discover results; it is not an admission path and must not bypass lineage or review filters
   - now rehydrates task metadata for unresolved items from continuity facts
   - durable mutation ordering: audit before continuity JSONL append; `saveContinuityMemoryState(..., nowUTC)` for testable / consistent artifact timestamps
+- `continuity_memory_wake.go`
+  - core Loopgate wake-state builder and diagnostic-wake assembly
+- `continuity_memory_wake_selection.go`
+  - wake fact-candidate precedence, anchor tuple resolution, and authoritative-vs-derived state classification
+- `continuity_memory_wake_projection.go`
+  - wake-state projection helpers and token-budget trimming
 - `continuity_mutation_ordering_test.go`
   - `TestMutateContinuityMemory_*`, `TestContinuityInspectRequest_*`, corrupt-replay coverage per Phase 1 Tasks 1 and 5
 - `continuity_runtime.go`
