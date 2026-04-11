@@ -78,8 +78,12 @@ For integrators it matters in four ways:
 - `server_haven_chat_runtime.go`
   - `havenChatRuntime` — internal runtime object that owns the supervised agent loop and explicit runtime dependencies (`policy`, `registry`, capability execution hook)
   - `runToolLoop` — the agent loop; now delegates to `executeToolCallsConcurrent`
-- `server_haven_chat_setup.go`
-  - request decode, thread bootstrap, and runtime bootstrap
+- `server_haven_chat_request.go`
+  - request-method gate, trusted Haven session enforcement, signed-body verification, and chat request decode
+- `server_haven_chat_thread.go`
+  - thread bootstrap, workspace binding handoff, and user-message persistence into threadstore
+- `server_haven_chat_runtime_setup.go`
+  - runtime bootstrap: persona, model runtime config, wake summary, attachment shaping, and tool catalog preparation
 - `server_haven_chat_loop_state.go`
   - per-turn loop state (conversation growth, follow-up nudges, pending approval outcome shaping)
 - `server_haven_chat_results.go`
