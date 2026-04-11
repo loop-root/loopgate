@@ -8,6 +8,11 @@ import (
 	"morph/internal/sandbox"
 )
 
+type MorphlingInput struct {
+	SandboxPath string `json:"sandbox_path"`
+	Role        string `json:"role,omitempty"`
+}
+
 type MorphlingSpawnRequest struct {
 	RequestID                  string           `json:"request_id,omitempty"`
 	Class                      string           `json:"class"`

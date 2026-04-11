@@ -76,13 +76,16 @@ For integrators it matters in four ways:
     - `OpenSessionRequest`
     - `CapabilityRequest`
     - `CapabilityResponse`
-    - sandbox, connection, and site-inspection envelopes
+- `types_connections.go`
+  - connection status, PKCE, model-connection store, and site-inspection/trust wire contracts plus validators
 - `types_haven_ui.go`
   - Haven UI, task-board projection, desk-note, journal, working-note, workspace, and presence wire contracts
 - `types_memory.go`
   - continuity inspection, wake-state, memory lookup/recall/artifact, and todo wire contracts plus request validation helpers
 - `types_morphling.go`
-  - morphling lifecycle wire contracts and morphling request validation helpers
+  - morphling lifecycle wire contracts, sandbox input specs, and morphling request validation helpers
+- `types_sandbox.go`
+  - sandbox import/export/list/metadata wire contracts plus request validation helpers
 
 ### Haven Chat (agentic tool execution)
 
