@@ -174,7 +174,8 @@ Key files:
 - `folder_access.go`: explicit host-folder grant storage and compare-before-sync mirror logic
 - `continuity_memory.go`: Loopgate-owned durable memory selection and task-board wake-state reconstruction
 - `continuity_runtime_contract.go`: continuity runtime constants, replay/event structs, and artifact path layout
-- `continuity_runtime.go`: wake-state/runtime projection, replay, and snapshot helpers; now part of the task-metadata and future scheduler groundwork
+- `continuity_runtime.go`: continuity runtime derivation and projection helpers; now part of the task-metadata and future scheduler groundwork
+- `continuity_runtime_storage.go`: continuity artifact persistence and authoritative JSONL replay path
 - `todo_execution.go`: capability-entry surface for task and goal actions
 - `todo_contract.go`: shared task/todo constants and active-item record contract
 - `todo_request.go`: todo request normalization and validation helpers

@@ -247,9 +247,11 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `continuity_runtime_contract.go`
   - continuity runtime constants, replay/event contract structs, and partition artifact-path layout
 - `continuity_runtime.go`
-  - event-log replay, artifact writing, and current-snapshot reconstruction
-  - important when new continuity event types are introduced
-  - now projects structured task snapshots instead of only item IDs and text
+  - continuity runtime derivation helpers: goal normalization, resolved profile snapshots, ranking cache, and task/review snapshot reconstruction
+  - important when new continuity event payloads or projection fields are introduced
+- `continuity_runtime_storage.go`
+  - continuity artifact persistence, JSONL append/replay, and derived snapshot materialization
+  - the fail-closed path for replaying authoritative continuity events back into memory state
 
 - `memory_backend.go` / `memory_backend_continuity_tcl.go`
   - swappable backend boundary
