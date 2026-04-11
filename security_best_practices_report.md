@@ -13,10 +13,11 @@ Targeted review scope:
 
 No critical or high-severity issues were found in the reviewed scope. Signed-request coverage, peer binding, approval manifest binding, and trusted-Haven route gating all held up in this pass.
 
-Two lower-severity issues were identified and fixed in this change set:
+Three lower-severity issues were identified and fixed in this change set:
 
 1. a malformed morphling worker open request could return early without emitting an explicit denial response
 2. Haven settings routes reflected raw backend/storage errors to authenticated UI clients, leaking local runtime implementation detail
+3. Haven model settings routes reflected raw config and validation errors to authenticated UI clients, leaking config paths and internal connection metadata
 
 ## Fixed Findings
 
@@ -38,6 +39,28 @@ if err := server.decodeJSONBody(writer, request, maxCapabilityBodyBytes, &openRe
 - Fix: emit `400 Bad Request` with `DenialCodeMalformedRequest` when JSON decode fails.
 - Mitigation: regression coverage added for malformed worker-open bodies.
 - False positive notes: none; this was directly visible in handler code.
+
+Status: fixed in the current worktree/commit.
+
+### SG-003
+
+- Rule ID: GO-CONFIG-001 / UI projection redaction invariant
+- Severity: Low
+- Location: `internal/loopgate/server_haven_model_settings.go:68-76`, `internal/loopgate/server_haven_model_settings.go:153-161`, `internal/loopgate/server_haven_model_settings.go:294-301`, `internal/loopgate/server_haven_model_settings.go:305-311`
+- Evidence:
+
+```go
+server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
+	Status:       ResponseStatusError,
+	DenialReason: fmt.Sprintf("load model config: %v", err),
+	DenialCode:   DenialCodeExecutionFailed,
+})
+```
+
+- Impact: authenticated Haven model-settings clients could receive raw filesystem/config errors and validation failures containing local config paths, stored connection IDs, or backend mismatch detail. This does not create new authority, but it leaks internal runtime detail through an operator-facing settings route likely to be part of the UI MVP.
+- Fix: replace raw load/save/validation error text with stable redacted operator messages and mark the responses `Redacted: true`.
+- Mitigation: regression coverage added to ensure GET does not leak the config path, POST validation does not leak stale connection metadata, and POST save failure does not leak the config path.
+- False positive notes: malformed user input validation is still allowed to return specific request-shape errors; the fix is scoped to internal config/runtime failures rather than all bad-request responses.
 
 Status: fixed in the current worktree/commit.
 
@@ -77,5 +100,6 @@ Status: fixed in the current worktree/commit.
 ## Follow-up Recommendations
 
 1. Sweep remaining operator-only config and diagnostic handlers for raw `err.Error()` reflection and normalize them to stable redacted messages.
-2. Add one small helper for “execution failed but redacted” responses so new UI endpoints do not reintroduce path leaks ad hoc.
-3. Keep UI MVP work on typed Loopgate APIs only; do not let a desktop or browser surface read raw runtime state files directly.
+2. The next likely MVP-facing candidate is `internal/loopgate/server_haven_chat_runtime_setup.go`, which still reflects raw model runtime initialization failures to chat clients.
+3. Add one small helper for “execution failed but redacted” responses so new UI endpoints do not reintroduce path leaks ad hoc.
+4. Keep UI MVP work on typed Loopgate APIs only; do not let a desktop or browser surface read raw runtime state files directly.

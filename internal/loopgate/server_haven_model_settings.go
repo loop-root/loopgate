@@ -12,6 +12,12 @@ import (
 
 const maxHavenModelSettingsBodyBytes = 32 * 1024
 
+const (
+	havenModelSettingsLoadFailureText       = "failed to load model settings"
+	havenModelSettingsUpdateFailureText     = "failed to update model settings"
+	havenModelSettingsValidationFailureText = "failed to validate model settings"
+)
+
 // HavenModelSettingsResponse is the JSON for GET/POST /v1/model/settings.
 // The legacy /v1/haven/model-settings alias returns the same payload.
 type HavenModelSettingsResponse struct {
@@ -64,8 +70,9 @@ func (server *Server) handleHavenModelSettingsGet(writer http.ResponseWriter, re
 	if err != nil {
 		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 			Status:       ResponseStatusError,
-			DenialReason: fmt.Sprintf("load model config: %v", err),
+			DenialReason: havenModelSettingsLoadFailureText,
 			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
 		})
 		return
 	}
@@ -148,8 +155,9 @@ func (server *Server) handleHavenModelSettingsPost(writer http.ResponseWriter, r
 	if err != nil {
 		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 			Status:       ResponseStatusError,
-			DenialReason: fmt.Sprintf("load model config: %v", err),
+			DenialReason: havenModelSettingsLoadFailureText,
 			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
 		})
 		return
 	}
@@ -287,8 +295,9 @@ func (server *Server) handleHavenModelSettingsPost(writer http.ResponseWriter, r
 	if err != nil {
 		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
 			Status:       ResponseStatusError,
-			DenialReason: err.Error(),
+			DenialReason: havenModelSettingsValidationFailureText,
 			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
 		})
 		return
 	}
@@ -296,8 +305,9 @@ func (server *Server) handleHavenModelSettingsPost(writer http.ResponseWriter, r
 	if err := modelruntime.SavePersistedConfig(configPath, validatedConfig); err != nil {
 		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 			Status:       ResponseStatusError,
-			DenialReason: fmt.Sprintf("save model config: %v", err),
+			DenialReason: havenModelSettingsUpdateFailureText,
 			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
 		})
 		return
 	}
