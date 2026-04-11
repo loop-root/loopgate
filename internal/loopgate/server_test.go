@@ -3450,6 +3450,41 @@ func TestOpenSessionActiveLimitByPeerUID(t *testing.T) {
 	}
 }
 
+func TestSessionOpenAuditFailureRestoresReplacedSession(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure original capability token: %v", err)
+	}
+	originalControlSessionID := client.controlSessionID
+	originalCapabilityToken := client.capabilityToken
+
+	server.appendAuditEvent = func(string, ledger.Event) error {
+		return errors.New("audit down")
+	}
+
+	replacingClient := NewClient(client.socketPath)
+	replacingClient.ConfigureSession("test-actor", "test-session", capabilityNames(status.Capabilities))
+	if _, err := replacingClient.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+		t.Fatalf("expected session open audit failure, got %v", err)
+	}
+
+	server.mu.Lock()
+	_, originalSessionStillPresent := server.sessions[originalControlSessionID]
+	_, originalTokenStillPresent := server.tokens[originalCapabilityToken]
+	server.mu.Unlock()
+	if !originalSessionStillPresent {
+		t.Fatalf("expected original session %q to be restored after audit failure", originalControlSessionID)
+	}
+	if !originalTokenStillPresent {
+		t.Fatalf("expected original capability token for %q to remain valid after audit failure", originalControlSessionID)
+	}
+
+	if _, err := client.Status(context.Background()); err != nil {
+		t.Fatalf("expected original client status to succeed after replacement audit failure: %v", err)
+	}
+}
+
 func TestPruneExpiredLockedSkipsBeforeScheduledSweep(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

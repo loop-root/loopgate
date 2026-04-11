@@ -145,6 +145,12 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	server.mu.Lock()
 	server.pruneExpiredLocked()
 
+	var replacedSessionID string
+	var replacedSession controlSession
+	replacedSessionTokens := make(map[string]capabilityToken)
+	hadReplacedSession := false
+	previousSessionOpenAtUTC, hadPreviousSessionOpenAt := server.sessionOpenByUID[requestPeerIdentity.UID]
+
 	// Idempotent re-open: if the same (UID, ClientSessionLabel) pair already has
 	// an active session, close the old one before creating the replacement. This
 	// prevents session accumulation from client retries, capability expansion, or
@@ -153,9 +159,13 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	for csID, existingSession := range server.sessions {
 		if existingSession.PeerIdentity.UID == requestPeerIdentity.UID &&
 			existingSession.ClientSessionLabel == clientLabel {
+			replacedSessionID = csID
+			replacedSession = existingSession
+			hadReplacedSession = true
 			// Revoke old session's tokens and clean up.
 			for tokenString, tokenClaims := range server.tokens {
 				if tokenClaims.ControlSessionID == csID {
+					replacedSessionTokens[tokenString] = tokenClaims
 					delete(server.tokens, tokenString)
 				}
 			}
@@ -309,6 +319,18 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		delete(server.sessions, controlSessionID)
 		delete(server.tokens, capabilityTokenString)
 		delete(server.approvalTokenIndex, approvalTokenHash(approvalTokenString))
+		if hadReplacedSession {
+			server.sessions[replacedSessionID] = replacedSession
+			for restoredTokenString, restoredTokenClaims := range replacedSessionTokens {
+				server.tokens[restoredTokenString] = restoredTokenClaims
+			}
+			server.approvalTokenIndex[approvalTokenHash(replacedSession.ApprovalToken)] = replacedSessionID
+		}
+		if hadPreviousSessionOpenAt {
+			server.sessionOpenByUID[requestPeerIdentity.UID] = previousSessionOpenAtUTC
+		} else {
+			delete(server.sessionOpenByUID, requestPeerIdentity.UID)
+		}
 		server.mu.Unlock()
 		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
 			Status:       ResponseStatusError,
