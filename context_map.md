@@ -436,6 +436,8 @@ Start in:
 - `internal/loopgate/types_memory.go`
 - `internal/loopgate/types_haven_ui.go`
 - `internal/loopgate/types_morphling.go`
+- `internal/loopgate/configured_capability_runtime.go`
+- `internal/loopgate/configured_capability_extract.go`
 - `internal/loopgate/ui_client.go`
 - tests in the same package
 

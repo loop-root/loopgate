@@ -206,6 +206,10 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - control-session bootstrap, delegated-session refresh state, approval-token flows, and capability-execution wrappers
 - `client_transport.go`
   - signed HTTP transport, retry-on-token-refresh behavior, SSE chat reader, and request-signature helpers
+- `configured_capability_runtime.go`
+  - configured remote capability execution, access-token issuance/cache, provenance metadata, and registry registration
+- `configured_capability_extract.go`
+  - configured response extraction, HTML/Markdown/JSON selectors, and result-field classification helpers
 
 ### Memory and Continuity
 
