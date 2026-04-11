@@ -440,6 +440,34 @@ Follow-up:
 - the browser/bootstrap identity problem remains open by design and should stay
   in the threat model until a launch-bound bridge path actually exists in code
 
+## Later hardening on Loopgate-managed model secret authority
+
+The next review slice revisited the remaining legacy model config/env
+compatibility path and one complexity hotspot around it.
+
+What changed:
+
+- extracted Loopgate's model-runtime secret policy into a dedicated helper file
+  instead of leaving the decision split across `server_model_handlers.go` and
+  the generic `internal/modelruntime` package
+- Loopgate-managed remote `openai_compatible` and `anthropic` configs now
+  require `model_connection_id`
+- the older `api_key_env_var` compatibility path is still present in the
+  generic runtime package for bootstrap/test use, but Loopgate now rejects it
+  for remote validate/inference
+- `model_connection_id` is now validated for provider and base-url match before
+  the referenced secret is reused, so a stored model connection cannot act like
+  a generic credential bucket across providers or endpoints
+
+Why this matters:
+
+- it removes a hidden trust split where remote model secret authority could
+  drift back into ambient process environment instead of staying Loopgate-owned
+- it keeps a named model connection bound to the provider/base-url pair it was
+  created for
+- it reduces complexity in the server path by moving the actual security rule
+  into one place instead of duplicating a softer version in multiple handlers
+
 ## Later hardening on executable pin fail-closed behavior
 
 The same session-open review found one smaller fail-open edge:

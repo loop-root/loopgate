@@ -1,7 +1,6 @@
 package loopgate
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,8 +9,6 @@ import (
 
 	"morph/internal/identifiers"
 	modelpkg "morph/internal/model"
-	anthropicprovider "morph/internal/model/anthropic"
-	openai "morph/internal/model/openai"
 	modelruntime "morph/internal/modelruntime"
 	"morph/internal/secrets"
 )
@@ -630,109 +627,6 @@ func (server *Server) handleModelConnectionStore(writer http.ResponseWriter, req
 	}
 
 	server.writeJSON(writer, http.StatusOK, connectionStatus)
-}
-
-func (server *Server) validateModelConfig(ctx context.Context, runtimeConfig modelruntime.Config) (modelruntime.Config, error) {
-	validatedConfig, err := modelruntime.ValidateConfig(ctx, runtimeConfig)
-	if err != nil {
-		return modelruntime.Config{}, err
-	}
-	if validatedConfig.ProviderName != "openai_compatible" && validatedConfig.ProviderName != "anthropic" {
-		return validatedConfig, nil
-	}
-	if validatedConfig.ModelConnectionID != "" {
-		if _, err := server.ValidateModelConnection(ctx, validatedConfig.ModelConnectionID); err != nil {
-			return modelruntime.Config{}, err
-		}
-		return validatedConfig, nil
-	}
-	if validatedConfig.APIKeyEnvVar != "" {
-		return validatedConfig, nil
-	}
-	if validatedConfig.ProviderName == "openai_compatible" && modelruntime.IsLoopbackModelBaseURL(validatedConfig.BaseURL) {
-		return validatedConfig, nil
-	}
-	if validatedConfig.ProviderName == "anthropic" {
-		return modelruntime.Config{}, fmt.Errorf("anthropic provider requires model_connection_id or legacy api_key env")
-	}
-	return modelruntime.Config{}, fmt.Errorf("openai_compatible provider requires model_connection_id or legacy api_key env for non-localhost base url")
-}
-
-func (server *Server) newModelClientFromRuntimeConfig(runtimeConfig modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error) {
-	validatedConfig, err := modelruntime.NormalizeConfig(runtimeConfig)
-	if err != nil {
-		return nil, modelruntime.Config{}, err
-	}
-	switch validatedConfig.ProviderName {
-	case "stub":
-		return modelpkg.NewClient(modelpkg.NewStubProvider()), validatedConfig, nil
-	case "anthropic":
-		if validatedConfig.ModelConnectionID != "" {
-			modelConnectionRecord, err := server.resolveModelConnection(validatedConfig.ModelConnectionID)
-			if err != nil {
-				return nil, modelruntime.Config{}, err
-			}
-			secretStore, err := server.secretStoreForRef(modelConnectionRecord.Credential)
-			if err != nil {
-				return nil, modelruntime.Config{}, err
-			}
-			provider, err := anthropicprovider.NewProvider(anthropicprovider.Config{
-				BaseURL:         validatedConfig.BaseURL,
-				ModelName:       validatedConfig.ModelName,
-				Temperature:     validatedConfig.Temperature,
-				MaxOutputTokens: validatedConfig.MaxOutputTokens,
-				Timeout:         validatedConfig.Timeout,
-				APIKeyRef:       modelConnectionRecord.Credential,
-				SecretStore:     secretStore,
-			})
-			if err != nil {
-				return nil, modelruntime.Config{}, err
-			}
-			return modelpkg.NewClient(provider), validatedConfig, nil
-		}
-		return modelruntime.NewClientFromConfig(validatedConfig)
-	case "openai_compatible":
-		if validatedConfig.ModelConnectionID != "" {
-			modelConnectionRecord, err := server.resolveModelConnection(validatedConfig.ModelConnectionID)
-			if err != nil {
-				return nil, modelruntime.Config{}, err
-			}
-			secretStore, err := server.secretStoreForRef(modelConnectionRecord.Credential)
-			if err != nil {
-				return nil, modelruntime.Config{}, err
-			}
-			provider, err := openai.NewProvider(openai.Config{
-				BaseURL:         validatedConfig.BaseURL,
-				ModelName:       validatedConfig.ModelName,
-				Temperature:     validatedConfig.Temperature,
-				MaxOutputTokens: validatedConfig.MaxOutputTokens,
-				Timeout:         validatedConfig.Timeout,
-				APIKeyRef:       modelConnectionRecord.Credential,
-				SecretStore:     secretStore,
-			})
-			if err != nil {
-				return nil, modelruntime.Config{}, err
-			}
-			return modelpkg.NewClient(provider), validatedConfig, nil
-		}
-		if modelruntime.IsLoopbackModelBaseURL(validatedConfig.BaseURL) && validatedConfig.APIKeyEnvVar == "" {
-			provider, err := openai.NewProvider(openai.Config{
-				BaseURL:         validatedConfig.BaseURL,
-				ModelName:       validatedConfig.ModelName,
-				Temperature:     validatedConfig.Temperature,
-				MaxOutputTokens: validatedConfig.MaxOutputTokens,
-				Timeout:         validatedConfig.Timeout,
-				NoAuth:          true,
-			})
-			if err != nil {
-				return nil, modelruntime.Config{}, err
-			}
-			return modelpkg.NewClient(provider), validatedConfig, nil
-		}
-		return modelruntime.NewClientFromConfig(validatedConfig)
-	default:
-		return nil, modelruntime.Config{}, fmt.Errorf("unsupported MORPH_MODEL_PROVIDER %q", validatedConfig.ProviderName)
-	}
 }
 
 func (server *Server) writeModelErrorResponse(writer http.ResponseWriter, tokenClaims capabilityToken, runtimeConfig modelruntime.Config, partialResponse modelpkg.Response, timingBreakdown modelAuditTimings, modelErr error) {

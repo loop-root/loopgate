@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-01
+**Last updated:** 2026-04-11
 
 # Secrets Subsystem (First Pass)
 
@@ -114,6 +114,10 @@ Current reality:
   and use the referenced secret for client-credentials token exchange
 - Loopgate can now use PKCE configuration to persist refresh tokens through the
   secure backend and keep access tokens in memory only
+- Loopgate-managed remote model inference now requires `model_connection_id`
+  with a Loopgate-resolved secret ref; the older `api_key_env_var` path
+  remains only a generic compatibility/bootstrap mechanism outside the
+  Loopgate-owned remote runtime path
 
 Target direction:
 

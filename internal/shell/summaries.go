@@ -139,7 +139,10 @@ func summarizeNetwork(commandContext CommandContext) string {
 		if commandContext.CurrentRuntimeConfig.ModelConnectionID != "" {
 			lines = append(lines, fmt.Sprintf("model_connection_id: %s", commandContext.CurrentRuntimeConfig.ModelConnectionID))
 		} else if commandContext.CurrentRuntimeConfig.APIKeyEnvVar != "" {
-			lines = append(lines, fmt.Sprintf("legacy_model_api_key_env_var: %s", commandContext.CurrentRuntimeConfig.APIKeyEnvVar))
+			lines = append(lines,
+				fmt.Sprintf("legacy_model_api_key_env_var: %s", commandContext.CurrentRuntimeConfig.APIKeyEnvVar),
+				"model_secret_storage: legacy runtime env reference (Loopgate remote inference denies this path)",
+			)
 		} else {
 			lines = append(lines, "model_secret_storage: none (loopback no-auth model)")
 		}

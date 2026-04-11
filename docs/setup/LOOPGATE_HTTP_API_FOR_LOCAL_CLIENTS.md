@@ -390,6 +390,16 @@ cross the public control-plane surface.
 
 ### 7.5 Model control routes
 
+Loopgate-managed remote model runtime follows a stricter secret rule than the
+generic `internal/modelruntime` package:
+
+- remote `openai_compatible` and `anthropic` configs must use
+  **`model_connection_id`**
+- the older `api_key_env_var` compatibility field is rejected on Loopgate's
+  remote validate/inference path
+- loopback `openai_compatible` remains the narrow exception for local no-auth
+  model servers
+
 - `POST /v1/model/reply`
   - requires **`model.reply`**
   - runs a model round-trip through Loopgate’s runtime and audit path
