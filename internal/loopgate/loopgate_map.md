@@ -47,11 +47,13 @@ For integrators it matters in four ways:
 - `memory_capability.go`
   - authoritative execution for `memory.remember`
   - bridges native tool calls onto the explicit remember-memory API
-- `todo_capability.go`
-  - authoritative execution for `todo.add`, `todo.complete`, and `todo.list`
-  - bridges Todo tool calls onto explicit continuity mutations and wake-state reads
-  - now persists task metadata into continuity distillates so wake-state can reconstruct a real task substrate
-  - now also persists task execution classes so approval posture survives restart and wake-state rebuild
+- `todo_execution.go`
+  - capability-entry wrappers for `todo.add`, `todo.complete`, `todo.list`, `goal.set`, and `goal.close`
+  - owns result shaping, audit/error surfacing, and UI tool-event emission for task/goal capability execution
+- `todo_mutation.go`
+  - continuity-backed todo mutation path, request normalization, status updates, and task fact derivation
+- `goal_mutation.go`
+  - continuity-backed goal open/close mutation path
 - `todo_projection.go`
   - continuity-backed task board projection, recent completion shaping, and explicit todo state discovery
 - `todo_render.go`
@@ -250,7 +252,9 @@ The current working set in this directory is:
 - `continuity_memory.go`
 - `folder_access.go`
 - `memory_capability.go`
-- `todo_capability.go`
+- `todo_execution.go`
+- `todo_mutation.go`
+- `goal_mutation.go`
 - `server.go`
 - `server_connection_handlers.go`
 - `ui_types.go`

@@ -172,7 +172,9 @@ Key files:
 - `folder_access.go`: explicit host-folder grant storage and compare-before-sync mirror logic
 - `continuity_memory.go`: Loopgate-owned durable memory selection and task-board wake-state reconstruction
 - `continuity_runtime.go`: wake-state/runtime projection helpers; now part of the task-metadata and future scheduler groundwork
-- `todo_capability.go`: Loopgate-owned task-board authority; persists task metadata into continuity state
+- `todo_execution.go`: capability-entry surface for task and goal actions
+- `todo_mutation.go`: continuity-backed task mutation and status authority
+- `goal_mutation.go`: continuity-backed goal mutation authority
 - `morphlings.go`, `morphling_workers.go`: bounded worker lifecycle
 
 Important note:
