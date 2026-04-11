@@ -5,12 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
 
-	"morph/internal/config"
 	tclpkg "morph/internal/tcl"
 )
 
@@ -341,18 +339,6 @@ func deriveContinuityResonateKey(distillateRecord continuityDistillateRecord, no
 	}
 }
 
-type continuityFactCandidate struct {
-	Fact          continuityDistillateFact
-	DistillateID  string
-	CreatedAtUTC  string
-	AuthorityLane int
-}
-
-const (
-	memoryFactStateClassAuthoritative = "authoritative_state"
-	memoryFactStateClassDerived       = "derived_context"
-)
-
 func deriveGoalOpSemanticProjection(action string, goalText string, sourceChannel string, trust tclpkg.Trust) *tclpkg.SemanticProjection {
 	return deriveMemoryCandidateSemanticProjection(tclpkg.MemoryCandidate{
 		Source:              tclpkg.CandidateSourceWorkflowStep,
@@ -397,64 +383,6 @@ func certaintyScoreForEpistemicFlavor(epistemicFlavor string) int {
 	default:
 		return 50
 	}
-}
-
-func memoryFactStateClassForAuthorityLane(authorityLane int) string {
-	if authorityLane >= 2 {
-		return memoryFactStateClassAuthoritative
-	}
-	return memoryFactStateClassDerived
-}
-
-func memoryFactStateClassForDistillate(distillateRecord continuityDistillateRecord) string {
-	if isExplicitProfileFactDistillate(distillateRecord) {
-		return memoryFactStateClassAuthoritative
-	}
-	return memoryFactStateClassDerived
-}
-
-func compareContinuityFactCandidates(existingCandidate continuityFactCandidate, candidate continuityFactCandidate) int {
-	switch {
-	case candidate.AuthorityLane != existingCandidate.AuthorityLane:
-		if candidate.AuthorityLane > existingCandidate.AuthorityLane {
-			return 1
-		}
-		return -1
-	}
-	existingCreatedAtUTC := parseTimeOrZero(existingCandidate.CreatedAtUTC)
-	candidateCreatedAtUTC := parseTimeOrZero(candidate.CreatedAtUTC)
-	switch {
-	case candidateCreatedAtUTC.After(existingCreatedAtUTC):
-		return 1
-	case existingCreatedAtUTC.After(candidateCreatedAtUTC):
-		return -1
-	}
-	switch {
-	case candidate.Fact.CertaintyScore > existingCandidate.Fact.CertaintyScore:
-		return 1
-	case candidate.Fact.CertaintyScore < existingCandidate.Fact.CertaintyScore:
-		return -1
-	}
-	if reflect.DeepEqual(candidate.Fact.Value, existingCandidate.Fact.Value) {
-		if candidate.DistillateID < existingCandidate.DistillateID {
-			return 1
-		}
-		return -1
-	}
-	return 0
-}
-
-func anchorTupleKey(anchorVersion string, anchorKey string) string {
-	trimmedAnchorVersion := strings.TrimSpace(anchorVersion)
-	trimmedAnchorKey := strings.TrimSpace(anchorKey)
-	if trimmedAnchorVersion == "" || trimmedAnchorKey == "" {
-		return ""
-	}
-	return trimmedAnchorVersion + ":" + trimmedAnchorKey
-}
-
-func continuityFactAnchorTuple(factRecord continuityDistillateFact) (string, string) {
-	return semanticProjectionAnchorVersion(factRecord.SemanticProjection), semanticProjectionAnchorKey(factRecord.SemanticProjection)
 }
 
 func validateContinuityDistillateFact(factRecord continuityDistillateFact) error {
@@ -507,378 +435,6 @@ func validateContinuityUnresolvedItemOp(itemOp continuityUnresolvedItemOp) error
 	return nil
 }
 
-func appendRecentFactCandidate(recentFactsBySlotKey map[string]MemoryWakeStateRecentFact, recentFactOrder *[]string, factCandidatesByAnchorTupleKey map[string]continuityFactCandidate, ambiguousAnchorTupleKeys map[string]struct{}, candidate continuityFactCandidate) {
-	if candidate.Fact.CertaintyScore <= 0 {
-		candidate.Fact.CertaintyScore = certaintyScoreForEpistemicFlavor(candidate.Fact.EpistemicFlavor)
-	}
-	factAnchorVersion, factAnchorKey := continuityFactAnchorTuple(candidate.Fact)
-	factAnchorTupleKey := anchorTupleKey(factAnchorVersion, factAnchorKey)
-	if factAnchorTupleKey == "" {
-		slotKey := candidate.Fact.Name + ":" + candidate.Fact.SourceRef
-		recentFactsBySlotKey[slotKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact, memoryFactStateClassForAuthorityLane(candidate.AuthorityLane))
-		*recentFactOrder = appendWithoutDuplicate(*recentFactOrder, slotKey)
-		return
-	}
-	if _, ambiguous := ambiguousAnchorTupleKeys[factAnchorTupleKey]; ambiguous {
-		return
-	}
-	if existingCandidate, found := factCandidatesByAnchorTupleKey[factAnchorTupleKey]; found {
-		switch compareContinuityFactCandidates(existingCandidate, candidate) {
-		case 1:
-			factCandidatesByAnchorTupleKey[factAnchorTupleKey] = candidate
-			recentFactsBySlotKey[factAnchorTupleKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact, memoryFactStateClassForAuthorityLane(candidate.AuthorityLane))
-		case -1:
-			return
-		default:
-			delete(factCandidatesByAnchorTupleKey, factAnchorTupleKey)
-			delete(recentFactsBySlotKey, factAnchorTupleKey)
-			ambiguousAnchorTupleKeys[factAnchorTupleKey] = struct{}{}
-			*recentFactOrder = removeStringValue(*recentFactOrder, factAnchorTupleKey)
-			return
-		}
-		*recentFactOrder = appendWithoutDuplicate(*recentFactOrder, factAnchorTupleKey)
-		return
-	}
-	factCandidatesByAnchorTupleKey[factAnchorTupleKey] = candidate
-	recentFactsBySlotKey[factAnchorTupleKey] = memoryWakeRecentFactFromDistillateFact(candidate.Fact, memoryFactStateClassForAuthorityLane(candidate.AuthorityLane))
-	*recentFactOrder = appendWithoutDuplicate(*recentFactOrder, factAnchorTupleKey)
-}
-
-func buildLoopgateWakeProducts(currentState continuityMemoryState, now time.Time, runtimeConfig config.RuntimeConfig) (MemoryWakeStateResponse, continuityDiagnosticWakeReport) {
-	activeGoalsByID := map[string]string{}
-	activeGoalOrder := make([]string, 0, 8)
-	unresolvedItemsByID := map[string]MemoryWakeStateOpenItem{}
-	unresolvedItemOrder := make([]string, 0, 8)
-	recentFactsBySlotKey := map[string]MemoryWakeStateRecentFact{}
-	recentFactOrder := make([]string, 0, 12)
-	factCandidatesByAnchorTupleKey := map[string]continuityFactCandidate{}
-	ambiguousAnchorTupleKeys := map[string]struct{}{}
-	sourceRefSeen := map[string]MemoryWakeStateSourceRef{}
-	sourceRefOrder := make([]string, 0, 16)
-	resonateKeys := make([]string, 0, 8)
-	includedEntries := make([]continuityDiagnosticWakeEntry, 0, 24)
-	excludedEntries := make([]continuityDiagnosticWakeEntry, 0, 24)
-	familyCounts := map[string]int{}
-	timeBandCounts := map[string]int{}
-
-	for _, distillateRecord := range activeLoopgateDistillates(currentState) {
-		for _, sourceRef := range distillateRecord.SourceRefs {
-			sourceRefKey := sourceRef.Kind + ":" + sourceRef.Ref
-			sourceRefSeen[sourceRefKey] = MemoryWakeStateSourceRef{
-				Kind: sourceRef.Kind,
-				Ref:  sourceRef.Ref,
-			}
-			sourceRefOrder = appendWithoutDuplicate(sourceRefOrder, sourceRefKey)
-		}
-		if isExplicitProfileFactDistillate(distillateRecord) {
-			for _, factRecord := range distillateRecord.Facts {
-				appendRecentFactCandidate(recentFactsBySlotKey, &recentFactOrder, factCandidatesByAnchorTupleKey, ambiguousAnchorTupleKeys, continuityFactCandidate{
-					Fact:          factRecord,
-					DistillateID:  distillateRecord.DistillateID,
-					CreatedAtUTC:  distillateRecord.CreatedAtUTC,
-					AuthorityLane: 2,
-				})
-				includedEntries = append(includedEntries, continuityDiagnosticWakeEntry{
-					ItemKind:         wakeEntryKindDistillate,
-					ItemID:           distillateRecord.DistillateID,
-					GoalFamilyID:     distillateRecord.GoalFamilyID,
-					Scope:            distillateRecord.Scope,
-					RetentionScore:   distillateRecord.RetentionScore,
-					EffectiveHotness: distillateRecord.EffectiveHotness,
-					Reason:           "hard_bound_explicit_profile_fact",
-					PrecedenceSource: "explicit_profile_memory",
-					RedactedSummary:  redactedWakeSummary(fmt.Sprintf("%s=%v", factRecord.Name, factRecord.Value)),
-				})
-			}
-		}
-		for _, goalOp := range distillateRecord.GoalOps {
-			switch goalOp.Action {
-			case "opened":
-				activeGoalsByID[goalOp.GoalID] = goalOp.Text
-				activeGoalOrder = appendWithoutDuplicate(activeGoalOrder, goalOp.GoalID)
-				includedEntries = append(includedEntries, continuityDiagnosticWakeEntry{
-					ItemKind:         wakeEntryKindGoal,
-					ItemID:           goalOp.GoalID,
-					GoalFamilyID:     distillateRecord.GoalFamilyID,
-					Scope:            distillateRecord.Scope,
-					RetentionScore:   distillateRecord.RetentionScore,
-					EffectiveHotness: distillateRecord.EffectiveHotness,
-					Reason:           "hard_bound_active_goal",
-					PrecedenceSource: "active_goal_state",
-					RedactedSummary:  redactedWakeSummary(goalOp.Text),
-				})
-			case "closed":
-				delete(activeGoalsByID, goalOp.GoalID)
-				activeGoalOrder = removeStringValue(activeGoalOrder, goalOp.GoalID)
-			}
-		}
-		for _, itemOp := range distillateRecord.UnresolvedItemOps {
-			switch itemOp.Action {
-			case "opened":
-				taskMetadata := explicitTodoTaskMetadataFromDistillate(distillateRecord)
-				taskMetadata.ID = itemOp.ItemID
-				taskMetadata.Text = itemOp.Text
-				taskMetadata.Status = explicitTodoWorkflowStatusTodo
-				if taskMetadata.CreatedAtUTC == "" {
-					taskMetadata.CreatedAtUTC = distillateRecord.CreatedAtUTC
-				}
-				unresolvedItemsByID[itemOp.ItemID] = taskMetadata
-				unresolvedItemOrder = appendWithoutDuplicate(unresolvedItemOrder, itemOp.ItemID)
-				includedEntries = append(includedEntries, continuityDiagnosticWakeEntry{
-					ItemKind:         wakeEntryKindTodo,
-					ItemID:           itemOp.ItemID,
-					GoalFamilyID:     distillateRecord.GoalFamilyID,
-					Scope:            distillateRecord.Scope,
-					RetentionScore:   distillateRecord.RetentionScore,
-					EffectiveHotness: distillateRecord.EffectiveHotness,
-					Reason:           "hard_bound_open_task",
-					PrecedenceSource: "open_task_state",
-					RedactedSummary:  redactedWakeSummary(itemOp.Text),
-				})
-			case "closed":
-				delete(unresolvedItemsByID, itemOp.ItemID)
-				unresolvedItemOrder = removeStringValue(unresolvedItemOrder, itemOp.ItemID)
-			case todoItemOpStatusSet:
-				if existingItem, ok := unresolvedItemsByID[itemOp.ItemID]; ok {
-					if normalized := normalizeExplicitTodoWorkflowStatus(itemOp.Status); normalized != "" {
-						existingItem.Status = normalized
-						unresolvedItemsByID[itemOp.ItemID] = existingItem
-					}
-				}
-			}
-		}
-	}
-
-	activeResonateKeys := activeLoopgateResonateKeys(currentState)
-	sort.Slice(activeResonateKeys, func(leftIndex int, rightIndex int) bool {
-		leftKey := activeResonateKeys[leftIndex]
-		rightKey := activeResonateKeys[rightIndex]
-		switch {
-		case leftKey.EffectiveHotness != rightKey.EffectiveHotness:
-			return leftKey.EffectiveHotness > rightKey.EffectiveHotness
-		case leftKey.RetentionScore != rightKey.RetentionScore:
-			return leftKey.RetentionScore > rightKey.RetentionScore
-		case leftKey.CreatedAtUTC != rightKey.CreatedAtUTC:
-			return leftKey.CreatedAtUTC > rightKey.CreatedAtUTC
-		default:
-			return itemKindID(wakeEntryKindResonateKey, leftKey.KeyID) < itemKindID(wakeEntryKindResonateKey, rightKey.KeyID)
-		}
-	})
-	for _, resonateKeyRecord := range activeResonateKeys {
-		if distillateRecord, found := currentState.Distillates[resonateKeyRecord.DistillateID]; found && isExplicitProfileFactDistillate(distillateRecord) {
-			continue
-		}
-		goalFamilyID := strings.TrimSpace(resonateKeyRecord.GoalFamilyID)
-		timeBandKey := goalFamilyID + ":" + timeBandKeyFor(resonateKeyRecord.CreatedAtUTC)
-		if goalFamilyID != "" && familyCounts[goalFamilyID] >= 2 {
-			excludedEntries = append(excludedEntries, continuityDiagnosticWakeEntry{
-				ItemKind:         wakeEntryKindResonateKey,
-				ItemID:           resonateKeyRecord.KeyID,
-				GoalFamilyID:     resonateKeyRecord.GoalFamilyID,
-				Scope:            resonateKeyRecord.Scope,
-				RetentionScore:   resonateKeyRecord.RetentionScore,
-				EffectiveHotness: resonateKeyRecord.EffectiveHotness,
-				TrimReason:       "duplicate_family_cap",
-				PrecedenceSource: "optional_memory",
-			})
-			continue
-		}
-		if goalFamilyID != "" && timeBandCounts[timeBandKey] >= 2 {
-			excludedEntries = append(excludedEntries, continuityDiagnosticWakeEntry{
-				ItemKind:         wakeEntryKindResonateKey,
-				ItemID:           resonateKeyRecord.KeyID,
-				GoalFamilyID:     resonateKeyRecord.GoalFamilyID,
-				Scope:            resonateKeyRecord.Scope,
-				RetentionScore:   resonateKeyRecord.RetentionScore,
-				EffectiveHotness: resonateKeyRecord.EffectiveHotness,
-				TrimReason:       "duplicate_family_time_band_cap",
-				PrecedenceSource: "optional_memory",
-			})
-			continue
-		}
-		resonateKeys = append(resonateKeys, resonateKeyRecord.KeyID)
-		sourceRefKey := "resonate_key:" + resonateKeyRecord.KeyID
-		sourceRefSeen[sourceRefKey] = MemoryWakeStateSourceRef{Kind: "resonate_key", Ref: resonateKeyRecord.KeyID}
-		sourceRefOrder = appendWithoutDuplicate(sourceRefOrder, sourceRefKey)
-		familyCounts[goalFamilyID]++
-		timeBandCounts[timeBandKey]++
-		includedEntries = append(includedEntries, continuityDiagnosticWakeEntry{
-			ItemKind:         wakeEntryKindResonateKey,
-			ItemID:           resonateKeyRecord.KeyID,
-			GoalFamilyID:     resonateKeyRecord.GoalFamilyID,
-			Scope:            resonateKeyRecord.Scope,
-			RetentionScore:   resonateKeyRecord.RetentionScore,
-			EffectiveHotness: resonateKeyRecord.EffectiveHotness,
-			Reason:           "eligible_optional_resonate_key",
-			PrecedenceSource: "remembered_context",
-		})
-	}
-
-	distillates := activeLoopgateDistillates(currentState)
-	sort.Slice(distillates, func(leftIndex int, rightIndex int) bool {
-		leftDistillate := distillates[leftIndex]
-		rightDistillate := distillates[rightIndex]
-		switch {
-		case leftDistillate.EffectiveHotness != rightDistillate.EffectiveHotness:
-			return leftDistillate.EffectiveHotness > rightDistillate.EffectiveHotness
-		case leftDistillate.RetentionScore != rightDistillate.RetentionScore:
-			return leftDistillate.RetentionScore > rightDistillate.RetentionScore
-		case leftDistillate.CreatedAtUTC != rightDistillate.CreatedAtUTC:
-			return leftDistillate.CreatedAtUTC > rightDistillate.CreatedAtUTC
-		default:
-			return itemKindID(wakeEntryKindDistillate, leftDistillate.DistillateID) < itemKindID(wakeEntryKindDistillate, rightDistillate.DistillateID)
-		}
-	})
-	for _, distillateRecord := range distillates {
-		if isExplicitProfileFactDistillate(distillateRecord) {
-			continue
-		}
-		goalFamilyID := strings.TrimSpace(distillateRecord.GoalFamilyID)
-		timeBandKey := goalFamilyID + ":" + timeBandKeyFor(distillateRecord.CreatedAtUTC)
-		if goalFamilyID != "" && familyCounts[goalFamilyID] >= 2 {
-			excludedEntries = append(excludedEntries, continuityDiagnosticWakeEntry{
-				ItemKind:         wakeEntryKindDistillate,
-				ItemID:           distillateRecord.DistillateID,
-				GoalFamilyID:     distillateRecord.GoalFamilyID,
-				Scope:            distillateRecord.Scope,
-				RetentionScore:   distillateRecord.RetentionScore,
-				EffectiveHotness: distillateRecord.EffectiveHotness,
-				TrimReason:       "duplicate_family_cap",
-				PrecedenceSource: "optional_memory",
-			})
-			continue
-		}
-		if goalFamilyID != "" && timeBandCounts[timeBandKey] >= 2 {
-			excludedEntries = append(excludedEntries, continuityDiagnosticWakeEntry{
-				ItemKind:         wakeEntryKindDistillate,
-				ItemID:           distillateRecord.DistillateID,
-				GoalFamilyID:     distillateRecord.GoalFamilyID,
-				Scope:            distillateRecord.Scope,
-				RetentionScore:   distillateRecord.RetentionScore,
-				EffectiveHotness: distillateRecord.EffectiveHotness,
-				TrimReason:       "duplicate_family_time_band_cap",
-				PrecedenceSource: "optional_memory",
-			})
-			continue
-		}
-		for _, factRecord := range distillateRecord.Facts {
-			appendRecentFactCandidate(recentFactsBySlotKey, &recentFactOrder, factCandidatesByAnchorTupleKey, ambiguousAnchorTupleKeys, continuityFactCandidate{
-				Fact:          factRecord,
-				DistillateID:  distillateRecord.DistillateID,
-				CreatedAtUTC:  distillateRecord.CreatedAtUTC,
-				AuthorityLane: 1,
-			})
-		}
-		familyCounts[goalFamilyID]++
-		timeBandCounts[timeBandKey]++
-		includedEntries = append(includedEntries, continuityDiagnosticWakeEntry{
-			ItemKind:         wakeEntryKindDistillate,
-			ItemID:           distillateRecord.DistillateID,
-			GoalFamilyID:     distillateRecord.GoalFamilyID,
-			Scope:            distillateRecord.Scope,
-			RetentionScore:   distillateRecord.RetentionScore,
-			EffectiveHotness: distillateRecord.EffectiveHotness,
-			Reason:           "eligible_optional_distillate",
-			PrecedenceSource: "remembered_context",
-		})
-	}
-
-	trimToLimit(&activeGoalOrder, 5)
-	trimToLimit(&unresolvedItemOrder, 10)
-	trimToLimit(&recentFactOrder, 12)
-	trimToLimit(&sourceRefOrder, 16)
-	trimToLimit(&resonateKeys, 8)
-
-	activeGoals := make([]string, 0, len(activeGoalOrder))
-	for _, goalID := range activeGoalOrder {
-		if goalText, found := activeGoalsByID[goalID]; found {
-			activeGoals = append(activeGoals, goalText)
-		}
-	}
-	unresolvedItems := make([]MemoryWakeStateOpenItem, 0, len(unresolvedItemOrder))
-	for _, itemID := range unresolvedItemOrder {
-		if unresolvedItem, found := unresolvedItemsByID[itemID]; found {
-			unresolvedItems = append(unresolvedItems, unresolvedItem)
-		}
-	}
-	recentFacts := make([]MemoryWakeStateRecentFact, 0, len(recentFactOrder))
-	for _, factSlotKey := range recentFactOrder {
-		if factRecord, found := recentFactsBySlotKey[factSlotKey]; found {
-			recentFacts = append(recentFacts, factRecord)
-		}
-	}
-	sourceRefs := make([]MemoryWakeStateSourceRef, 0, len(sourceRefOrder))
-	for _, sourceRefKey := range sourceRefOrder {
-		sourceRefs = append(sourceRefs, sourceRefSeen[sourceRefKey])
-	}
-
-	approxPromptTokens := approximateLoopgateWakeStateTokens(activeGoals, unresolvedItems, recentFacts, resonateKeys)
-trimLoop:
-	for approxPromptTokens > 2000 {
-		switch {
-		case len(resonateKeys) > 0:
-			excludedEntries = append(excludedEntries, continuityDiagnosticWakeEntry{
-				ItemKind:   wakeEntryKindResonateKey,
-				ItemID:     resonateKeys[0],
-				TrimReason: "token_budget",
-			})
-			resonateKeys = append([]string(nil), resonateKeys[1:]...)
-		case len(recentFacts) > 0:
-			excludedEntries = append(excludedEntries, continuityDiagnosticWakeEntry{
-				ItemKind:   wakeEntryKindDistillate,
-				ItemID:     recentFacts[0].Name,
-				TrimReason: "token_budget",
-			})
-			recentFacts = append([]MemoryWakeStateRecentFact(nil), recentFacts[1:]...)
-		case len(activeGoals) > 0:
-			activeGoals = append([]string(nil), activeGoals[1:]...)
-		case len(unresolvedItems) > 0:
-			unresolvedItems = append([]MemoryWakeStateOpenItem(nil), unresolvedItems[1:]...)
-		default:
-			break trimLoop
-		}
-		approxPromptTokens = approximateLoopgateWakeStateTokens(activeGoals, unresolvedItems, recentFacts, resonateKeys)
-	}
-
-	sort.Slice(includedEntries, func(leftIndex int, rightIndex int) bool {
-		return stableWakeEntryLess(includedEntries[leftIndex], includedEntries[rightIndex])
-	})
-	sort.Slice(excludedEntries, func(leftIndex int, rightIndex int) bool {
-		return stableWakeEntryLess(excludedEntries[leftIndex], excludedEntries[rightIndex])
-	})
-
-	runtimeWakeState := MemoryWakeStateResponse{
-		ID:                 "wake_loopgate_" + now.UTC().Format("20060102T150405Z"),
-		Scope:              memoryScopeGlobal,
-		CreatedAtUTC:       now.UTC().Format(time.RFC3339Nano),
-		SourceRefs:         sourceRefs,
-		ActiveGoals:        activeGoals,
-		UnresolvedItems:    unresolvedItems,
-		RecentFacts:        recentFacts,
-		ResonateKeys:       resonateKeys,
-		PromptTokenBudget:  2000,
-		ApproxPromptTokens: approxPromptTokens,
-	}
-	diagnosticWake := continuityDiagnosticWakeReport{
-		SchemaVersion:     continuityMemorySchemaVersion,
-		ResolutionVersion: continuityResolutionVersion,
-		ReportID:          newDiagnosticWakeReportID(now.UTC()),
-		CreatedAtUTC:      now.UTC().Format(time.RFC3339Nano),
-		RuntimeWakeID:     runtimeWakeState.ID,
-		Entries:           includedEntries,
-		ExcludedEntries:   excludedEntries,
-	}
-	return runtimeWakeState, diagnosticWake
-}
-
-func (server *Server) loadMemoryWakeState(tenantID string) (MemoryWakeStateResponse, error) {
-	backend, err := server.memoryBackendForTenant(tenantID)
-	if err != nil {
-		return MemoryWakeStateResponse{}, err
-	}
-	return backend.BuildWakeState(context.Background(), MemoryWakeStateRequest{Scope: memoryScopeGlobal})
-}
-
 func (server *Server) memoryBackendForTenant(rawTenantID string) (MemoryBackend, error) {
 	server.memoryMu.Lock()
 	defer server.memoryMu.Unlock()
@@ -891,30 +447,6 @@ func (server *Server) memoryBackendForTenant(rawTenantID string) (MemoryBackend,
 		return nil, fmt.Errorf("memory backend is not configured")
 	}
 	return partition.backend, nil
-}
-
-func (server *Server) loadMemoryDiagnosticWake(tenantID string) MemoryDiagnosticWakeResponse {
-	server.memoryMu.Lock()
-	defer server.memoryMu.Unlock()
-	partition, err := server.ensureMemoryPartitionLocked(tenantID)
-	if err != nil {
-		return MemoryDiagnosticWakeResponse{}
-	}
-	return cloneMemoryDiagnosticWakeResponse(memoryDiagnosticWakeResponseFromReport(partition.state.DiagnosticWake))
-}
-
-func (server *Server) discoverMemoryFromPartitionState(partition *memoryPartition, validatedRequest MemoryDiscoverRequest) (MemoryDiscoverResponse, error) {
-	continuityBackend, ok := partition.backend.(*continuityTCLMemoryBackend)
-	if !ok {
-		if partition.backend == nil {
-			return MemoryDiscoverResponse{}, fmt.Errorf("memory backend is not configured")
-		}
-		return MemoryDiscoverResponse{}, fmt.Errorf("memory backend %q does not support continuity_tcl discover helpers", partition.backend.Name())
-	}
-	// Retain the partition-state helper for focused tests while the live discover path
-	// routes through the backend interface. This keeps test setup small without letting
-	// production traffic bypass the backend seam.
-	return continuityBackend.discoverFromBoundPartitionState(validatedRequest)
 }
 
 type discoverSlotPreferenceRule struct {
@@ -1028,20 +560,6 @@ func (server *Server) rememberMemoryFact(tokenClaims capabilityToken, rawRequest
 	return backend.RememberFact(context.Background(), tokenClaims, rawRequest)
 }
 
-func (server *Server) recallMemoryFromPartitionState(partition *memoryPartition, validatedRequest MemoryRecallRequest) (MemoryRecallResponse, error) {
-	continuityBackend, ok := partition.backend.(*continuityTCLMemoryBackend)
-	if !ok {
-		if partition.backend == nil {
-			return MemoryRecallResponse{}, fmt.Errorf("memory backend is not configured")
-		}
-		return MemoryRecallResponse{}, fmt.Errorf("memory backend %q does not support continuity_tcl recall helpers", partition.backend.Name())
-	}
-	// Retain the partition-state helper for focused tests while the live recall path
-	// routes through the backend interface. This keeps test setup small without letting
-	// production traffic bypass the backend seam.
-	return continuityBackend.recallFromBoundPartitionState(validatedRequest)
-}
-
 func (server *Server) recallMemory(tenantID string, rawRequest MemoryRecallRequest) (MemoryRecallResponse, error) {
 	validatedRequest := rawRequest
 	if validatedRequest.Scope == "" {
@@ -1061,16 +579,6 @@ func (server *Server) recallMemory(tenantID string, rawRequest MemoryRecallReque
 		return MemoryRecallResponse{}, err
 	}
 	return backend.Recall(context.Background(), validatedRequest)
-}
-
-type explicitProfileFactRecord struct {
-	InspectionID   string
-	DistillateID   string
-	ResonateKeyID  string
-	FactKey        string
-	FactValue      string
-	AnchorTupleKey string
-	CreatedAtUTC   string
 }
 
 func (server *Server) consumeMemoryFactWriteBudgetLocked(controlSessionID string, peerUID uint32, nowUTC time.Time) error {
@@ -1124,186 +632,6 @@ func pruneOldMemoryFactWrites(writeTimes []time.Time, windowStartUTC time.Time) 
 	return filteredWriteTimes
 }
 
-func activeExplicitProfileFactByAnchorTuple(currentState continuityMemoryState, anchorVersion string, anchorKey string) (explicitProfileFactRecord, bool) {
-	wantedAnchorTupleKey := anchorTupleKey(anchorVersion, anchorKey)
-	if wantedAnchorTupleKey == "" {
-		return explicitProfileFactRecord{}, false
-	}
-	return activeExplicitProfileFactByAnchorTupleKey(currentState, wantedAnchorTupleKey)
-}
-
-func activeExplicitProfileFactByAnchorTupleKey(currentState continuityMemoryState, wantedAnchorTupleKey string) (explicitProfileFactRecord, bool) {
-	if strings.TrimSpace(wantedAnchorTupleKey) == "" {
-		return explicitProfileFactRecord{}, false
-	}
-	for _, distillateRecord := range activeLoopgateDistillates(currentState) {
-		explicitProfileFact, found := explicitProfileFactFromDistillate(currentState, distillateRecord)
-		if found && explicitProfileFact.AnchorTupleKey == wantedAnchorTupleKey {
-			return explicitProfileFact, true
-		}
-	}
-	return explicitProfileFactRecord{}, false
-}
-
-func explicitProfileFactFromDistillate(currentState continuityMemoryState, distillateRecord continuityDistillateRecord) (explicitProfileFactRecord, bool) {
-	if !isExplicitProfileFactDistillate(distillateRecord) || len(distillateRecord.Facts) != 1 {
-		return explicitProfileFactRecord{}, false
-	}
-	var resonateKeyID string
-	for _, resonateKeyRecord := range currentState.ResonateKeys {
-		if resonateKeyRecord.DistillateID == distillateRecord.DistillateID {
-			resonateKeyID = resonateKeyRecord.KeyID
-			break
-		}
-	}
-	factRecord := distillateRecord.Facts[0]
-	factValue, isString := factRecord.Value.(string)
-	if !isString {
-		return explicitProfileFactRecord{}, false
-	}
-	anchorVersion, anchorKey := continuityFactAnchorTuple(factRecord)
-	return explicitProfileFactRecord{
-		InspectionID:   distillateRecord.InspectionID,
-		DistillateID:   distillateRecord.DistillateID,
-		ResonateKeyID:  resonateKeyID,
-		FactKey:        factRecord.Name,
-		FactValue:      factValue,
-		AnchorTupleKey: anchorTupleKey(anchorVersion, anchorKey),
-		CreatedAtUTC:   distillateRecord.CreatedAtUTC,
-	}, true
-}
-
-func isExplicitProfileFactDistillate(distillateRecord continuityDistillateRecord) bool {
-	for _, sourceRef := range distillateRecord.SourceRefs {
-		if sourceRef.Kind == explicitProfileFactSourceKind {
-			return true
-		}
-	}
-	return false
-}
-
-func loopgateRecallOpenItems(distillateRecord continuityDistillateRecord) ([]string, []MemoryWakeStateOpenItem) {
-	activeGoalsByID := map[string]string{}
-	activeGoalOrder := make([]string, 0, len(distillateRecord.GoalOps))
-	for _, goalOp := range distillateRecord.GoalOps {
-		switch goalOp.Action {
-		case "opened":
-			activeGoalsByID[goalOp.GoalID] = goalOp.Text
-			activeGoalOrder = appendWithoutDuplicate(activeGoalOrder, goalOp.GoalID)
-		case "closed":
-			delete(activeGoalsByID, goalOp.GoalID)
-			activeGoalOrder = removeStringValue(activeGoalOrder, goalOp.GoalID)
-		}
-	}
-	activeGoals := make([]string, 0, len(activeGoalOrder))
-	for _, goalID := range activeGoalOrder {
-		if goalText, found := activeGoalsByID[goalID]; found {
-			activeGoals = append(activeGoals, goalText)
-		}
-	}
-
-	unresolvedItemsByID := map[string]MemoryWakeStateOpenItem{}
-	unresolvedItemOrder := make([]string, 0, len(distillateRecord.UnresolvedItemOps))
-	for _, itemOp := range distillateRecord.UnresolvedItemOps {
-		switch itemOp.Action {
-		case "opened":
-			taskMetadata := explicitTodoTaskMetadataFromDistillate(distillateRecord)
-			taskMetadata.ID = itemOp.ItemID
-			taskMetadata.Text = itemOp.Text
-			taskMetadata.Status = explicitTodoWorkflowStatusTodo
-			if taskMetadata.CreatedAtUTC == "" {
-				taskMetadata.CreatedAtUTC = distillateRecord.CreatedAtUTC
-			}
-			unresolvedItemsByID[itemOp.ItemID] = taskMetadata
-			unresolvedItemOrder = appendWithoutDuplicate(unresolvedItemOrder, itemOp.ItemID)
-		case "closed":
-			delete(unresolvedItemsByID, itemOp.ItemID)
-			unresolvedItemOrder = removeStringValue(unresolvedItemOrder, itemOp.ItemID)
-		case todoItemOpStatusSet:
-			if existingItem, ok := unresolvedItemsByID[itemOp.ItemID]; ok {
-				if normalized := normalizeExplicitTodoWorkflowStatus(itemOp.Status); normalized != "" {
-					existingItem.Status = normalized
-					unresolvedItemsByID[itemOp.ItemID] = existingItem
-				}
-			}
-		}
-	}
-	unresolvedItems := make([]MemoryWakeStateOpenItem, 0, len(unresolvedItemOrder))
-	for _, itemID := range unresolvedItemOrder {
-		if unresolvedItem, found := unresolvedItemsByID[itemID]; found {
-			unresolvedItems = append(unresolvedItems, unresolvedItem)
-		}
-	}
-	return activeGoals, unresolvedItems
-}
-
-func activeLoopgateDistillates(currentState continuityMemoryState) []continuityDistillateRecord {
-	distillates := make([]continuityDistillateRecord, 0, len(currentState.Distillates))
-	for _, distillateRecord := range currentState.Distillates {
-		decision := inspectionLineageSelectionDecision(currentState, distillateRecord.InspectionID)
-		if !decision.Allowed {
-			continue
-		}
-		distillates = append(distillates, cloneContinuityDistillateRecord(distillateRecord))
-	}
-	sort.Slice(distillates, func(leftIndex int, rightIndex int) bool {
-		if distillates[leftIndex].CreatedAtUTC != distillates[rightIndex].CreatedAtUTC {
-			return distillates[leftIndex].CreatedAtUTC < distillates[rightIndex].CreatedAtUTC
-		}
-		return distillates[leftIndex].DistillateID < distillates[rightIndex].DistillateID
-	})
-	return distillates
-}
-
-func activeLoopgateResonateKeys(currentState continuityMemoryState) []continuityResonateKeyRecord {
-	resonateKeys := make([]continuityResonateKeyRecord, 0, len(currentState.ResonateKeys))
-	for _, resonateKeyRecord := range currentState.ResonateKeys {
-		_, _, decision, err := resolveRecallMaterial(currentState, resonateKeyRecord.KeyID)
-		if err != nil || !decision.Allowed {
-			continue
-		}
-		resonateKeys = append(resonateKeys, cloneContinuityResonateKeyRecord(resonateKeyRecord))
-	}
-	sort.Slice(resonateKeys, func(leftIndex int, rightIndex int) bool {
-		if resonateKeys[leftIndex].CreatedAtUTC != resonateKeys[rightIndex].CreatedAtUTC {
-			return resonateKeys[leftIndex].CreatedAtUTC < resonateKeys[rightIndex].CreatedAtUTC
-		}
-		return resonateKeys[leftIndex].KeyID < resonateKeys[rightIndex].KeyID
-	})
-	return resonateKeys
-}
-
-func resolveRecallMaterial(currentState continuityMemoryState, requestedKeyID string) (continuityResonateKeyRecord, continuityDistillateRecord, continuityEligibilityDecision, error) {
-	resonateKeyRecord, found := currentState.ResonateKeys[requestedKeyID]
-	if !found {
-		return continuityResonateKeyRecord{}, continuityDistillateRecord{}, continuityEligibilityDecision{}, continuityGovernanceError{
-			httpStatus:     404,
-			responseStatus: ResponseStatusDenied,
-			denialCode:     DenialCodeContinuityInspectionNotFound,
-			reason:         fmt.Sprintf("resonate key %q not found", requestedKeyID),
-		}
-	}
-	distillateRecord, found := currentState.Distillates[resonateKeyRecord.DistillateID]
-	if !found {
-		return continuityResonateKeyRecord{}, continuityDistillateRecord{}, continuityEligibilityDecision{}, continuityGovernanceError{
-			httpStatus:     404,
-			responseStatus: ResponseStatusDenied,
-			denialCode:     DenialCodeContinuityInspectionNotFound,
-			reason:         fmt.Sprintf("distillate for key %q not found", requestedKeyID),
-		}
-	}
-	decision := inspectionLineageSelectionDecision(currentState, distillateRecord.InspectionID)
-	if !decision.Allowed {
-		return continuityResonateKeyRecord{}, continuityDistillateRecord{}, decision, continuityGovernanceError{
-			httpStatus:     403,
-			responseStatus: ResponseStatusDenied,
-			denialCode:     decision.DenialCode,
-			reason:         fmt.Sprintf("resonate key %q is not eligible", requestedKeyID),
-		}
-	}
-	return cloneContinuityResonateKeyRecord(resonateKeyRecord), cloneContinuityDistillateRecord(distillateRecord), decision, nil
-}
-
 func actualContinuityPayloadBytes(events []ContinuityEventInput) int {
 	totalBytes := 0
 	for _, continuityEvent := range events {
@@ -1337,23 +665,6 @@ func actualObservedContinuityPromptTokens(events []continuityObservedEventRecord
 		payloadBytes, _ := json.Marshal(continuityEvent)
 		tokenCount += approximateLoopgateTokenCount(string(payloadBytes))
 	}
-	return tokenCount
-}
-
-func approximateLoopgateWakeStateTokens(activeGoals []string, unresolvedItems []MemoryWakeStateOpenItem, recentFacts []MemoryWakeStateRecentFact, resonateKeys []string) int {
-	tokenCount := approximateLoopgateTokenCount("remembered continuity")
-	for _, activeGoal := range activeGoals {
-		tokenCount += approximateLoopgateTokenCount(activeGoal)
-	}
-	for _, unresolvedItem := range unresolvedItems {
-		tokenCount += approximateLoopgateTokenCount(unresolvedItem.ID + " " + unresolvedItem.Text)
-	}
-	for _, factRecord := range recentFacts {
-		tokenCount += approximateLoopgateTokenCount(factRecord.Name)
-		tokenCount += approximateLoopgateTokenCount(fmt.Sprintf("%v", factRecord.Value))
-		tokenCount += approximateLoopgateTokenCount(factRecord.SourceRef)
-	}
-	tokenCount += approximateLoopgateTokenCount(strings.Join(resonateKeys, ", "))
 	return tokenCount
 }
 
@@ -1472,13 +783,6 @@ func removeStringValue(values []string, removedValue string) []string {
 	return filteredValues
 }
 
-func trimToLimit(values *[]string, limit int) {
-	if len(*values) <= limit {
-		return
-	}
-	*values = append([]string(nil), (*values)[len(*values)-limit:]...)
-}
-
 func ptrContinuityInspectionRecord(inspectionRecord continuityInspectionRecord) *continuityInspectionRecord {
 	return &inspectionRecord
 }
@@ -1501,34 +805,6 @@ func ptrContinuityInspectionLineage(lineage continuityInspectionLineage) *contin
 
 func ptrContinuityObservedPacket(observedPacket continuityObservedPacket) *continuityObservedPacket {
 	return &observedPacket
-}
-
-func memoryWakeRecentFactFromDistillateFact(factRecord continuityDistillateFact, stateClass string) MemoryWakeStateRecentFact {
-	conflictAnchorVersion, conflictAnchorKey := continuityFactAnchorTuple(factRecord)
-	return MemoryWakeStateRecentFact{
-		Name:               factRecord.Name,
-		Value:              factRecord.Value,
-		SourceRef:          factRecord.SourceRef,
-		EpistemicFlavor:    factRecord.EpistemicFlavor,
-		StateClass:         stateClass,
-		ConflictKeyVersion: conflictAnchorVersion,
-		ConflictKey:        conflictAnchorKey,
-		CertaintyScore:     factRecord.CertaintyScore,
-	}
-}
-
-func memoryRecallFactFromDistillateFact(factRecord continuityDistillateFact, stateClass string) MemoryRecallFact {
-	conflictAnchorVersion, conflictAnchorKey := continuityFactAnchorTuple(factRecord)
-	return MemoryRecallFact{
-		Name:               factRecord.Name,
-		Value:              factRecord.Value,
-		SourceRef:          factRecord.SourceRef,
-		EpistemicFlavor:    factRecord.EpistemicFlavor,
-		StateClass:         stateClass,
-		ConflictKeyVersion: conflictAnchorVersion,
-		ConflictKey:        conflictAnchorKey,
-		CertaintyScore:     factRecord.CertaintyScore,
-	}
 }
 
 func semanticProjectionAnchorVersion(semanticProjection *tclpkg.SemanticProjection) string {
