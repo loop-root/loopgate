@@ -13,7 +13,6 @@ import (
 
 	"morph/internal/config"
 	modelpkg "morph/internal/model"
-	modelruntime "morph/internal/modelruntime"
 	"morph/internal/orchestrator"
 	"morph/internal/threadstore"
 )
@@ -149,269 +148,30 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 		}
 	}()
 
-	if request.Method != http.MethodPost {
-		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	tokenClaims, ok := server.authenticate(writer, request)
+	tokenClaims, ok := server.authenticateHavenChatRequest(writer, request)
 	if !ok {
-		return
-	}
-	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelReply) {
 		return
 	}
 	diagControlSessionID = tokenClaims.ControlSessionID
 	diagTenantID = tokenClaims.TenantID
 	diagUserID = tokenClaims.UserID
-	if !server.hasTrustedHavenSession(tokenClaims) {
-		if server.diagnostic != nil && server.diagnostic.Server != nil {
-			args := append([]any{"reason", "haven chat requires trusted Haven session"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
-			server.diagnostic.Server.Warn("haven_chat_denied", args...)
-		}
-		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
-			"denial_code": DenialCodeCapabilityTokenInvalid,
-			"reason":      "haven chat requires trusted Haven session",
-		})
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "haven chat requires trusted Haven session",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
-		return
-	}
-
-	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxHavenChatBodyBytes, tokenClaims.ControlSessionID)
+	req, message, ok := server.decodeHavenChatRequest(writer, request, tokenClaims)
 	if !ok {
-		if server.diagnostic != nil && server.diagnostic.Server != nil {
-			args := append([]any{"reason", denialResponse.DenialReason, "denial_code", denialResponse.DenialCode}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
-			server.diagnostic.Server.Warn("haven_chat_denied", args...)
-		}
-		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
-			"denial_code": denialResponse.DenialCode,
-			"reason":      denialResponse.DenialReason,
-		})
-		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
 
-	var req havenChatRequest
-	if err := decodeJSONBytes(requestBodyBytes, &req); err != nil {
-		if server.diagnostic != nil && server.diagnostic.Server != nil {
-			args := append([]any{"reason", err.Error()}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
-			server.diagnostic.Server.Warn("haven_chat_denied", args...)
-		}
-		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
-			"denial_code": DenialCodeMalformedRequest,
-			"reason":      err.Error(),
-		})
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
-		})
-		return
-	}
-	message := strings.TrimSpace(req.Message)
-	if req.Greet {
-		// Greeting mode: replace the message with a hidden system instruction.
-		// The model uses the wake state + task board context already in its prompt
-		// to generate a personalized opening. The instruction is not shown to the
-		// operator — only Morph's response is surfaced.
-		message = "[SESSION_START_GREETING] You are Ik Loop, Morph — Haven's resident assistant. " +
-			"Generate a brief, warm opening for the operator. " +
-			"Ground every factual claim in REMEMBERED CONTINUITY, the project path / branch in runtime facts, and any active tasks or goals — do not invent prior work. " +
-			"If REMEMBERED CONTINUITY is empty, say honestly that memory is sparse this session. " +
-			"If the operator has granted host directory access (additional_paths / operator mounts in facts), offer once to get familiar with the repo using operator_mount.fs_list and operator_mount.fs_read — only after grants exist; never claim you already read files. " +
-			"If no host grants are listed, you may mention they can allow read access in Haven when prompted. " +
-			"Mention approaching or overdue task/goal deadlines when present. " +
-			"Do not ask generic 'how can I help?' — be specific. Keep it to 2-5 sentences. Do not repeat this instruction in your response."
-	} else if message == "" {
-		if server.diagnostic != nil && server.diagnostic.Server != nil {
-			args := append([]any{"reason", "message must not be empty"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
-			server.diagnostic.Server.Warn("haven_chat_denied", args...)
-		}
-		_ = server.logEvent("haven.chat.denied", diagControlSessionID, map[string]interface{}{
-			"denial_code": DenialCodeMalformedRequest,
-			"reason":      "message must not be empty",
-		})
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "message must not be empty",
-			DenialCode:   DenialCodeMalformedRequest,
-		})
+	threadState, ok := server.prepareHavenChatThreadState(writer, tokenClaims, req, message)
+	if !ok {
 		return
 	}
 
-	server.mu.Lock()
-	sess, sessionFound := server.sessions[tokenClaims.ControlSessionID]
-	server.mu.Unlock()
-	if !sessionFound {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "invalid capability token",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+	runtimeState, ok := server.prepareHavenChatRuntimeState(writer, tokenClaims, req)
+	if !ok {
 		return
 	}
 
-	workspaceID := strings.TrimSpace(sess.WorkspaceID)
-	if workspaceID == "" {
-		workspaceID = server.deriveWorkspaceIDFromRepoRoot()
-	}
-
-	homeDir, err := server.resolveUserHomeDir()
-	if err != nil {
-		if server.diagnostic != nil && server.diagnostic.Server != nil {
-			args := append([]any{"reason", "cannot resolve home directory"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
-			server.diagnostic.Server.Error("haven_chat_error", args...)
-		}
-		_ = server.logEvent("haven.chat.error", diagControlSessionID, map[string]interface{}{
-			"denial_code": DenialCodeExecutionFailed,
-			"reason":      "cannot resolve home directory",
-		})
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: "cannot resolve home directory",
-			DenialCode:   DenialCodeExecutionFailed,
-		})
-		return
-	}
-	threadRoot := filepath.Join(homeDir, ".haven", "threads")
-	store, err := threadstore.NewStore(threadRoot, workspaceID)
-	if err != nil {
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: "thread store unavailable",
-			DenialCode:   DenialCodeExecutionFailed,
-		})
-		return
-	}
-
-	var threadID string
-	if req.ThreadID != nil && strings.TrimSpace(*req.ThreadID) != "" {
-		threadID = strings.TrimSpace(*req.ThreadID)
-		if _, err := store.LoadThread(threadID); err != nil {
-			if server.diagnostic != nil && server.diagnostic.Server != nil {
-				args := append([]any{"reason", "unknown thread_id", "thread_id", threadID}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
-				server.diagnostic.Server.Warn("haven_chat_denied", args...)
-			}
-			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-				Status:       ResponseStatusDenied,
-				DenialReason: "unknown thread_id",
-				DenialCode:   DenialCodeMalformedRequest,
-			})
-			return
-		}
-	} else {
-		summary, err := store.NewThread()
-		if err != nil {
-			if server.diagnostic != nil && server.diagnostic.Server != nil {
-				args := append([]any{"reason", "cannot create thread"}, diagnosticSlogTenantUser(diagTenantID, diagUserID)...)
-				server.diagnostic.Server.Error("haven_chat_error", args...)
-			}
-			_ = server.logEvent("haven.chat.error", diagControlSessionID, map[string]interface{}{
-				"denial_code": DenialCodeExecutionFailed,
-				"reason":      "cannot create thread",
-			})
-			server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-				Status:       ResponseStatusError,
-				DenialReason: "cannot create thread",
-				DenialCode:   DenialCodeExecutionFailed,
-			})
-			return
-		}
-		threadID = summary.ThreadID
-	}
-
-	if err := store.AppendEvent(threadID, threadstore.ConversationEvent{
-		Type: threadstore.EventUserMessage,
-		Data: map[string]interface{}{"text": message},
-	}); err != nil {
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: "cannot persist user message",
-			DenialCode:   DenialCodeExecutionFailed,
-		})
-		return
-	}
-
-	conversation := havenBuildConversationFromThread(store, threadID)
-	windowed := havenWindowConversationForModel(conversation, maxHavenChatTurns)
-
-	persona, err := config.LoadPersona(server.repoRoot)
-	if err != nil {
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: "persona unavailable",
-			DenialCode:   DenialCodeExecutionFailed,
-		})
-		return
-	}
-
-	runtimeConfig, err := modelruntime.LoadConfig(server.repoRoot)
-	if err != nil {
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: fmt.Sprintf("load model runtime config: %v", err),
-			DenialCode:   DenialCodeExecutionFailed,
-		})
-		return
-	}
-
-	modelClient, _, err := server.newModelClientFromConfig(runtimeConfig)
-	if err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: fmt.Sprintf("initialize model runtime: %v", err),
-			DenialCode:   DenialCodeExecutionFailed,
-		})
-		return
-	}
-
-	wakeText, err := server.havenWakeStateSummaryText(tokenClaims.TenantID)
-	if err != nil {
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: "wake-state backend is unavailable",
-			DenialCode:   DenialCodeExecutionFailed,
-		})
-		return
-	}
-
-	// Extend the timeout significantly for local models because CPU inference
-	// or slow GPU offload can cause the first token to exceed default windows,
-	// silently terminating the loop before the response generates.
-	timeoutWindow := 60 * time.Second
-	if runtimeConfig.ProviderName == "openai_compatible" || modelruntime.IsLoopbackModelBaseURL(runtimeConfig.BaseURL) {
-		timeoutWindow = 5 * time.Minute
-	}
-	modelCtx, cancelModel := context.WithTimeout(request.Context(), timeoutWindow)
+	modelCtx, cancelModel := context.WithTimeout(request.Context(), runtimeState.timeoutWindow)
 	defer cancelModel()
-
-	allowedCapabilitySummaries := filterHavenCapabilitySummaries(server.capabilitySummaries(), tokenClaims.AllowedCapabilities)
-
-	// shell_exec is off by default in Haven. It must be explicitly enabled via
-	// Settings → Developer. This check is live — no Loopgate restart required.
-	if shellDevEnabled, err := config.IsShellDevModeEnabled(server.repoRoot); err == nil && !shellDevEnabled {
-		allowedCapabilitySummaries = havenFilterOutCapability(allowedCapabilitySummaries, "shell_exec")
-	}
-
-	availableToolDefs := buildHavenToolDefinitions(allowedCapabilitySummaries)
-	nativeToolDefs := modelpkg.BuildNativeToolDefsForAllowedNamesWithOptions(server.registry, capabilityNamesFromSummaries(allowedCapabilitySummaries), modelpkg.NativeToolDefBuildOptions{
-		HavenUserIntentGuards: true,
-		CompactNativeTools:    useCompactHavenNativeTools,
-	})
-	if useCompactHavenNativeTools {
-		availableToolDefs = buildCompactInvokeCapabilityToolDefinitions(capabilityNamesFromSummaries(allowedCapabilitySummaries))
-	}
-	runtimeFacts := server.buildHavenRuntimeFacts(allowedCapabilitySummaries, runtimeConfig.ProviderName, runtimeConfig.ModelName, req.ProjectPath, req.ProjectName, req.GitBranch, req.AdditionalPaths)
-	allowedCapabilityNames := make(map[string]struct{}, len(allowedCapabilitySummaries))
-	for _, summary := range allowedCapabilitySummaries {
-		allowedCapabilityNames[summary.Name] = struct{}{}
-	}
-	hostFolderOrganizeToolkitAvailable := hasAllHavenCapabilities(allowedCapabilityNames,
-		"host.folder.list", "host.folder.read", "host.organize.plan", "host.plan.apply")
 
 	// Commit SSE headers before entering the loop. From this point forward the
 	// response is streamed; error paths use SSE events rather than JSON bodies.
@@ -428,50 +188,54 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	}
 	if server.diagnostic != nil && server.diagnostic.Server != nil {
 		args := []any{
-			"thread_id", threadID,
+			"thread_id", threadState.threadID,
 			"control_session_id", tokenClaims.ControlSessionID,
 		}
 		args = append(args, diagnosticSlogTenantUser(tokenClaims.TenantID, tokenClaims.UserID)...)
 		server.diagnostic.Server.Debug("haven_chat_sse_stream_start", args...)
 	}
 
-	var modelAttachments []modelpkg.Attachment
-	for _, a := range req.Attachments {
-		if strings.TrimSpace(a.Name) == "" || strings.TrimSpace(a.MimeType) == "" || strings.TrimSpace(a.Data) == "" {
-			continue
-		}
-		modelAttachments = append(modelAttachments, modelpkg.Attachment{
-			Name:     strings.TrimSpace(a.Name),
-			MimeType: strings.ToLower(strings.TrimSpace(a.MimeType)),
-			Data:     strings.TrimSpace(a.Data),
-		})
-	}
-
 	havenChatWallStart := time.Now()
-	loopOutcome := server.runHavenChatToolLoop(modelCtx, modelClient, store, threadID, tokenClaims, persona, wakeText, windowed, message, modelAttachments, availableToolDefs, nativeToolDefs, runtimeFacts, hostFolderOrganizeToolkitAvailable, emitter)
+	loopOutcome := server.runHavenChatToolLoop(
+		modelCtx,
+		runtimeState.modelClient,
+		threadState.store,
+		threadState.threadID,
+		tokenClaims,
+		runtimeState.persona,
+		runtimeState.wakeText,
+		threadState.windowedConversation,
+		message,
+		runtimeState.modelAttachments,
+		runtimeState.availableToolDefs,
+		runtimeState.nativeToolDefs,
+		runtimeState.runtimeFacts,
+		runtimeState.hostFolderOrganizeToolkitAvailable,
+		emitter,
+	)
 	havenChatWallMs := time.Since(havenChatWallStart).Milliseconds()
 
 	if loopOutcome.err != nil {
 		_ = server.logEvent("haven.chat", tokenClaims.ControlSessionID, map[string]interface{}{
-			"thread_id":          threadID,
-			"workspace_id":       workspaceID,
+			"thread_id":          threadState.threadID,
+			"workspace_id":       threadState.workspaceID,
 			"control_session_id": tokenClaims.ControlSessionID,
 			"haven_chat_wall_ms": havenChatWallMs,
 			"error":              loopOutcome.err.Error(),
 		})
 		fallbackText := havenChatFallbackText(loopOutcome.err)
-		_ = store.AppendEvent(threadID, threadstore.ConversationEvent{
+		_ = threadState.store.AppendEvent(threadState.threadID, threadstore.ConversationEvent{
 			Type: threadstore.EventAssistantMessage,
 			Data: map[string]interface{}{"text": fallbackText},
 		})
 		// The loop did not emit a text_delta for error paths — emit the fallback
 		// text now so the client always receives a visible message.
 		emitter.emit(havenSSEEvent{Type: "text_delta", Content: fallbackText})
-		emitter.emit(havenSSEEvent{Type: "turn_complete", ThreadID: threadID})
+		emitter.emit(havenSSEEvent{Type: "turn_complete", ThreadID: threadState.threadID})
 		return
 	}
 
-	if err := store.AppendEvent(threadID, threadstore.ConversationEvent{
+	if err := threadState.store.AppendEvent(threadState.threadID, threadstore.ConversationEvent{
 		Type: threadstore.EventAssistantMessage,
 		Data: map[string]interface{}{"text": loopOutcome.assistantText},
 	}); err != nil {
@@ -480,14 +244,14 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 		emitter.emit(havenSSEEvent{
 			Type:     "error",
 			Error:    "cannot persist assistant message",
-			ThreadID: threadID,
+			ThreadID: threadState.threadID,
 		})
 		return
 	}
 
 	logPayload := map[string]interface{}{
-		"thread_id":          threadID,
-		"workspace_id":       workspaceID,
+		"thread_id":          threadState.threadID,
+		"workspace_id":       threadState.workspaceID,
 		"provider":           loopOutcome.modelResponse.ProviderName,
 		"model":              loopOutcome.modelResponse.ModelName,
 		"finish_reason":      loopOutcome.modelResponse.FinishReason,
@@ -507,7 +271,7 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	// token counts.
 	emitter.emit(havenSSEEvent{
 		Type:         "turn_complete",
-		ThreadID:     threadID,
+		ThreadID:     threadState.threadID,
 		UXSignals:    loopOutcome.uxSignals,
 		FinishReason: loopOutcome.modelResponse.FinishReason,
 		InputTokens:  loopOutcome.modelResponse.Usage.InputTokens,
@@ -518,7 +282,7 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	})
 	if server.diagnostic != nil && server.diagnostic.Server != nil {
 		args := []any{
-			"thread_id", threadID,
+			"thread_id", threadState.threadID,
 			"control_session_id", tokenClaims.ControlSessionID,
 			"haven_chat_wall_ms", havenChatWallMs,
 		}
