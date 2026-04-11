@@ -387,6 +387,25 @@ Why this matters:
 - this keeps Haven-only behavior aligned with the same server-owned trust source
   already used for trusted-sandbox auto-allow
 
+## Later helper-wrapper audit result
+
+After the Haven-only route hardening, the next review pass checked the
+remaining direct `executeCapabilityRequest(...)` wrapper paths.
+
+Result:
+
+- no additional live privilege bypass was found in the remaining helper wrappers
+- the surviving direct wrappers still require the same route scopes and
+  capability scopes as the underlying capability path
+- the main remaining drift was documentation that still described some
+  Haven-only routes as merely `actor: haven` gated even though the code now
+  requires a trusted Haven session
+
+Follow-up:
+
+- the HTTP API contract was updated to describe those routes in terms of the
+  real enforced boundary: trusted Haven session + explicit control scopes
+
 ## Later hardening on executable pin fail-closed behavior
 
 The same session-open review found one smaller fail-open edge:
