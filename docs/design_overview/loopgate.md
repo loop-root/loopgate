@@ -171,11 +171,11 @@ The display-safe memory UI routes are intentionally operator-oriented:
 - `POST /v1/ui/memory/reset` archives the previous memory root and reinitializes
   continuity state for a fresh-start demo or operator cleanup flow; requires
   `memory.reset`
-- `POST /v1/morphlings/spawn`
-- `POST /v1/morphlings/status`
-- `POST /v1/morphlings/review`
-- `POST /v1/morphlings/terminate`
-- `POST /v1/morphlings/worker/launch`
+- `POST /v1/morphlings/spawn` (`morphling.write`)
+- `POST /v1/morphlings/status` (`morphling.read`)
+- `POST /v1/morphlings/review` (`morphling.write`)
+- `POST /v1/morphlings/terminate` (`morphling.write`)
+- `POST /v1/morphlings/worker/launch` (`morphling.write`)
 - `POST /v1/morphlings/worker/open`
 - `POST /v1/morphlings/worker/start`
 - `POST /v1/morphlings/worker/update`
@@ -226,6 +226,9 @@ Task-plan prototype note:
   testing, not the future cross-process worker authority model
 - they are now explicitly capability-gated with `task_plan.write` /
   `task_plan.read` rather than relying on signed transport alone
+- morphling lifecycle mutation routes are explicitly capability-gated with
+  `morphling.write`, while status uses `morphling.read`; the dedicated worker
+  open/start/update/complete path remains a separate worker-token transport
 
 Not yet implemented:
 

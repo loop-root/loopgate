@@ -18,7 +18,7 @@ func TestMorphlingConcurrentSpawnsCompeteForLastSlot(t *testing.T) {
 	repoRoot := t.TempDir()
 	clientOne, status, server := startLoopgateServer(t, repoRoot, loopgateMorphlingPolicyYAML(false, true, 1))
 	clientTwo := NewClient(server.socketPath)
-	clientTwo.ConfigureSession("test-actor-two", "test-session-two", capabilityNames(status.Capabilities))
+	clientTwo.ConfigureSession("test-actor-two", "test-session-two", advertisedSessionCapabilityNames(status))
 
 	spawnRequest := MorphlingSpawnRequest{
 		Class:                 "reviewer",
@@ -302,7 +302,7 @@ func TestMorphlingRestartDuringTerminatingDoesNotLeakCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bootstrap status after recovery server: %v", err)
 	}
-	client.ConfigureSession("recover-test", "recover-session", capabilityNames(status.Capabilities))
+	client.ConfigureSession("recover-test", "recover-session", advertisedSessionCapabilityNames(status))
 
 	firstSpawnResponse, err := client.SpawnMorphling(context.Background(), MorphlingSpawnRequest{
 		Class:                 "reviewer",

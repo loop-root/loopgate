@@ -16,6 +16,9 @@ func (server *Server) handleMorphlingWorkerLaunch(writer http.ResponseWriter, re
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMorphlingWrite) {
+		return
+	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)
 	if !ok {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
@@ -142,6 +145,9 @@ func (server *Server) handleMorphlingReview(writer http.ResponseWriter, request 
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityMorphlingWrite) {
 		return
 	}
 	requestBodyBytes, denialResponse, ok := server.readAndVerifySignedBody(writer, request, maxCapabilityBodyBytes, tokenClaims.ControlSessionID)

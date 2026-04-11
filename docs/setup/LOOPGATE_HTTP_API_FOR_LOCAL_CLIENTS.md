@@ -226,7 +226,9 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
 | `POST /v1/memory/discover` / `recall` / `remember` | Memory surfaces |
 | `POST /v1/memory/inspections/…` | Inspection governance |
-| `POST /v1/morphlings/*` | Bounded worker (**morphling**) lifecycle + worker IPC |
+| `POST /v1/morphlings/spawn` / `terminate` / `review` / `worker/launch` | Bounded worker (**morphling**) lifecycle mutation routes (**`morphling.write`**) |
+| `POST /v1/morphlings/status` | Bounded worker (**morphling**) status projection (**`morphling.read`**) |
+| `POST /v1/morphlings/worker/open` / `start` / `update` / `complete` | Dedicated morphling worker token/session path (not a Bearer control route) |
 | `POST /v1/quarantine/metadata` / `view` | Quarantine metadata / bounded payload view (**`quarantine.read`**) |
 | `POST /v1/quarantine/prune` | Quarantine blob prune while preserving metadata (**`quarantine.write`**) |
 | `POST /v1/task/plan` / `lease` / `execute` / `complete` | Task-plan vertical slice (**`task_plan.write`**) |

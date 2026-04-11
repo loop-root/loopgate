@@ -202,3 +202,36 @@ Why this matters:
   privileged operator action, not something any signed session should inherit
 - this closes another authority leak where transport integrity existed without
   least-privilege route binding
+
+## Later route-scope cleanup on morphling lifecycle routes
+
+The next parity sweep found the parent-session morphling routes were also
+signed-only:
+
+- `/v1/morphlings/spawn`
+- `/v1/morphlings/status`
+- `/v1/morphlings/terminate`
+- `/v1/morphlings/review`
+- `/v1/morphlings/worker/launch`
+
+This was a real privilege boundary issue, not a stylistic inconsistency:
+`spawnMorphling` derives child capabilities from class policy and the requested
+set, not from the parent token's executable tool scopes. Without an explicit
+route scope, any signed session could reach the morphling lifecycle surface.
+
+What changed:
+
+- added `morphling.read` for status
+- added `morphling.write` for spawn / terminate / review / worker launch
+- added explicit route-scope regressions for morphling lifecycle paths
+- updated morphling contract tests that were still opening secondary sessions
+  from executable capabilities only
+- updated the HTTP/design/checklist docs so morphling lifecycle is no longer
+  described as a signed-only Bearer surface
+
+Why this matters:
+
+- it prevents signed-session tokens from treating morphling lifecycle as an
+  ambient privilege escalation surface
+- it keeps child worker creation behind an explicit operator/client grant
+  instead of relying only on class policy and per-session ownership checks

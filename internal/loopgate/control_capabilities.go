@@ -17,6 +17,8 @@ const (
 	controlCapabilityMemoryReset             = "memory.reset"
 	controlCapabilityMemoryReview            = "memory.review"
 	controlCapabilityMemoryLineage           = "memory.lineage"
+	controlCapabilityMorphlingRead           = "morphling.read"
+	controlCapabilityMorphlingWrite          = "morphling.write"
 	controlCapabilityModelReply              = "model.reply"
 	controlCapabilityModelSettingsRead       = "model.settings.read"
 	controlCapabilityModelSettingsWrite      = "model.settings.write"
@@ -120,6 +122,18 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "memory",
 		Operation:   "write",
 		Description: "Apply lineage transitions such as tombstone or purge to governed memory artifacts through the local control plane.",
+	},
+	controlCapabilityMorphlingRead: {
+		Name:        controlCapabilityMorphlingRead,
+		Category:    "morphling",
+		Operation:   "read",
+		Description: "Read bounded morphling lifecycle status projections through the local control plane.",
+	},
+	controlCapabilityMorphlingWrite: {
+		Name:        controlCapabilityMorphlingWrite,
+		Category:    "morphling",
+		Operation:   "write",
+		Description: "Create, review, terminate, and launch bounded morphling workers through the local control plane.",
 	},
 	controlCapabilityModelReply: {
 		Name:        controlCapabilityModelReply,

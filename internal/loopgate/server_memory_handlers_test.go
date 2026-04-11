@@ -67,6 +67,8 @@ func TestStatusAdvertisesAdditionalControlCapabilities(t *testing.T) {
 		controlCapabilityDiagnosticRead,
 		controlCapabilityFolderAccessRead,
 		controlCapabilityFolderAccessWrite,
+		controlCapabilityMorphlingRead,
+		controlCapabilityMorphlingWrite,
 		controlCapabilityModelReply,
 		controlCapabilityModelSettingsRead,
 		controlCapabilityModelSettingsWrite,

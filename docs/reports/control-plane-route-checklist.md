@@ -93,3 +93,6 @@ Security-relevant denials and many successes append via `logEvent` / ledger path
 - `/v1/task/result` should require **`task_plan.read`**
 - `/v1/quarantine/metadata` and `/v1/quarantine/view` should require **`quarantine.read`**
 - `/v1/quarantine/prune` should require **`quarantine.write`**
+- `/v1/morphlings/status` should require **`morphling.read`**
+- `/v1/morphlings/spawn`, `/v1/morphlings/terminate`, `/v1/morphlings/review`, and `/v1/morphlings/worker/launch` should require **`morphling.write`**
+- `/v1/morphlings/worker/open`, `/start`, `/update`, and `/complete` are worker-token routes and should stay outside the Bearer control-capability path
