@@ -336,6 +336,9 @@ func (server *Server) handleHavenJournalEntries(writer http.ResponseWriter, requ
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
+		return
+	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
 		return
 	}
@@ -415,6 +418,9 @@ func (server *Server) handleHavenJournalEntry(writer http.ResponseWriter, reques
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
+		return
+	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "fs_read") {
 		return
 	}
@@ -457,6 +463,9 @@ func (server *Server) handleHavenWorkingNotes(writer http.ResponseWriter, reques
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
 		return
 	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
@@ -515,6 +524,9 @@ func (server *Server) handleHavenWorkingNotesEntry(writer http.ResponseWriter, r
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
+		return
+	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "fs_read") {
 		return
 	}
@@ -554,6 +566,9 @@ func (server *Server) handleHavenWorkingNotesSave(writer http.ResponseWriter, re
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIWrite) {
 		return
 	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "notes.write") {
@@ -639,6 +654,9 @@ func (server *Server) handleHavenWorkspaceList(writer http.ResponseWriter, reque
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
+		return
+	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
 		return
 	}
@@ -673,6 +691,9 @@ func (server *Server) handleHavenWorkspaceHostLayout(writer http.ResponseWriter,
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
 		return
 	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
@@ -835,6 +856,9 @@ func (server *Server) handleHavenWorkspacePreview(writer http.ResponseWriter, re
 	}
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
 		return
 	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "fs_read") {

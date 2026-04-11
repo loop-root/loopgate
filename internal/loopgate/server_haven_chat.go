@@ -315,6 +315,9 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelReply) {
+		return
+	}
 	diagControlSessionID = tokenClaims.ControlSessionID
 	diagTenantID = tokenClaims.TenantID
 	diagUserID = tokenClaims.UserID

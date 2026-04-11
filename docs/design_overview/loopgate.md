@@ -130,14 +130,17 @@ Implemented endpoints:
 
 - `GET /v1/health` (liveness, no auth)
 - `GET /v1/status` (Bearer + signed GET — full inventory)
+- `POST /v1/chat` (actor `haven` + `model.reply`)
 - `GET /v1/ui/status` (`ui.read`)
 - `GET /v1/ui/events` (`ui.read`)
 - `GET /v1/ui/approvals` (approval-token authenticated UI route)
 - `POST /v1/ui/approvals/{id}/decision` (approval-token authenticated; body `{ "approved": bool }`)
-- `POST /v1/ui/workspace/list`
-- `POST /v1/ui/workspace/preview`
-- `GET /v1/ui/working-notes`, `GET /v1/ui/working-notes/entry`, `POST /v1/ui/working-notes/save`
-- `GET /v1/ui/journal/entries`, `GET /v1/ui/journal/entry`
+- `POST /v1/ui/workspace/list` (`ui.read` + `fs_list`)
+- `GET /v1/ui/workspace/host-layout` (`ui.read` + `fs_list`)
+- `POST /v1/ui/workspace/preview` (`ui.read` + `fs_read`)
+- `GET /v1/ui/working-notes`, `GET /v1/ui/working-notes/entry` (`ui.read` + `fs_list` / `fs_read`), `POST /v1/ui/working-notes/save` (`ui.write` + `notes.write`)
+- `GET /v1/ui/journal/entries`, `GET /v1/ui/journal/entry` (`ui.read` + `fs_list` / `fs_read`)
+- `GET /v1/ui/paint/gallery` (`ui.read` + `fs_list` + `fs_read`)
 - `GET /v1/ui/desk-notes` (`ui.read`), `POST /v1/ui/desk-notes/dismiss` (`ui.write`)
 - `GET /v1/ui/memory`
 - `POST /v1/ui/memory/reset`
@@ -151,6 +154,7 @@ Implemented endpoints:
 - `POST /v1/quarantine/prune` (`quarantine.write`)
 - `POST /v1/sites/inspect` (`site.inspect`)
 - `POST /v1/sites/trust-draft` (`site.trust.write`)
+- `POST /v1/resident/journal-tick` (actor `haven` + `model.reply`)
 - `POST /v1/sandbox/import` (`fs_write`; host source must be inside the control session's bound operator mounts)
 - `POST /v1/sandbox/stage`
 - `POST /v1/sandbox/metadata`

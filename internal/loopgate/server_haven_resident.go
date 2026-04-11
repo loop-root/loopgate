@@ -21,10 +21,10 @@ import (
 
 const (
 	havenJournalResidentStateFileName = "haven_journal_resident.json"
-	maxHavenJournalResidentBodyBytes    = 4096
-	journalResidentMinAttemptGap        = 5 * time.Minute
-	journalResidentMinSuccessGap        = 4 * time.Hour
-	maxJournalResidentModelRunes        = 8000
+	maxHavenJournalResidentBodyBytes  = 4096
+	journalResidentMinAttemptGap      = 5 * time.Minute
+	journalResidentMinSuccessGap      = 4 * time.Hour
+	maxJournalResidentModelRunes      = 8000
 )
 
 type havenJournalResidentState struct {
@@ -130,6 +130,9 @@ func (server *Server) handleHavenJournalResidentTick(writer http.ResponseWriter,
 
 	tokenClaims, ok := server.authenticate(writer, request)
 	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityModelReply) {
 		return
 	}
 	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {

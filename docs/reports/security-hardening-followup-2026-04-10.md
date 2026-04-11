@@ -219,6 +219,68 @@ This was a real privilege boundary issue, not a stylistic inconsistency:
 set, not from the parent token's executable tool scopes. Without an explicit
 route scope, any signed session could reach the morphling lifecycle surface.
 
+## Later route-scope cleanup on Haven chat, resident, and UI convenience routes
+
+Another follow-up sweep found three more compatibility-era seams:
+
+- `POST /v1/chat` and `POST /v1/resident/journal-tick` were still signed and
+  actor-gated, but they did not require the explicit `model.reply` route scope
+  even though both can invoke the model runtime
+- several Haven UI convenience routes were still leaning only on the underlying
+  executable tool scopes (`fs_list`, `fs_read`, `notes.write`) without the
+  explicit `ui.read` / `ui.write` route scopes
+- `GET /v1/ui/workspace/host-layout` in particular exposed resolved host paths
+  through a UI route that was not yet bound to `ui.read`
+
+What changed:
+
+- gated `/v1/chat` and `/v1/resident/journal-tick` behind `model.reply`
+- gated the remaining Haven UI projection routes behind `ui.read`
+- gated `/v1/ui/working-notes/save` behind `ui.write`
+- kept the underlying tool-scope checks in place, so the UI routes now require
+  both the explicit route scope and the relevant executable capability family
+
+Why this matters:
+
+- actor labels are compatibility identifiers, not authority; a client-chosen
+  `actor: haven` must not substitute for `model.reply`
+- UI projection routes should not become a side door around the explicit UI
+  surface contract just because the caller also has raw tool capabilities
+- the host-layout route now follows the same least-privilege rule as the rest
+  of the UI projection surface instead of disclosing resolved host paths to any
+  session with `fs_list`
+
+## Later execution-path hardening for approval-disabled helper routes
+
+The next execution-path review found a subtler issue than route scopes:
+
+- a few internal helper paths were calling `executeCapabilityRequest(..., false)`
+  outside the approval-decision flow
+- `false` meant "do not create a new approval", but the execution path did not
+  distinguish that from "this request is already executing under an approved
+  capability envelope"
+- if one of those helper-wrapped capabilities drifted to `NeedsApproval`, the
+  helper would have executed it instead of failing closed
+
+What changed:
+
+- added an explicit `ApprovedExecution` token flag for the post-approval
+  execution path
+- tightened approved execution tokens to be single-use and bound to the exact
+  approved capability + normalized arguments
+- changed `executeCapabilityRequest` so `NeedsApproval` + `allowApprovalCreation=false`
+  is now a hard denial unless the token is explicitly marked
+  `ApprovedExecution`
+
+Why this matters:
+
+- internal helper routes such as Haven UI save/read wrappers no longer have any
+  silent approval-bypass behavior if policy tightens underneath them
+- approval-disablement now means "fail closed without creating approval state",
+  not "go ahead anyway"
+- approved execution is now explicit, single-use, and request-bound instead of
+  being inferred from a broad internal token shape
+
 What changed:
 
 - added `morphling.read` for status

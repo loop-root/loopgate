@@ -40,6 +40,9 @@ func (server *Server) handleHavenPaintGallery(writer http.ResponseWriter, reques
 	if !ok {
 		return
 	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
+		return
+	}
 	if !server.requireCapabilityScope(writer, tokenClaims, "fs_list") {
 		return
 	}

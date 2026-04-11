@@ -3388,6 +3388,39 @@ func TestApprovalDecisionCannotBeReplayedAfterResolution(t *testing.T) {
 	}
 }
 
+func TestExecuteCapabilityRequest_DeniesNeedsApprovalWhenApprovalCreationDisabledWithoutApprovedExecution(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	server.mu.Lock()
+	baseToken := server.tokens[client.capabilityToken]
+	server.mu.Unlock()
+
+	response := server.executeCapabilityRequest(context.Background(), baseToken, CapabilityRequest{
+		RequestID:  "req-no-approval-bypass",
+		Capability: "fs_write",
+		Arguments: map[string]string{
+			"path":    "blocked.txt",
+			"content": "approval bypass should fail closed",
+		},
+	}, false)
+	if response.Status != ResponseStatusDenied || response.DenialCode != DenialCodeApprovalRequired || !response.ApprovalRequired {
+		t.Fatalf("expected approval-required denial without execution, got %#v", response)
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot, "blocked.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected blocked file to remain unwritten, stat err=%v", err)
+	}
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	if len(server.approvals) != 0 {
+		t.Fatalf("expected no pending approvals to be created on fail-closed path, got %#v", server.approvals)
+	}
+}
+
 func TestCapabilityResponseJSONDoesNotExposeProviderTokenFields(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

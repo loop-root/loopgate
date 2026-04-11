@@ -192,6 +192,7 @@ type capabilityToken struct {
 	UserID            string
 	ExpiresAt         time.Time
 	SingleUse         bool
+	ApprovedExecution bool
 	BoundCapability   string
 	BoundArgumentHash string
 	ParentTokenID     string
@@ -1108,6 +1109,28 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			ControlSessionID: tokenClaims.ControlSessionID,
 		})
 		return pendingResponse
+	}
+	if policyDecision.Decision == policypkg.NeedsApproval && !allowApprovalCreation && !tokenClaims.ApprovedExecution {
+		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"reason":               "capability requires approval and this route does not support approval creation",
+			"denial_code":          DenialCodeApprovalRequired,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+		}
+		deniedResponse := CapabilityResponse{
+			RequestID:        capabilityRequest.RequestID,
+			Status:           ResponseStatusDenied,
+			DenialReason:     "capability requires approval and this route does not support approval creation",
+			DenialCode:       DenialCodeApprovalRequired,
+			ApprovalRequired: true,
+		}
+		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
+		return deniedResponse
 	}
 
 	effectiveTokenClaims := tokenClaims
@@ -2425,6 +2448,7 @@ func deriveExecutionToken(baseToken capabilityToken, capabilityRequest Capabilit
 		UserID:              baseToken.UserID,
 		ExpiresAt:           baseToken.ExpiresAt,
 		SingleUse:           true,
+		ApprovedExecution:   baseToken.ApprovedExecution,
 		BoundCapability:     capabilityRequest.Capability,
 		BoundArgumentHash:   normalizedArgumentHash(capabilityRequest.Arguments),
 		ParentTokenID:       baseToken.TokenID,

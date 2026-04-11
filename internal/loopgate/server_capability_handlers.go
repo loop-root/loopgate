@@ -181,6 +181,10 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 			TenantID:            controlSession.TenantID,
 			UserID:              controlSession.UserID,
 			ExpiresAt:           controlSession.ExpiresAt,
+			SingleUse:           true,
+			ApprovedExecution:   true,
+			BoundCapability:     pendingApproval.Request.Capability,
+			BoundArgumentHash:   normalizedArgumentHash(pendingApproval.Request.Arguments),
 		}, pendingApproval.Request, false)
 		response.ApprovalRequestID = approvalID
 		server.markApprovalExecutionResult(approvalID, response.Status)

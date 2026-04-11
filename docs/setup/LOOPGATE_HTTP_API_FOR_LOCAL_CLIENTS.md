@@ -213,6 +213,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/model/reply` | Model round-trip through Loopgate — **`model.reply`** |
 | `POST /v1/model/validate` | Validate runtime model config — **`model.validate`** |
 | `POST /v1/model/connections/store` | Store provider credentials (secret handled server-side) — **`connection.write`** |
+| `POST /v1/chat` | Haven chat / tool orchestration entrypoint — actor **`haven`** + **`model.reply`** |
 | `POST /v1/capabilities/execute` | Execute a registered capability |
 | `POST /v1/connections/validate` | Validate a configured connection — **`connection.write`** |
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows — **`connection.write`** |
@@ -252,6 +253,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/ui/workspace/preview` | Read workspace file preview (signed POST; body `path`; **`fs_read`**; using the same virtual path mapping as the list route) |
 | `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET; **`ui.read`**); Loopgate normalizes the file into a bounded state/anchor projection instead of replaying raw freeform text |
 | `GET /v1/ui/morph-sleep` | Same normalized snapshot as presence plus `is_sleeping` / `is_resting` (signed GET; **`ui.read`**) |
+| `POST /v1/resident/journal-tick` | Haven resident journal helper — actor **`haven`** + **`model.reply`**; internal model use still requires explicit route scope |
 | `POST /v1/agent/work-item/ensure` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
 | `POST /v1/agent/work-item/complete` | **Actor `haven` only** for the current compatibility gate — signed POST; runs **`todo.complete`** for a task-board item id |
 | `GET` / `PUT /v1/ui/task-standing-grants` | Task standing-grant controls (**`task_standing_grant.read`** / **`task_standing_grant.write`**) |
@@ -344,6 +346,17 @@ These routes let a client using **actor label `haven`** create or complete **Tas
 
 **Product note:** Classification of user messages (answer-only vs task vs tool vs approval-gated), UI phase (`planning`, `waiting_for_approval`, etc.), and deep-link behavior are **unprivileged client** responsibilities. Loopgate only exposes narrow, auditable capability wrappers. Simple host-folder work typically flows through **`/v1/chat`** and normal approvals; use ensure/complete when the client wants an explicit Task Board row.
 
+### 7.2.1 Haven chat and resident helpers
+
+- `POST /v1/chat`
+  - requires actor **`haven`**
+  - requires **`model.reply`**
+  - preserves the same signed-body and control-session binding rules as other privileged POST routes
+- `POST /v1/resident/journal-tick`
+  - requires actor **`haven`**
+  - requires **`model.reply`**
+  - may still return `status: "skipped"` when the token lacks `fs_write`; the model scope gates the route, not the later journal decision logic
+
 ### 7.3 Continuity inspection (threadstore-loaded; actor `haven`)
 
 **`POST /v1/continuity/inspect-thread`**
@@ -406,14 +419,17 @@ cross the public control-plane surface.
 - `POST /v1/sandbox/list`
   - requires **`fs_list`**
   - returns a directory listing inside the sandbox home
-- `GET /v1/ui/journal/entries`, `GET /v1/ui/working-notes`, and `POST /v1/ui/workspace/list`
-  - require **`fs_list`**
+- `GET /v1/ui/journal/entries`, `GET /v1/ui/working-notes`, `GET /v1/ui/paint/gallery`, `POST /v1/ui/workspace/list`, and `GET /v1/ui/workspace/host-layout`
+  - require **`ui.read`**
+  - also require the matching underlying tool scopes (`fs_list`; `ui/paint/gallery` additionally needs `fs_read`)
   - return display-safe projections over sandbox directory structure
 - `GET /v1/ui/journal/entry`, `GET /v1/ui/working-notes/entry`, and `POST /v1/ui/workspace/preview`
-  - require **`fs_read`**
+  - require **`ui.read`**
+  - also require **`fs_read`**
   - return bounded file content projections through Loopgate
 - `POST /v1/ui/working-notes/save`
-  - requires **`notes.write`**
+  - requires **`ui.write`**
+  - also requires **`notes.write`**
   - saves a working note through the same governed capability path as `notes.write`
 - `GET /v1/settings/shell-dev` and `GET /v1/settings/idle`
   - require actor **`haven`** and **`config.read`**

@@ -338,6 +338,39 @@ func TestHavenModelRoutesRequireScopedCapabilities(t *testing.T) {
 	if len(catalogResponse.Models) != 2 {
 		t.Fatalf("expected 2 model catalog entries, got %#v", catalogResponse)
 	}
+
+	chatDeniedClient := NewClient(client.socketPath)
+	chatDeniedClient.ConfigureSession("haven", "haven-chat-model-reply-denied", []string{"fs_list"})
+	if _, err := chatDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied haven chat token: %v", err)
+	}
+	if err := chatDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/chat", chatDeniedClient.capabilityToken, havenChatRequest{
+		Message: "scope check",
+	}, &CapabilityResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected model.reply scope denial for haven chat, got %v", err)
+	}
+
+	residentDeniedClient := NewClient(client.socketPath)
+	residentDeniedClient.ConfigureSession("haven", "haven-journal-tick-denied", []string{"fs_write"})
+	if _, err := residentDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied resident tick token: %v", err)
+	}
+	if err := residentDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/resident/journal-tick", residentDeniedClient.capabilityToken, nil, &HavenJournalResidentTickResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected model.reply scope denial for resident tick, got %v", err)
+	}
+
+	residentAllowedClient := NewClient(client.socketPath)
+	residentAllowedClient.ConfigureSession("haven", "haven-journal-tick-allowed", []string{controlCapabilityModelReply})
+	if _, err := residentAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure model.reply token for resident tick: %v", err)
+	}
+	var residentResponse HavenJournalResidentTickResponse
+	if err := residentAllowedClient.doJSON(context.Background(), http.MethodPost, "/v1/resident/journal-tick", residentAllowedClient.capabilityToken, nil, &residentResponse, nil); err != nil {
+		t.Fatalf("resident tick with model.reply: %v", err)
+	}
+	if residentResponse.Status != "skipped" || !strings.Contains(residentResponse.Reason, "fs_write") {
+		t.Fatalf("expected resident tick to continue past scope gate and skip without fs_write, got %#v", residentResponse)
+	}
 }
 
 func TestFolderAccessRoutesRequireScopedCapabilities(t *testing.T) {
@@ -809,13 +842,53 @@ func TestHavenProjectionRoutesRequireCapabilityScopes(t *testing.T) {
 		t.Fatalf("seed journal file: %v", err)
 	}
 
+	workingNotePath := filepath.Join(server.sandboxPaths.Scratch, "notes", "scope-note.md")
+	if err := os.MkdirAll(filepath.Dir(workingNotePath), 0o755); err != nil {
+		t.Fatalf("mkdir working notes dir: %v", err)
+	}
+	if err := os.WriteFile(workingNotePath, []byte("# Scope Note\n\nKeep UI projections bounded."), 0o600); err != nil {
+		t.Fatalf("seed working note file: %v", err)
+	}
+
+	paintPath := filepath.Join(server.sandboxPaths.Outputs, "paintings", "20260410-120000-0001-scope.svg")
+	if err := os.MkdirAll(filepath.Dir(paintPath), 0o755); err != nil {
+		t.Fatalf("mkdir paint dir: %v", err)
+	}
+	if err := os.WriteFile(paintPath, []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"), 0o600); err != nil {
+		t.Fatalf("seed paint file: %v", err)
+	}
+
 	workspaceFilePath := filepath.Join(server.sandboxPaths.Workspace, "preview.txt")
 	if err := os.WriteFile(workspaceFilePath, []byte("preview me"), 0o600); err != nil {
 		t.Fatalf("seed workspace preview file: %v", err)
 	}
 
+	uiDeniedClient := NewClient(client.socketPath)
+	uiDeniedClient.ConfigureSession("haven", "haven-ui-projection-denied", []string{"fs_list", "fs_read", "notes.write"})
+	if _, err := uiDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure denied ui projection token: %v", err)
+	}
+	if err := uiDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/journal/entries", uiDeniedClient.capabilityToken, nil, &HavenJournalEntriesResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.read scope denial for journal entries, got %v", err)
+	}
+	if err := uiDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/paint/gallery", uiDeniedClient.capabilityToken, nil, &HavenPaintGalleryResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.read scope denial for paint gallery, got %v", err)
+	}
+	if err := uiDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/ui/workspace/list", uiDeniedClient.capabilityToken, HavenWorkspaceListRequest{}, &HavenWorkspaceListResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.read scope denial for workspace list, got %v", err)
+	}
+	if err := uiDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/workspace/host-layout", uiDeniedClient.capabilityToken, nil, &HavenWorkspaceHostLayoutResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.read scope denial for workspace host layout, got %v", err)
+	}
+	if err := uiDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/ui/working-notes/save", uiDeniedClient.capabilityToken, HavenWorkingNoteSaveRequest{
+		Title:   "Scope Test",
+		Content: "Saved through notes.write",
+	}, &HavenWorkingNoteSaveResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected ui.write scope denial for working note save, got %v", err)
+	}
+
 	listDeniedClient := NewClient(client.socketPath)
-	listDeniedClient.ConfigureSession("haven", "haven-fs-list-denied", []string{"fs_read"})
+	listDeniedClient.ConfigureSession("haven", "haven-fs-list-denied", []string{controlCapabilityUIRead, "fs_read"})
 	if _, err := listDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied haven fs_list token: %v", err)
 	}
@@ -825,45 +898,66 @@ func TestHavenProjectionRoutesRequireCapabilityScopes(t *testing.T) {
 	if err := listDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/ui/workspace/list", listDeniedClient.capabilityToken, HavenWorkspaceListRequest{}, &HavenWorkspaceListResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected fs_list scope denial for workspace list, got %v", err)
 	}
+	if err := listDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/workspace/host-layout", listDeniedClient.capabilityToken, nil, &HavenWorkspaceHostLayoutResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected fs_list scope denial for workspace host layout, got %v", err)
+	}
 
 	listAllowedClient := NewClient(client.socketPath)
-	listAllowedClient.ConfigureSession("haven", "haven-fs-list-allowed", []string{"fs_list"})
+	listAllowedClient.ConfigureSession("haven", "haven-fs-list-allowed", []string{controlCapabilityUIRead, "fs_list", "fs_read"})
 	if _, err := listAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure haven fs_list token: %v", err)
 	}
 	if err := listAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/journal/entries", listAllowedClient.capabilityToken, nil, &HavenJournalEntriesResponse{}, nil); err != nil {
-		t.Fatalf("journal entries with fs_list: %v", err)
+		t.Fatalf("journal entries with ui.read+fs_list: %v", err)
+	}
+	if err := listAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/working-notes", listAllowedClient.capabilityToken, nil, &HavenWorkingNotesResponse{}, nil); err != nil {
+		t.Fatalf("working notes with ui.read+fs_list: %v", err)
+	}
+	if err := listAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/paint/gallery", listAllowedClient.capabilityToken, nil, &HavenPaintGalleryResponse{}, nil); err != nil {
+		t.Fatalf("paint gallery with ui.read+fs_list+fs_read: %v", err)
 	}
 	if err := listAllowedClient.doJSON(context.Background(), http.MethodPost, "/v1/ui/workspace/list", listAllowedClient.capabilityToken, HavenWorkspaceListRequest{}, &HavenWorkspaceListResponse{}, nil); err != nil {
-		t.Fatalf("workspace list with fs_list: %v", err)
+		t.Fatalf("workspace list with ui.read+fs_list: %v", err)
+	}
+	if err := listAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/workspace/host-layout", listAllowedClient.capabilityToken, nil, &HavenWorkspaceHostLayoutResponse{}, nil); err != nil {
+		t.Fatalf("workspace host layout with ui.read+fs_list: %v", err)
 	}
 
 	readDeniedClient := NewClient(client.socketPath)
-	readDeniedClient.ConfigureSession("haven", "haven-fs-read-denied", []string{"fs_list"})
+	readDeniedClient.ConfigureSession("haven", "haven-fs-read-denied", []string{controlCapabilityUIRead, "fs_list"})
 	if _, err := readDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied haven fs_read token: %v", err)
 	}
 	if err := readDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/journal/entry?path=research/journal/today.md", readDeniedClient.capabilityToken, nil, &HavenJournalEntryResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected fs_read scope denial for journal entry, got %v", err)
 	}
+	if err := readDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/working-notes/entry?path=research/notes/scope-note.md", readDeniedClient.capabilityToken, nil, &HavenWorkingNoteResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected fs_read scope denial for working note entry, got %v", err)
+	}
 	if err := readDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/ui/workspace/preview", readDeniedClient.capabilityToken, HavenWorkspacePreviewRequest{Path: "projects/preview.txt"}, &HavenWorkspacePreviewResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected fs_read scope denial for workspace preview, got %v", err)
 	}
+	if err := readDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/paint/gallery", readDeniedClient.capabilityToken, nil, &HavenPaintGalleryResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected fs_read scope denial for paint gallery, got %v", err)
+	}
 
 	readAllowedClient := NewClient(client.socketPath)
-	readAllowedClient.ConfigureSession("haven", "haven-fs-read-allowed", []string{"fs_read"})
+	readAllowedClient.ConfigureSession("haven", "haven-fs-read-allowed", []string{controlCapabilityUIRead, "fs_read", "fs_list"})
 	if _, err := readAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure haven fs_read token: %v", err)
 	}
 	if err := readAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/journal/entry?path=research/journal/today.md", readAllowedClient.capabilityToken, nil, &HavenJournalEntryResponse{}, nil); err != nil {
-		t.Fatalf("journal entry with fs_read: %v", err)
+		t.Fatalf("journal entry with ui.read+fs_read: %v", err)
+	}
+	if err := readAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/working-notes/entry?path=research/notes/scope-note.md", readAllowedClient.capabilityToken, nil, &HavenWorkingNoteResponse{}, nil); err != nil {
+		t.Fatalf("working note entry with ui.read+fs_read: %v", err)
 	}
 	if err := readAllowedClient.doJSON(context.Background(), http.MethodPost, "/v1/ui/workspace/preview", readAllowedClient.capabilityToken, HavenWorkspacePreviewRequest{Path: "projects/preview.txt"}, &HavenWorkspacePreviewResponse{}, nil); err != nil {
-		t.Fatalf("workspace preview with fs_read: %v", err)
+		t.Fatalf("workspace preview with ui.read+fs_read: %v", err)
 	}
 
 	notesDeniedClient := NewClient(client.socketPath)
-	notesDeniedClient.ConfigureSession("haven", "haven-notes-write-denied", []string{"fs_read"})
+	notesDeniedClient.ConfigureSession("haven", "haven-notes-write-denied", []string{controlCapabilityUIWrite, "fs_read"})
 	if _, err := notesDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied notes.write token: %v", err)
 	}
@@ -875,7 +969,7 @@ func TestHavenProjectionRoutesRequireCapabilityScopes(t *testing.T) {
 	}
 
 	notesAllowedClient := NewClient(client.socketPath)
-	notesAllowedClient.ConfigureSession("haven", "haven-notes-write-allowed", []string{"notes.write"})
+	notesAllowedClient.ConfigureSession("haven", "haven-notes-write-allowed", []string{controlCapabilityUIWrite, "notes.write"})
 	if _, err := notesAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure notes.write token: %v", err)
 	}
@@ -883,7 +977,7 @@ func TestHavenProjectionRoutesRequireCapabilityScopes(t *testing.T) {
 		Title:   "Scope Test",
 		Content: "Saved through notes.write",
 	}, &HavenWorkingNoteSaveResponse{}, nil); err != nil {
-		t.Fatalf("working note save with notes.write: %v", err)
+		t.Fatalf("working note save with ui.write+notes.write: %v", err)
 	}
 
 	uiReadDeniedClient := NewClient(client.socketPath)
