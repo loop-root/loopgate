@@ -184,15 +184,10 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_haven_memory_handlers.go`
   - display-safe memory inventory projection over continuity state **for the session tenant’s partition**
   - archive-and-reset path that closes and reopens the backend for **that partition only** (multi-tenant: other partitions untouched)
-- `continuity_memory.go`
-  - thread distillation
-  - explicit remembered facts
-  - explicit remember persistence now revalidates and consumes `tcl.ValidatedMemoryCandidate` directly; request normalization is preflight only
-  - timezone/locale alias handling ends at the adapter boundary, so persistence only sees canonical `profile.timezone` / `profile.locale`
-  - discover-memory retrieval remains tag-overlap first, with a narrow slot-preference tie-break for a tiny allowlist of stable profile slots (`name`, `preferred_name`, `timezone`, `locale`)
-  - that tie-break only reorders already-eligible discover results; it is not an admission path and must not bypass lineage or review filters
-  - now rehydrates task metadata for unresolved items from continuity facts
-  - durable mutation ordering: audit before continuity JSONL append; `saveContinuityMemoryState(..., nowUTC)` for testable / consistent artifact timestamps
+- `continuity_memory_access.go`
+  - continuity request normalization, inspect/discover/recall adapters, and backend lookup
+- `continuity_memory_mutation.go`
+  - continuity mutation ordering and explicit memory fact write-budget enforcement
 - `continuity_memory_records.go`
   - continuity inspect / lineage record types, schema constants, and distillate-record JSON compatibility helpers
 - `continuity_memory_wake.go`
