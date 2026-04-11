@@ -292,50 +292,17 @@ func (server *Server) runHavenChatToolLoop(
 	hostFolderOrganizeToolkitAvailable bool,
 	emitter *havenSSEEmitter,
 ) havenChatLoopOutcome {
-	userMessage := initialUserMessage
-	var lastModelResponse modelpkg.Response
-	var uxSignals []string
-	proseOnlyHostFolderNudges := 0
-	hostPlanApplyNudgeCount := 0
-	sawHostFolderToolRound := false
-	awaitingHostPlanApply := false
+	loopState := newHavenChatLoopState(conversation, initialUserMessage)
 
 	for iteration := 0; iteration < maxHavenToolIterations; iteration++ {
 		if ctx.Err() != nil {
 			return havenChatLoopOutcome{err: ctx.Err()}
 		}
 
-		// On iteration 0 send the full capability catalog so the model knows what tools exist.
-		// On subsequent iterations send only the lightweight set — the model already has tool
-		// results in context and re-sending 2 000+ tokens of descriptions bloats input tokens
-		// and adds measurable latency on every follow-up model call.
-		var turnRuntimeFacts []string
-		if iteration == 0 {
-			turnRuntimeFacts = append([]string(nil), baseRuntimeFacts...)
-		} else {
-			turnRuntimeFacts = []string{
-				havenToolLoopContinuationFact,
-				modelpkg.HavenConstrainedNativeToolsRuntimeFact,
-			}
-			// Slim organize nudge is aggressive; inject it only while this request is already
-			// executing host-folder tools or waiting on plan→apply — not whenever the toolkit exists.
-			if hostFolderOrganizeToolkitAvailable && (sawHostFolderToolRound || awaitingHostPlanApply) {
-				turnRuntimeFacts = append(turnRuntimeFacts, havenToolLoopSlimOrganizeFact)
-			}
-		}
-
-		modelUserMessage := userMessage
-		if iteration > 0 && strings.TrimSpace(modelUserMessage) == "" {
-			modelUserMessage = havenToolFollowupUserNudge
-		}
-
-		windowedConversation := havenWindowConversationForModel(conversation, maxHavenChatTurns)
-		// Attachments only apply to the first iteration — subsequent tool-loop iterations
-		// are model↔tool exchanges that do not include the original user payload.
-		var turnAttachments []modelpkg.Attachment
-		if iteration == 0 {
-			turnAttachments = initialAttachments
-		}
+		turnRuntimeFacts := loopState.buildTurnRuntimeFacts(baseRuntimeFacts, hostFolderOrganizeToolkitAvailable, iteration)
+		modelUserMessage := loopState.modelUserMessage(iteration)
+		windowedConversation := havenWindowConversationForModel(loopState.conversation, maxHavenChatTurns)
+		turnAttachments := havenChatTurnAttachments(iteration, initialAttachments)
 		modelResponse, modelErr := modelClient.Reply(ctx, modelpkg.Request{
 			Persona:        persona,
 			Policy:         server.policy,
@@ -351,7 +318,7 @@ func (server *Server) runHavenChatToolLoop(
 		if modelErr != nil {
 			return havenChatLoopOutcome{err: modelErr}
 		}
-		lastModelResponse = modelResponse
+		loopState.lastModelResponse = modelResponse
 		replyText := strings.TrimSpace(modelResponse.AssistantText)
 		if havenIsNonUserFacingAssistantPlaceholder(replyText) {
 			replyText = ""
@@ -367,16 +334,10 @@ func (server *Server) runHavenChatToolLoop(
 				replyText = "My response was cut off — the output limit was reached. Try a shorter or more specific request."
 			}
 			emitter.emit(havenSSEEvent{Type: "text_delta", Content: replyText})
-			return havenChatLoopOutcome{modelResponse: lastModelResponse, assistantText: replyText, uxSignals: uxSignals}
+			return havenChatLoopOutcome{modelResponse: loopState.lastModelResponse, assistantText: replyText, uxSignals: loopState.uxSignals}
 		}
 
-		if userMessage != "" {
-			conversation = append(conversation, modelpkg.ConversationTurn{
-				Role:      "user",
-				Content:   userMessage,
-				Timestamp: threadstore.NowUTC(),
-			})
-		}
+		loopState.appendUserTurnIfPresent()
 
 		useStructuredPath := len(modelResponse.ToolUseBlocks) > 0 && server.registry != nil
 		var parsedCalls []orchestrator.ToolCall
@@ -391,65 +352,20 @@ func (server *Server) runHavenChatToolLoop(
 		}
 
 		if len(parsedCalls) == 0 && len(validationErrors) == 0 {
-			if replyText == "" {
-				replyText = "I didn't get a clear reply from the model. Try again in a moment."
-			}
-			// host.organize.plan does not enqueue Loopgate approval; host.plan.apply does. After any
-			// host.* tool, sawHostFolderToolRound blocks the generic prose nudge — so without this,
-			// the model can stop after organize.plan with "waiting for Loopgate" and Haven never
-			// receives approval_required.
-			if awaitingHostPlanApply &&
-				hostFolderOrganizeToolkitAvailable &&
-				hostPlanApplyNudgeCount < maxHavenHostPlanApplyNudges &&
-				iteration+1 < maxHavenToolIterations {
-				hostPlanApplyNudgeCount++
-				conversation = append(conversation, modelpkg.ConversationTurn{
-					Role:      "assistant",
-					Content:   replyText,
-					Timestamp: threadstore.NowUTC(),
-				})
-				userMessage = havenHostPlanApplyActNowNudge
-				continue
-			}
-			if hostFolderOrganizeToolkitAvailable &&
-				!sawHostFolderToolRound &&
-				havenHostFolderProseNudgeApplies(initialUserMessage, conversation) &&
-				proseOnlyHostFolderNudges < maxHavenHostFolderProseOnlyNudges &&
-				iteration+1 < maxHavenToolIterations {
-				proseOnlyHostFolderNudges++
-				conversation = append(conversation, modelpkg.ConversationTurn{
-					Role:      "assistant",
-					Content:   replyText,
-					Timestamp: threadstore.NowUTC(),
-				})
-				// If the thread already has a prior assistant turn, the folder has
-				// been listed — push toward organize.plan. Otherwise push toward list.
-				if havenThreadHasPriorAssistantWork(conversation) {
-					userMessage = havenHostFolderPlanNowNudge
-				} else {
-					userMessage = havenHostFolderActNowNudge
+			handled, outcome := loopState.handleNoToolResponse(replyText, initialUserMessage, hostFolderOrganizeToolkitAvailable, iteration, emitter)
+			if handled {
+				if outcome == nil {
+					continue
 				}
-				continue
+				return *outcome
 			}
-			// Final return from this iteration — emit text now that we know no tool
-			// calls follow (nudge continuations above would have called `continue`).
-			emitter.emit(havenSSEEvent{Type: "text_delta", Content: replyText})
-			return havenChatLoopOutcome{modelResponse: lastModelResponse, assistantText: replyText, uxSignals: uxSignals}
 		}
 
-		assistantTurn := modelpkg.ConversationTurn{
-			Role:      "assistant",
-			Content:   replyText,
-			Timestamp: threadstore.NowUTC(),
-		}
-		if useStructuredPath {
-			assistantTurn.ToolCalls = modelResponse.ToolUseBlocks
-		}
-		conversation = append(conversation, assistantTurn)
+		loopState.appendAssistantTurn(replyText, modelResponse.ToolUseBlocks, useStructuredPath)
 
 		if len(parsedCalls) == 0 && len(validationErrors) > 0 {
-			conversation = append(conversation, havenStructuredValidationErrorTurn(validationErrors))
-			userMessage = ""
+			loopState.conversation = append(loopState.conversation, havenStructuredValidationErrorTurn(validationErrors))
+			loopState.userMessage = ""
 			continue
 		}
 
@@ -477,37 +393,16 @@ func (server *Server) runHavenChatToolLoop(
 				Output:     "Tool call rejected: " + validationError.Error() + ". Check the tool name and required arguments, then try again.",
 			})
 		}
-		for _, parsedCall := range parsedCalls {
-			if strings.HasPrefix(strings.TrimSpace(parsedCall.Name), "host.") {
-				sawHostFolderToolRound = true
-				break
-			}
-		}
-
-		for _, tr := range toolResults {
-			if tr.Status == orchestrator.StatusSuccess && tr.Capability == "host.plan.apply" {
-				havenAccumulateUXSignal(&uxSignals, havenUXSignalHostOrganizeApplied)
-			}
-		}
-
-		for _, tr := range toolResults {
-			capName := strings.TrimSpace(tr.Capability)
-			if capName == "host.organize.plan" && tr.Status == orchestrator.StatusSuccess {
-				awaitingHostPlanApply = true
-			}
-			if capName == "host.plan.apply" {
-				awaitingHostPlanApply = false
-			}
-		}
+		loopState.observeToolResults(parsedCalls, toolResults)
 
 		// Auto-apply: when host.organize.plan just returned a plan_id, fire host.plan.apply
 		// immediately without a model round-trip. This saves one full sequential model call
 		// (~2–5 s) every time the organize flow completes successfully.
 		// The pending-approval check below handles the resulting approval_required response
 		// exactly as it would if the model had called host.plan.apply itself.
-		if hostFolderOrganizeToolkitAvailable && awaitingHostPlanApply && ctx.Err() == nil {
+		if hostFolderOrganizeToolkitAvailable && loopState.awaitingHostPlanApply && ctx.Err() == nil {
 			if planID := havenExtractOrganizePlanIDFromResults(toolResults); planID != "" {
-				awaitingHostPlanApply = false
+				loopState.awaitingHostPlanApply = false
 				autoCallID := "loopgate-auto-apply-" + planID
 				emitter.emit(havenSSEEvent{Type: "tool_start", ToolCall: &havenSSEToolCall{
 					CallID: autoCallID,
@@ -520,7 +415,7 @@ func (server *Server) runHavenChatToolLoop(
 				}})
 				for _, tr := range autoResults {
 					if tr.Status == orchestrator.StatusSuccess {
-						havenAccumulateUXSignal(&uxSignals, havenUXSignalHostOrganizeApplied)
+						havenAccumulateUXSignal(&loopState.uxSignals, havenUXSignalHostOrganizeApplied)
 					}
 					emitter.emit(havenSSEEvent{Type: "tool_result", ToolResult: &havenSSEToolResult{
 						CallID:  tr.CallID,
@@ -532,42 +427,22 @@ func (server *Server) runHavenChatToolLoop(
 			}
 		}
 
-		if pending := firstHavenPendingApprovalToolResult(toolResults); pending != nil {
-			if havenCapabilityNeedsHostOrganizeApprovalUX(pending.Capability) {
-				havenAccumulateUXSignal(&uxSignals, havenUXSignalHostOrganizeApprovalPending)
-			}
-			assistantText := havenAssistantTextWaitingForLoopgate(replyText)
-			// Emit the approval preamble as text_delta. If the model produced prose
-			// this iteration (replyText non-empty) it was NOT emitted earlier — tool
-			// iterations hold text until the outcome is known. Emit the full combined
-			// assistantText here so the client never receives a partial message.
-			emitter.emit(havenSSEEvent{Type: "text_delta", Content: assistantText})
-			emitter.emit(havenSSEEvent{Type: "approval_needed", ApprovalNeeded: &havenSSEApproval{
-				ApprovalID: pending.ApprovalRequestID,
-				Capability: pending.Capability,
-			}})
-			return havenChatLoopOutcome{
-				modelResponse:      lastModelResponse,
-				assistantText:      assistantText,
-				approvalStatus:     "approval_required",
-				approvalID:         pending.ApprovalRequestID,
-				approvalCapability: pending.Capability,
-				uxSignals:          uxSignals,
-			}
+		if handled, outcome := loopState.pendingApprovalOutcome(replyText, toolResults, emitter); handled {
+			return *outcome
 		}
 
 		if toolResultTurn, ok := havenToolResultTurn(toolResults, useStructuredPath); ok {
-			conversation = append(conversation, toolResultTurn)
+			loopState.conversation = append(loopState.conversation, toolResultTurn)
 		}
 
-		userMessage = ""
+		loopState.userMessage = ""
 	}
 
 	timeoutText := "That took longer than expected and I had to stop mid-way. Try a smaller folder or ask again."
 	emitter.emit(havenSSEEvent{Type: "text_delta", Content: timeoutText})
 	return havenChatLoopOutcome{
-		modelResponse: lastModelResponse,
+		modelResponse: loopState.lastModelResponse,
 		assistantText: timeoutText,
-		uxSignals:     uxSignals,
+		uxSignals:     loopState.uxSignals,
 	}
 }
