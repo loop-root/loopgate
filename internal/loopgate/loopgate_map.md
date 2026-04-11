@@ -284,7 +284,11 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `memorybench_bridge.go`
   - narrow internal bridge that lets `cmd/memorybench` read the `continuity_tcl`
     projected discovery surface without widening Loopgate’s public API
-  - benchmark governance now uses the same validated-candidate write path as production explicit memory writes
+  - projected-node backend openers plus production-parity seeding helpers for benchmark scenarios
+- `memorybench_bridge_control_plane.go`
+  - product-valid control-plane scenario seeding and discover/recall replay for benchmark parity runs
+- `memorybench_bridge_candidate.go`
+  - benchmark-only memory candidate governance adapter that reuses the production TCL validation path without pretending benchmark inputs are product API shapes
 
 ## Current Sprint Focus
 
