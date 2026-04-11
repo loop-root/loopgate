@@ -19,7 +19,7 @@ const (
 const havenToolLoopContinuationFact = "You are after tool results in the thread. Continue from the user's **latest** message; those outputs are authoritative. Do not re-run tools that already succeeded in this thread unless the user explicitly asks to redo or refresh. Do **not** call host.folder.*, host.organize.plan, or host.plan.apply unless (a) the user's latest message is clearly about listing/organizing a granted Mac folder, or (b) you are in the middle of that same workflow in **this** request (e.g. you just listed and must plan, or plan just returned plan_id and apply is next). If the user narrowed scope (e.g. only memory, or said organizing is not needed), answer with text or the tools that match—do not drag in host organize. Do not restart with a generic greeting or onboarding menu unless they changed topic."
 
 // havenToolLoopSlimOrganizeFact is injected only while a host-folder organize workflow is active
-// for this HTTP request (see runHavenChatToolLoop). It must not run on every follow-up iteration when
+// for this HTTP request (see havenChatRuntime.runToolLoop). It must not run on every follow-up iteration when
 // the toolkit is merely available — that steered models to re-list/re-plan after unrelated tools (e.g. memory.remember).
 //
 // The full capability catalog is not re-sent after the first call to keep later iterations fast.

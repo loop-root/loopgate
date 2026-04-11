@@ -7,9 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
-	modelpkg "morph/internal/model"
-	"morph/internal/orchestrator"
 	"morph/internal/threadstore"
 )
 
@@ -92,11 +89,10 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 	}
 
 	havenChatWallStart := time.Now()
-	loopOutcome := server.runHavenChatToolLoop(
+	chatRuntime := newHavenChatRuntime(server)
+	loopOutcome := chatRuntime.runToolLoop(
 		modelCtx,
 		runtimeState.modelClient,
-		threadState.store,
-		threadState.threadID,
 		tokenClaims,
 		runtimeState.persona,
 		runtimeState.wakeText,
@@ -184,201 +180,5 @@ func (server *Server) handleHavenChat(writer http.ResponseWriter, request *http.
 		}
 		args = append(args, diagnosticSlogTenantUser(tokenClaims.TenantID, tokenClaims.UserID)...)
 		server.diagnostic.Server.Debug("haven_chat_sse_stream_done", args...)
-	}
-}
-
-// runHavenChatToolLoop is Loopgate's supervised agent runtime for Haven turns.
-//
-// Runtime model (Loopgate terms):
-//   - Morph (the resident assistant) operates within a bounded iteration budget
-//     (maxHavenToolIterations). Loopgate owns the continuation decision; the model
-//     only decides whether to call capabilities or return text within each iteration.
-//   - Capability dispatch is policy-gated at every iteration via executeCapabilityRequest.
-//     The model cannot bypass Loopgate authority by embedding capability names in text.
-//   - Read-only capabilities may execute concurrently within a single iteration batch
-//     (see executeHavenToolCallsConcurrent). Write and execute capabilities are always
-//     dispatched serially to preserve observable ordering of side effects.
-//   - All side-effect capabilities that require approval are held at the approval
-//     boundary; the loop does not continue past a pending_approval result.
-//
-// Checkpoint gap (known limitation):
-//
-//	The conversation accumulates in memory across iterations. If the HTTP handler is
-//	cancelled mid-loop (ctx cancellation, client disconnect, server restart) all
-//	in-flight tool results are lost. A durable checkpoint would write each completed
-//	tool-result turn to the threadstore before advancing to the next model call.
-//	This is not yet implemented; recovery requires re-sending the user message.
-//
-// TODO(checkpoint): write completed tool-result turns to store after each iteration
-// so that a cancelled or crashed request can be resumed without data loss.
-func (server *Server) runHavenChatToolLoop(
-	ctx context.Context,
-	modelClient *modelpkg.Client,
-	store *threadstore.Store,
-	threadID string,
-	tokenClaims capabilityToken,
-	persona config.Persona,
-	wakeState string,
-	conversation []modelpkg.ConversationTurn,
-	initialUserMessage string,
-	initialAttachments []modelpkg.Attachment,
-	availableTools []modelpkg.ToolDefinition,
-	nativeToolDefs []modelpkg.NativeToolDef,
-	baseRuntimeFacts []string,
-	hostFolderOrganizeToolkitAvailable bool,
-	emitter *havenSSEEmitter,
-) havenChatLoopOutcome {
-	loopState := newHavenChatLoopState(conversation, initialUserMessage)
-
-	for iteration := 0; iteration < maxHavenToolIterations; iteration++ {
-		if ctx.Err() != nil {
-			return havenChatLoopOutcome{err: ctx.Err()}
-		}
-
-		turnRuntimeFacts := loopState.buildTurnRuntimeFacts(baseRuntimeFacts, hostFolderOrganizeToolkitAvailable, iteration)
-		modelUserMessage := loopState.modelUserMessage(iteration)
-		windowedConversation := havenWindowConversationForModel(loopState.conversation, maxHavenChatTurns)
-		turnAttachments := havenChatTurnAttachments(iteration, initialAttachments)
-		modelResponse, modelErr := modelClient.Reply(ctx, modelpkg.Request{
-			Persona:        persona,
-			Policy:         server.policy,
-			SessionID:      tokenClaims.ControlSessionID,
-			WakeState:      wakeState,
-			Conversation:   windowedConversation,
-			UserMessage:    modelUserMessage,
-			Attachments:    turnAttachments,
-			AvailableTools: availableTools,
-			NativeToolDefs: nativeToolDefs,
-			RuntimeFacts:   turnRuntimeFacts,
-		})
-		if modelErr != nil {
-			return havenChatLoopOutcome{err: modelErr}
-		}
-		loopState.lastModelResponse = modelResponse
-		replyText := strings.TrimSpace(modelResponse.AssistantText)
-		if havenIsNonUserFacingAssistantPlaceholder(replyText) {
-			replyText = ""
-		}
-
-		// If the model hit its output token limit the response is truncated — any
-		// tool call JSON or plan_json will be malformed. Retrying with the same
-		// (now longer) context only makes things worse and burns 40–50 s per
-		// iteration. Return whatever text we have and let the user know.
-		if strings.EqualFold(strings.TrimSpace(modelResponse.FinishReason), "max_tokens") ||
-			strings.EqualFold(strings.TrimSpace(modelResponse.FinishReason), "length") {
-			if replyText == "" {
-				replyText = "My response was cut off — the output limit was reached. Try a shorter or more specific request."
-			}
-			emitter.emit(havenSSEEvent{Type: "text_delta", Content: replyText})
-			return havenChatLoopOutcome{modelResponse: loopState.lastModelResponse, assistantText: replyText, uxSignals: loopState.uxSignals}
-		}
-
-		loopState.appendUserTurnIfPresent()
-
-		useStructuredPath := len(modelResponse.ToolUseBlocks) > 0 && server.registry != nil
-		var parsedCalls []orchestrator.ToolCall
-		var validationErrors []orchestrator.ToolCallValidationError
-		if useStructuredPath {
-			parsedCalls, validationErrors = orchestrator.ExtractStructuredCalls(modelResponse.ToolUseBlocks, server.registry)
-		} else {
-			parser := orchestrator.NewParser()
-			parser.Registry = server.registry
-			parsedOutput := parser.Parse(replyText)
-			parsedCalls = parsedOutput.Calls
-		}
-
-		if len(parsedCalls) == 0 && len(validationErrors) == 0 {
-			handled, outcome := loopState.handleNoToolResponse(replyText, initialUserMessage, hostFolderOrganizeToolkitAvailable, iteration, emitter)
-			if handled {
-				if outcome == nil {
-					continue
-				}
-				return *outcome
-			}
-		}
-
-		loopState.appendAssistantTurn(replyText, modelResponse.ToolUseBlocks, useStructuredPath)
-
-		if len(parsedCalls) == 0 && len(validationErrors) > 0 {
-			loopState.conversation = append(loopState.conversation, havenStructuredValidationErrorTurn(validationErrors))
-			loopState.userMessage = ""
-			continue
-		}
-
-		// Emit tool_start for each valid call before execution so the client can
-		// show progress immediately. Validation-error calls are not included here
-		// because they were never dispatched — their tool_result would be orphaned.
-		for _, call := range parsedCalls {
-			emitter.emit(havenSSEEvent{Type: "tool_start", ToolCall: &havenSSEToolCall{
-				CallID: call.ID,
-				Name:   call.Name,
-			}})
-		}
-
-		// executeHavenToolCallsConcurrent fans out read-only tools in parallel
-		// and runs write/unknown tools serially. It also emits tool_result SSE
-		// events inline as each tool finishes, so the operator sees live progress
-		// rather than a single batch after all tools complete.
-		toolResults := server.executeHavenToolCallsConcurrent(ctx, tokenClaims, parsedCalls, emitter)
-
-		for _, validationError := range validationErrors {
-			toolResults = append(toolResults, orchestrator.ToolResult{
-				CallID:     validationError.BlockID,
-				Capability: validationError.BlockName,
-				Status:     orchestrator.StatusError,
-				Output:     "Tool call rejected: " + validationError.Error() + ". Check the tool name and required arguments, then try again.",
-			})
-		}
-		loopState.observeToolResults(parsedCalls, toolResults)
-
-		// Auto-apply: when host.organize.plan just returned a plan_id, fire host.plan.apply
-		// immediately without a model round-trip. This saves one full sequential model call
-		// (~2–5 s) every time the organize flow completes successfully.
-		// The pending-approval check below handles the resulting approval_required response
-		// exactly as it would if the model had called host.plan.apply itself.
-		if hostFolderOrganizeToolkitAvailable && loopState.awaitingHostPlanApply && ctx.Err() == nil {
-			if planID := havenExtractOrganizePlanIDFromResults(toolResults); planID != "" {
-				loopState.awaitingHostPlanApply = false
-				autoCallID := "loopgate-auto-apply-" + planID
-				emitter.emit(havenSSEEvent{Type: "tool_start", ToolCall: &havenSSEToolCall{
-					CallID: autoCallID,
-					Name:   "host.plan.apply",
-				}})
-				autoResults := server.executeHavenToolCalls(ctx, tokenClaims, []orchestrator.ToolCall{{
-					ID:   autoCallID,
-					Name: "host.plan.apply",
-					Args: map[string]string{"plan_id": planID},
-				}})
-				for _, tr := range autoResults {
-					if tr.Status == orchestrator.StatusSuccess {
-						havenAccumulateUXSignal(&loopState.uxSignals, havenUXSignalHostOrganizeApplied)
-					}
-					emitter.emit(havenSSEEvent{Type: "tool_result", ToolResult: &havenSSEToolResult{
-						CallID:  tr.CallID,
-						Preview: havenSSEPreviewForToolResult(tr),
-						Status:  string(tr.Status),
-					}})
-				}
-				toolResults = append(toolResults, autoResults...)
-			}
-		}
-
-		if handled, outcome := loopState.pendingApprovalOutcome(replyText, toolResults, emitter); handled {
-			return *outcome
-		}
-
-		if toolResultTurn, ok := havenToolResultTurn(toolResults, useStructuredPath); ok {
-			loopState.conversation = append(loopState.conversation, toolResultTurn)
-		}
-
-		loopState.userMessage = ""
-	}
-
-	timeoutText := "That took longer than expected and I had to stop mid-way. Try a smaller folder or ask again."
-	emitter.emit(havenSSEEvent{Type: "text_delta", Content: timeoutText})
-	return havenChatLoopOutcome{
-		modelResponse: loopState.lastModelResponse,
-		assistantText: timeoutText,
-		uxSignals:     loopState.uxSignals,
 	}
 }

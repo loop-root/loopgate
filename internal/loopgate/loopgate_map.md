@@ -73,9 +73,11 @@ For integrators it matters in four ways:
 ### Haven Chat (agentic tool execution)
 
 - `server_haven_chat.go`
-  - Haven chat HTTP handler and SSE streaming loop
-  - `runHavenChatToolLoop` — the agent loop; now delegates to `executeHavenToolCallsConcurrent`
-  - now mostly holds only the request lifecycle and main loop
+  - Haven chat HTTP handler and SSE stream lifecycle
+  - now mostly holds only the request lifecycle, stream error handling, and turn completion bookkeeping
+- `server_haven_chat_runtime.go`
+  - `havenChatRuntime` — internal runtime object that owns the supervised agent loop and explicit runtime dependencies (`policy`, `registry`, capability execution hook)
+  - `runToolLoop` — the agent loop; now delegates to `executeToolCallsConcurrent`
 - `server_haven_chat_setup.go`
   - request decode, thread bootstrap, and runtime bootstrap
 - `server_haven_chat_loop_state.go`
@@ -91,8 +93,8 @@ For integrators it matters in four ways:
 - `server_haven_chat_transport.go`
   - SSE transport types and emitter
 - `server_haven_chat_tools.go`
-  - `executeHavenToolCallsConcurrent` — fans out read-only tool calls in parallel (Phase 1: reads), then runs write/execute/unknown calls serially (Phase 2: writes). Each goroutine emits its own `tool_result` SSE event inline as it finishes, giving the operator live feedback.
-  - `executeHavenToolCalls` — retained as the simple serial reference implementation; no longer called by the chat loop but kept for direct-call tests and future fallback use
+  - `executeToolCallsConcurrent` — fans out read-only tool calls in parallel (Phase 1: reads), then runs write/execute/unknown calls serially (Phase 2: writes). Each goroutine emits its own `tool_result` SSE event inline as it finishes, giving the operator live feedback.
+  - `executeToolCalls` — retained as the simple serial reference implementation; used by the runtime for direct serial dispatch and plan auto-apply
 - `server_haven_model_catalog.go`
   - Haven-facing model catalog discovery
 - `server_haven_wake_context.go`
@@ -104,12 +106,12 @@ For integrators it matters in four ways:
 - `tool_classification.go` (**new**)
   - `capabilityClass` struct: `readOnly bool` — derived from Loopgate's own `OpRead` / `OpWrite` / `OpExecute` taxonomy
   - `classifyCapability(registry, capabilityName)` — pure, fail-closed: unregistered → serial (readOnly=false); OpRead → readOnly=true; OpWrite/OpExecute → readOnly=false
-  - Canonical dispatch decision for `executeHavenToolCallsConcurrent`. If you add a new `Op*` constant to `internal/tools/tool.go`, add a corresponding test case here.
+  - Canonical dispatch decision for `havenChatRuntime.executeToolCallsConcurrent`. If you add a new `Op*` constant to `internal/tools/tool.go`, add a corresponding test case here.
 - `tool_classification_test.go` (**new**)
   - Unit tests that pin the fail-closed contract and the OpRead / non-OpRead split
   - Also spot-checks real capability names (fs_read, notes.list, notes.write) to guard against unintentional operation-type changes
 - `server_haven_chat_concurrent_test.go` (**new**)
-  - Integration tests for `executeHavenToolCallsConcurrent`:
+  - Integration tests for `havenChatRuntime.executeToolCallsConcurrent`:
     - `TestHavenChat_ConcurrentReadOnlyToolsRunFasterThanSerial` — wall-clock timing proves reads overlap
     - `TestHavenChat_SerialWriteToolsRunInOrder` — start-time tracking proves writes do not overlap
     - `TestHavenChat_ToolResultsRetainInputOrder` — result slice order matches input call order despite parallel execution

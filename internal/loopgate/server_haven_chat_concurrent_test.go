@@ -1,6 +1,6 @@
 package loopgate
 
-// Integration tests for executeHavenToolCallsConcurrent.
+// Integration tests for havenChatRuntime.executeToolCallsConcurrent.
 //
 // Design rationale:
 //  - We use artificial delays in fake tools to distinguish serial (~N*delay)
@@ -69,7 +69,7 @@ func (t trackingFakeLoopgateTool) Execute(ctx context.Context, _ map[string]stri
 // TestHavenChat_ConcurrentReadOnlyToolsRunFasterThanSerial verifies that two
 // read-only tools in a single model response execute in parallel.
 //
-// This test is the primary gate for executeHavenToolCallsConcurrent.
+// This test is the primary gate for havenChatRuntime.executeToolCallsConcurrent.
 // When RED: the executor is still running reads serially (>= 120 ms for 2×60 ms tools).
 // When GREEN: reads truly overlap (< 110 ms total).
 func TestHavenChat_ConcurrentReadOnlyToolsRunFasterThanSerial(t *testing.T) {
@@ -97,7 +97,7 @@ func TestHavenChat_ConcurrentReadOnlyToolsRunFasterThanSerial(t *testing.T) {
 
 	// Model calls both reads in one response via invoke_capability, then returns text.
 	// ExtractStructuredCalls expands invoke_capability blocks into the real capability names
-	// so executeHavenToolCallsConcurrent sees Name="slow_read_a" / "slow_read_b".
+	// so havenChatRuntime.executeToolCallsConcurrent sees Name="slow_read_a" / "slow_read_b".
 	provider := &sequenceModelProvider{
 		responses: []modelpkg.Response{
 			{
@@ -236,7 +236,7 @@ func TestHavenChat_SerialWriteToolsRunInOrder(t *testing.T) {
 }
 
 // TestHavenChat_ToolResultsRetainInputOrder verifies that the result slice
-// returned by executeHavenToolCallsConcurrent is in the same order as the input
+// returned by havenChatRuntime.executeToolCallsConcurrent is in the same order as the input
 // calls, even when reads finish in arbitrary order. The model conversation
 // depends on positional correlation between call IDs and results.
 func TestHavenChat_ToolResultsRetainInputOrder(t *testing.T) {
@@ -333,7 +333,7 @@ func TestHavenChat_ToolResultsRetainInputOrder(t *testing.T) {
 		t.Errorf("expected second result ToolUseID=call-b, got %q (order not preserved)", toolResultBlocks[1].ToolUseID)
 	}
 
-	// Execute both the known-concurrent reads test using executeHavenToolCallsConcurrent
+	// Execute both the known-concurrent reads test using havenChatRuntime.executeToolCallsConcurrent
 	// directly to verify index-based result ordering without HTTP overhead.
 	parsedCalls := []orchestrator.ToolCall{
 		{ID: "direct-a", Name: "slow_first", Args: map[string]string{}},
@@ -345,7 +345,8 @@ func TestHavenChat_ToolResultsRetainInputOrder(t *testing.T) {
 		ControlSessionID:    "test-direct",
 		AllowedCapabilities: map[string]struct{}{"slow_first": {}, "fast_second": {}},
 	}
-	results := server.executeHavenToolCallsConcurrent(context.Background(), token, parsedCalls, nil)
+	chatRuntime := newHavenChatRuntime(server)
+	results := chatRuntime.executeToolCallsConcurrent(context.Background(), token, parsedCalls, nil)
 	if len(results) != 2 {
 		t.Fatalf("direct call: expected 2 results, got %d", len(results))
 	}

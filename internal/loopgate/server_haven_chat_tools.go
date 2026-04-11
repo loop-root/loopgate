@@ -9,10 +9,10 @@ import (
 	"morph/internal/threadstore"
 )
 
-func (server *Server) executeHavenToolCalls(ctx context.Context, tokenClaims capabilityToken, parsedCalls []orchestrator.ToolCall) []orchestrator.ToolResult {
+func (runtime havenChatRuntime) executeToolCalls(ctx context.Context, tokenClaims capabilityToken, parsedCalls []orchestrator.ToolCall) []orchestrator.ToolResult {
 	toolResults := make([]orchestrator.ToolResult, 0, len(parsedCalls))
 	for _, parsedCall := range parsedCalls {
-		capabilityResponse := server.executeCapabilityRequest(ctx, tokenClaims, CapabilityRequest{
+		capabilityResponse := runtime.executeCapabilityRequest(ctx, tokenClaims, CapabilityRequest{
 			RequestID:  parsedCall.ID,
 			Actor:      tokenClaims.ActorLabel,
 			SessionID:  tokenClaims.ControlSessionID,
@@ -30,7 +30,7 @@ func (server *Server) executeHavenToolCalls(ctx context.Context, tokenClaims cap
 	return toolResults
 }
 
-// executeHavenToolCallsConcurrent runs read-only tool calls in parallel and
+// executeToolCallsConcurrent runs read-only tool calls in parallel and
 // write/execute tool calls serially, preserving the original input order in
 // the returned results slice.
 //
@@ -53,7 +53,7 @@ func (server *Server) executeHavenToolCalls(ctx context.Context, tokenClaims cap
 //     (i), so there is no data race on the toolResults slice itself.
 //   - Approval detection (checking results for StatusPendingApproval) happens
 //     after wg.Wait(), so the caller always sees the complete, stable result set.
-func (server *Server) executeHavenToolCallsConcurrent(ctx context.Context, tokenClaims capabilityToken, parsedCalls []orchestrator.ToolCall, emitter *havenSSEEmitter) []orchestrator.ToolResult {
+func (runtime havenChatRuntime) executeToolCallsConcurrent(ctx context.Context, tokenClaims capabilityToken, parsedCalls []orchestrator.ToolCall, emitter *havenSSEEmitter) []orchestrator.ToolResult {
 	toolResults := make([]orchestrator.ToolResult, len(parsedCalls))
 
 	// Partition into read-only (parallel) and serial (write/execute/unknown) groups.
@@ -65,7 +65,7 @@ func (server *Server) executeHavenToolCallsConcurrent(ctx context.Context, token
 	var readGroup []indexedCall
 	var serialGroup []indexedCall
 	for i, call := range parsedCalls {
-		cls := classifyCapability(server.registry, call.Name)
+		cls := classifyCapability(runtime.registry, call.Name)
 		if cls.readOnly {
 			readGroup = append(readGroup, indexedCall{i, call})
 		} else {
@@ -77,7 +77,7 @@ func (server *Server) executeHavenToolCallsConcurrent(ctx context.Context, token
 	// It also emits a tool_result SSE event immediately on completion so the operator
 	// sees progress rather than a silent pause while tools run.
 	executeSingle := func(idx int, call orchestrator.ToolCall) {
-		capabilityResponse := server.executeCapabilityRequest(ctx, tokenClaims, CapabilityRequest{
+		capabilityResponse := runtime.executeCapabilityRequest(ctx, tokenClaims, CapabilityRequest{
 			RequestID:  call.ID,
 			Actor:      tokenClaims.ActorLabel,
 			SessionID:  tokenClaims.ControlSessionID,

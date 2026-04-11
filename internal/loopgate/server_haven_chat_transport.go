@@ -104,7 +104,7 @@ type havenSSEApproval struct {
 // safe to call on a nil receiver (no-op), so callers never need to nil-check.
 //
 // mu serialises concurrent emit() calls so that goroutines spawned by
-// executeHavenToolCallsConcurrent can stream individual tool_result events
+// havenChatRuntime.executeToolCallsConcurrent can stream individual tool_result events
 // as each tool finishes without corrupting the SSE frame boundaries.
 // The single-goroutine serial path takes the lock on every call but never
 // contends, so there is no measurable overhead in the common case.
@@ -134,7 +134,7 @@ func newHavenSSEEmitter(writer http.ResponseWriter) *havenSSEEmitter {
 // flushing immediately. A nil receiver or a marshal failure is a silent no-op
 // — the client sees a gap rather than a corrupt frame.
 // emit is goroutine-safe: the mutex prevents frame interleaving when concurrent
-// tool goroutines (see executeHavenToolCallsConcurrent) emit tool_result events.
+// tool goroutines (see havenChatRuntime.executeToolCallsConcurrent) emit tool_result events.
 func (e *havenSSEEmitter) emit(event havenSSEEvent) {
 	if e == nil {
 		return
