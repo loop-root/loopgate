@@ -10,6 +10,13 @@ import (
 	modelruntime "morph/internal/modelruntime"
 )
 
+const (
+	havenChatRuntimeLoadFailureText = "chat model runtime is unavailable"
+	havenChatRuntimeInitFailureText = "chat model initialization failed"
+	havenChatWakeStateFailureText   = "wake-state backend is unavailable"
+	havenChatPersonaFailureText     = "persona unavailable"
+)
+
 type havenChatRuntimeState struct {
 	persona                            config.Persona
 	runtimeConfig                      modelruntime.Config
@@ -28,7 +35,7 @@ func (server *Server) prepareHavenChatRuntimeState(writer http.ResponseWriter, t
 	if err != nil {
 		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 			Status:       ResponseStatusError,
-			DenialReason: "persona unavailable",
+			DenialReason: havenChatPersonaFailureText,
 			DenialCode:   DenialCodeExecutionFailed,
 		})
 		return havenChatRuntimeState{}, false
@@ -38,8 +45,9 @@ func (server *Server) prepareHavenChatRuntimeState(writer http.ResponseWriter, t
 	if err != nil {
 		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 			Status:       ResponseStatusError,
-			DenialReason: "load model runtime config: " + err.Error(),
+			DenialReason: havenChatRuntimeLoadFailureText,
 			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
 		})
 		return havenChatRuntimeState{}, false
 	}
@@ -48,8 +56,9 @@ func (server *Server) prepareHavenChatRuntimeState(writer http.ResponseWriter, t
 	if err != nil {
 		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
 			Status:       ResponseStatusError,
-			DenialReason: "initialize model runtime: " + err.Error(),
+			DenialReason: havenChatRuntimeInitFailureText,
 			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
 		})
 		return havenChatRuntimeState{}, false
 	}
@@ -58,7 +67,7 @@ func (server *Server) prepareHavenChatRuntimeState(writer http.ResponseWriter, t
 	if err != nil {
 		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
 			Status:       ResponseStatusError,
-			DenialReason: "wake-state backend is unavailable",
+			DenialReason: havenChatWakeStateFailureText,
 			DenialCode:   DenialCodeExecutionFailed,
 		})
 		return havenChatRuntimeState{}, false

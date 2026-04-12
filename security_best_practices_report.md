@@ -13,11 +13,12 @@ Targeted review scope:
 
 No critical or high-severity issues were found in the reviewed scope. Signed-request coverage, peer binding, approval manifest binding, and trusted-Haven route gating all held up in this pass.
 
-Three lower-severity issues were identified and fixed in this change set:
+Four lower-severity issues were identified and fixed in this change set:
 
 1. a malformed morphling worker open request could return early without emitting an explicit denial response
 2. Haven settings routes reflected raw backend/storage errors to authenticated UI clients, leaking local runtime implementation detail
 3. Haven model settings routes reflected raw config and validation errors to authenticated UI clients, leaking config paths and internal connection metadata
+4. Haven chat runtime setup reflected raw runtime config and model initialization errors to authenticated UI clients, leaking backend detail before the SSE stream opened
 
 ## Fixed Findings
 
@@ -39,6 +40,28 @@ if err := server.decodeJSONBody(writer, request, maxCapabilityBodyBytes, &openRe
 - Fix: emit `400 Bad Request` with `DenialCodeMalformedRequest` when JSON decode fails.
 - Mitigation: regression coverage added for malformed worker-open bodies.
 - False positive notes: none; this was directly visible in handler code.
+
+Status: fixed in the current worktree/commit.
+
+### SG-004
+
+- Rule ID: GO-CONFIG-001 / UI projection redaction invariant
+- Severity: Low
+- Location: `internal/loopgate/server_haven_chat_runtime_setup.go:34-42`, `internal/loopgate/server_haven_chat_runtime_setup.go:45-53`
+- Evidence:
+
+```go
+server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
+	Status:       ResponseStatusError,
+	DenialReason: "load model runtime config: " + err.Error(),
+	DenialCode:   DenialCodeExecutionFailed,
+})
+```
+
+- Impact: authenticated Haven chat clients could receive raw model runtime configuration and initialization errors before the SSE stream opened. That could expose config-path or connection-binding detail through the operator chat surface.
+- Fix: replace raw runtime prep failures with stable redacted operator messages and mark those responses `Redacted: true`.
+- Mitigation: regression coverage added for unreadable runtime config and model-client initialization failure so those paths no longer leak config paths or backend detail.
+- False positive notes: scoped only to the pre-stream runtime preparation path; streamed tool/runtime failures still use the existing fallback-text path once the SSE response has started.
 
 Status: fixed in the current worktree/commit.
 
@@ -100,6 +123,5 @@ Status: fixed in the current worktree/commit.
 ## Follow-up Recommendations
 
 1. Sweep remaining operator-only config and diagnostic handlers for raw `err.Error()` reflection and normalize them to stable redacted messages.
-2. The next likely MVP-facing candidate is `internal/loopgate/server_haven_chat_runtime_setup.go`, which still reflects raw model runtime initialization failures to chat clients.
-3. Add one small helper for “execution failed but redacted” responses so new UI endpoints do not reintroduce path leaks ad hoc.
-4. Keep UI MVP work on typed Loopgate APIs only; do not let a desktop or browser surface read raw runtime state files directly.
+2. Add one small helper for “execution failed but redacted” responses so new UI endpoints do not reintroduce path leaks ad hoc.
+3. Keep UI MVP work on typed Loopgate APIs only; do not let a desktop or browser surface read raw runtime state files directly.
