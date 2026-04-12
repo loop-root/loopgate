@@ -2,8 +2,8 @@
 # Start Loopgate for native Haven clients over the Unix-socket HTTP control plane.
 #
 # IMPORTANT: Run the copy of this script inside the Loopgate repo.
-# REPO_ROOT is derived from this file's location unless LOOPGATE_REPO_ROOT or
-# MORPH_REPO_ROOT overrides it.
+# REPO_ROOT is derived from this file's location unless LOOPGATE_REPO_ROOT
+# overrides it.
 #
 # Usage:
 #   ./scripts/start-loopgate-swift-dev.sh
@@ -12,7 +12,6 @@
 #
 # Environment (optional):
 #   LOOPGATE_REPO_ROOT      — canonical repo root for config/policy
-#   MORPH_REPO_ROOT         — compatibility alias for repo root
 #   LOOPGATE_SOCKET         — Unix socket path (default: $REPO_ROOT/runtime/state/loopgate.sock)
 #   LOOPGATE_REUSE_RUNNING  — if 1, keep an already-ready Loopgate on the socket (default: 0)
 #   HAVEN_REUSE_RUNNING_LOOPGATE — alias for LOOPGATE_REUSE_RUNNING
@@ -22,7 +21,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${LOOPGATE_REPO_ROOT:-${MORPH_REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}}"
+REPO_ROOT="${LOOPGATE_REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
 
 if [[ ! -f "$REPO_ROOT/config/runtime.yaml" ]]; then
@@ -140,7 +139,6 @@ if [[ "$BACKGROUND" == "1" ]]; then
   (
     cd "$REPO_ROOT"
     export LOOPGATE_REPO_ROOT="$REPO_ROOT"
-    export MORPH_REPO_ROOT="$REPO_ROOT"
     export LOOPGATE_SOCKET="$SOCKET_PATH"
     if [[ "$ACCEPT_POLICY" == "1" ]]; then
       go run ./cmd/loopgate --accept-policy
@@ -180,7 +178,6 @@ echo "Socket: $SOCKET_PATH (set LOOPGATE_SOCKET in Swift to this path)"
 echo "Structured slog: $LOOPGATE_LOG_DIR/{server,socket,client}.log when diagnostic enabled"
 cd "$REPO_ROOT"
 export LOOPGATE_REPO_ROOT="$REPO_ROOT"
-export MORPH_REPO_ROOT="$REPO_ROOT"
 export LOOPGATE_SOCKET="$SOCKET_PATH"
 trap - EXIT INT TERM
 if [[ "$ACCEPT_POLICY" == "1" ]]; then
