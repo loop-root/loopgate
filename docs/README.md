@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-11
 
 # Docs Index
 
@@ -28,6 +28,7 @@
 - [Operator planning model](./design_overview/morph_planning_model.md) *(file name historical)*
 - [Workflow Milestone 1](./design_overview/workflow_milestone_1.md)
 - [Loopgate](./design_overview/loopgate.md)
+- [Haven Single-Workspace SwiftUI MVP](./design_overview/haven_single_workspace_swiftui_mvp.md)
 - [System Contract](./design_overview/systems_contract.md)
 - [UI Surface Contract](./design_overview/ui_surface_contract.md)
 - [Threat model](./loopgate-threat-model.md)
