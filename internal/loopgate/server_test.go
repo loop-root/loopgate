@@ -3098,6 +3098,14 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 	if len(replayedFromLast) >= len(replayedEvents) {
 		t.Fatalf("expected Last-Event-ID replay to omit earlier events, got %#v", replayedFromLast)
 	}
+
+	recentEvents := readUIRecentEvents(t, client, "")
+	if len(recentEvents) != len(replayedEvents) {
+		t.Fatalf("expected recent ui events endpoint to mirror replay buffer, got %#v", recentEvents)
+	}
+	if !containsUIEventType(recentEvents, UIEventTypeApprovalPending) {
+		t.Fatalf("expected approval.pending event in recent ui events, got %#v", recentEvents)
+	}
 }
 
 func TestExpiredCapabilityTokenIsRefreshedForLocalClient(t *testing.T) {
@@ -6507,6 +6515,42 @@ func readUIReplayEvents(t *testing.T, client *Client, lastEventID string) []UIEv
 		events = append(events, uiEvent)
 	}
 	return events
+}
+
+func readUIRecentEvents(t *testing.T, client *Client, lastEventID string) []UIEventEnvelope {
+	t.Helper()
+
+	capabilityToken, err := client.ensureCapabilityToken(context.Background())
+	if err != nil {
+		t.Fatalf("ensure capability token for recent ui events: %v", err)
+	}
+
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.baseURL+"/v1/ui/events/recent", nil)
+	if err != nil {
+		t.Fatalf("build recent ui events request: %v", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+capabilityToken)
+	if lastEventID != "" {
+		request.Header.Set("Last-Event-ID", lastEventID)
+	}
+	if err := client.attachRequestSignature(request, "/v1/ui/events/recent", nil); err != nil {
+		t.Fatalf("attach recent ui events signature: %v", err)
+	}
+
+	httpResponse, err := client.httpClient.Do(request)
+	if err != nil {
+		t.Fatalf("do recent ui events request: %v", err)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected recent ui events status: %d", httpResponse.StatusCode)
+	}
+
+	var response UIRecentEventsResponse
+	if err := json.NewDecoder(httpResponse.Body).Decode(&response); err != nil {
+		t.Fatalf("decode recent ui events response: %v", err)
+	}
+	return response.Events
 }
 
 func containsUIEventType(events []UIEventEnvelope, expectedType string) bool {

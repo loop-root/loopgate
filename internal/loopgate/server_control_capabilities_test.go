@@ -1107,6 +1107,22 @@ func TestHavenProjectionRoutesRequireCapabilityScopes(t *testing.T) {
 		t.Fatalf("expected ui.read scope denial HTTP status for ui events, got %d", uiEventsDeniedResponse.StatusCode)
 	}
 	_ = uiEventsDeniedResponse.Body.Close()
+	uiRecentDeniedRequest, err := http.NewRequestWithContext(context.Background(), http.MethodGet, uiReadDeniedClient.baseURL+"/v1/ui/events/recent", nil)
+	if err != nil {
+		t.Fatalf("build denied recent ui events request: %v", err)
+	}
+	uiRecentDeniedRequest.Header.Set("Authorization", "Bearer "+uiReadDeniedClient.capabilityToken)
+	if err := uiReadDeniedClient.attachRequestSignature(uiRecentDeniedRequest, "/v1/ui/events/recent", nil); err != nil {
+		t.Fatalf("attach denied recent ui events signature: %v", err)
+	}
+	uiRecentDeniedResponse, err := uiReadDeniedClient.httpClient.Do(uiRecentDeniedRequest)
+	if err != nil {
+		t.Fatalf("do denied recent ui events request: %v", err)
+	}
+	if uiRecentDeniedResponse.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected ui.read scope denial HTTP status for recent ui events, got %d", uiRecentDeniedResponse.StatusCode)
+	}
+	_ = uiRecentDeniedResponse.Body.Close()
 	if err := uiReadDeniedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/desk-notes", uiReadDeniedClient.capabilityToken, nil, &HavenDeskNotesResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected ui.read scope denial for desk notes, got %v", err)
 	}
@@ -1141,6 +1157,22 @@ func TestHavenProjectionRoutesRequireCapabilityScopes(t *testing.T) {
 		t.Fatalf("expected ui events success with ui.read, got %d", uiEventsAllowedResponse.StatusCode)
 	}
 	_ = uiEventsAllowedResponse.Body.Close()
+	uiRecentAllowedRequest, err := http.NewRequestWithContext(context.Background(), http.MethodGet, uiReadAllowedClient.baseURL+"/v1/ui/events/recent", nil)
+	if err != nil {
+		t.Fatalf("build allowed recent ui events request: %v", err)
+	}
+	uiRecentAllowedRequest.Header.Set("Authorization", "Bearer "+uiReadAllowedClient.capabilityToken)
+	if err := uiReadAllowedClient.attachRequestSignature(uiRecentAllowedRequest, "/v1/ui/events/recent", nil); err != nil {
+		t.Fatalf("attach allowed recent ui events signature: %v", err)
+	}
+	uiRecentAllowedResponse, err := uiReadAllowedClient.httpClient.Do(uiRecentAllowedRequest)
+	if err != nil {
+		t.Fatalf("do allowed recent ui events request: %v", err)
+	}
+	if uiRecentAllowedResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected recent ui events success with ui.read, got %d", uiRecentAllowedResponse.StatusCode)
+	}
+	_ = uiRecentAllowedResponse.Body.Close()
 	if err := uiReadAllowedClient.doJSON(context.Background(), http.MethodGet, "/v1/ui/desk-notes", uiReadAllowedClient.capabilityToken, nil, &HavenDeskNotesResponse{}, nil); err != nil {
 		t.Fatalf("desk notes with ui.read: %v", err)
 	}

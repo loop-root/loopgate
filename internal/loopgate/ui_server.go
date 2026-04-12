@@ -573,6 +573,30 @@ func (server *Server) handleUIEvents(writer http.ResponseWriter, request *http.R
 	}
 }
 
+func (server *Server) handleUIRecentEvents(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityUIRead) {
+		return
+	}
+	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	lastEventID := strings.TrimSpace(request.Header.Get("Last-Event-ID"))
+	server.writeJSON(writer, http.StatusOK, UIRecentEventsResponse{
+		Events: server.uiReplayEvents(tokenClaims.ControlSessionID, lastEventID),
+	})
+}
+
 func writeSSEEvent(writer http.ResponseWriter, uiEventEnvelope UIEventEnvelope) error {
 	encodedEvent, err := json.Marshal(uiEventEnvelope)
 	if err != nil {

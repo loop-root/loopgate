@@ -190,6 +190,10 @@ type UIEventEnvelope struct {
 	Data             interface{} `json:"data"`
 }
 
+type UIRecentEventsResponse struct {
+	Events []UIEventEnvelope `json:"events"`
+}
+
 type UIEventSessionInfo struct {
 	ControlSessionID   string `json:"control_session_id"`
 	ActorLabel         string `json:"actor_label"`
