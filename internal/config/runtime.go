@@ -23,6 +23,7 @@ const DefaultHybridEvidenceMaxItems = 2
 const DefaultHybridEvidenceMaxHintBytes = 580
 const defaultHybridEvidencePythonExecutable = "python3"
 const defaultHybridEvidenceHelperScriptPath = "cmd/memorybench/rag_search.py"
+const expectedSessionClientExecutableEnv = "LOOPGATE_EXPECTED_SESSION_CLIENT_EXECUTABLE"
 
 // DiagnosticLogging configures optional text log files (slog) for local troubleshooting.
 // DefaultLevel: error | warn | info | debug | trace (trace is finer than debug).
@@ -188,6 +189,9 @@ func LoadRuntimeConfig(repoRoot string) (RuntimeConfig, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			runtimeConfig := defaultRuntimeConfig()
+			if err := applyExpectedSessionClientExecutableOverride(&runtimeConfig); err != nil {
+				return RuntimeConfig{}, err
+			}
 			if err := ApplyDiagnosticLoggingOverride(repoRoot, &runtimeConfig); err != nil {
 				return RuntimeConfig{}, err
 			}
@@ -206,6 +210,9 @@ func LoadRuntimeConfig(repoRoot string) (RuntimeConfig, error) {
 		return RuntimeConfig{}, err
 	}
 	applyRuntimeConfigDefaults(&runtimeConfig)
+	if err := applyExpectedSessionClientExecutableOverride(&runtimeConfig); err != nil {
+		return RuntimeConfig{}, err
+	}
 	if err := ApplyDiagnosticLoggingOverride(repoRoot, &runtimeConfig); err != nil {
 		return RuntimeConfig{}, err
 	}
@@ -569,6 +576,24 @@ func validateExpectedSessionClientExecutable(raw string) error {
 	if !filepath.IsAbs(filepath.Clean(trimmed)) {
 		return fmt.Errorf("control_plane.expected_session_client_executable must be an absolute path when set")
 	}
+	return nil
+}
+
+func applyExpectedSessionClientExecutableOverride(runtimeConfig *RuntimeConfig) error {
+	if runtimeConfig == nil {
+		return nil
+	}
+	if strings.TrimSpace(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable) != "" {
+		return nil
+	}
+	rawOverride := strings.TrimSpace(os.Getenv(expectedSessionClientExecutableEnv))
+	if rawOverride == "" {
+		return nil
+	}
+	if err := validateExpectedSessionClientExecutable(rawOverride); err != nil {
+		return err
+	}
+	runtimeConfig.ControlPlane.ExpectedSessionClientExecutable = rawOverride
 	return nil
 }
 

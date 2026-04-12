@@ -13,6 +13,7 @@
 # Environment (optional):
 #   LOOPGATE_REPO_ROOT      — canonical repo root for config/policy
 #   LOOPGATE_SOCKET         — Unix socket path (default: $REPO_ROOT/runtime/state/loopgate.sock)
+#   LOOPGATE_EXPECTED_SESSION_CLIENT_EXECUTABLE — absolute Haven executable path used to pin trusted session opens
 #   LOOPGATE_REUSE_RUNNING  — if 1, keep an already-ready Loopgate on the socket (default: 0)
 #   HAVEN_REUSE_RUNNING_LOOPGATE — alias for LOOPGATE_REUSE_RUNNING
 #   LOOPGATE_BACKGROUND     — if 1, run Loopgate in the background and append stdout/stderr to runtime/logs/loopgate.log

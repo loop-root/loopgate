@@ -346,6 +346,51 @@ func TestLoadRuntimeConfig_RejectsRelativeSessionExecutablePin(t *testing.T) {
 	}
 }
 
+func TestLoadRuntimeConfig_UsesExpectedSessionClientExecutableEnvWhenUnset(t *testing.T) {
+	repoRoot := t.TempDir()
+	t.Setenv(expectedSessionClientExecutableEnv, "/Applications/Haven.app/Contents/MacOS/Haven")
+
+	runtimeConfig, err := LoadRuntimeConfig(repoRoot)
+	if err != nil {
+		t.Fatalf("load runtime config: %v", err)
+	}
+	if got := runtimeConfig.ControlPlane.ExpectedSessionClientExecutable; got != "/Applications/Haven.app/Contents/MacOS/Haven" {
+		t.Fatalf("unexpected expected session client executable: %q", got)
+	}
+}
+
+func TestLoadRuntimeConfig_RejectsRelativeSessionExecutableEnv(t *testing.T) {
+	repoRoot := t.TempDir()
+	t.Setenv(expectedSessionClientExecutableEnv, "relative/haven")
+
+	_, err := LoadRuntimeConfig(repoRoot)
+	if err == nil {
+		t.Fatal("expected relative env override to fail closed")
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("expected absolute-path validation error, got %v", err)
+	}
+}
+
+func TestLoadRuntimeConfig_DoesNotOverrideExplicitSessionExecutableWithEnv(t *testing.T) {
+	repoRoot := t.TempDir()
+	t.Setenv(expectedSessionClientExecutableEnv, "/Applications/Other.app/Contents/MacOS/Other")
+
+	cfg := DefaultRuntimeConfig()
+	cfg.ControlPlane.ExpectedSessionClientExecutable = "/Applications/Haven.app/Contents/MacOS/Haven"
+	if err := WriteRuntimeConfigYAML(repoRoot, cfg); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	runtimeConfig, err := LoadRuntimeConfig(repoRoot)
+	if err != nil {
+		t.Fatalf("load runtime config: %v", err)
+	}
+	if got := runtimeConfig.ControlPlane.ExpectedSessionClientExecutable; got != "/Applications/Haven.app/Contents/MacOS/Haven" {
+		t.Fatalf("expected explicit config value to win, got %q", got)
+	}
+}
+
 func TestLoadRuntimeConfig_PreservesExplicitFalseForClosedSegmentVerification(t *testing.T) {
 	repoRoot := t.TempDir()
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
