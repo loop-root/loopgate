@@ -46,6 +46,8 @@ func TestConfigGetRequiresAuthenticatedScopedSignedRequest(t *testing.T) {
 func TestConfigPutRequiresConfigWriteScope(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	runtimeConfigUpdate := config.DefaultRuntimeConfig()
+	runtimeConfigUpdate.Memory.CandidatePanelSize = 9
 
 	writerDeniedClient := NewClient(client.socketPath)
 	writerDeniedClient.ConfigureSession("config-writer", "config-write-denied", []string{controlCapabilityConfigRead})
@@ -53,10 +55,7 @@ func TestConfigPutRequiresConfigWriteScope(t *testing.T) {
 		t.Fatalf("ensure config.read token: %v", err)
 	}
 	var deniedResponse map[string]string
-	err := writerDeniedClient.doJSON(context.Background(), http.MethodPut, "/v1/config/goal_aliases", writerDeniedClient.capabilityToken, config.GoalAliases{
-		Version: "1",
-		Aliases: map[string][]string{"workflow_followup": []string{"carry_forward"}},
-	}, &deniedResponse, nil)
+	err := writerDeniedClient.doJSON(context.Background(), http.MethodPut, "/v1/config/runtime", writerDeniedClient.capabilityToken, runtimeConfigUpdate, &deniedResponse, nil)
 	if err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected config.write scope denial, got %v", err)
 	}
@@ -67,17 +66,32 @@ func TestConfigPutRequiresConfigWriteScope(t *testing.T) {
 		t.Fatalf("ensure config.write token: %v", err)
 	}
 	var okResponse map[string]string
-	if err := writerClient.doJSON(context.Background(), http.MethodPut, "/v1/config/goal_aliases", writerClient.capabilityToken, config.GoalAliases{
-		Version: "1",
-		Aliases: map[string][]string{"workflow_followup": []string{"carry_forward"}},
-	}, &okResponse, nil); err != nil {
-		t.Fatalf("config.write put goal aliases: %v", err)
+	if err := writerClient.doJSON(context.Background(), http.MethodPut, "/v1/config/runtime", writerClient.capabilityToken, runtimeConfigUpdate, &okResponse, nil); err != nil {
+		t.Fatalf("config.write put runtime: %v", err)
 	}
 	if okResponse["status"] != "ok" {
 		t.Fatalf("unexpected config write response: %#v", okResponse)
 	}
-	if len(server.goalAliases.Aliases["workflow_followup"]) != 1 || server.goalAliases.Aliases["workflow_followup"][0] != "carry_forward" {
-		t.Fatalf("expected updated goal aliases in memory, got %#v", server.goalAliases.Aliases)
+	if server.runtimeConfig.Memory.CandidatePanelSize != runtimeConfigUpdate.Memory.CandidatePanelSize {
+		t.Fatalf("expected updated runtime config in memory, got %#v", server.runtimeConfig.Memory.CandidatePanelSize)
+	}
+}
+
+func TestConfigGoalAliasesRouteRetired(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.baseURL+"/v1/config/goal_aliases", nil)
+	if err != nil {
+		t.Fatalf("build retired config route request: %v", err)
+	}
+	response, err := client.httpClient.Do(request)
+	if err != nil {
+		t.Fatalf("request retired config route: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected retired goal_aliases route to return 404, got %d", response.StatusCode)
 	}
 }
 

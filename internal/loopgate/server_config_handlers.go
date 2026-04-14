@@ -13,7 +13,6 @@ var validConfigSections = map[string]struct{}{
 	"policy":            {},
 	"morphling_classes": {},
 	"runtime":           {},
-	"goal_aliases":      {},
 	"connections":       {},
 }
 
@@ -72,8 +71,6 @@ func (server *Server) handleConfigGet(w http.ResponseWriter, section string) {
 		result = morphlingClassPolicyFile{Version: mcp.Version, Classes: classList}
 	case "runtime":
 		result = server.runtimeConfig
-	case "goal_aliases":
-		result = server.goalAliases
 	case "connections":
 		server.providerTokenMu.Lock()
 		conns := server.configuredConnections
@@ -96,8 +93,6 @@ func (server *Server) handleConfigPut(w http.ResponseWriter, section string, bod
 		server.handleConfigPutMorphlingClasses(w, body)
 	case "runtime":
 		server.handleConfigPutRuntime(w, body)
-	case "goal_aliases":
-		server.handleConfigPutGoalAliases(w, body)
 	case "connections":
 		server.handleConfigPutConnections(w, body)
 	}
@@ -210,30 +205,6 @@ func (server *Server) handleConfigPutRuntime(w http.ResponseWriter, body []byte)
 
 	server.mu.Lock()
 	server.runtimeConfig = reloaded
-	server.mu.Unlock()
-
-	w.Header().Set("Content-Type", contentTypeApplicationJSON)
-	fmt.Fprintln(w, `{"status":"ok"}`)
-}
-
-func (server *Server) handleConfigPutGoalAliases(w http.ResponseWriter, body []byte) {
-	var ga config.GoalAliases
-	if err := json.Unmarshal(body, &ga); err != nil {
-		http.Error(w, "invalid goal aliases: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := config.WriteGoalAliasesYAML(server.repoRoot, ga); err != nil {
-		http.Error(w, "save goal aliases: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	reloaded, err := config.LoadGoalAliases(server.repoRoot)
-	if err != nil {
-		http.Error(w, "reload goal aliases: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	server.mu.Lock()
-	server.goalAliases = reloaded
 	server.mu.Unlock()
 
 	w.Header().Set("Content-Type", contentTypeApplicationJSON)

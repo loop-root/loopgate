@@ -4,7 +4,7 @@ This file maps the repo-root **`config/`** directory — **tracked YAML** that i
 
 Use it when changing:
 
-- default goal aliases or runtime defaults that ship with the repo
+- internal continuity tuning or runtime defaults that ship with the repo
 
 ## Files
 
@@ -12,7 +12,8 @@ Use it when changing:
   - default model/runtime hints (checked-in baseline; live runtime often under `runtime/state/`)
 
 - `goal_aliases.yaml`
-  - goal alias table consumed via `internal/config` goal-alias loading
+  - internal goal-family alias table consumed by continuity internals
+  - not exposed as a live `/v1/config/*` control-plane section in the current Loopgate MVP
 
 ## Relationship Notes
 
