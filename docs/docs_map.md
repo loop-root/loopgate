@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-07
+**Last updated:** 2026-04-14
 
 # Docs Map
 
@@ -46,9 +46,10 @@ Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/2
 - `docs/product-rfcs/` — legacy `RFC-MORPH-*` material retained for historical context; not the active source of truth for the current product
 - `docs/TCL-RFCs/` — Thought Compression Language
 
-## Benchmarks and historical PoCs
+## Benchmarks and extracted subsystems
 
-- `docs/memorybench_*.md` — historical memory/continuity benchmark material, not part of the active Loopgate product surface
+- `docs/memorybench_*.md` — historical continuity benchmark material
+- `docs/roadmap/continuity_extraction_plan.md` — note on the continuity split and repo handoff
 
 ## Superpowers / agent planning (`docs/superpowers/`)
 
@@ -66,4 +67,4 @@ Specs and plans for structured agent work (often gitignored in published clones)
 ## Important watchouts
 
 - Do not document secrets or machine-specific paths that should stay local.
-- Haven, Morph, morphling-heavy, multi-tenant, and admin-console docs are not the active repo direction; keep current docs centered on Loopgate, Claude Code governance, local policy, and local audit.
+- Haven, Morph, morphling-heavy, continuity-heavy, multi-tenant, and admin-console docs are not the active repo direction; keep current docs centered on Loopgate, Claude Code governance, local policy, local audit, and MCP governance.

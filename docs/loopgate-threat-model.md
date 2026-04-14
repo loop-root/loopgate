@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-11
+**Last updated:** 2026-04-14
 
 # Loopgate Threat Model
 
@@ -8,14 +8,18 @@
 
 The highest-risk themes in a typical **Loopgate** deployment are local control-plane abuse, audit and state integrity, and sensitive third-party data handling through Loopgate-managed provider connections. Implemented controls include peer-bound and signed Loopgate requests, explicit approval state, pending-approval decisions bound to the originating control session, typed and policy-gated capabilities, quarantined remote payloads, and OS-backed secure secret storage on macOS. Residual risks concentrate on same-user local abuse of the control plane (including **unauthenticated `GET /v1/health`** as a trivial liveness probe — by design), fail-open configuration defaults around filesystem scope, local integrity gaps in audit-derived memory, and any future browser or bridge bootstrap surface. Recent review did **not** find a live same-user peer-hop bypass in the current approval path or a delegated-session bootstrap bypass in the generic helper; the remaining gap is stronger launch-bound client identity and UI-channel provenance for any future browser bridge. Inventory routes **`GET /v1/status`** / **`GET /v1/connections/status`** require authenticated signed GETs; see [RFC 0001 — token policy](rfcs/0001-loopgate-token-policy.md). Evidence anchors: [server.go](../internal/loopgate/server.go), [client_credentials.go](../internal/loopgate/client_credentials.go), [pkce.go](../internal/loopgate/pkce.go), [quarantine.go](../internal/loopgate/quarantine.go), [claude_code_hooks_mvp.md](design_overview/claude_code_hooks_mvp.md), [0002-delegated-session-refresh.md](rfcs/0002-delegated-session-refresh.md).
 
-**Product framing:** Loopgate is the **primary product** in this repository. **Operator clients** are Claude Code hooks, IDE integrations, direct local HTTP clients, and optional **out-of-tree** MCP→HTTP forwarders over **HTTP on the Unix socket** (**in-tree MCP deprecated/removed** per ADR 0010). Any remaining in-repo UI shell code is reference-only, not a ship target. **Morphlings** remain Loopgate-governed bounded workers.
+**Product framing:** Loopgate is the primary product in this repository.
+Operator clients are Claude Code hooks, direct local HTTP clients, and optional
+out-of-tree MCP→HTTP forwarders over HTTP on the Unix socket. The old in-tree
+continuity subsystem is no longer part of the active Loopgate runtime and is
+being moved to a separate `continuity` repo.
 
 ## Scope and assumptions
 
 - In scope:
   - **Operator clients** connecting over HTTP on the Loopgate Unix socket (IDE bridges, reference Wails shell, tests, custom integrators)
-  - `cmd/loopgate`, `internal/loopgate`, and supporting packages for policy, tools, audit, memory, secrets
-  - `internal/shell`, `internal/modelruntime`, `internal/model`, `internal/tools`, `internal/safety`, `internal/config`, `internal/ledger`, `internal/state`, `internal/memory`, `internal/secrets`
+  - `cmd/loopgate`, `internal/loopgate`, and supporting packages for policy, tools, audit, and secrets
+  - `internal/shell`, `internal/modelruntime`, `internal/model`, `internal/tools`, `internal/safety`, `internal/config`, `internal/ledger`, `internal/state`, `internal/secrets`
   - `docs/design_overview/claude_code_hooks_mvp.md`, `docs/rfcs/0002-delegated-session-refresh.md`, `core/policy/policy.yaml`
 - Out of scope (this revision):
   - ancillary `cmd/` entrypoints outside principal surfaces, except as noted in abuse paths
@@ -28,6 +32,7 @@ The highest-risk themes in a typical **Loopgate** deployment are local control-p
   - Loopgate-managed provider connections should be treated as capable of accessing production-sensitive third-party data.
   - **Primary integration direction** is **Claude Code hooks** plus **HTTP on the local socket** for direct clients and IDE integrations; any in-repo UI shell is a **reference** attachment, not the normative deployment story.
   - Any future browser or bridge path is an emerging surface, not the primary runtime path.
+  - Continuity and memory concerns are now out of scope for the active Loopgate kernel and should be modeled separately in the `continuity` repo.
 - Open questions that would materially change ranking:
   - Whether a dedicated launcher becomes the sole bootstrap for Loopgate and any future browser bridge, with stronger launch-bound identity than same-user local access.
   - Whether local audit/state files are intended to be forensic-grade evidence or operator convenience artifacts.

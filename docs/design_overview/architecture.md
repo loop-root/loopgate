@@ -1,85 +1,137 @@
-**Last updated:** 2026-04-08
+**Last updated:** 2026-04-14
 
 # Loopgate architecture overview
 
-This repository is centered on **Loopgate**: the policy-governed **AI governance engine** and local control plane (`cmd/loopgate`, `internal/loopgate`).
+This repository is centered on **Loopgate**: a local-first governance kernel for
+AI-assisted engineering work.
 
-**Operator clients** connect over **HTTP on a Unix domain socket** (v1). **Primary direction:** Claude Code hooks, native HTTP clients, and optional external forwarders for MCP-shaped hosts (in-tree stdio MCP removed — see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`). Any remaining in-repo UI shells are legacy code, not current product surfaces.
+The active product is deliberately narrow:
 
-**Morphlings** are Loopgate-governed bounded workers (naming unchanged).
+- local HTTP control plane on a Unix domain socket
+- signed policy
+- approval and denial workflows
+- append-only local audit
+- Claude Code hook governance
+- sandbox mediation
+- request-driven governed MCP broker flows
+
+The in-tree continuity and memory subsystem is no longer part of Loopgate's
+active architecture. It is being re-homed into a separate sibling repository
+named `continuity`.
 
 ## 1) Current system classification
 
-As of **2026-04-03**, the implemented deployment is:
+As of **2026-04-14**, the implemented and supported shape is:
 
-- **local** control plane (typical socket: `runtime/state/loopgate.sock`)
-- **single-tenant** in code today; **multi-tenant `tenant_id`** is an explicit enterprise direction (see root `AGENTS.md`)
-- **HTTP over Unix domain socket** between local clients and Loopgate (v1; see RFC 0001 and `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`)
-- append-only audit logging
-- deny-by-default capability execution
+- local-first
+- single-machine
+- HTTP over Unix domain socket
+- deny-by-default
+- append-only audit
+- request-driven authority
 
-**Enterprise surfaces** (**in-tree MCP deprecated/removed** — ADR 0010; mTLS admin transport) are **in progress** — not fully described by this “local single-node” snapshot alone.
+This document intentionally describes the current shipped direction, not older
+Haven/Morph framing and not speculative distributed deployment.
 
 ## 2) High-level execution model
 
-Typical **IDE / operator client** flow (v1):
+Typical local flow:
 
-`developer tool → Loopgate (HTTP on UDS) → validation / policy / approval / tool execution → structured result → Loopgate durable memory / audit`
+`developer tool -> Loopgate (HTTP on UDS) -> validation / policy / approval / execution -> structured result + durable audit`
 
-**MCP:** deprecated and removed in-tree; **reserved** for a possible future thin forwarder (new ADR). External MCP hosts use **out-of-tree** forwarders to this HTTP API today.
+Current client directions:
 
-Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/model`, `internal/modelruntime`, `internal/memory`, `internal/loopgate`, `internal/shell`, `internal/setup`, and policy/tools/safety packages.
+- Claude Code hooks
+- direct local HTTP clients
+- optional out-of-tree MCP forwarders that call the same Loopgate HTTP API
+
+In-tree stdio MCP has been removed. See
+`docs/adr/0010-macos-supported-target-and-mcp-removal.md`.
 
 ## 3) Component ownership
 
-### Unprivileged operator clients
+### Unprivileged clients
 
-- **Shipped integrations:** **Claude Code hooks** and **HTTP-on-UDS** local clients. **In-tree MCP removed** — see ADR 0010 and `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative wire).
-- Persona loading, prompt compilation, model runtime configuration (non-secret), local session state, continuity thread projection, local ledger, approval UX — on the **unprivileged** side of the boundary (same pattern any client must follow).
+Clients can:
+
+- gather user input
+- render approvals and denials
+- submit signed requests to Loopgate
+- display Loopgate status and audit-derived views
+
+Clients are not authority. Natural language is not authority. Model output is
+not authority.
 
 ### Loopgate
 
-- Authoritative policy, capability orchestration, approval state machine, token minting and validation.
-- Model inference for configured providers, filesystem capabilities, gateway audit, OS-backed secrets, integration auth (e.g. client_credentials, PKCE).
-- Task plan validation, morphling lifecycle, sandbox mediation, continuity inspection, distillates, wake-state projection, governed recall.
+Loopgate owns:
+
+- policy evaluation
+- control sessions and signed requests
+- approval state
+- capability execution mediation
+- sandbox boundaries
+- provider credential handling
+- governed MCP server lifecycle and execution
+- authoritative local audit persistence
+
+### Continuity
+
+Continuity is no longer part of the active Loopgate kernel. Historical
+continuity/memory references in older docs should be read as extraction history,
+not current architecture.
 
 ## 4) Trust boundaries
 
-**Trusted:** Loopgate binary, policy enforcement inside Loopgate, any local client **binary** (IDE bridge, CLI/TUI shell, MCP host) as a transport — but **not** model output routed through it.
+Trusted:
 
-**Untrusted:** model output, user input, tool arguments/output, config until validated, external integration responses.
+- Loopgate itself
+- validated signed policy
+- Loopgate-controlled audit persistence
 
-Model output is content, not authority. The client presents capability intent; Loopgate decides whether anything executes.
+Untrusted:
+
+- model output
+- user prompts
+- tool output
+- local config before validation
+- external provider payloads
+- anything a client claims about its own intent
 
 ## 5) Invariants currently enforced
 
-- Ledger append-only semantics where applicable.
-- Loopgate is the execution choke point for governed capabilities and task-plan mediation.
-- Approvals are created and enforced in Loopgate.
-- Capability tokens are short-lived and scoped.
-- Unprivileged operator clients do not receive raw secret material from Loopgate through the implemented contracts.
-- Startup fails closed if Loopgate is unavailable (client paths that require it).
-- Continuity thread transitions monotonic where designed; wake-state projection is derived and rebuilt from Loopgate authority.
+- Loopgate is the authority boundary.
+- Signed policy remains authoritative.
+- Privileged requests require a bound control session and signed envelope.
+- Security-relevant actions remain auditable.
+- Sandbox and host filesystem boundaries stay explicit.
+- Secrets stay inside Loopgate-managed storage and resolution paths.
+- MCP execution remains request-driven and server-owned.
 
 ## 6) Current implementation state
 
-Loopgate supports provider-auth paths (`client_credentials`, `pkce`), YAML connection definitions, quarantine for raw remote bodies, morphling state machine, sandbox import/export/stage flows, and hash-linked audit where implemented.
+Loopgate currently ships:
 
-See `docs/design_overview/loopgate.md` and `docs/roadmap/roadmap.md` for a feature-level list.
+- session open and signed-request validation
+- capability execution and approval workflows
+- sandbox import / stage / export mediation
+- provider connection validation and auth flows
+- governed MCP launch / execute / stop / status
+- hot policy apply for already signed policy
+- local operator and troubleshooting flows
 
-**Remaining gaps** (non-exhaustive): authorization code without PKCE, full refresh-token rotation story, generic external HTTP capability, externally anchored audit signatures, and explicit admin-node implementation as product priorities land.
+See `docs/design_overview/loopgate.md`,
+`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`, and
+`docs/setup/OPERATOR_GUIDE.md` for the operator-facing view.
 
-## 7) Planned expansion
+## 7) Near-term direction
 
-### Loopgate (product)
+Near-term work stays inside the governance kernel:
 
-- Enterprise: **`tenant_id` isolation**, **mTLS** to governance authority, and direct governed clients with the same policy and audit invariants as today’s HTTP handlers. (**In-tree MCP** removed; any future IDE protocol adapter is **out of scope** until a new ADR — see ADR 0010.)
-- OAuth and integration expansion, additional secret backends, typed integrations, deny-by-default secret export.
+- operator docs and troubleshooting
+- cleanup of stale historical docs and local-path residue
+- audit and ledger hardening
+- tighter capability and policy ergonomics
 
-### Skills / manifests
-
-- Explicit manifests, typed schemas, declared capability bindings, approval requirements — no permissions from prompt text alone.
-
-### APIs
-
-- Loopgate APIs for capability execution, connection flows, and denial introspection.
+Anything continuity-specific should move to the separate `continuity` repo
+rather than back into Loopgate.

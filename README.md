@@ -1,6 +1,6 @@
 # Loopgate
 
-**Last updated:** 2026-04-13
+**Last updated:** 2026-04-14
 
 **Loopgate** is a local-first governance layer for AI-assisted engineering work.
 
@@ -51,7 +51,7 @@ What is not the active product story right now:
 - a separate assistant product
 - morphlings as a near-term core feature
 - distributed enterprise deployment
-- automatic memory as part of the Claude v1 path
+- automatic memory or continuity inside Loopgate
 
 ## Quick start
 
@@ -111,6 +111,24 @@ docs/                      setup, operator docs, architecture, cleanup plan
 runtime/                   local state and logs (gitignored where appropriate)
 ```
 
+## Continuity split
+
+Loopgate no longer carries the memory and continuity subsystem as part of its
+active product surface.
+
+That work is being re-homed into a separate sibling repository named
+`continuity`, so Loopgate can stay focused on:
+
+- policy
+- approvals
+- audit
+- Claude hook governance
+- sandbox mediation
+- governed MCP broker flows
+
+If older docs mention in-tree memory, wake-state, distillates, or memorybench,
+read them as historical material unless they have been explicitly rewritten.
+
 ## Cleanup direction
 
 The repository is actively being simplified toward a thinner, easier-to-audit Loopgate core.
@@ -122,7 +140,7 @@ Current cleanup priorities:
 - remove stale multi-product framing
 - add real operator docs and troubleshooting docs
 - trim or archive morphling / Haven / Morph leftovers
-- isolate or remove memory paths that are not part of the v1 product
+- finish rewriting or archiving docs that still describe extracted continuity work as part of Loopgate
 - sweep tracked docs and artifacts for hardcoded local paths and stale runtime data
 - harden the local audit story further, including ledger replacement/tamper gaps
 

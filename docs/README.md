@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-13
+**Last updated:** 2026-04-14
 
 # Docs Index
 
@@ -14,7 +14,10 @@ The current active story is:
 - local audit
 - governed local MCP/runtime work
 
-The docs still contain older material about Haven, Morph, morphlings, memory-heavy flows, and future enterprise directions. Those are being trimmed or archived. Use the documents below as the current source of truth for the active product.
+The docs still contain older material about Haven, Morph, morphlings,
+continuity, and future enterprise directions. Those are being trimmed or
+archived. Use the documents below as the current source of truth for the active
+product.
 
 ## Start here
 
@@ -25,6 +28,7 @@ The docs still contain older material about Haven, Morph, morphlings, memory-hea
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./loopgate-threat-model.md)
 - [Loopgate cleanup plan](./roadmap/loopgate_cleanup_plan.md)
+- [Continuity split note](./roadmap/continuity_extraction_plan.md)
 
 ## Current product docs
 
@@ -50,7 +54,7 @@ Not all docs under `docs/` reflect the current product boundary.
 Known categories under cleanup:
 - Haven / Morph compatibility language
 - morphling-specific design and product RFCs
-- memory-heavy design work that is not part of the current Claude v1 path
+- continuity and memory design work that is now being moved to the separate `continuity` repo
 - distributed-deployment forward-looking material
 - docs containing hardcoded local filesystem paths
 

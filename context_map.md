@@ -15,7 +15,7 @@ If this file disagrees with code, the code wins. If this file disagrees with the
 
 Loopgate is a policy-governed AI governance engine.
 
-This repo implements the enforcement runtime (`cmd/loopgate`, `internal/loopgate`) and shared backend libraries. It is the authority boundary for AI capability execution — locally on developer machines, and in enterprise deployment as a distributed enforcement network with centralized governance.
+This repo implements the enforcement runtime (`cmd/loopgate`, `internal/loopgate`) and shared backend libraries. It is the authority boundary for AI capability execution on the local machine.
 
 Product surfaces:
 
@@ -24,24 +24,25 @@ Product surfaces:
 
 This repository centers on **Loopgate** as the governance engine.
 
-Note: older memory, continuity, task-board, and morphling references may still
-appear deeper in this local map while cleanup continues. Treat those as
-historical or extraction notes, not the active Loopgate product surface.
+Note: older continuity, task-board, and morphling references may still appear
+deeper in this local map while cleanup continues. Treat those as historical or
+extraction notes, not the active Loopgate product surface.
 
 ## Current Product Shape
 
 - `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, Claude hook governance, and the MCP broker path.
 - The **current product surface** is a direct local client model: **Claude Code hooks** over the local control plane, plus optional **HTTP-native** clients and **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
-- **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile). Admin node connects via mTLS over TCP. Apple XPC is optional post-launch hardening (no committed date).
-- Retired Haven, Morph, morphling, task-board, and in-tree memory surfaces are cleanup or extraction debt, not the active product surface.
+- **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile).
+- Continuity and memory are being moved to a separate sibling repo named `continuity`.
+- Retired Haven, Morph, morphling, and task-board surfaces are cleanup debt, not the active product surface.
 
-Useful mental model (enterprise):
+Useful mental model:
 
 ```text
 Developer IDE or local HTTP client
-  -> Loopgate **HTTP on UDS** (local node)
+  -> Loopgate **HTTP on UDS**
   -> Policy evaluation, audit, approvals
-  -> Admin node (governance, IDP, audit aggregation)
+  -> governed execution or denial
 ```
 
 ## Non-Negotiable Invariants
@@ -148,13 +149,12 @@ What lives here:
 - session and token integrity
 - approval workflows
 - sandbox import / export / stage / list / metadata
-- memory continuity and wake-state
 - model connection storage and validation
-- morphling lifecycle and worker governance
 - site trust and outbound integration hooks
 - UI status queries used by unprivileged clients (e.g. IDE integrations)
 - shared-folder mediation
 - folder-grant mirroring and compare-before-sync refresh
+- governed MCP lifecycle and execution helpers
 
 Key files:
 
@@ -167,17 +167,7 @@ Key files:
 - `client_transport.go`: signed transport, retries, and request-signature implementation
 - `shared_folder.go`: default shared-space mediation
 - `folder_access.go`: explicit host-folder grant storage and compare-before-sync mirror logic
-- `continuity_memory.go`: Loopgate-owned durable memory selection and task-board wake-state reconstruction
-- `continuity_runtime_contract.go`: continuity runtime constants, replay/event structs, and artifact path layout
-- `continuity_runtime.go`: continuity runtime derivation and projection helpers; now part of the task-metadata and future scheduler groundwork
-- `continuity_runtime_storage.go`: continuity artifact persistence and authoritative JSONL replay path
-- `todo_execution.go`: capability-entry surface for task and goal actions
-- `todo_contract.go`: shared task/todo constants and active-item record contract
-- `todo_request.go`: todo request normalization and validation helpers
-- `todo_mutation.go`: continuity-backed task mutation and status authority
-- `todo_task_facts.go`: explicit todo task-fact derivation for continuity records
-- `goal_mutation.go`: continuity-backed goal mutation authority
-- `morphling_spawn.go`, `morphling_status.go`, `morphling_workers.go`: bounded worker spawn/status/IPC flow
+- `mcp_gateway_runtime.go`, `mcp_gateway_execution.go`, `mcp_gateway_approval.go`: governed MCP lifecycle, approval, and execution helpers
 
 Important note:
 
@@ -213,12 +203,8 @@ Current core tools:
 - `fs_write`
 - `shell_exec`
 - `path_open`
-- `journal.*` (sandbox workspace)
-- `paint.*` (sandbox workspace)
-- `note.create` (sandbox workspace)
-- `memory.remember` (explicit durable memory lane)
-- `todo.*` (Task Board operating-memory tools)
-- `notes.*` (private working-notes tools)
+- The active tool registry is intentionally narrow and governance-oriented.
+- Retired Haven-only and memory/task-oriented tools are no longer part of the active Loopgate surface.
 
 ### `internal/policy/`
 

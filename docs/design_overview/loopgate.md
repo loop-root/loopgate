@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-11
+**Last updated:** 2026-04-14
 
 # Loopgate
 
@@ -16,6 +16,10 @@ It is the enforcement point for capabilities, approvals, integration auth, and o
 Older Haven route and tool surfaces are being retired. Treat the active
 Loopgate product as the governance kernel for Claude hooks, approvals, audit,
 policy, sandbox mediation, and the MCP gateway path.
+
+The former in-tree continuity and memory subsystem is no longer part of the
+active Loopgate product. That work is being re-homed into a separate sibling
+repository named `continuity`.
 
 ## Current state
 
@@ -116,7 +120,7 @@ Current MVP note:
 
 - the active transport is the local Unix-socket control plane for Claude hooks, operator clients, and out-of-tree bridges
 - retired Haven and morphling surfaces are no longer part of the active product boundary
-- the retired in-tree memory and continuity layers are being separated out of Loopgate rather than treated as part of the active operator contract
+- the retired in-tree memory and continuity layers are no longer part of the active operator contract
 
 Not yet implemented:
 
