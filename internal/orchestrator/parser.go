@@ -30,7 +30,6 @@ var reservedMorphCommandNames = map[string]struct{}{
 	"connections": {},
 	"site":        {},
 	"sandbox":     {},
-	"morphling":   {},
 	"quarantine":  {},
 	"config":      {},
 	"tools":       {},

@@ -765,10 +765,6 @@ tools:
     enabled: false
     allowed_commands: []
     requires_approval: true
-  morphlings:
-    spawn_enabled: false
-    max_active: 5
-    require_template: true
 logging:
   log_commands: true
   log_tool_calls: true
@@ -906,10 +902,6 @@ tools:
       - "swift"
       - "xcodebuild"
     requires_approval: true
-  morphlings:
-    spawn_enabled: false
-    max_active: 5
-    require_template: true
 logging:
   log_commands: true
   log_tool_calls: true

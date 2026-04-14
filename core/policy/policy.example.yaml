@@ -244,13 +244,6 @@ tools:
       - "xcodebuild"
     requires_approval: true
 
-  morphlings:
-    # Legacy delegated-work surface. Keep disabled unless you are explicitly
-    # testing that path; it is not part of the current local-first product story.
-    spawn_enabled: false
-    max_active: 5
-    require_template: true
-
 logging:
   log_commands: true
   log_tool_calls: true
