@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/loopgate"
+	"loopgate/internal/config"
+	"loopgate/internal/loopgate"
 )
 
 type testPolicySignerFixture struct {

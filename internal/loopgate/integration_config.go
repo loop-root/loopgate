@@ -14,9 +14,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"morph/internal/config"
-	"morph/internal/identifiers"
-	"morph/internal/secrets"
+	"loopgate/internal/config"
+	"loopgate/internal/identifiers"
+	"loopgate/internal/secrets"
 )
 
 const (

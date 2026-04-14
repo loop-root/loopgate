@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	memorypkg "morph/internal/memory"
+	memorypkg "loopgate/internal/memory"
 )
 
 const (

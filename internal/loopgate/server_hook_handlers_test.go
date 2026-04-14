@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/ledger"
+	"loopgate/internal/ledger"
 )
 
 type claudeHookSessionStateTestFile struct {

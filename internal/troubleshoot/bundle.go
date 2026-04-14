@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 // WriteOperatorBundle creates outDir, writes report.json, and appends last maxLines of each diagnostic log (if present).

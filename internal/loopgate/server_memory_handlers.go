@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"morph/internal/identifiers"
+	"loopgate/internal/identifiers"
 )
 
 func (server *Server) handleMemoryWakeState(writer http.ResponseWriter, request *http.Request) {

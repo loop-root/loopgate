@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/identifiers"
-	tclpkg "morph/internal/tcl"
+	"loopgate/internal/identifiers"
+	tclpkg "loopgate/internal/tcl"
 )
 
 func (backend *continuityTCLMemoryBackend) inspectObservedContinuityAuthoritatively(authenticatedSession capabilityToken, rawRequest ObservedContinuityInspectRequest) (ContinuityInspectResponse, error) {

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"morph/internal/secrets"
+	"loopgate/internal/secrets"
 )
 
 const hookAuditPreviewMaxBytes = 256

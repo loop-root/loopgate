@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 func TestOpenSessionRejectedWhenExecutablePinMismatch(t *testing.T) {

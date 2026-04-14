@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/relationhints"
+	"loopgate/internal/relationhints"
 )
 
 const BenchmarkVersion = "0.1.0"

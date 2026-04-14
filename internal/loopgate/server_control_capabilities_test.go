@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	modelpkg "morph/internal/model"
-	modelruntime "morph/internal/modelruntime"
+	"loopgate/internal/config"
+	modelpkg "loopgate/internal/model"
+	modelruntime "loopgate/internal/modelruntime"
 )
 
 func TestStatusOmitsConnectionsWithoutConnectionReadScope(t *testing.T) {

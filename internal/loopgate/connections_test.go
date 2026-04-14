@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/ledger"
-	"morph/internal/secrets"
+	"loopgate/internal/ledger"
+	"loopgate/internal/secrets"
 )
 
 type fakeConnectionSecretStore struct {

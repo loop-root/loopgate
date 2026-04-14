@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/model"
-	"morph/internal/secrets"
+	"loopgate/internal/config"
+	"loopgate/internal/model"
+	"loopgate/internal/secrets"
 )
 
 func TestProvider_GenerateUsesCompiledPersonaPrompt(t *testing.T) {

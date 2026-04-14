@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 // runtimeYAMLDiagnosticOn is a valid runtime.yaml with diagnostic logging enabled.

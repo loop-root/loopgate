@@ -110,21 +110,6 @@ func (server *Server) pruneExpiredLocked() {
 		}
 		noteNextSweepCandidate(consumedToken.ConsumedAt.Add(requestReplayWindow))
 	}
-	for launchToken, workerLaunch := range server.morphlingWorkerLaunches {
-		if nowUTC.After(workerLaunch.ExpiresAt) {
-			delete(server.morphlingWorkerLaunches, launchToken)
-			continue
-		}
-		noteNextSweepCandidate(workerLaunch.ExpiresAt)
-	}
-	for workerToken, workerSession := range server.morphlingWorkerSessions {
-		if nowUTC.After(workerSession.ExpiresAt) {
-			delete(server.morphlingWorkerSessions, workerToken)
-			continue
-		}
-		noteNextSweepCandidate(workerSession.ExpiresAt)
-	}
-
 	if server.expirySweepMaxInterval <= 0 {
 		server.nextExpirySweepAt = time.Time{}
 		return

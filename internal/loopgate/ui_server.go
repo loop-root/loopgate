@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/secrets"
-	statepkg "morph/internal/state"
+	"loopgate/internal/config"
+	"loopgate/internal/secrets"
+	statepkg "loopgate/internal/state"
 )
 
 const maxUIEventBuffer = 200
@@ -315,17 +315,6 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 		})
 		return
 	}
-	if err := server.expirePendingMorphlingApprovals(); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			RequestID:         approvalID,
-			Status:            ResponseStatusError,
-			DenialReason:      "control-plane audit is unavailable",
-			DenialCode:        DenialCodeAuditUnavailable,
-			ApprovalRequestID: approvalID,
-		})
-		return
-	}
-
 	decisionNonce, manifestSHA256, found := server.currentApprovalDecisionState(approvalID)
 	if !found {
 		server.writeJSON(writer, http.StatusNotFound, CapabilityResponse{
@@ -377,40 +366,6 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 		}
 		if integrityDenial, integrityOK := server.verifyPendingApprovalStoredExecutionBody(pendingApproval); !integrityOK {
 			server.writePendingApprovalExecutionIntegrityDenial(writer, controlSession, approvalID, pendingApproval, integrityDenial)
-			return
-		}
-		if isMorphlingSpawnApproval(pendingApproval) {
-			response, err := server.resolveMorphlingSpawnApproval(pendingApproval, true, decisionNonce)
-			if err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-					RequestID:         pendingApproval.Request.RequestID,
-					Status:            ResponseStatusError,
-					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
-					ApprovalRequestID: approvalID,
-				})
-				return
-			}
-			if response.Status != ResponseStatusSuccess {
-				response.ApprovalRequestID = approvalID
-				server.emitUIApprovalResolved(pendingApproval, approvalID, ternaryApprovalDecision(true), response.Status)
-				server.writeJSON(writer, httpStatusForResponse(response), response)
-				return
-			}
-			if err := server.commitApprovalGrantConsumed(approvalID, decisionNonce); err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-					RequestID:         pendingApproval.Request.RequestID,
-					Status:            ResponseStatusError,
-					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
-					ApprovalRequestID: approvalID,
-				})
-				return
-			}
-			server.markApprovalExecutionResult(approvalID, ResponseStatusSuccess)
-			response.ApprovalRequestID = approvalID
-			server.emitUIApprovalResolved(pendingApproval, approvalID, "approved", response.Status)
-			server.writeJSON(writer, httpStatusForResponse(response), response)
 			return
 		}
 		if err := server.commitApprovalGrantConsumed(approvalID, decisionNonce); err != nil {
@@ -477,24 +432,6 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 		server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
-	if isMorphlingSpawnApproval(pendingApproval) {
-		response, err := server.resolveMorphlingSpawnApproval(pendingApproval, false, decisionNonce)
-		if err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
-				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
-				ApprovalRequestID: approvalID,
-			})
-			return
-		}
-		response.ApprovalRequestID = approvalID
-		server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", response.Status)
-		server.writeJSON(writer, httpStatusForResponse(response), response)
-		return
-	}
-
 	server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
 	server.writeJSON(writer, http.StatusOK, CapabilityResponse{
 		RequestID:         pendingApproval.Request.RequestID,

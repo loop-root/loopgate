@@ -1,6 +1,6 @@
 package ui
 
-import "morph/internal/secrets"
+import "loopgate/internal/secrets"
 
 // Safe runs s through the secrets redaction pipeline before it reaches any
 // render function. Call it at the boundary between untrusted caller data and

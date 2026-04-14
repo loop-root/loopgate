@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/safety"
+	"loopgate/internal/safety"
 )
 
 func TestRepositoryPolicyFile_LoadsWithStrictSchema(t *testing.T) {

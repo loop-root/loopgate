@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/config"
-	"morph/internal/loopgate"
+	"loopgate/internal/config"
+	"loopgate/internal/loopgate"
 )
 
 func TestSandboxImportRejectsHostDirectoryWithSymlinkOverRealSocket(t *testing.T) {

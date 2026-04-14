@@ -1,6 +1,6 @@
 package shell
 
-import "morph/internal/ui"
+import "loopgate/internal/ui"
 
 // commandManPage holds the content for a command's help/man page.
 type commandManPage struct {

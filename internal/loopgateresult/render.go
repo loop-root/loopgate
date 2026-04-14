@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"morph/internal/loopgate"
-	"morph/internal/orchestrator"
-	"morph/internal/secrets"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/orchestrator"
+	"loopgate/internal/secrets"
 )
 
 func SanitizedApprovalMetadata(rawMetadata map[string]interface{}) map[string]interface{} {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 type continuityMemoryState struct {

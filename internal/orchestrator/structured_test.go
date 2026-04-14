@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/model"
-	"morph/internal/tools"
+	"loopgate/internal/model"
+	"loopgate/internal/tools"
 )
 
 // testTool is a minimal Tool implementation for testing.

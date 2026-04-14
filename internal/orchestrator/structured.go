@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"morph/internal/model"
-	"morph/internal/tools"
+	"loopgate/internal/model"
+	"loopgate/internal/tools"
 )
 
 // ToolCallValidationError captures a validation failure for a specific

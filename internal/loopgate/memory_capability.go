@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"morph/internal/secrets"
+	"loopgate/internal/secrets"
 )
 
 func (server *Server) executeMemoryRememberCapability(tokenClaims capabilityToken, capabilityRequest CapabilityRequest) CapabilityResponse {

@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	tclpkg "morph/internal/tcl"
+	"loopgate/internal/config"
+	tclpkg "loopgate/internal/tcl"
 )
 
 func TestInspectContinuityThread_ReplayIsIdempotentAndDoesNotAuditRawContinuityText(t *testing.T) {

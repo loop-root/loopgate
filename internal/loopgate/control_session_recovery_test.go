@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/ledger"
+	"loopgate/internal/ledger"
 )
 
 func newControlSessionRecoveryTestServer(t *testing.T, repoRoot string) *Server {

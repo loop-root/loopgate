@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 const TestPolicySigningKeyID = "loopgate-test-policy-root"

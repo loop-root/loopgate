@@ -1,4 +1,4 @@
-module morph
+module loopgate
 
 go 1.25.0
 

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 func writeJSONArtifact(path string, payload interface{}) error {

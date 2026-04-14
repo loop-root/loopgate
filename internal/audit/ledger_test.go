@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/ledger"
+	"loopgate/internal/ledger"
 )
 
 func TestLedgerWriter_MustPersistReturnsAppendFailure(t *testing.T) {

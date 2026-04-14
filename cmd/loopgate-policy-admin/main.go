@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"strings"
 
-	"morph/internal/config"
-	"morph/internal/loopgate"
+	"loopgate/internal/config"
+	"loopgate/internal/loopgate"
 )
 
 const policySigningPrivateKeyFileEnv = "LOOPGATE_POLICY_SIGNING_PRIVATE_KEY_FILE"

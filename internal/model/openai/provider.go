@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/model"
-	"morph/internal/prompt"
-	"morph/internal/secrets"
+	"loopgate/internal/model"
+	"loopgate/internal/prompt"
+	"loopgate/internal/secrets"
 )
 
 // maxOpenAIRateLimitRetries is how many times we retry after HTTP 429 from an OpenAI-compatible API.

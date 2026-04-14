@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/identifiers"
+	"loopgate/internal/identifiers"
 )
 
 const (

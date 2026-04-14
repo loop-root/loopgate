@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/ledger"
+	"loopgate/internal/config"
+	"loopgate/internal/ledger"
 )
 
 const maxTopEventTypes = 25

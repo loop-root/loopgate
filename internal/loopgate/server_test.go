@@ -27,15 +27,15 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/ledger"
-	modelpkg "morph/internal/model"
-	modelruntime "morph/internal/modelruntime"
-	policypkg "morph/internal/policy"
-	"morph/internal/sandbox"
-	"morph/internal/secrets"
-	"morph/internal/testutil"
-	toolspkg "morph/internal/tools"
+	"loopgate/internal/config"
+	"loopgate/internal/ledger"
+	modelpkg "loopgate/internal/model"
+	modelruntime "loopgate/internal/modelruntime"
+	policypkg "loopgate/internal/policy"
+	"loopgate/internal/sandbox"
+	"loopgate/internal/secrets"
+	"loopgate/internal/testutil"
+	toolspkg "loopgate/internal/tools"
 )
 
 type delayedModelProvider struct {
@@ -6831,10 +6831,6 @@ func loopgatePolicyYAML(writeRequiresApproval bool) string {
 		"    enabled: false\n" +
 		"    allowed_commands: []\n" +
 		"    requires_approval: true\n" +
-		"  morphlings:\n" +
-		"    spawn_enabled: false\n" +
-		"    max_active: 5\n" +
-		"    require_template: true\n" +
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +
@@ -6843,53 +6839,6 @@ func loopgatePolicyYAML(writeRequiresApproval bool) string {
 		"  auto_distillate: true\n" +
 		"  require_promotion_approval: true\n" +
 		"  continuity_review_required: false\n" +
-		"safety:\n" +
-		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n"
-}
-
-func loopgateMorphlingPolicyYAML(writeRequiresApproval bool, spawnEnabled bool, maxActive int) string {
-	approvalValue := "false"
-	if writeRequiresApproval {
-		approvalValue = "true"
-	}
-	spawnEnabledValue := "false"
-	if spawnEnabled {
-		spawnEnabledValue = "true"
-	}
-	if maxActive <= 0 {
-		maxActive = 5
-	}
-
-	return "version: 0.1.0\n\n" +
-		"tools:\n" +
-		"  filesystem:\n" +
-		"    allowed_roots:\n" +
-		"      - \".\"\n" +
-		"    denied_paths: []\n" +
-		"    read_enabled: true\n" +
-		"    write_enabled: true\n" +
-		"    write_requires_approval: " + approvalValue + "\n" +
-		"  http:\n" +
-		"    enabled: false\n" +
-		"    allowed_domains: []\n" +
-		"    requires_approval: true\n" +
-		"    timeout_seconds: 10\n" +
-		"  shell:\n" +
-		"    enabled: false\n" +
-		"    allowed_commands: []\n" +
-		"    requires_approval: true\n" +
-		"  morphlings:\n" +
-		"    spawn_enabled: " + spawnEnabledValue + "\n" +
-		fmt.Sprintf("    max_active: %d\n", maxActive) +
-		"    require_template: true\n" +
-		"logging:\n" +
-		"  log_commands: true\n" +
-		"  log_tool_calls: true\n" +
-		"  log_memory_promotions: true\n" +
-		"memory:\n" +
-		"  auto_distillate: true\n" +
-		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
 		"  allow_policy_modification: false\n"
@@ -6919,10 +6868,6 @@ func loopgateHTTPPolicyYAML(requiresApproval bool) string {
 		"    enabled: false\n" +
 		"    allowed_commands: []\n" +
 		"    requires_approval: true\n" +
-		"  morphlings:\n" +
-		"    spawn_enabled: false\n" +
-		"    max_active: 5\n" +
-		"    require_template: true\n" +
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +
@@ -6964,10 +6909,6 @@ func loopgateShellPolicyYAML(requiresApproval bool, allowedCommands []string) st
 		"    allowed_commands:\n" +
 		strings.Join(quotedCommands, "") +
 		"    requires_approval: " + approvalValue + "\n" +
-		"  morphlings:\n" +
-		"    spawn_enabled: false\n" +
-		"    max_active: 5\n" +
-		"    require_template: true\n" +
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +

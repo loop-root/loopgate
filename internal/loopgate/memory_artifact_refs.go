@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"morph/internal/identifiers"
+	"loopgate/internal/identifiers"
 )
 
 const (

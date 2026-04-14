@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
 )
 
 func TestDistillFromLedger_MalformedLineFailsWithIntegrityError(t *testing.T) {

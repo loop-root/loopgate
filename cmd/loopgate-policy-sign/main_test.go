@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/testutil"
+	"loopgate/internal/testutil"
 )
 
 func TestResolvePolicySigningPrivateKeyPath_PrefersFlag(t *testing.T) {

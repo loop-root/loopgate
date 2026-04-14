@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"morph/internal/config"
-	"morph/internal/secrets"
-	"morph/internal/troubleshoot"
+	"loopgate/internal/config"
+	"loopgate/internal/secrets"
+	"loopgate/internal/troubleshoot"
 )
 
 func TestHandleDiagnosticReport_UnauthenticatedWithoutPeer(t *testing.T) {

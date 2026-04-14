@@ -1,6 +1,6 @@
 package loopgate
 
-import toolspkg "morph/internal/tools"
+import toolspkg "loopgate/internal/tools"
 
 // capabilityClass describes how a single capability may be dispatched within
 // a batch of tool calls returned by the model.

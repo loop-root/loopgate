@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"morph/internal/config"
-	policypkg "morph/internal/policy"
+	"loopgate/internal/config"
+	policypkg "loopgate/internal/policy"
 )
 
 func (server *Server) evaluateClaudeCodeHookPolicy(req HookPreValidateRequest, toolDef struct {

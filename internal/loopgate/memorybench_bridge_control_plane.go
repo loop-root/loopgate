@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/threadstore"
+	"loopgate/internal/threadstore"
 )
 
 var _ io.Closer = (*benchmarkProductionParityControlPlaneBackend)(nil)

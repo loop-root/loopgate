@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	policypkg "morph/internal/policy"
-	"morph/internal/secrets"
+	policypkg "loopgate/internal/policy"
+	"loopgate/internal/secrets"
 )
 
 type approvalExecutionContext struct {
@@ -59,31 +59,6 @@ const (
 	approvalStateConsumed        = "consumed"
 	approvalStateExecutionFailed = "execution_failed"
 )
-
-// capabilityTokenForMorphlingApprovalFinalize builds a token for finalizeSpawnedMorphling after UI/API approval.
-// It prefers the live control session (peer binding, expiry, tenancy) so execution matches the session that
-// is still open when the operator approves; ExecutionContext carries a snapshot if the session is gone.
-func (server *Server) capabilityTokenForMorphlingApprovalFinalize(pending pendingApproval) capabilityToken {
-	server.mu.Lock()
-	session, sessionFound := server.sessions[pending.ControlSessionID]
-	server.mu.Unlock()
-	token := capabilityToken{
-		ControlSessionID:    pending.ExecutionContext.ControlSessionID,
-		ActorLabel:          pending.ExecutionContext.ActorLabel,
-		ClientSessionLabel:  pending.ExecutionContext.ClientSessionLabel,
-		AllowedCapabilities: copyCapabilitySet(pending.ExecutionContext.AllowedCapabilities),
-		TenantID:            pending.ExecutionContext.TenantID,
-		UserID:              pending.ExecutionContext.UserID,
-		ExpiresAt:           pending.ExpiresAt,
-	}
-	if sessionFound {
-		token.PeerIdentity = session.PeerIdentity
-		token.TenantID = session.TenantID
-		token.UserID = session.UserID
-		token.ExpiresAt = session.ExpiresAt
-	}
-	return token
-}
 
 func approvalTokenHash(token string) string {
 	h := sha256.Sum256([]byte(token))
@@ -367,9 +342,9 @@ func (server *Server) validatePendingApprovalDecision(controlSession controlSess
 }
 
 // commitApprovalGrantConsumed appends approval.granted and transitions the approval to consumed.
-// Call after approval-scoped work succeeds (e.g. morphling spawn finalization) so a spawn failure
-// does not leave a consumed approval with no morphling. If audit append fails after side effects,
-// the operator may need manual recovery (rare).
+// Call after approval-scoped work succeeds so a post-decision failure does not leave a consumed
+// approval with no executed action. If audit append fails after side effects, the operator may
+// need manual recovery (rare).
 func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDecisionNonce string) error {
 	expectedDecisionNonce = strings.TrimSpace(expectedDecisionNonce)
 	server.mu.Lock()

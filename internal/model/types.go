@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 type ConversationTurn struct {

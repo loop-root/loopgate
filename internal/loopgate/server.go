@@ -14,15 +14,15 @@ import (
 	"sync"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/ledger"
-	"morph/internal/loopdiag"
-	modelpkg "morph/internal/model"
-	modelruntime "morph/internal/modelruntime"
-	policypkg "morph/internal/policy"
-	"morph/internal/sandbox"
-	"morph/internal/secrets"
-	toolspkg "morph/internal/tools"
+	"loopgate/internal/config"
+	"loopgate/internal/ledger"
+	"loopgate/internal/loopdiag"
+	modelpkg "loopgate/internal/model"
+	modelruntime "loopgate/internal/modelruntime"
+	policypkg "loopgate/internal/policy"
+	"loopgate/internal/sandbox"
+	"loopgate/internal/secrets"
+	toolspkg "loopgate/internal/tools"
 )
 
 const statusVersion = "0.1.0"
@@ -47,7 +47,6 @@ type Server struct {
 	derivedArtifactDir         string
 	connectionPath             string
 	modelConnectionPath        string
-	morphlingPath              string
 	memoryBasePath             string
 	memoryLegacyPath           string
 	claudeHookSessionsPath     string
@@ -60,7 +59,6 @@ type Server struct {
 	policy                     config.Policy
 	runtimeConfig              config.RuntimeConfig
 	goalAliases                config.GoalAliases
-	morphlingClassPolicy       morphlingClassPolicy
 	registry                   *toolspkg.Registry
 	checker                    *policypkg.Checker
 	now                        func() time.Time
@@ -102,11 +100,6 @@ type Server struct {
 	modelConnectionsMu sync.Mutex
 	modelConnections   map[string]modelConnectionRecord
 
-	morphlingsMu      sync.Mutex
-	morphlings        map[string]morphlingRecord
-	morphlingStateKey []byte
-	morphlingKeyPath  string
-
 	memoryMu                  sync.Mutex
 	memoryFactWritesBySession map[string][]time.Time
 	memoryFactWritesByUID     map[uint32][]time.Time
@@ -119,9 +112,6 @@ type Server struct {
 	hostAccessAppliedPlanAt map[string]time.Time
 
 	configStateDir string
-
-	morphlingWorkerLaunches map[string]morphlingWorkerLaunch
-	morphlingWorkerSessions map[string]morphlingWorkerSession
 
 	providerTokenMu        sync.Mutex
 	providerTokens         map[string]providerAccessToken
@@ -158,9 +148,6 @@ type Server struct {
 	maxTotalControlSessions int
 	// maxTotalApprovalRecords caps server.approvals map size including terminal rows until pruned.
 	maxTotalApprovalRecords int
-	// maxMorphlingWorkerSessions caps in-memory morphling worker sessions.
-	maxMorphlingWorkerSessions int
-
 	// sessionMACRotationMaster is 32 bytes of server-held entropy used to derive per-epoch
 	// session MAC keys (see session_mac_rotation.go). Loaded or created under runtime/state.
 	sessionMACRotationMaster []byte
@@ -230,7 +217,6 @@ const (
 	defaultMaxAuthNonceReplayEntries            = 65536
 	defaultMaxTotalControlSessions              = 512
 	defaultMaxTotalApprovalRecords              = 4096
-	defaultMaxMorphlingWorkerSessions           = 256
 )
 
 func normalizeSessionExecutablePinPath(raw string) string {
@@ -293,8 +279,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		derivedArtifactDir:         filepath.Join(repoRoot, "runtime", "state", "derived_artifacts"),
 		connectionPath:             filepath.Join(repoRoot, "runtime", "state", "loopgate_connections.json"),
 		modelConnectionPath:        filepath.Join(repoRoot, "runtime", "state", "loopgate_model_connections.json"),
-		morphlingPath:              filepath.Join(repoRoot, "runtime", "state", "loopgate_morphlings.json"),
-		morphlingKeyPath:           filepath.Join(repoRoot, "runtime", "state", "morphling_state_key"),
 		memoryBasePath:             filepath.Join(repoRoot, "runtime", "state", "memory"),
 		claudeHookSessionsPath:     filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions.json"),
 		claudeHookSessionsRoot:     filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions"),
@@ -308,7 +292,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		policyContentSHA256:        policyLoadResult.ContentSHA256,
 		runtimeConfig:              runtimeConfig,
 		goalAliases:                goalAliases,
-		morphlingClassPolicy:       morphlingClassPolicy{},
 		registry:                   nil,
 		checker:                    nil,
 		now:                        time.Now,
@@ -332,8 +315,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		pkceSessions:                         make(map[string]pendingPKCESession),
 		memoryFactWritesBySession:            make(map[string][]time.Time),
 		memoryFactWritesByUID:                make(map[uint32][]time.Time),
-		morphlingWorkerLaunches:              make(map[string]morphlingWorkerLaunch),
-		morphlingWorkerSessions:              make(map[string]morphlingWorkerSession),
 		sessions:                             make(map[string]controlSession),
 		tokens:                               make(map[string]capabilityToken),
 		approvals:                            make(map[string]pendingApproval),
@@ -351,7 +332,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,
 		maxTotalControlSessions:              defaultMaxTotalControlSessions,
 		maxTotalApprovalRecords:              defaultMaxTotalApprovalRecords,
-		maxMorphlingWorkerSessions:           defaultMaxMorphlingWorkerSessions,
 		hostAccessPlans:                      make(map[string]*hostAccessStoredPlan),
 		hostAccessAppliedPlanAt:              make(map[string]time.Time),
 	}
@@ -376,16 +356,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	if err := server.sandboxPaths.Ensure(); err != nil {
 		return nil, fmt.Errorf("ensure sandbox paths: %w", err)
 	}
-	morphlingKey, err := loadOrCreateStateKey(server.morphlingKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("load morphling state key: %w", err)
-	}
-	server.morphlingStateKey = morphlingKey
-	loadedMorphlings, err := loadMorphlingRecords(server.morphlingPath, server.morphlingStateKey)
-	if err != nil {
-		return nil, fmt.Errorf("load morphling records: %w", err)
-	}
-	server.morphlings = loadedMorphlings
 	server.memoryMu.Lock()
 	if err := server.initDefaultMemoryPartitionLocked(); err != nil {
 		server.memoryMu.Unlock()
@@ -413,9 +383,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	}
 	if err := server.loadOrInitAuditExportState(); err != nil {
 		return nil, fmt.Errorf("load audit export state: %w", err)
-	}
-	if err := server.recoverMorphlings(); err != nil {
-		return nil, fmt.Errorf("recover morphlings: %w", err)
 	}
 	if err := server.loadNonceReplayState(); err != nil {
 		return nil, fmt.Errorf("load nonce replay state: %w", err)

@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"morph/internal/ledger"
+	"loopgate/internal/ledger"
 )
 
 func (server *Server) diagnosticServerControlPlaneFromAuditEvent(ev ledger.Event) {

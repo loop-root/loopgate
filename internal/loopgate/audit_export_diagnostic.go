@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/secrets"
-	"morph/internal/troubleshoot"
+	"loopgate/internal/secrets"
+	"loopgate/internal/troubleshoot"
 )
 
 func (server *Server) buildAuditExportTrustCheckResponse(ctx context.Context) AuditExportTrustCheckResponse {

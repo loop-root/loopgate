@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"morph/internal/identifiers"
+	"loopgate/internal/identifiers"
 )
 
 var (

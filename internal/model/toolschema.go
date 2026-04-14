@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"morph/internal/tools"
+	"loopgate/internal/tools"
 )
 
 // NativeToolDefBuildOptions adjusts how provider-facing tool definitions are built.

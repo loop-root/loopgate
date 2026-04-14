@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	modelruntime "morph/internal/modelruntime"
-	"morph/internal/secrets"
+	modelruntime "loopgate/internal/modelruntime"
+	"loopgate/internal/secrets"
 )
 
 type fakeModelPolicySecretStore struct{}

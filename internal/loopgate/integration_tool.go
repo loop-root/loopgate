@@ -3,7 +3,7 @@ package loopgate
 import (
 	"context"
 
-	toolspkg "morph/internal/tools"
+	toolspkg "loopgate/internal/tools"
 )
 
 const httpMethodGet = "GET"

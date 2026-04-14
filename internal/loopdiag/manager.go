@@ -16,7 +16,7 @@ import (
 	"strings"
 	"sync"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 const slogTraceLevel = slog.Level(-8)

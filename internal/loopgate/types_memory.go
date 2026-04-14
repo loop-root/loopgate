@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/identifiers"
-	tclpkg "morph/internal/tcl"
+	"loopgate/internal/identifiers"
+	tclpkg "loopgate/internal/tcl"
 )
 
 type ContinuitySourceRefInput struct {

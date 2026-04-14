@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/ledger"
-	"morph/internal/loopgate"
-	"morph/internal/testutil"
+	"loopgate/internal/ledger"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/testutil"
 )
 
 type loopgateHarness struct {

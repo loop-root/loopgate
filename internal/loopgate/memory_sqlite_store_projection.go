@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	tclpkg "morph/internal/tcl"
+	tclpkg "loopgate/internal/tcl"
 )
 
 func (store *continuitySQLiteStore) replaceProjectedNodes(authoritativeState continuityMemoryState) error {

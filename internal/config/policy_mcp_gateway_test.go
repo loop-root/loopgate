@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/secrets"
+	"loopgate/internal/secrets"
 )
 
 func TestPolicy_MCPGatewayDenyUnknownServersDefaultsTrue(t *testing.T) {

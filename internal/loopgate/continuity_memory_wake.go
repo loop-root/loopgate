@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 func buildLoopgateWakeProducts(currentState continuityMemoryState, now time.Time, runtimeConfig config.RuntimeConfig) (MemoryWakeStateResponse, continuityDiagnosticWakeReport) {

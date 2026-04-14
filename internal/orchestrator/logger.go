@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
-	"morph/internal/policy"
-	"morph/internal/secrets"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
+	"loopgate/internal/policy"
+	"loopgate/internal/secrets"
 )
 
 // LedgerLogger logs orchestrator events to the append-only ledger.

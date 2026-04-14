@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/ledger"
+	"loopgate/internal/config"
+	"loopgate/internal/ledger"
 )
 
 func countNonEmptyJSONLLines(t *testing.T, path string) int {

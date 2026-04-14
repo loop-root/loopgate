@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/tools"
+	"loopgate/internal/tools"
 )
 
 func TestBuildNativeToolDefs_ReturnsOnlyAllowlistedTools(t *testing.T) {

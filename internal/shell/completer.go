@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"morph/internal/config"
-	"morph/internal/safety"
+	"loopgate/internal/config"
+	"loopgate/internal/safety"
 )
 
 // NewCompleter returns a readline AutoCompleter with command + policy-aware path completion.

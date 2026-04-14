@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"morph/internal/safety"
+	"loopgate/internal/safety"
 
 	"golang.org/x/sys/unix"
 	"golang.org/x/text/unicode/norm"

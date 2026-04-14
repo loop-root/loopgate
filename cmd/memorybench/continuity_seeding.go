@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/loopgate"
-	"morph/internal/memorybench"
-	tclpkg "morph/internal/tcl"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/memorybench"
+	tclpkg "loopgate/internal/tcl"
 )
 
 const benchmarkFixtureSourceChannel = "benchmark_fixture"

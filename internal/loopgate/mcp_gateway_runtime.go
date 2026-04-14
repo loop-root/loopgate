@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"morph/internal/secrets"
+	"loopgate/internal/secrets"
 )
 
 const (

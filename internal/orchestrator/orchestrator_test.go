@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"morph/internal/config"
-	"morph/internal/policy"
-	"morph/internal/tools"
+	"loopgate/internal/config"
+	"loopgate/internal/policy"
+	"loopgate/internal/tools"
 )
 
 // mockTool for testing

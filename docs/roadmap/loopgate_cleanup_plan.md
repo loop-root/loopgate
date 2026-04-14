@@ -69,9 +69,8 @@ Mapped buckets:
   - tracked Finder/editor junk and empty legacy directories
   - stale repo-facing references that still make legacy surfaces look active
 - Coupled, needs a replacement or extraction plan first:
-  - morphling lifecycle, worker, and task-plan runner code
-  - Haven-specific route and UI projection leftovers still wired into server/runtime types
   - memory backend and continuity subsystems that are no longer part of Claude v1 but still exist as first-class server code
+  - Haven-specific route and UI projection leftovers still wired into server/runtime types
 - Likely archive before delete:
   - legacy design docs, product RFCs, and benchmark/report material with old product framing
 
@@ -85,7 +84,9 @@ Completed in this phase so far:
 - removed Haven-only helper routes for resident journal ticks and agent work-item creation/completion, plus their direct client/test shims
 - retired the larger Haven compatibility route surface instead of keeping it behind a runtime switch
 - removed the retired Haven chat, UI projection, continuity-inspect, model-catalog, and settings implementation files from `internal/loopgate/`
-- mapped deeper morphling/task-board/runtime code as still structurally coupled, so it will need staged removal rather than a blind deletion
+- removed the morphling runtime/state-machine/worker file cluster from `internal/loopgate/`
+- removed active morphling route, shell, config, status, and policy/template surfaces
+- renamed the Go module from `morph` to `loopgate` and rewrote internal package imports
 
 ## Phase 4: Repo hygiene and sanitization
 

@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	policypkg "morph/internal/policy"
-	toolspkg "morph/internal/tools"
+	policypkg "loopgate/internal/policy"
+	toolspkg "loopgate/internal/tools"
 )
 
 func isHighRiskCapability(tool toolspkg.Tool, policyDecision policypkg.CheckResult) bool {

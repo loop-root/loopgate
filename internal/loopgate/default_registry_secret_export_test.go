@@ -3,8 +3,8 @@ package loopgate
 import (
 	"testing"
 
-	"morph/internal/config"
-	toolspkg "morph/internal/tools"
+	"loopgate/internal/config"
+	toolspkg "loopgate/internal/tools"
 )
 
 // Regression: default registry tools that match the unregistered secret-export name heuristic must

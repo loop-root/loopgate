@@ -1,6 +1,6 @@
 package tools
 
-import "morph/internal/config"
+import "loopgate/internal/config"
 
 // NewDefaultRegistry creates a registry with the standard filesystem tools
 // rooted at repoRoot. Used by the Haven client and the Loopgate server.

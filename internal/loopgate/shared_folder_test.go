@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/ledger"
-	"morph/internal/sandbox"
+	"loopgate/internal/config"
+	"loopgate/internal/ledger"
+	"loopgate/internal/sandbox"
 )
 
 func TestSyncDefaultSharedFolderCreatesHostFolderAndMirrorsIntoSandbox(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"morph/internal/ledger"
+	"loopgate/internal/ledger"
 )
 
 func TestAuditExportFlushRouteRequiresScopedCapability(t *testing.T) {

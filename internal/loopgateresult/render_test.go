@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/loopgate"
-	"morph/internal/orchestrator"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/orchestrator"
 )
 
 func TestPromptEligibleOutput_FailsClosedOnInvalidClassification(t *testing.T) {

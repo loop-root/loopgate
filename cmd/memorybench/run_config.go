@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"morph/internal/memorybench"
+	"loopgate/internal/memorybench"
 )
 
 type repeatedStringFlag struct {

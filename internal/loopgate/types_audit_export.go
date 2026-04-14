@@ -1,6 +1,6 @@
 package loopgate
 
-import "morph/internal/troubleshoot"
+import "loopgate/internal/troubleshoot"
 
 type AuditExportFlushResponse struct {
 	FlushRequestID       string `json:"flush_request_id"`

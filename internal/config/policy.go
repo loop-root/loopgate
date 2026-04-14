@@ -11,13 +11,13 @@ import (
 	"slices"
 	"strings"
 
-	"morph/internal/identifiers"
-	"morph/internal/secrets"
+	"loopgate/internal/identifiers"
+	"loopgate/internal/secrets"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Policy represents Morph's capability governance configuration.
+// Policy represents Loopgate's capability governance configuration.
 type Policy struct {
 	Version string `yaml:"version" json:"version"`
 
@@ -45,12 +45,6 @@ type Policy struct {
 			AllowedCommands  []string `yaml:"allowed_commands" json:"allowed_commands"`
 			RequiresApproval bool     `yaml:"requires_approval" json:"requires_approval"`
 		} `yaml:"shell" json:"shell"`
-
-		Morphlings struct {
-			SpawnEnabled    bool `yaml:"spawn_enabled" json:"spawn_enabled"`
-			MaxActive       int  `yaml:"max_active" json:"max_active"`
-			RequireTemplate bool `yaml:"require_template" json:"require_template"`
-		} `yaml:"morphlings" json:"morphlings"`
 	} `yaml:"tools" json:"tools"`
 
 	Logging struct {
@@ -259,9 +253,6 @@ func applyPolicyDefaults(pol *Policy) error {
 	}
 	if pol.Tools.HTTP.TimeoutSeconds <= 0 {
 		pol.Tools.HTTP.TimeoutSeconds = 10
-	}
-	if pol.Tools.Morphlings.MaxActive <= 0 {
-		pol.Tools.Morphlings.MaxActive = 5
 	}
 	if pol.Memory.SubmitPreviousMinEvents <= 0 {
 		pol.Memory.SubmitPreviousMinEvents = 3

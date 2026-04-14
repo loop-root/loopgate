@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	toolspkg "morph/internal/tools"
+	toolspkg "loopgate/internal/tools"
 )
 
 // buildTestRegistry creates a minimal registry with one tool per operation type

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/sandbox"
+	"loopgate/internal/sandbox"
 )
 
 const stagedArtifactRefPrefix = "staged://artifacts/"

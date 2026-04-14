@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"morph/internal/config"
-	tclpkg "morph/internal/tcl"
+	"loopgate/internal/config"
+	tclpkg "loopgate/internal/tcl"
 )
 
 type analyzedRememberFactCandidate struct {

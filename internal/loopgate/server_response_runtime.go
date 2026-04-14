@@ -39,7 +39,7 @@ func httpStatusForResponse(response CapabilityResponse) int {
 			DenialCodeRequestSignatureMissing, DenialCodeRequestSignatureInvalid, DenialCodeRequestTimestampInvalid,
 			DenialCodeRequestNonceReplayDetected, DenialCodeControlSessionBindingInvalid:
 			return http.StatusUnauthorized
-		case DenialCodeApprovalNotFound, DenialCodeMorphlingNotFound, DenialCodeContinuityInspectionNotFound:
+		case DenialCodeApprovalNotFound, DenialCodeContinuityInspectionNotFound:
 			return http.StatusNotFound
 		case DenialCodeRequestReplayDetected, DenialCodeCapabilityTokenReused, DenialCodeApprovalStateConflict,
 			DenialCodeQuarantinePruneNotEligible:
@@ -48,8 +48,7 @@ func httpStatusForResponse(response CapabilityResponse) int {
 			return http.StatusTooManyRequests
 		case DenialCodeMalformedRequest, DenialCodeInvalidCapabilityArguments, DenialCodeSiteURLInvalid,
 			DenialCodeSiteInspectionUnsupportedType, DenialCodeSandboxPathInvalid, DenialCodeSandboxHostDestinationInvalid,
-			DenialCodeMorphlingInputInvalid, DenialCodeMorphlingArtifactInvalid, DenialCodeMorphlingReviewInvalid,
-			DenialCodeMorphlingWorkerLaunchInvalid, DenialCodeApprovalDecisionNonceMissing, DenialCodeApprovalDecisionNonceInvalid,
+			DenialCodeApprovalDecisionNonceMissing, DenialCodeApprovalDecisionNonceInvalid,
 			DenialCodeApprovalManifestMismatch:
 			return http.StatusBadRequest
 		default:

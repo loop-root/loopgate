@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"morph/internal/sandbox"
+	"loopgate/internal/sandbox"
 )
 
 var errSandboxHostDestinationInvalid = errors.New("sandbox host destination is invalid")

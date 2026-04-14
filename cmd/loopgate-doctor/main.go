@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"morph/internal/loopgate"
-	"morph/internal/troubleshoot"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/troubleshoot"
 )
 
 func main() {

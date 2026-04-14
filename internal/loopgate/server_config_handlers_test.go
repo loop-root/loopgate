@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 func TestConfigGetRequiresAuthenticatedScopedSignedRequest(t *testing.T) {

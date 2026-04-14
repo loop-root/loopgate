@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"morph/internal/config"
-	"morph/internal/identifiers"
-	"morph/internal/secrets"
+	"loopgate/internal/config"
+	"loopgate/internal/identifiers"
+	"loopgate/internal/secrets"
 )
 
 var errMCPGatewayServerNotFound = errors.New("mcp gateway server not found")

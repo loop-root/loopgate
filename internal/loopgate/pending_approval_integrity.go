@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"morph/internal/secrets"
-	toolspkg "morph/internal/tools"
+	"loopgate/internal/secrets"
+	toolspkg "loopgate/internal/tools"
 )
 
 // verifyPendingApprovalStoredExecutionBody checks that pending.Request still serializes to the

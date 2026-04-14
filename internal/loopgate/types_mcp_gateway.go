@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"morph/internal/identifiers"
+	"loopgate/internal/identifiers"
 )
 
 const maxMCPGatewayInvocationArgumentCount = 64

@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"morph/internal/identifiers"
+	"loopgate/internal/identifiers"
 
 	"gopkg.in/yaml.v3"
 )

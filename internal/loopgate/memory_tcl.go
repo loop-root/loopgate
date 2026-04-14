@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tclpkg "morph/internal/tcl"
+	tclpkg "loopgate/internal/tcl"
 )
 
 const (

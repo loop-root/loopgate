@@ -13,9 +13,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	policypkg "morph/internal/policy"
-	"morph/internal/sandbox"
-	"morph/internal/secrets"
+	policypkg "loopgate/internal/policy"
+	"loopgate/internal/sandbox"
+	"loopgate/internal/secrets"
 )
 
 const (

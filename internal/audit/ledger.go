@@ -3,7 +3,7 @@ package audit
 import (
 	"fmt"
 
-	"morph/internal/ledger"
+	"loopgate/internal/ledger"
 )
 
 type Class string

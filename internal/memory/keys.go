@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
 )
 
 // SessionState is the minimal interface required from runtime state.

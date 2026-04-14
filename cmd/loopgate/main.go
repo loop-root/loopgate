@@ -9,8 +9,8 @@ import (
 	"strings"
 	"syscall"
 
-	"morph/internal/loopgate"
-	"morph/internal/memory"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/memory"
 )
 
 var exitProcess = os.Exit

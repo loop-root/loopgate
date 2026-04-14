@@ -49,9 +49,6 @@ func (server *Server) retireDeadPeerSessionsForUID(peerUID uint32) error {
 }
 
 func (server *Server) retireOrphanedControlSession(controlSessionID string) error {
-	if err := server.terminateActiveMorphlingsForControlSession(controlSessionID, morphlingReasonParentSessionEnded); err != nil {
-		return err
-	}
 	if err := server.cancelPendingApprovalsForControlSession(controlSessionID, "parent control session process is no longer alive"); err != nil {
 		return err
 	}
@@ -64,78 +61,6 @@ func (server *Server) retireOrphanedControlSession(controlSessionID string) erro
 		return err
 	}
 	return nil
-}
-
-func (server *Server) terminateActiveMorphlingsForControlSession(controlSessionID string, terminationReason string) error {
-	server.morphlingsMu.Lock()
-	morphlingIDs := make([]string, 0)
-	for morphlingID, record := range server.morphlings {
-		if record.ParentControlSessionID != controlSessionID {
-			continue
-		}
-		if !morphlingStateConsumesCapacity(record.State) {
-			continue
-		}
-		morphlingIDs = append(morphlingIDs, morphlingID)
-	}
-	server.morphlingsMu.Unlock()
-
-	sort.Strings(morphlingIDs)
-	for _, morphlingID := range morphlingIDs {
-		if err := server.terminateMorphlingForControlSessionEnd(controlSessionID, morphlingID, terminationReason); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (server *Server) terminateMorphlingForControlSessionEnd(controlSessionID string, morphlingID string, terminationReason string) error {
-	nowUTC := server.now().UTC()
-
-	server.morphlingsMu.Lock()
-	record, found := server.morphlings[morphlingID]
-	if !found {
-		server.morphlingsMu.Unlock()
-		return nil
-	}
-	if record.ParentControlSessionID != controlSessionID {
-		server.morphlingsMu.Unlock()
-		return nil
-	}
-	if !morphlingStateConsumesCapacity(record.State) {
-		server.morphlingsMu.Unlock()
-		return nil
-	}
-
-	previousRecord := cloneMorphlingRecord(record)
-	terminatingRecord, err := server.transitionMorphlingLocked(morphlingID, morphlingEventBeginTermination, nowUTC, func(updatedRecord *morphlingRecord) error {
-		updatedRecord.Outcome = morphlingOutcomeCancelled
-		updatedRecord.TerminationReason = strings.TrimSpace(terminationReason)
-		if updatedRecord.TerminationReason == "" {
-			updatedRecord.TerminationReason = morphlingReasonParentSessionEnded
-		}
-		updatedRecord.ReviewDeadlineUTC = ""
-		return nil
-	})
-	server.morphlingsMu.Unlock()
-	if err != nil {
-		return err
-	}
-
-	if err := server.logEvent("morphling.terminating", controlSessionID, map[string]interface{}{
-		"morphling_id":       terminatingRecord.MorphlingID,
-		"outcome":            terminatingRecord.Outcome,
-		"termination_reason": terminatingRecord.TerminationReason,
-		"control_session_id": controlSessionID,
-	}); err != nil {
-		if rollbackErr := server.rollbackMorphlingRecordAfterAuditFailure(terminatingRecord.MorphlingID, morphlingStateTerminating, previousRecord); rollbackErr != nil {
-			return fmt.Errorf("%w: %v (rollback failed: %v)", errMorphlingAuditUnavailable, err, rollbackErr)
-		}
-		return fmt.Errorf("%w: %v", errMorphlingAuditUnavailable, err)
-	}
-
-	_, err = server.completeMorphlingTermination(controlSessionID, morphlingID)
-	return err
 }
 
 func (server *Server) cancelPendingApprovalsForControlSession(controlSessionID string, cancellationReason string) error {
@@ -204,7 +129,7 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 			server.approvals[approvalID] = previousApproval
 		}
 		server.mu.Unlock()
-		return fmt.Errorf("%w: approval.cancelled audit append failed: %v", errMorphlingAuditUnavailable, err)
+		return fmt.Errorf("audit unavailable: approval.cancelled audit append failed: %w", err)
 	}
 
 	return nil

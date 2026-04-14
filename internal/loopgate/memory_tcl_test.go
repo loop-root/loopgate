@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	tclpkg "morph/internal/tcl"
+	tclpkg "loopgate/internal/tcl"
 )
 
 func TestBuildValidatedMemoryRememberCandidate_CanonicalizesAliasAtAdapterBoundary(t *testing.T) {

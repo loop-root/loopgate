@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/ledger"
-	policypkg "morph/internal/policy"
-	"morph/internal/sandbox"
-	toolspkg "morph/internal/tools"
+	"loopgate/internal/config"
+	"loopgate/internal/ledger"
+	policypkg "loopgate/internal/policy"
+	"loopgate/internal/sandbox"
+	toolspkg "loopgate/internal/tools"
 )
 
 func TestParseHostOrganizePlanJSON_ArrayAndWrappedString(t *testing.T) {

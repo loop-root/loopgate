@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"morph/internal/identifiers"
+	"loopgate/internal/identifiers"
 )
 
 func normalizeExplicitTodoWorkflowStatus(raw string) string {

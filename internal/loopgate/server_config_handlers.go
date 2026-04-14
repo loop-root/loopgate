@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 var validConfigSections = map[string]struct{}{

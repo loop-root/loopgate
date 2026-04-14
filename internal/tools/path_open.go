@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"morph/internal/safety"
+	"loopgate/internal/safety"
 
 	"golang.org/x/sys/unix"
 )

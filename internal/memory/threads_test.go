@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
 )
 
 func TestRolloverContinuityThreads_SealsCurrentAndBuildsInspectCandidate(t *testing.T) {

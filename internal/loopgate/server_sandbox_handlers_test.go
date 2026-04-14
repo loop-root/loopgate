@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/sandbox"
+	"loopgate/internal/sandbox"
 )
 
 func TestRedactSandboxError_DoesNotExposeAbsolutePaths(t *testing.T) {

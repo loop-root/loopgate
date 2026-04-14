@@ -3,7 +3,7 @@ package loopgate
 import (
 	"net/http"
 
-	"morph/internal/troubleshoot"
+	"loopgate/internal/troubleshoot"
 )
 
 // handleDiagnosticReport returns aggregated operator diagnostics (JSON). Requires a valid capability token,

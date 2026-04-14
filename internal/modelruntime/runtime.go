@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/identifiers"
-	"morph/internal/model"
-	anthropicprovider "morph/internal/model/anthropic"
-	openai "morph/internal/model/openai"
-	"morph/internal/secrets"
+	"loopgate/internal/identifiers"
+	"loopgate/internal/model"
+	anthropicprovider "loopgate/internal/model/anthropic"
+	openai "loopgate/internal/model/openai"
+	"loopgate/internal/secrets"
 )
 
 const runtimeConfigRelativePath = "runtime/state/model_runtime.json"

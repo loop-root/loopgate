@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/loopgate"
+	"loopgate/internal/loopgate"
 )
 
 const integrationQuarantineRefPrefix = "quarantine://payloads/"

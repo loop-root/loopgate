@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 type ConversationTurn struct {

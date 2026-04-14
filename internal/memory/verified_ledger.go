@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	ledgerpkg "morph/internal/ledger"
+	ledgerpkg "loopgate/internal/ledger"
 )
 
 func openVerifiedMemoryLedger(ledgerPath string) (*os.File, error) {

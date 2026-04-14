@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/loopgate"
-	"morph/internal/loopgateresult"
-	"morph/internal/memory"
-	modelruntime "morph/internal/modelruntime"
-	"morph/internal/safety"
-	"morph/internal/sandbox"
-	setuppkg "morph/internal/setup"
-	"morph/internal/ui"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/loopgateresult"
+	"loopgate/internal/memory"
+	modelruntime "loopgate/internal/modelruntime"
+	"loopgate/internal/safety"
+	"loopgate/internal/sandbox"
+	setuppkg "loopgate/internal/setup"
+	"loopgate/internal/ui"
 
 	"github.com/chzyer/readline"
 )

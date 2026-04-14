@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/identifiers"
-	"morph/internal/secrets"
+	"loopgate/internal/identifiers"
+	"loopgate/internal/secrets"
 
 	"gopkg.in/yaml.v3"
 )

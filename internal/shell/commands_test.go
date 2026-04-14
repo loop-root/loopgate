@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/audit"
-	"morph/internal/config"
-	"morph/internal/ledger"
-	"morph/internal/loopgate"
-	"morph/internal/memory"
-	modelruntime "morph/internal/modelruntime"
-	"morph/internal/sandbox"
+	"loopgate/internal/audit"
+	"loopgate/internal/config"
+	"loopgate/internal/ledger"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/memory"
+	modelruntime "loopgate/internal/modelruntime"
+	"loopgate/internal/sandbox"
 )
 
 func TestApprovalPreview_HidesSensitiveContent(t *testing.T) {

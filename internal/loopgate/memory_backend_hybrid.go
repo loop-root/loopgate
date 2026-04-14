@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"morph/internal/config"
-	"morph/internal/relationhints"
+	"loopgate/internal/config"
+	"loopgate/internal/relationhints"
 )
 
 const memoryDiscoverRetrievalModeHybrid = "hybrid_continuity_state_plus_rag_evidence"

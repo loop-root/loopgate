@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 const auditExportStateSchemaVersion = "1"

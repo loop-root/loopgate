@@ -3,7 +3,7 @@ package policy
 import (
 	"testing"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 func TestChecker_FilesystemRead_Allowed(t *testing.T) {

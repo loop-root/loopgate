@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"morph/internal/policy"
-	"morph/internal/tools"
+	"loopgate/internal/policy"
+	"loopgate/internal/tools"
 )
 
 // Approver handles user approval for gated operations.

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
 )
 
 func TestLoadGlobalContinuityState_RejectsTamperedLedger(t *testing.T) {

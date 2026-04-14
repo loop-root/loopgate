@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"morph/internal/secrets"
+	"loopgate/internal/secrets"
 )
 
 func (server *Server) handleCapabilityExecute(writer http.ResponseWriter, request *http.Request) {
@@ -83,16 +83,6 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 		})
 		return
 	}
-	if err := server.expirePendingMorphlingApprovals(); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			RequestID:         approvalID,
-			Status:            ResponseStatusError,
-			DenialReason:      "control-plane audit is unavailable",
-			DenialCode:        DenialCodeAuditUnavailable,
-			ApprovalRequestID: approvalID,
-		})
-		return
-	}
 	if decisionRequest.Approved {
 		pendingApproval, denialResponse, ok := server.validatePendingApprovalDecision(controlSession, approvalID, decisionRequest)
 		if !ok {
@@ -125,40 +115,6 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 		}
 		if integrityDenial, integrityOK := server.verifyPendingApprovalStoredExecutionBody(pendingApproval); !integrityOK {
 			server.writePendingApprovalExecutionIntegrityDenial(writer, controlSession, approvalID, pendingApproval, integrityDenial)
-			return
-		}
-		if isMorphlingSpawnApproval(pendingApproval) {
-			response, err := server.resolveMorphlingSpawnApproval(pendingApproval, true, decisionRequest.DecisionNonce)
-			if err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-					RequestID:         pendingApproval.Request.RequestID,
-					Status:            ResponseStatusError,
-					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
-					ApprovalRequestID: approvalID,
-				})
-				return
-			}
-			if response.Status != ResponseStatusSuccess {
-				response.ApprovalRequestID = approvalID
-				server.emitUIApprovalResolved(pendingApproval, approvalID, ternaryApprovalDecision(true), response.Status)
-				server.writeJSON(writer, httpStatusForResponse(response), response)
-				return
-			}
-			if err := server.commitApprovalGrantConsumed(approvalID, decisionRequest.DecisionNonce); err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-					RequestID:         pendingApproval.Request.RequestID,
-					Status:            ResponseStatusError,
-					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
-					ApprovalRequestID: approvalID,
-				})
-				return
-			}
-			server.markApprovalExecutionResult(approvalID, ResponseStatusSuccess)
-			response.ApprovalRequestID = approvalID
-			server.emitUIApprovalResolved(pendingApproval, approvalID, "approved", response.Status)
-			server.writeJSON(writer, httpStatusForResponse(response), response)
 			return
 		}
 		if err := server.commitApprovalGrantConsumed(approvalID, decisionRequest.DecisionNonce); err != nil {
@@ -222,24 +178,6 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 		server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
-	if isMorphlingSpawnApproval(pendingApproval) {
-		response, err := server.resolveMorphlingSpawnApproval(pendingApproval, false, decisionRequest.DecisionNonce)
-		if err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
-				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
-				ApprovalRequestID: approvalID,
-			})
-			return
-		}
-		response.ApprovalRequestID = approvalID
-		server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", response.Status)
-		server.writeJSON(writer, httpStatusForResponse(response), response)
-		return
-	}
-
 	server.writeJSON(writer, http.StatusOK, CapabilityResponse{
 		RequestID:         pendingApproval.Request.RequestID,
 		Status:            ResponseStatusDenied,

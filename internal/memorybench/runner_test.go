@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/relationhints"
+	"loopgate/internal/relationhints"
 )
 
 type fakeProjectedNodeDiscoverer struct {

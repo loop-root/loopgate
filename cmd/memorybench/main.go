@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/loopgate"
-	"morph/internal/memorybench"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/memorybench"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 func testRepoRoot(t *testing.T) string {

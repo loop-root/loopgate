@@ -444,11 +444,11 @@ func TestNormalizeForOS_NFCNormalization(t *testing.T) {
 	}
 
 	// "café" in NFC (precomposed) vs NFD (decomposed: "cafe" + combining acute accent)
-	nfc := "caf\u00e9"          // café (single codepoint é)
-	nfd := "cafe\u0301"         // café (e + combining acute accent)
+	nfc := "caf\u00e9"  // café (single codepoint é)
+	nfd := "cafe\u0301" // café (e + combining acute accent)
 
-	normalizedNFC := normalizeForOS(nfc)
-	normalizedNFD := normalizeForOS(nfd)
+	normalizedNFC := NormalizePathForOSComparison(nfc)
+	normalizedNFD := NormalizePathForOSComparison(nfd)
 	if normalizedNFC != normalizedNFD {
 		t.Errorf("NFC and NFD forms should normalize to the same string: NFC=%q NFD=%q", normalizedNFC, normalizedNFD)
 	}

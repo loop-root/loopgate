@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/model"
-	"morph/internal/prompt"
-	"morph/internal/secrets"
+	"loopgate/internal/model"
+	"loopgate/internal/prompt"
+	"loopgate/internal/secrets"
 )
 
 const anthropicVersion = "2023-06-01"

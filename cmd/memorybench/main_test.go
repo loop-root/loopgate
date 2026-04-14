@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/memorybench"
+	"loopgate/internal/memorybench"
 )
 
 type fakeMainProjectedNodeDiscoverer struct {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/secrets"
+	"loopgate/internal/config"
+	"loopgate/internal/secrets"
 )
 
 func normalizeGoalSummarySlug(rawGoalSummary string) string {

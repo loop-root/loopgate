@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 func TestCompiler_IncludesPersonaTrustAndHallucinationRules(t *testing.T) {

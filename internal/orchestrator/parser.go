@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"morph/internal/tools"
+	"loopgate/internal/tools"
 )
 
 var reservedMorphCommandNames = map[string]struct{}{

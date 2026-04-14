@@ -17,8 +17,6 @@ const (
 	controlCapabilityMemoryReview            = "memory.review"
 	controlCapabilityMemoryLineage           = "memory.lineage"
 	controlCapabilityMCPGatewayWrite         = "mcp_gateway.write"
-	controlCapabilityMorphlingRead           = "morphling.read"
-	controlCapabilityMorphlingWrite          = "morphling.write"
 	controlCapabilityModelReply              = "model.reply"
 	controlCapabilityModelSettingsRead       = "model.settings.read"
 	controlCapabilityModelSettingsWrite      = "model.settings.write"

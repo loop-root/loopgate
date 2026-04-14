@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/secrets"
+	"loopgate/internal/secrets"
 )
 
 var (

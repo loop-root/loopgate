@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"morph/internal/config"
-	"morph/internal/identifiers"
-	modelpkg "morph/internal/model"
-	modelruntime "morph/internal/modelruntime"
+	"loopgate/internal/config"
+	"loopgate/internal/identifiers"
+	modelpkg "loopgate/internal/model"
+	modelruntime "loopgate/internal/modelruntime"
 )
 
 const (
@@ -79,17 +79,6 @@ const (
 	DenialCodeSandboxHostDestinationInvalid     = "sandbox_host_destination_invalid"
 	DenialCodeSandboxSymlinkNotAllowed          = "sandbox_symlink_not_allowed"
 	DenialCodeSandboxArtifactNotStaged          = "sandbox_artifact_not_staged"
-	DenialCodeMorphlingSpawnDisabled            = "morphling_spawn_disabled"
-	DenialCodeMorphlingClassInvalid             = "morphling_class_invalid"
-	DenialCodeMorphlingInputInvalid             = "morphling_input_invalid"
-	DenialCodeMorphlingArtifactInvalid          = "morphling_artifact_invalid"
-	DenialCodeMorphlingActiveLimitReached       = "morphling_active_limit_reached"
-	DenialCodeMorphlingNotFound                 = "morphling_not_found"
-	DenialCodeMorphlingStateInvalid             = "morphling_state_invalid"
-	DenialCodeMorphlingReviewInvalid            = "morphling_review_invalid"
-	DenialCodeMorphlingWorkerLaunchInvalid      = "morphling_worker_launch_invalid"
-	DenialCodeMorphlingWorkerTokenMissing       = "morphling_worker_token_missing"
-	DenialCodeMorphlingWorkerTokenInvalid       = "morphling_worker_token_invalid"
 	DenialCodeContinuityLineageIneligible       = "continuity_lineage_ineligible"
 	DenialCodeContinuityGovernanceStateConflict = "continuity_governance_state_conflict"
 	DenialCodeContinuityInspectionNotFound      = "continuity_inspection_not_found"

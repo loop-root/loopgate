@@ -80,8 +80,6 @@ For integrators it matters in four ways:
   - connection status, PKCE, model-connection store, and site-inspection/trust wire contracts plus validators
 - `types_memory.go`
   - continuity inspection, wake-state, memory lookup/recall/artifact, and legacy todo replay wire contracts plus request validation helpers
-- `types_morphling.go`
-  - morphling lifecycle wire contracts, sandbox input specs, and morphling request validation helpers
 - `types_sandbox.go`
   - sandbox import/export/list/metadata wire contracts plus request validation helpers
 
@@ -99,20 +97,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_sandbox_handlers_test.go` — `TestRedactSandboxError_DoesNotExposeAbsolutePaths`
 - `server_memory_handlers.go` — memory endpoints (see Memory section below)
 - `server_capability_handlers.go` — capability execution
-- `morphling_state.go`
-  - morphling record schema, validation, signed on-disk persistence, tenant checks, and operator-facing summary projection helpers
-- `morphling_transition.go`
-  - atomic morphling record transition, rollback, and restore helpers around on-disk state persistence
-- `morphling_termination.go`
-  - morphling termination, approval expiry, failure cleanup, and restart recovery
-- `morphling_spawn.go`
-  - morphling spawn admission, approval creation/finalization, and approval resolution
-- `morphling_status.go`
-  - morphling status projection for the authenticated control session
-- `morphling_workers.go`
-  - morphling worker IPC, execution updates, and staged artifact handling
-- `server_morphling_handlers.go` / `server_morphling_worker_handlers.go` — morphling lifecycle and workers
-  - legacy delegated-work surface; still coupled to task-plan and approval code, so removal should be staged rather than treated as dead code
 - `server_model_handlers.go` — model connection APIs; **session open** stamps `TenantID` / `UserID` from `config/runtime.yaml` → `tenancy` (see `docs/setup/TENANCY.md`, ADR 0004)
 - `server_config_handlers.go` — configuration
 - `server_connection_handlers.go` — `/v1/status` and connection surface
@@ -133,8 +117,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - control-session bootstrap, delegated-session refresh state, approval-token flows, and capability-execution wrappers
 - `client_memory.go`
   - continuity, wake, and memory governance wrappers used by local clients and test harnesses
-- `client_morphling.go`
-  - morphling lifecycle and quarantine wrappers, including cached approval metadata for pending spawn reviews
 - `client_sandbox.go`
   - sandbox import/export/list/metadata wrappers over the signed local control plane
 - `client_transport.go`

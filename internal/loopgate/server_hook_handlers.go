@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	policypkg "morph/internal/policy"
-	"morph/internal/secrets"
+	policypkg "loopgate/internal/policy"
+	"loopgate/internal/secrets"
 )
 
 // claudeCodeToolMap maps Claude Code tool names to Loopgate policy categories and operations.

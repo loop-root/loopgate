@@ -296,10 +296,6 @@ func loopgatePolicyYAMLWithMCPGateway(mcpGatewaySection string) string {
 		"    enabled: false\n" +
 		"    allowed_commands: []\n" +
 		"    requires_approval: true\n" +
-		"  morphlings:\n" +
-		"    spawn_enabled: false\n" +
-		"    max_active: 5\n" +
-		"    require_template: true\n" +
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +

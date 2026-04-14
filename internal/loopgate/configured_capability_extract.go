@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"morph/internal/identifiers"
+	"loopgate/internal/identifiers"
 )
 
 func (server *Server) buildCapabilityResult(capabilityRequest CapabilityRequest, output string, sourceQuarantineRef string) (map[string]interface{}, map[string]ResultFieldMetadata, ResultClassification, string, error) {

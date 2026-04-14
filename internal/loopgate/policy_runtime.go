@@ -5,19 +5,18 @@ import (
 	"net/http"
 	"time"
 
-	"morph/internal/config"
-	policypkg "morph/internal/policy"
-	toolspkg "morph/internal/tools"
+	"loopgate/internal/config"
+	policypkg "loopgate/internal/policy"
+	toolspkg "loopgate/internal/tools"
 )
 
 type serverPolicyRuntime struct {
-	policy               config.Policy
-	policyContentSHA256  string
-	checker              *policypkg.Checker
-	registry             *toolspkg.Registry
-	mcpGatewayManifests  map[string]mcpGatewayServerManifest
-	morphlingClassPolicy morphlingClassPolicy
-	httpClient           *http.Client
+	policy              config.Policy
+	policyContentSHA256 string
+	checker             *policypkg.Checker
+	registry            *toolspkg.Registry
+	mcpGatewayManifests map[string]mcpGatewayServerManifest
+	httpClient          *http.Client
 }
 
 func (server *Server) currentPolicyRuntime() serverPolicyRuntime {
@@ -28,7 +27,6 @@ func (server *Server) currentPolicyRuntime() serverPolicyRuntime {
 	legacyChecker := server.checker
 	legacyRegistry := server.registry
 	legacyMCPGatewayManifests := server.mcpGatewayManifests
-	legacyMorphlingClassPolicy := server.morphlingClassPolicy
 	legacyHTTPClient := server.httpClient
 	server.policyRuntimeMu.RUnlock()
 	if runtime.checker != nil || runtime.registry != nil {
@@ -46,9 +44,6 @@ func (server *Server) currentPolicyRuntime() serverPolicyRuntime {
 		if len(runtime.mcpGatewayManifests) == 0 && len(legacyMCPGatewayManifests) > 0 {
 			runtime.mcpGatewayManifests = legacyMCPGatewayManifests
 		}
-		if len(runtime.morphlingClassPolicy.Classes) == 0 && len(legacyMorphlingClassPolicy.Classes) > 0 {
-			runtime.morphlingClassPolicy = legacyMorphlingClassPolicy
-		}
 		if runtime.policy.Version == "" && legacyPolicy.Version != "" {
 			runtime.policy = legacyPolicy
 		}
@@ -58,13 +53,12 @@ func (server *Server) currentPolicyRuntime() serverPolicyRuntime {
 		return runtime
 	}
 	return serverPolicyRuntime{
-		policy:               legacyPolicy,
-		policyContentSHA256:  legacyPolicyContentSHA256,
-		checker:              legacyChecker,
-		registry:             legacyRegistry,
-		mcpGatewayManifests:  legacyMCPGatewayManifests,
-		morphlingClassPolicy: legacyMorphlingClassPolicy,
-		httpClient:           legacyHTTPClient,
+		policy:              legacyPolicy,
+		policyContentSHA256: legacyPolicyContentSHA256,
+		checker:             legacyChecker,
+		registry:            legacyRegistry,
+		mcpGatewayManifests: legacyMCPGatewayManifests,
+		httpClient:          legacyHTTPClient,
 	}
 }
 
@@ -76,7 +70,6 @@ func (server *Server) storePolicyRuntime(runtime serverPolicyRuntime) {
 	server.checker = runtime.checker
 	server.registry = runtime.registry
 	server.mcpGatewayManifests = runtime.mcpGatewayManifests
-	server.morphlingClassPolicy = runtime.morphlingClassPolicy
 	server.httpClient = runtime.httpClient
 	server.policyRuntimeMu.Unlock()
 }
@@ -155,22 +148,16 @@ func (server *Server) buildPolicyRuntime(policyLoadResult config.PolicyLoadResul
 		return serverPolicyRuntime{}, fmt.Errorf("register configured capabilities: %w", err)
 	}
 
-	morphlingClassPolicy, err := loadMorphlingClassPolicyWithSeed(server.configStateDir, server.repoRoot, registry)
-	if err != nil {
-		return serverPolicyRuntime{}, fmt.Errorf("load morphling class policy: %w", err)
-	}
-
 	existingRuntime := server.currentPolicyRuntime()
 	httpClient := cloneHTTPClientWithTimeout(existingRuntime.httpClient, time.Duration(policyLoadResult.Policy.Tools.HTTP.TimeoutSeconds)*time.Second)
 
 	return serverPolicyRuntime{
-		policy:               policyLoadResult.Policy,
-		policyContentSHA256:  policyLoadResult.ContentSHA256,
-		checker:              policypkg.NewChecker(policyLoadResult.Policy),
-		registry:             registry,
-		mcpGatewayManifests:  mcpGatewayManifests,
-		morphlingClassPolicy: morphlingClassPolicy,
-		httpClient:           httpClient,
+		policy:              policyLoadResult.Policy,
+		policyContentSHA256: policyLoadResult.ContentSHA256,
+		checker:             policypkg.NewChecker(policyLoadResult.Policy),
+		registry:            registry,
+		mcpGatewayManifests: mcpGatewayManifests,
+		httpClient:          httpClient,
 	}, nil
 }
 

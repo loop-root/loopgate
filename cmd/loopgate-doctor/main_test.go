@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/loopgate"
-	"morph/internal/secrets"
-	"morph/internal/testutil"
+	"loopgate/internal/config"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/secrets"
+	"loopgate/internal/testutil"
 )
 
 func TestRunTrustCheck_UsesRunningLoopgateServer(t *testing.T) {

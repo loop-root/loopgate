@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/loopgate"
+	"loopgate/internal/loopgate"
 )
 
 func TestSessionAuthReplayOverRealSocket(t *testing.T) {

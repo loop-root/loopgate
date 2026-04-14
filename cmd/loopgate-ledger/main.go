@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"morph/internal/config"
-	"morph/internal/ledger"
+	"loopgate/internal/config"
+	"loopgate/internal/ledger"
 )
 
 func main() {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
 )
 
 func TestBuildGlobalWakeState_WritesBoundedStructuredArtifact(t *testing.T) {

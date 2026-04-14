@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 type continuityTCLMemoryBackend struct {

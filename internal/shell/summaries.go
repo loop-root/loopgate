@@ -8,11 +8,11 @@ import (
 	"sort"
 	"strings"
 
-	"morph/internal/config"
-	"morph/internal/loopgate"
-	modelruntime "morph/internal/modelruntime"
-	"morph/internal/sandbox"
-	"morph/internal/ui"
+	"loopgate/internal/config"
+	"loopgate/internal/loopgate"
+	modelruntime "loopgate/internal/modelruntime"
+	"loopgate/internal/sandbox"
+	"loopgate/internal/ui"
 )
 
 type CommandContext struct {

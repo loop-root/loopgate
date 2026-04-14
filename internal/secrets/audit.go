@@ -5,8 +5,8 @@ import (
 	"sort"
 	"time"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
 )
 
 // AppendSecretMetadataEvent records secret reference + lifecycle metadata only.

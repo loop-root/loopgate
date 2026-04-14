@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	modelpkg "morph/internal/model"
-	modelruntime "morph/internal/modelruntime"
+	modelpkg "loopgate/internal/model"
+	modelruntime "loopgate/internal/modelruntime"
 )
 
 type RequestDeniedError struct {

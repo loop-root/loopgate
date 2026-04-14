@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/identifiers"
-	modelpkg "morph/internal/model"
-	modelruntime "morph/internal/modelruntime"
-	"morph/internal/secrets"
+	"loopgate/internal/identifiers"
+	modelpkg "loopgate/internal/model"
+	modelruntime "loopgate/internal/modelruntime"
+	"loopgate/internal/secrets"
 )
 
 func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *http.Request) {
@@ -411,24 +411,6 @@ func (server *Server) handleSessionClose(writer http.ResponseWriter, request *ht
 	}
 	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
 		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
-		return
-	}
-
-	server.morphlingsMu.Lock()
-	activeMorphlingCount := 0
-	for _, morphlingRecord := range server.morphlings {
-		if morphlingRecord.ParentControlSessionID == tokenClaims.ControlSessionID &&
-			morphlingStateConsumesCapacity(morphlingRecord.State) {
-			activeMorphlingCount++
-		}
-	}
-	server.morphlingsMu.Unlock()
-	if activeMorphlingCount > 0 {
-		server.writeJSON(writer, http.StatusConflict, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: fmt.Sprintf("control session has %d active morphlings; terminate governed work before closing the session", activeMorphlingCount),
-			DenialCode:   DenialCodeSessionCloseBlocked,
-		})
 		return
 	}
 

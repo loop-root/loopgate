@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/safety"
-	toolspkg "morph/internal/tools"
+	"loopgate/internal/safety"
+	toolspkg "loopgate/internal/tools"
 )
 
 const (

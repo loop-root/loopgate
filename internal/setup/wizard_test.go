@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/loopgate"
-	modelruntime "morph/internal/modelruntime"
+	"loopgate/internal/loopgate"
+	modelruntime "loopgate/internal/modelruntime"
 )
 
 type scriptedPrompter struct {

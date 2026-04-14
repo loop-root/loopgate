@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 type fakeCompletionOperation struct {

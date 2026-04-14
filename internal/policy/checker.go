@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 // Checker evaluates tool calls against the loaded policy.

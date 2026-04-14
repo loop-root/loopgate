@@ -1,6 +1,6 @@
 package model
 
-import "morph/internal/prompt"
+import "loopgate/internal/prompt"
 
 func ToPromptConversationTurns(conversation []ConversationTurn) []prompt.ConversationTurn {
 	promptConversation := make([]prompt.ConversationTurn, 0, len(conversation))

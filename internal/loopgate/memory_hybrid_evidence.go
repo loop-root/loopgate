@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"morph/internal/config"
-	"morph/internal/memorybench"
+	"loopgate/internal/config"
+	"loopgate/internal/memorybench"
 )
 
 // memoryEvidenceRetriever is the bounded runtime seam for non-authoritative

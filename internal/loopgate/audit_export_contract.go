@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/ledger"
+	"loopgate/internal/ledger"
 )
 
 const adminNodeAuditIngestSchemaVersion = "1"

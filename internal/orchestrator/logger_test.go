@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"morph/internal/policy"
+	"loopgate/internal/policy"
 )
 
 func TestLedgerLogger_RedactsToolArgsReasonAndOutput(t *testing.T) {

@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/memorybench"
-	"morph/internal/relationhints"
-	tclpkg "morph/internal/tcl"
-	"morph/internal/threadstore"
+	"loopgate/internal/config"
+	"loopgate/internal/memorybench"
+	"loopgate/internal/relationhints"
+	tclpkg "loopgate/internal/tcl"
+	"loopgate/internal/threadstore"
 )
 
 type stubMemoryBackend struct {

@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"morph/internal/config"
-	"morph/internal/sandbox"
+	"loopgate/internal/config"
+	"loopgate/internal/sandbox"
 )
 
 const (

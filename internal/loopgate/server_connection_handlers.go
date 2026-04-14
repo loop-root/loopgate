@@ -3,7 +3,7 @@ package loopgate
 import (
 	"net/http"
 
-	"morph/internal/secrets"
+	"loopgate/internal/secrets"
 )
 
 func (server *Server) handleHealth(writer http.ResponseWriter, request *http.Request) {

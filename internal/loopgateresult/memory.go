@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"morph/internal/loopgate"
+	"loopgate/internal/loopgate"
 )
 
 func FormatMemoryWakeStateResponse(wakeStateResponse loopgate.MemoryWakeStateResponse) string {

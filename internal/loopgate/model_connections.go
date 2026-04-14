@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/identifiers"
-	modelruntime "morph/internal/modelruntime"
-	"morph/internal/secrets"
+	"loopgate/internal/identifiers"
+	modelruntime "loopgate/internal/modelruntime"
+	"loopgate/internal/secrets"
 )
 
 type modelConnectionRecord struct {

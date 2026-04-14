@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	modelpkg "morph/internal/model"
-	anthropicprovider "morph/internal/model/anthropic"
-	openai "morph/internal/model/openai"
-	modelruntime "morph/internal/modelruntime"
-	"morph/internal/secrets"
+	modelpkg "loopgate/internal/model"
+	anthropicprovider "loopgate/internal/model/anthropic"
+	openai "loopgate/internal/model/openai"
+	modelruntime "loopgate/internal/modelruntime"
+	"loopgate/internal/secrets"
 )
 
 func (server *Server) validateModelConfig(ctx context.Context, runtimeConfig modelruntime.Config) (modelruntime.Config, error) {

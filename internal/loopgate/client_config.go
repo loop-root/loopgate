@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"morph/internal/config"
+	"loopgate/internal/config"
 )
 
 func (client *Client) LoadPolicyConfig(ctx context.Context) (config.Policy, error) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	tclpkg "morph/internal/tcl"
+	tclpkg "loopgate/internal/tcl"
 )
 
 func deriveContinuityResonateKey(distillateRecord continuityDistillateRecord, now time.Time) continuityResonateKeyRecord {

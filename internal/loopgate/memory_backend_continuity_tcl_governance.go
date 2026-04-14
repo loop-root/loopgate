@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/secrets"
+	"loopgate/internal/secrets"
 )
 
 func (backend *continuityTCLMemoryBackend) reviewContinuityInspectionAuthoritatively(authenticatedSession capabilityToken, inspectionID string, rawRequest MemoryInspectionReviewRequest) (MemoryInspectionGovernanceResponse, error) {

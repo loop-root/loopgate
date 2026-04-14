@@ -8,8 +8,8 @@ import (
 	"slices"
 	"testing"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
 )
 
 func TestFinalizeSession_WritesKeyAndAuditsCreation(t *testing.T) {

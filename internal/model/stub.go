@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/prompt"
+	"loopgate/internal/prompt"
 )
 
 type StubProvider struct {

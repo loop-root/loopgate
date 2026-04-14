@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/audit"
-	"morph/internal/ledger"
+	"loopgate/internal/audit"
+	"loopgate/internal/ledger"
 )
 
 func (server *Server) loadAuditChainState() error {

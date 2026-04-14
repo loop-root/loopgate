@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"morph/internal/config"
-	"morph/internal/identifiers"
+	"loopgate/internal/config"
+	"loopgate/internal/identifiers"
 )
 
 func cloneContinuityInspectionRecord(inspectionRecord continuityInspectionRecord) continuityInspectionRecord {
