@@ -1,7 +1,6 @@
 package loopgate
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/hmac"
@@ -17,80 +16,6 @@ import (
 
 func (client *Client) doJSON(ctx context.Context, method string, path string, capabilityToken string, requestBody interface{}, responseBody interface{}, extraHeaders map[string]string) error {
 	return client.doJSONWithTimeout(ctx, client.defaultRequestTimeout, method, path, capabilityToken, requestBody, responseBody, extraHeaders)
-}
-
-// doHavenChatSSE sends POST /v1/chat and reads the SSE response stream,
-// assembling all events into a HavenChatResponse. Used in tests to exercise
-// the SSE endpoint with the same request-signing path as the Swift client.
-func (client *Client) doHavenChatSSE(ctx context.Context, capabilityToken string, requestBody havenChatRequest) (HavenChatResponse, error) {
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return HavenChatResponse{}, fmt.Errorf("marshal request body: %w", err)
-	}
-
-	httpRequest, err := http.NewRequestWithContext(ctx, "POST", client.baseURL+"/v1/chat", bytes.NewReader(bodyBytes))
-	if err != nil {
-		return HavenChatResponse{}, fmt.Errorf("build request: %w", err)
-	}
-	httpRequest.Header.Set("Content-Type", "application/json")
-	if strings.TrimSpace(capabilityToken) != "" {
-		httpRequest.Header.Set("Authorization", "Bearer "+capabilityToken)
-	}
-	if err := client.attachRequestSignature(httpRequest, "/v1/chat", bodyBytes); err != nil {
-		return HavenChatResponse{}, err
-	}
-
-	httpResponse, err := client.httpClient.Do(httpRequest)
-	if err != nil {
-		return HavenChatResponse{}, fmt.Errorf("loopgate request failed: %w", err)
-	}
-	defer httpResponse.Body.Close()
-
-	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
-		return HavenChatResponse{}, fmt.Errorf("loopgate returned status %d", httpResponse.StatusCode)
-	}
-
-	var result HavenChatResponse
-	scanner := bufio.NewScanner(httpResponse.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		jsonData := line[len("data: "):]
-		if strings.TrimSpace(jsonData) == "" {
-			continue
-		}
-		var event havenSSEEvent
-		if err := json.Unmarshal([]byte(jsonData), &event); err != nil {
-			continue
-		}
-		switch event.Type {
-		case "text_delta":
-			result.AssistantText += event.Content
-		case "approval_needed":
-			result.Status = "approval_required"
-			if event.ApprovalNeeded != nil {
-				result.ApprovalID = event.ApprovalNeeded.ApprovalID
-				result.ApprovalCapability = event.ApprovalNeeded.Capability
-			}
-		case "turn_complete":
-			result.ThreadID = event.ThreadID
-			result.UXSignals = event.UXSignals
-			result.FinishReason = event.FinishReason
-			result.InputTokens = event.InputTokens
-			result.OutputTokens = event.OutputTokens
-			result.TotalTokens = event.TotalTokens
-			result.ProviderName = event.ProviderName
-			result.ModelName = event.ModelName
-		case "error":
-			return result, fmt.Errorf("server error: %s", event.Error)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return result, fmt.Errorf("read SSE stream: %w", err)
-	}
-	return result, nil
 }
 
 func (client *Client) doCapabilityJSON(ctx context.Context, requestTimeout time.Duration, method string, path string, capabilityToken string, requestBody interface{}, responseBody *CapabilityResponse, extraHeaders map[string]string) error {

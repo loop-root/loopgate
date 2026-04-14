@@ -256,7 +256,7 @@ func normalizeObservedContinuityEventRecord(observedEvent continuityObservedEven
 
 func isAllowedObservedContinuitySourceRefKind(rawSourceRefKind string) bool {
 	switch strings.TrimSpace(rawSourceRefKind) {
-	case havenThreadEventSourceKind:
+	case observedContinuityThreadEventSourceKind:
 		return true
 	default:
 		return false

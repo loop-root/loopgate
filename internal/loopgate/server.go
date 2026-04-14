@@ -94,12 +94,6 @@ type Server struct {
 	uiSubscribers      map[int]uiEventSubscriber
 	nextUISubscriberID int
 
-	// havenDeskNotesMu serializes load/save of runtime/state/haven_desk_notes.json for /v1/ui/desk-notes.
-	havenDeskNotesMu sync.Mutex
-
-	// havenPreferencesMu serializes load/save of runtime/state/haven_preferences.json.
-	havenPreferencesMu sync.Mutex
-
 	claudeHookSessionsMu sync.Mutex
 
 	connectionsMu sync.Mutex
@@ -465,8 +459,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	mux.HandleFunc("/v1/session/mac-keys", server.handleSessionMACKeys)
 	mux.HandleFunc("/v1/model/reply", server.handleModelReply)
 	mux.HandleFunc("/v1/model/validate", server.handleModelValidate)
-	mux.HandleFunc("/v1/model/ollama/tags", server.handleOllamaTags)
-	mux.HandleFunc("/v1/model/openai/models", server.handleOpenAICompatibleModels)
 	mux.HandleFunc("/v1/model/connections/store", server.handleModelConnectionStore)
 	mux.HandleFunc("/v1/capabilities/execute", server.handleCapabilityExecute)
 	mux.HandleFunc("/v1/connections/status", server.handleConnectionsStatus)

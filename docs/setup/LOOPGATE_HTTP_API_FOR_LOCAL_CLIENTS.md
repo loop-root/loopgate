@@ -98,9 +98,9 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 
 **Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch, or inability to resolve the connecting executable, returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable. Haven-specific `operator_mount_paths` bindings are rejected unless this pin is configured.
 
-**Trusted Haven session requirement:** Haven-only helper routes such as `/v1/chat`, `/v1/model/settings`, `/v1/settings/*`, and `/v1/continuity/inspect-thread` now require a session that opened as `actor: "haven"` **and** matched the pinned expected client executable. A spoofed actor label is not enough for those product-surface routes.
-
-**Haven trusted-sandbox auto-allow:** If the session **`actor`** is **`haven`**, the session opened under the pinned expected Haven executable, and a tool implements **`TrustedSandboxLocal()`**, Loopgate may treat **`NeedsApproval`** policy as **`Allow`** for that capability (audit still records the decision). Operators can tighten this in **`core/policy/policy.yaml`** → **`safety`**: **`haven_trusted_sandbox_auto_allow`** (`false` to disable), and optionally **`haven_trusted_sandbox_auto_allow_capabilities`** (omit = all such tools; `[]` = none; non-empty list = allowlist by capability name).
+**Legacy compatibility note:** some runtime and policy internals still use `haven`
+as a historical label. Treat that as cleanup debt, not as an active product
+surface or a route namespace.
 
 ---
 
@@ -267,30 +267,6 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 
 For **request/response JSON shapes**, use `internal/loopgate/types.go` as the source of truth (field names are `json` tagged).
 
-### 7.1 Memory operator routes (UI-safe)
-
-These routes exist so native clients can manage memory through Loopgate's typed
-surface instead of direct runtime-state reads or writes.
-
-- `GET /v1/ui/memory`
-  - requires **`memory.read`**
-  - returns a display-safe memory inventory
-  - includes wake-state counts plus a list of manageable memory objects
-  - object summaries are redacted for UI safety
-  - each object carries booleans such as `can_review`, `can_tombstone`, and
-    `can_purge`
-- `POST /v1/ui/memory/reset`
-  - requires **`memory.reset`**
-  - performs an operator-visible "fresh start" reset
-  - archives the previous memory root under
-    `runtime/state/memory_archives/<archive_id>`
-  - reinitializes the authoritative continuity state
-  - returns counts for the archived inspection, distillate, and resonate-key
-    objects
-
-This reset path is intentionally fail-closed and auditable. It does **not**
-silently delete memory in place.
-
 `GET /v1/status` only includes connection summaries when the session token
 includes **`connection.read`**. Use `GET /v1/connections/status` when the client
 explicitly needs the connection surface.
@@ -304,31 +280,7 @@ explicitly needs the connection surface.
   - require **`folder_access.write`**
   - update or synchronize Loopgate-managed folder-access state
 
-### 7.2.1 Haven chat and resident helpers
-
-- `POST /v1/chat`
-  - requires a **trusted Haven session**
-  - requires **`model.reply`**
-  - preserves the same signed-body and control-session binding rules as other privileged POST routes
-
-### 7.3 Continuity inspection (threadstore-loaded; trusted Haven session)
-
-**`POST /v1/continuity/inspect-thread`**
-
-- **Auth:** **Trusted Haven session** + **signed body** + **`ui.write`** + **`memory.write`** control capabilities (same signed-request pattern as `POST /v1/chat`).
-- **Body:** `{ "thread_id": "<required>" }` — must match a thread in Loopgate’s threadstore for the session workspace (on-disk implementation under `internal/threadstore`; default paths may use a **`.haven`** segment as a historical directory name—treat as an implementation detail, not a product name).
-- **Behavior:** Loads persisted thread events, canonicalizes them into a Loopgate-owned observed packet server-side, and runs the same inspection pipeline as other continuity proposals. If the thread has no mappable continuity rows, returns **200** with `submit_status: "skipped_no_continuity_events"`.
-- **Success (200):** `HavenContinuityInspectThreadResponse` in `internal/loopgate/types.go` (`submit_status`, optional `inspection_id`, derivation/review fields; Go identifier retained for compatibility).
-- **Product:** Clients may call this **best-effort after a completed chat turn** when the turn did **not** stop for `approval_required`, so operators get continuity proposals without shipping raw transcripts over HTTP.
-
-### 7.3.1 Historical note
-
-The raw `POST /v1/continuity/inspect` route has been removed. Continuity
-proposal input now comes from Loopgate-loaded threadstore records via
-`POST /v1/continuity/inspect-thread` or from internal test helpers that never
-cross the public control-plane surface.
-
-### 7.4 Operator diagnostics (“doctor” / troubleshooting)
+### 7.2 Operator diagnostics (“doctor” / troubleshooting)
 
 **`GET /v1/diagnostic/report`**
 
@@ -480,26 +432,12 @@ generic `internal/modelruntime` package:
 - `POST /v1/model/connections/store`
   - requires **`connection.write`**
   - stores provider credentials through Loopgate’s secure connection path
-- `GET /v1/model/settings`
-  - requires a **trusted Haven session**
-  - also requires **`model.settings.read`**
-  - returns the Haven-facing model settings projection
-- `POST /v1/model/settings`
-  - requires a **trusted Haven session**
-  - also requires **`model.settings.write`**
-  - updates the Haven-facing model settings projection
-  - when the request stores a new non-loopback provider credential, it also requires **`connection.write`**
-- `GET /v1/model/openai/models` and `GET /v1/model/ollama/tags`
-  - require a **trusted Haven session**
-  - also require **`connection.write`**
-  - probe an OpenAI-compatible `/models` endpoint for setup UX
-
-### 7.6 Sandbox and Haven filesystem projection routes
+### 7.4 Sandbox and host filesystem routes
 
 - `POST /v1/sandbox/import`, `POST /v1/sandbox/stage`, and `POST /v1/sandbox/export`
   - require **`fs_write`**
   - mutate sandbox or host-adjacent artifact state through Loopgate-owned paths
-  - `import` and `export` fail closed unless the control session is bound to matching Haven `operator_mount_paths` from a session opened by the pinned expected client executable
+  - `import` and `export` fail closed unless the control session is bound to matching operator mount paths from a session opened by the pinned expected client executable
   - `export` also requires an active operator-mount write grant for the matched root; otherwise Loopgate returns `approval_required`
 - `POST /v1/sandbox/metadata`
   - requires **`fs_read`**
@@ -507,26 +445,6 @@ generic `internal/modelruntime` package:
 - `POST /v1/sandbox/list`
   - requires **`fs_list`**
   - returns a directory listing inside the sandbox home
-- `GET /v1/ui/journal/entries`, `GET /v1/ui/working-notes`, `GET /v1/ui/paint/gallery`, `POST /v1/ui/workspace/list`, and `GET /v1/ui/workspace/host-layout`
-  - require **`ui.read`**
-  - also require the matching underlying tool scopes (`fs_list`; `ui/paint/gallery` additionally needs `fs_read`)
-  - return display-safe projections over sandbox directory structure
-- `GET /v1/ui/journal/entry`, `GET /v1/ui/working-notes/entry`, and `POST /v1/ui/workspace/preview`
-  - require **`ui.read`**
-  - also require **`fs_read`**
-  - return bounded file content projections through Loopgate
-- `POST /v1/ui/working-notes/save`
-  - requires **`ui.write`**
-  - also requires **`notes.write`**
-  - saves a working note through the same governed capability path as `notes.write`
-- `GET /v1/settings/shell-dev` and `GET /v1/settings/idle`
-  - require a **trusted Haven session**
-  - also require **`config.read`**
-  - expose Haven-facing settings projections only
-- `POST /v1/settings/shell-dev` and `POST /v1/settings/idle`
-  - require a **trusted Haven session**
-  - also require **`config.write`**
-  - update Haven-facing settings through Loopgate-owned config paths
 
 ---
 

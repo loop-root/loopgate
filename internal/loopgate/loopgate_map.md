@@ -78,72 +78,18 @@ For integrators it matters in four ways:
     - `CapabilityResponse`
 - `types_connections.go`
   - connection status, PKCE, model-connection store, and site-inspection/trust wire contracts plus validators
-- `types_haven_ui.go`
-  - Haven UI, task-board projection, desk-note, journal, working-note, workspace, and presence wire contracts
 - `types_memory.go`
-  - continuity inspection, wake-state, memory lookup/recall/artifact, and todo wire contracts plus request validation helpers
+  - continuity inspection, wake-state, memory lookup/recall/artifact, and legacy todo replay wire contracts plus request validation helpers
 - `types_morphling.go`
   - morphling lifecycle wire contracts, sandbox input specs, and morphling request validation helpers
 - `types_sandbox.go`
   - sandbox import/export/list/metadata wire contracts plus request validation helpers
 
-### Haven Chat (agentic tool execution)
+### Retired Haven surface
 
-- `server_haven_chat.go`
-  - Haven chat HTTP handler and SSE stream lifecycle
-  - now mostly holds only the request lifecycle, stream error handling, and turn completion bookkeeping
-- `server_haven_chat_runtime.go`
-  - `havenChatRuntime` — internal runtime object that owns the supervised agent loop and explicit runtime dependencies (`policy`, `registry`, capability execution hook)
-  - `runToolLoop` — the agent loop; now delegates to `executeToolCallsConcurrent`
-- `server_haven_chat_request.go`
-  - request-method gate, trusted Haven session enforcement, signed-body verification, and chat request decode
-- `server_haven_chat_thread.go`
-  - thread bootstrap, workspace binding handoff, and user-message persistence into threadstore
-- `server_haven_chat_runtime_setup.go`
-  - model/runtime bootstrap: persona, model runtime config, wake summary, attachment shaping, and timeout setup
-- `server_haven_chat_tool_setup.go`
-  - tool bootstrap for Haven chat: allowed capability filtering, native tool definitions, and runtime-fact assembly inputs
-- `server_haven_chat_loop_state.go`
-  - per-turn loop state (conversation growth, follow-up nudges, pending approval outcome shaping)
-- `server_haven_chat_results.go`
-  - tool-result shaping, approval wait UX, prompt-eligible result filtering, and SSE previews
-- `server_haven_chat_tool_defs.go`
-  - capability-summary filtering and model-facing tool definition shaping
-- `server_haven_chat_runtime_facts.go`
-  - Haven chat runtime-fact assembly
-- `server_haven_chat_context_facts.go`
-  - stable session/runtime facts plus project and granted-path context facts
-- `server_haven_chat_capability_facts.go`
-  - capability-specific guidance facts, grouped by product/tool family
-- `server_haven_chat_heuristics.go`
-  - host-folder and follow-up intent heuristics
-- `server_haven_chat_conversation.go`
-  - threadstore conversation reconstruction and model windowing
-- `server_haven_chat_transport.go`
-  - SSE transport types and emitter
-- `server_haven_chat_tools.go`
-  - `executeToolCallsConcurrent` — fans out read-only tool calls in parallel (Phase 1: reads), then runs write/execute/unknown calls serially (Phase 2: writes). Each goroutine emits its own `tool_result` SSE event inline as it finishes, giving the operator live feedback.
-  - `executeToolCalls` — retained as the simple serial reference implementation; used by the runtime for direct serial dispatch and plan auto-apply
-- `server_haven_model_catalog.go`
-  - Haven-facing model catalog discovery
-- `server_haven_wake_context.go`
-  - renders continuity wake state into the compact Haven-facing memory summary used by chat and resident flows
-- `workspace_binding.go`
-  - authoritative workspace ID derivation from the repo root
-- `havenSSEEmitter`
-  - now carries a `sync.Mutex` on the struct; `emit()` is goroutine-safe so concurrent read goroutines can stream events without corrupting SSE frames
-- `tool_classification.go` (**new**)
-  - `capabilityClass` struct: `readOnly bool` — derived from Loopgate's own `OpRead` / `OpWrite` / `OpExecute` taxonomy
-  - `classifyCapability(registry, capabilityName)` — pure, fail-closed: unregistered → serial (readOnly=false); OpRead → readOnly=true; OpWrite/OpExecute → readOnly=false
-  - Canonical dispatch decision for `havenChatRuntime.executeToolCallsConcurrent`. If you add a new `Op*` constant to `internal/tools/tool.go`, add a corresponding test case here.
-- `tool_classification_test.go` (**new**)
-  - Unit tests that pin the fail-closed contract and the OpRead / non-OpRead split
-  - Also spot-checks real capability names (fs_read, notes.list, notes.write) to guard against unintentional operation-type changes
-- `server_haven_chat_concurrent_test.go` (**new**)
-  - Integration tests for `havenChatRuntime.executeToolCallsConcurrent`:
-    - `TestHavenChat_ConcurrentReadOnlyToolsRunFasterThanSerial` — wall-clock timing proves reads overlap
-    - `TestHavenChat_SerialWriteToolsRunInOrder` — start-time tracking proves writes do not overlap
-    - `TestHavenChat_ToolResultsRetainInputOrder` — result slice order matches input call order despite parallel execution
+The old Haven chat, UI projection, and helper-route implementation files have
+been removed from the active package. Remaining Haven-named internals in
+Loopgate are cleanup debt, not part of the current product surface.
 
 ### Request handlers (split from `server.go`)
 
@@ -152,7 +98,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_sandbox_handlers.go` — sandbox import/export/list/stage; `redactSandboxError` returns stable sentinel strings only (no wrapped host paths in client-visible errors)
 - `server_sandbox_handlers_test.go` — `TestRedactSandboxError_DoesNotExposeAbsolutePaths`
 - `server_memory_handlers.go` — memory endpoints (see Memory section below)
-- `server_haven_memory_handlers.go` — UI memory inventory/reset handlers; projects redacted manageable objects and owns demo reset paths
 - `server_capability_handlers.go` — capability execution
 - `morphling_state.go`
   - morphling record schema, validation, signed on-disk persistence, tenant checks, and operator-facing summary projection helpers
@@ -178,23 +123,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 
 - `ui_server.go`
   - UI status and approvals
-- `server_haven_memory_handlers.go`
-  - `GET /v1/ui/memory`
-  - `POST /v1/ui/memory/reset`
-  - display-safe memory inventory for **operator-facing** memory controls
-  - auditable archive-and-fresh-start reset for demo prep
-- `server_haven_desk_notes.go`
-  - desk-note handlers and persistence for the operator desk surface
-- `server_haven_presence.go`
-  - normalized Haven presence and morph-sleep projections
-- `server_haven_journal.go`
-  - Haven journal listing, entry loading, and journal preview/title helpers
-- `server_haven_working_notes.go`
-  - working-note list/load/save handlers and title/preview/path derivation helpers
-- `server_haven_workspace.go`
-  - workspace listing, host-layout projection, preview handlers, and Haven workspace path mapping
-- `server_haven_file_access.go`
-  - shared file-read capability bridge for Haven UI projections
 - `ui_types.go`
   - client-facing UI summaries and event envelopes
   - includes folder-access sync/status response types used by **local HTTP clients**
@@ -204,13 +132,13 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `client_session.go`
   - control-session bootstrap, delegated-session refresh state, approval-token flows, and capability-execution wrappers
 - `client_memory.go`
-  - continuity, wake, task-board, and memory governance wrappers used by Haven and test harnesses
+  - continuity, wake, and memory governance wrappers used by local clients and test harnesses
 - `client_morphling.go`
   - morphling lifecycle and quarantine wrappers, including cached approval metadata for pending spawn reviews
 - `client_sandbox.go`
   - sandbox import/export/list/metadata wrappers over the signed local control plane
 - `client_transport.go`
-  - signed HTTP transport, retry-on-token-refresh behavior, SSE chat reader, and request-signature helpers
+  - signed HTTP transport, retry-on-token-refresh behavior, and request-signature helpers
 - `configured_capability_runtime.go`
   - configured remote capability execution, access-token issuance/cache, provenance metadata, and registry registration
 - `configured_capability_extract.go`
@@ -238,9 +166,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 
 - `server_memory_handlers.go`
   - memory endpoints, including explicit remember and diagnostic wake
-- `server_haven_memory_handlers.go`
-  - display-safe memory inventory projection over continuity state **for the session tenant’s partition**
-  - archive-and-reset path that closes and reopens the backend for **that partition only** (multi-tenant: other partitions untouched)
 - `continuity_memory_access.go`
   - continuity request normalization, inspect/discover/recall adapters, and backend lookup
 - `continuity_memory_mutation.go`

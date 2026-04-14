@@ -121,11 +121,10 @@ Implemented endpoints:
 - `POST /v1/quarantine/prune` (`quarantine.write`)
 - `POST /v1/sites/inspect` (`site.inspect`)
 - `POST /v1/sites/trust-draft` (`site.trust.write`)
-- `POST /v1/sandbox/import` (`fs_write`; host source must be inside the control session's bound operator mounts from a pinned Haven session)
+- `POST /v1/sandbox/import` (`fs_write`; host source must be inside the control session's bound operator mounts from a pinned expected client session)
 - `POST /v1/sandbox/stage`
 - `POST /v1/sandbox/metadata`
-- `POST /v1/sandbox/export` (`fs_write`; host destination must match a bound operator mount from a pinned Haven session and an active write grant)
-- `POST /v1/continuity/inspect-thread` (trusted Haven session + `ui.write` + `memory.write`)
+- `POST /v1/sandbox/export` (`fs_write`; host destination must match a bound operator mount from a pinned expected client session and an active write grant)
 - `GET /v1/memory/wake-state`
 - `POST /v1/memory/discover`
 - `POST /v1/memory/recall`
@@ -134,13 +133,6 @@ Implemented endpoints:
 - `POST /v1/memory/inspections/{id}/tombstone`
 - `POST /v1/memory/inspections/{id}/purge`
 
-The display-safe memory UI routes are intentionally operator-oriented:
-
-- `GET /v1/ui/memory` returns a redacted inventory of manageable memory objects
-  and wake-state counts; requires `memory.read`
-- `POST /v1/ui/memory/reset` archives the previous memory root and reinitializes
-  continuity state for a fresh-start demo or operator cleanup flow; requires
-  `memory.reset`
 - `POST /v1/morphlings/spawn` (`morphling.write`)
 - `POST /v1/morphlings/status` (`morphling.read`)
 - `POST /v1/morphlings/review` (`morphling.write`)

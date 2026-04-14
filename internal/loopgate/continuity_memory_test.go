@@ -1209,7 +1209,7 @@ func TestInspectObservedContinuity_PreservesProvidedFactSourceRef(t *testing.T) 
 					LedgerSequence:  1,
 					EventHash:       "observed_fact_source_ref_intro",
 					SourceRefs: []continuityArtifactSourceRef{{
-						Kind: havenThreadEventSourceKind,
+						Kind: observedContinuityThreadEventSourceKind,
 						Ref:  "thread_observed_fact_source_ref:1",
 					}},
 					Payload: &continuityObservedEventPayload{
@@ -1226,7 +1226,7 @@ func TestInspectObservedContinuity_PreservesProvidedFactSourceRef(t *testing.T) 
 					LedgerSequence:  2,
 					EventHash:       "observed_fact_source_ref_ack",
 					SourceRefs: []continuityArtifactSourceRef{{
-						Kind: havenThreadEventSourceKind,
+						Kind: observedContinuityThreadEventSourceKind,
 						Ref:  "thread_observed_fact_source_ref:2",
 					}},
 					Payload: &continuityObservedEventPayload{
@@ -1243,7 +1243,7 @@ func TestInspectObservedContinuity_PreservesProvidedFactSourceRef(t *testing.T) 
 					LedgerSequence:  3,
 					EventHash:       "observed_fact_source_ref_event",
 					SourceRefs: []continuityArtifactSourceRef{{
-						Kind: havenThreadEventSourceKind,
+						Kind: observedContinuityThreadEventSourceKind,
 						Ref:  "thread_observed_fact_source_ref:3",
 					}},
 					Payload: &continuityObservedEventPayload{
@@ -1266,7 +1266,7 @@ func TestInspectObservedContinuity_PreservesProvidedFactSourceRef(t *testing.T) 
 	derivedDistillate := testDefaultMemoryState(t, server).Distillates[inspectResponse.DerivedDistillateIDs[0]]
 	var foundProvidedDistillateSourceRef bool
 	for _, sourceRef := range derivedDistillate.SourceRefs {
-		if sourceRef.Kind == havenThreadEventSourceKind && sourceRef.Ref == "thread_observed_fact_source_ref:3" {
+		if sourceRef.Kind == observedContinuityThreadEventSourceKind && sourceRef.Ref == "thread_observed_fact_source_ref:3" {
 			foundProvidedDistillateSourceRef = true
 			break
 		}
@@ -1277,7 +1277,7 @@ func TestInspectObservedContinuity_PreservesProvidedFactSourceRef(t *testing.T) 
 	if len(derivedDistillate.Facts) != 1 {
 		t.Fatalf("expected one derived fact, got %#v", derivedDistillate.Facts)
 	}
-	if derivedDistillate.Facts[0].SourceRef != havenThreadEventSourceKind+":thread_observed_fact_source_ref:3" {
+	if derivedDistillate.Facts[0].SourceRef != observedContinuityThreadEventSourceKind+":thread_observed_fact_source_ref:3" {
 		t.Fatalf("expected provided observed source ref to persist on fact, got %#v", derivedDistillate.Facts[0])
 	}
 }

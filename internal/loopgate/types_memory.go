@@ -54,27 +54,7 @@ type ContinuityInspectResponse struct {
 	DerivedResonateKeyIDs []string `json:"derived_resonate_key_ids,omitempty"`
 }
 
-// HavenContinuityInspectThreadRequest is the JSON body for POST /v1/continuity/inspect-thread.
-// Loopgate loads the thread from its threadstore and proposes continuity for
-// inspection; the client does not supply raw events.
-type HavenContinuityInspectThreadRequest struct {
-	ThreadID string `json:"thread_id"`
-}
-
-// HavenContinuityInspectThreadResponse is returned by POST /v1/continuity/inspect-thread.
-// SubmitStatus is "submitted" when an inspection ran, or "skipped_no_continuity_events" when
-// the thread had no user_message / assistant_response / tool_executed mappable rows.
-type HavenContinuityInspectThreadResponse struct {
-	ThreadID              string   `json:"thread_id"`
-	SubmitStatus          string   `json:"submit_status"`
-	InspectionID          string   `json:"inspection_id,omitempty"`
-	Outcome               string   `json:"outcome,omitempty"`
-	DerivationOutcome     string   `json:"derivation_outcome,omitempty"`
-	ReviewStatus          string   `json:"review_status,omitempty"`
-	LineageStatus         string   `json:"lineage_status,omitempty"`
-	DerivedDistillateIDs  []string `json:"derived_distillate_ids,omitempty"`
-	DerivedResonateKeyIDs []string `json:"derived_resonate_key_ids,omitempty"`
-}
+const observedContinuityThreadEventSourceKind = "haven_thread_event"
 
 type MemoryInspectionReviewRequest struct {
 	Decision    string `json:"decision"`

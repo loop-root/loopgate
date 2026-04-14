@@ -83,8 +83,8 @@ Completed in this phase so far:
 - removed the legacy `cmd/morphling-runner` binary while keeping the narrower in-process task-plan helper
 - removed the task-plan prototype surface from the active server/runtime and its direct integration tests/docs
 - removed Haven-only helper routes for resident journal ticks and agent work-item creation/completion, plus their direct client/test shims
-- disabled the larger legacy Haven compatibility route surface by default in checked-in runtime config while keeping the code available behind an explicit compatibility switch
-- stopped registering the Haven-only sandbox tool set by default in the active capability registry while keeping that code behind the same compatibility switch
+- retired the larger Haven compatibility route surface instead of keeping it behind a runtime switch
+- removed the retired Haven chat, UI projection, continuity-inspect, model-catalog, and settings implementation files from `internal/loopgate/`
 - mapped deeper morphling/task-board/runtime code as still structurally coupled, so it will need staged removal rather than a blind deletion
 
 ## Phase 4: Repo hygiene and sanitization
