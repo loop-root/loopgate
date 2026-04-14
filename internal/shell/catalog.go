@@ -33,7 +33,6 @@ func commandCatalog() []slashCommandInfo {
 		{Name: "/connections", Args: "[validate|pkce-start|pkce-complete]", ShortArgs: "<subcommand>", Description: "show or manage Loopgate connections", ShortDesc: "manage Loopgate connections"},
 		{Name: "/site", Args: "[inspect|trust-draft] <url>", ShortArgs: "<subcommand> <url>", Description: "inspect a site or create a public_read trust draft", ShortDesc: "inspect or trust a site"},
 		{Name: "/sandbox", Args: "[import|stage|metadata|export] ...", ShortArgs: "<subcommand> ...", Description: "import into, stage inside, review, or export from the sandbox", ShortDesc: "manage the content sandbox"},
-		{Name: "/morphling", Args: "[spawn|status|review|terminate] ...", ShortArgs: "<subcommand> ...", Description: "manage the local pool of sandbox-scoped morphlings", ShortDesc: "manage morphling workers"},
 		{Name: "/quarantine", Args: "[metadata|view|prune] <quarantine-ref>", ShortArgs: "<subcommand> <ref>", Description: "inspect, explicitly view, or prune quarantined content", ShortDesc: "inspect quarantined content"},
 		{Name: "/config", Args: "", Description: "show config file paths"},
 		{Name: "/tools", Args: "", Description: "show registered tools"},
@@ -66,4 +65,3 @@ func commandNames() []string {
 	}
 	return names
 }
-

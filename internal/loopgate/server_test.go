@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -2145,192 +2144,33 @@ func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 	}
 }
 
-func TestMorphlingSpawnStatusAndTerminate(t *testing.T) {
+func TestMorphlingRoutesRetired(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, status, server := startLoopgateServer(t, repoRoot, loopgateMorphlingPolicyYAML(false, true, 5))
-	hostRootPath := t.TempDir()
-	pinTestProcessAsExpectedClient(t, server)
-	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
-	client.ConfigureSession("haven", "haven-morphling-import", advertisedSessionCapabilityNames(status))
-	hostSourcePath := filepath.Join(hostRootPath, "spec.md")
-	if err := os.WriteFile(hostSourcePath, []byte("sandbox spec"), 0o600); err != nil {
-		t.Fatalf("write host source: %v", err)
-	}
-	if _, err := client.SandboxImport(context.Background(), SandboxImportRequest{
-		HostSourcePath:  hostSourcePath,
-		DestinationName: "spec.md",
-	}); err != nil {
-		t.Fatalf("sandbox import: %v", err)
-	}
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	spawnResponse, err := client.SpawnMorphling(context.Background(), MorphlingSpawnRequest{
-		Class: "reviewer",
-		Goal:  "Update the sandboxed specification",
-		Inputs: []MorphlingInput{{
-			SandboxPath: "/morph/home/imports/spec.md",
-			Role:        "primary",
-		}},
-		RequestedCapabilities: []string{"fs_list", "fs_read"},
-	})
-	if err != nil {
-		t.Fatalf("spawn morphling: %v", err)
-	}
-	if spawnResponse.Status != ResponseStatusSuccess {
-		t.Fatalf("expected spawned morphling response, got %#v", spawnResponse)
-	}
-	if !strings.HasPrefix(spawnResponse.MorphlingID, "morphling-") {
-		t.Fatalf("expected morphling id prefix, got %#v", spawnResponse)
-	}
-	if spawnResponse.VirtualSandboxPath == "/morph/home" || !strings.HasPrefix(spawnResponse.VirtualSandboxPath, "/morph/home/agents/") {
-		t.Fatalf("expected working dir under /morph/home/agents, got %#v", spawnResponse)
-	}
-	if spawnResponse.State != morphlingStateSpawned {
-		t.Fatalf("expected spawned state, got %#v", spawnResponse)
-	}
-
-	statusResponse, err := client.MorphlingStatus(context.Background(), MorphlingStatusRequest{})
-	if err != nil {
-		t.Fatalf("morphling status: %v", err)
-	}
-	if len(statusResponse.Morphlings) != 1 {
-		t.Fatalf("expected one active morphling, got %#v", statusResponse)
-	}
-	if !slices.Contains(statusResponse.Morphlings[0].InputPaths, "/morph/home/imports/spec.md") {
-		t.Fatalf("expected virtual input path, got %#v", statusResponse)
-	}
-	if !slices.Contains(statusResponse.Morphlings[0].AllowedPaths, "/morph/home/imports/spec.md") {
-		t.Fatalf("expected input path in allowed paths, got %#v", statusResponse)
-	}
-
-	statusSummary, err := client.Status(context.Background())
-	if err != nil {
-		t.Fatalf("loopgate status: %v", err)
-	}
-	if statusSummary.ActiveMorphlings != 1 {
-		t.Fatalf("expected one active morphling in status summary, got %#v", statusSummary)
-	}
-
-	terminateResponse, err := client.TerminateMorphling(context.Background(), MorphlingTerminateRequest{
-		MorphlingID: spawnResponse.MorphlingID,
-		Reason:      "operator requested termination",
-	})
-	if err != nil {
-		t.Fatalf("terminate morphling: %v", err)
-	}
-	if terminateResponse.Morphling.State != morphlingStateTerminated {
-		t.Fatalf("expected terminated state, got %#v", terminateResponse)
-	}
-	if terminateResponse.Morphling.TerminationReason != "" {
-		t.Fatalf("expected projected summary to omit termination reason, got %#v", terminateResponse)
-	}
-	if terminateResponse.Morphling.StatusText != "terminated" {
-		t.Fatalf("expected projected status_text terminated, got %#v", terminateResponse)
-	}
-
-	terminatedStatusResponse, err := client.MorphlingStatus(context.Background(), MorphlingStatusRequest{
-		MorphlingID:       spawnResponse.MorphlingID,
-		IncludeTerminated: true,
-	})
-	if err != nil {
-		t.Fatalf("morphling status by id: %v", err)
-	}
-	if len(terminatedStatusResponse.Morphlings) != 1 || terminatedStatusResponse.Morphlings[0].State != morphlingStateTerminated {
-		t.Fatalf("expected terminated morphling in status response, got %#v", terminatedStatusResponse)
-	}
-
-	statusSummary, err = client.Status(context.Background())
-	if err != nil {
-		t.Fatalf("loopgate status after terminate: %v", err)
-	}
-	if statusSummary.ActiveMorphlings != 0 {
-		t.Fatalf("expected zero active morphlings after terminate, got %#v", statusSummary)
-	}
-
-	auditBytes, err := os.ReadFile(filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"))
-	if err != nil {
-		t.Fatalf("read loopgate events: %v", err)
-	}
-	var foundSpawned bool
-	var foundTerminated bool
-	for _, line := range strings.Split(strings.TrimSpace(string(auditBytes)), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
+	for _, path := range []string{
+		"/v1/morphlings/spawn",
+		"/v1/morphlings/status",
+		"/v1/morphlings/terminate",
+		"/v1/morphlings/review",
+		"/v1/morphlings/worker/launch",
+		"/v1/morphlings/worker/open",
+		"/v1/morphlings/worker/start",
+		"/v1/morphlings/worker/update",
+		"/v1/morphlings/worker/complete",
+	} {
+		request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, client.baseURL+path, strings.NewReader(`{}`))
+		if err != nil {
+			t.Fatalf("build retired morphling request for %s: %v", path, err)
 		}
-		var auditEvent ledger.Event
-		if err := json.Unmarshal([]byte(line), &auditEvent); err != nil {
-			t.Fatalf("decode audit event: %v", err)
+		response, err := client.httpClient.Do(request)
+		if err != nil {
+			t.Fatalf("request retired morphling route %s: %v", path, err)
 		}
-		switch auditEvent.Type {
-		case "morphling.spawned":
-			if auditEvent.Data["morphling_id"] != spawnResponse.MorphlingID {
-				continue
-			}
-			if eventHash, _ := auditEvent.Data["event_hash"].(string); strings.TrimSpace(eventHash) == "" {
-				t.Fatalf("expected morphling.spawned event hash, got %#v", auditEvent)
-			}
-			foundSpawned = true
-		case "morphling.terminated":
-			if auditEvent.Data["morphling_id"] != spawnResponse.MorphlingID {
-				continue
-			}
-			if eventHash, _ := auditEvent.Data["event_hash"].(string); strings.TrimSpace(eventHash) == "" {
-				t.Fatalf("expected morphling.terminated event hash, got %#v", auditEvent)
-			}
-			foundTerminated = true
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("expected retired morphling route %s to return 404, got %d", path, response.StatusCode)
 		}
-	}
-	if !foundSpawned {
-		t.Fatal("expected morphling.spawned audit event")
-	}
-	if !foundTerminated {
-		t.Fatal("expected morphling.terminated audit event")
-	}
-}
-
-func TestMorphlingSpawnDeniedWhenDisabled(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgateMorphlingPolicyYAML(false, false, 5))
-
-	deniedResponse, err := client.SpawnMorphling(context.Background(), MorphlingSpawnRequest{
-		Class:                 "editor",
-		Goal:                  "Attempt a disabled morphling spawn",
-		RequestedCapabilities: []string{"fs_list", "fs_read", "fs_write"},
-	})
-	if err == nil {
-		if deniedResponse.Status != ResponseStatusDenied || deniedResponse.DenialCode != DenialCodeMorphlingSpawnDisabled {
-			t.Fatalf("expected morphling spawn disabled denial, got %#v", deniedResponse)
-		}
-		return
-	}
-	t.Fatalf("expected morphling spawn denial response, got transport error %v", err)
-}
-
-func TestMorphlingSpawnDeniedAtActiveLimit(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgateMorphlingPolicyYAML(false, true, 1))
-
-	firstSpawnResponse, err := client.SpawnMorphling(context.Background(), MorphlingSpawnRequest{
-		Class:                 "reviewer",
-		Goal:                  "First morphling",
-		RequestedCapabilities: []string{"fs_list", "fs_read"},
-	})
-	if err != nil {
-		t.Fatalf("spawn first morphling: %v", err)
-	}
-	if firstSpawnResponse.MorphlingID == "" {
-		t.Fatalf("expected morphling id on first spawn, got %#v", firstSpawnResponse)
-	}
-
-	secondSpawnResponse, err := client.SpawnMorphling(context.Background(), MorphlingSpawnRequest{
-		Class:                 "reviewer",
-		Goal:                  "Second morphling should be denied",
-		RequestedCapabilities: []string{"fs_list", "fs_read"},
-	})
-	if err != nil {
-		t.Fatalf("expected morphling spawn denial response, got transport error %v", err)
-	}
-	if secondSpawnResponse.Status != ResponseStatusDenied || secondSpawnResponse.DenialCode != DenialCodeMorphlingActiveLimitReached {
-		t.Fatalf("expected active limit denial, got %#v", secondSpawnResponse)
 	}
 }
 
@@ -6409,41 +6249,6 @@ func TestHookPreValidateWritesAuditSequenceMetadata(t *testing.T) {
 	}
 	if decisionValue, _ := lastAuditEvent.Data["decision"].(string); decisionValue != "block" {
 		t.Fatalf("expected hook audit decision block, got %#v", lastAuditEvent.Data["decision"])
-	}
-}
-
-func TestMorphlingWorkerOpenMalformedBodyReturnsBadRequest(t *testing.T) {
-	repoRoot := t.TempDir()
-	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
-	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
-
-	server, err := NewServer(repoRoot, socketPath)
-	if err != nil {
-		t.Fatalf("new server: %v", err)
-	}
-
-	request := httptest.NewRequest(http.MethodPost, "/v1/morphlings/worker/open", bytes.NewBufferString("{"))
-	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
-		UID: uint32(os.Getuid()),
-		PID: 4242,
-	}))
-	recorder := httptest.NewRecorder()
-
-	server.handleMorphlingWorkerOpen(recorder, request)
-
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d body=%s", recorder.Code, recorder.Body.String())
-	}
-	var response CapabilityResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if response.DenialCode != DenialCodeMalformedRequest {
-		t.Fatalf("expected malformed request denial, got %#v", response)
-	}
-	if !strings.Contains(response.DenialReason, "invalid request body") {
-		t.Fatalf("expected invalid request body reason, got %#v", response)
 	}
 }
 

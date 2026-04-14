@@ -154,48 +154,6 @@ func TestOpenSessionCancelsPendingApprovalsForDeadPeerOrphan(t *testing.T) {
 	}
 }
 
-func TestOpenSessionTerminatesMorphlingsForDeadPeerOrphan(t *testing.T) {
-	repoRoot := t.TempDir()
-	server := newControlSessionRecoveryTestServer(t, repoRoot)
-	server.maxActiveSessionsPerUID = 1
-
-	firstPeerIdentity := peerIdentity{UID: 501, PID: 4301, EPID: 4301}
-	secondPeerIdentity := peerIdentity{UID: 501, PID: 4302, EPID: 4302}
-
-	firstSession := openSessionWithPeer(t, server, firstPeerIdentity, "haven", "haven-launch-a")
-	morphlingRecord := testMorphlingRecord(morphlingStateRunning)
-	morphlingRecord.MorphlingID = "morphling-orphan"
-	morphlingRecord.TaskID = "task-orphan"
-	morphlingRecord.RequestID = "req-orphan"
-	morphlingRecord.ParentControlSessionID = firstSession.ControlSessionID
-	morphlingRecord.ActorLabel = "haven"
-	morphlingRecord.ClientSessionLabel = "haven-launch-a"
-	morphlingRecord.LastEventAtUTC = server.now().UTC().Format(time.RFC3339Nano)
-	morphlingRecord.TokenExpiryUTC = server.now().UTC().Add(5 * time.Minute).Format(time.RFC3339Nano)
-	seedMorphlingRecordForAuditRollback(t, server, morphlingRecord)
-
-	server.processExists = func(pid int) (bool, error) {
-		return pid != firstPeerIdentity.PID, nil
-	}
-	openSessionWithPeer(t, server, secondPeerIdentity, "haven", "haven-launch-b")
-
-	server.morphlingsMu.Lock()
-	retiredMorphling, found := server.morphlings[morphlingRecord.MorphlingID]
-	server.morphlingsMu.Unlock()
-	if !found {
-		t.Fatalf("expected orphaned morphling to remain as terminated evidence")
-	}
-	if retiredMorphling.State != morphlingStateTerminated {
-		t.Fatalf("expected orphaned morphling to terminate, got %#v", retiredMorphling)
-	}
-	if retiredMorphling.Outcome != morphlingOutcomeCancelled {
-		t.Fatalf("expected orphaned morphling outcome cancelled, got %#v", retiredMorphling)
-	}
-	if retiredMorphling.TerminationReason != morphlingReasonParentSessionEnded {
-		t.Fatalf("expected parent-session-ended termination reason, got %#v", retiredMorphling)
-	}
-}
-
 func TestOpenSessionOrphanRecoveryFailsClosedOnAuditFailure(t *testing.T) {
 	repoRoot := t.TempDir()
 	server := newControlSessionRecoveryTestServer(t, repoRoot)

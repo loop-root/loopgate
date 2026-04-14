@@ -172,11 +172,6 @@ type ControlPlaneClient interface {
 	RecallMemory(ctx context.Context, request MemoryRecallRequest) (MemoryRecallResponse, error)
 	GetMemoryArtifacts(ctx context.Context, request MemoryArtifactGetRequest) (MemoryArtifactGetResponse, error)
 	RememberMemoryFact(ctx context.Context, request MemoryRememberRequest) (MemoryRememberResponse, error)
-	SpawnMorphling(ctx context.Context, request MorphlingSpawnRequest) (MorphlingSpawnResponse, error)
-	MorphlingStatus(ctx context.Context, request MorphlingStatusRequest) (MorphlingStatusResponse, error)
-	TerminateMorphling(ctx context.Context, request MorphlingTerminateRequest) (MorphlingTerminateResponse, error)
-	LaunchMorphlingWorker(ctx context.Context, request MorphlingWorkerLaunchRequest) (MorphlingWorkerLaunchResponse, error)
-	ReviewMorphling(ctx context.Context, request MorphlingReviewRequest) (MorphlingReviewResponse, error)
 	QuarantineMetadata(ctx context.Context, quarantineRef string) (QuarantineMetadataResponse, error)
 	ViewQuarantinedPayload(ctx context.Context, quarantineRef string) (QuarantineViewResponse, error)
 	PruneQuarantinedPayload(ctx context.Context, quarantineRef string) (QuarantineMetadataResponse, error)
@@ -220,7 +215,6 @@ type StatusResponse struct {
 	Capabilities        []CapabilitySummary `json:"capabilities"`
 	ControlCapabilities []CapabilitySummary `json:"control_capabilities,omitempty"`
 	PendingApprovals    int                 `json:"pending_approvals"`
-	ActiveMorphlings    int                 `json:"active_morphlings"`
 	Connections         []ConnectionStatus  `json:"connections"`
 }
 

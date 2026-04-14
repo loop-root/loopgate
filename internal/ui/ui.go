@@ -105,7 +105,7 @@ func HelpPanel(commands []HelpCommandEntry) string {
 	modelGroup := []string{"/setup", "/model", "/policy", "/agent", "/persona", "/settings"}
 	toolGroup := []string{"/tools", "/config", "/network", "/connections"}
 	workflowGroup := []string{"/goal", "/todo", "/memory"}
-	sandboxGroup := []string{"/sandbox", "/morphling", "/quarantine", "/site"}
+	sandboxGroup := []string{"/sandbox", "/quarantine", "/site"}
 	debugGroup := []string{"/debug"}
 
 	groups := [][]string{sessionGroup, fileGroup, modelGroup, toolGroup, workflowGroup, sandboxGroup, debugGroup}
@@ -337,55 +337,6 @@ func WelcomeMessage() string {
 		blankLine(),
 	}
 	return RenderBox("", lines, SingleBorder(), 60, Magenta)
-}
-
-// ── Morphling Progress ───────────────────────────────────────────────────────
-
-// MorphlingLaunched renders the worker launch confirmation line.
-func MorphlingLaunched(morphlingID string) string {
-	glyph := Purple("◈")
-	id := Teal(morphlingID)
-	return fmt.Sprintf("  %s %s %s %s", glyph, Dim("morphling"), id, Dim("worker launched — use /morphling status to monitor"))
-}
-
-// MorphlingProgress renders a morphling status update line.
-// eventType: "started", "progress", "completed", "failed"
-func MorphlingProgress(morphlingID string, eventType string, statusText string) string {
-	glyph := morphlingEventGlyph(eventType)
-	id := Teal(morphlingID)
-	badge := morphlingEventBadge(eventType)
-	status := Dim(statusText)
-	return fmt.Sprintf("  %s %s %s %s %s", glyph, Dim("morphling"), id, badge, status)
-}
-
-func morphlingEventGlyph(eventType string) string {
-	switch eventType {
-	case "started":
-		return Purple("◇")
-	case "progress":
-		return Purple("◈")
-	case "completed":
-		return Green("◆")
-	case "failed":
-		return Red("◆")
-	default:
-		return Dim("◇")
-	}
-}
-
-func morphlingEventBadge(eventType string) string {
-	switch eventType {
-	case "started":
-		return Purple("▸")
-	case "progress":
-		return Dim("▸")
-	case "completed":
-		return Green("✓")
-	case "failed":
-		return Red("✗")
-	default:
-		return Dim("▸")
-	}
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────

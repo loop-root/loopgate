@@ -93,36 +93,6 @@ func padCmd(s string, width int) string {
 
 // ── Man pages ────────────────────────────────────────────────────────────────
 
-func manMorphling() commandManPage {
-	return commandManPage{
-		Title:    "MORPHLING",
-		Synopsis: "/morphling <subcommand> [args...]",
-		Description: []string{
-			"Manage sandbox-scoped morphling workers. Morphlings are",
-			"autonomous agents that execute goals in isolated sandboxes",
-			"with a granted set of capabilities.",
-		},
-		Subcommands: []manSubcommand{
-			{Name: "spawn", Args: "<class> <caps> -- <goal>", Desc: "create and launch a morphling worker"},
-			{Name: "status", Args: "[morphling-id]", Desc: "show morphling pool or single status"},
-			{Name: "review", Args: "<id> <approve|reject>", Desc: "review a completed morphling's output"},
-			{Name: "terminate", Args: "<id> [reason]", Desc: "terminate a running morphling"},
-		},
-		Examples: []manExample{
-			{Command: "/morphling spawn editor fs_read,fs_write -- Create a hello world HTML page", Desc: "spawn an editor morphling with read/write access"},
-			{Command: "/morphling status", Desc: "list all active morphlings"},
-			{Command: "/morphling status editor-abc123", Desc: "show details for a specific morphling"},
-			{Command: "/morphling review editor-abc123 approve", Desc: "approve a morphling's artifacts"},
-			{Command: "/morphling terminate editor-abc123 no longer needed", Desc: "terminate with a reason"},
-		},
-		Notes: []string{
-			"Spawning requires interactive approval. The worker loop runs",
-			"in the background — progress appears between your turns.",
-			"Morphlings auto-deny any tool calls that require approval.",
-		},
-	}
-}
-
 func manGoal() commandManPage {
 	return commandManPage{
 		Title:    "GOAL",
@@ -383,7 +353,7 @@ func manMan() commandManPage {
 		},
 		Examples: []manExample{
 			{Command: "/man /goal", Desc: "show the goal command man page"},
-			{Command: "/man /morphling", Desc: "show the morphling man page"},
+			{Command: "/man /sandbox", Desc: "show the sandbox man page"},
 		},
 	}
 }
@@ -536,7 +506,6 @@ func manPolicy() commandManPage {
 // commandManPages returns the man page lookup table.
 func commandManPages() map[string]commandManPage {
 	return map[string]commandManPage{
-		"/morphling":   manMorphling(),
 		"/goal":        manGoal(),
 		"/todo":        manTodo(),
 		"/memory":      manMemory(),

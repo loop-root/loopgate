@@ -20,7 +20,7 @@ func TestIsHelpRequest(t *testing.T) {
 
 func TestLookupManPage_KnownCommands(t *testing.T) {
 	knownCommands := []string{
-		"/morphling", "/goal", "/todo", "/memory", "/sandbox",
+		"/goal", "/todo", "/memory", "/sandbox",
 		"/site", "/connections", "/model", "/quarantine", "/debug",
 		"/write", "/ls", "/cat",
 		"/help", "/man", "/exit", "/reset", "/pwd", "/setup",
@@ -46,28 +46,6 @@ func TestLookupManPage_UnknownCommand(t *testing.T) {
 	}
 }
 
-func TestRenderManPage_MorphlingContainsExpectedSections(t *testing.T) {
-	page, found := LookupManPage("/morphling")
-	if !found {
-		t.Fatal("no man page for /morphling")
-	}
-
-	for _, expected := range []string{
-		"MORPHLING",
-		"spawn",
-		"status",
-		"review",
-		"terminate",
-		"/morphling spawn editor",
-		"Subcommands:",
-		"Examples:",
-	} {
-		if !strings.Contains(page, expected) {
-			t.Errorf("morphling man page missing %q", expected)
-		}
-	}
-}
-
 func TestRenderManPage_GoalContainsSubcommands(t *testing.T) {
 	page, found := LookupManPage("/goal")
 	if !found {
@@ -82,9 +60,9 @@ func TestRenderManPage_GoalContainsSubcommands(t *testing.T) {
 }
 
 func TestRenderManPage_HasBorders(t *testing.T) {
-	page, found := LookupManPage("/morphling")
+	page, found := LookupManPage("/goal")
 	if !found {
-		t.Fatal("no man page for /morphling")
+		t.Fatal("no man page for /goal")
 	}
 
 	// Single border chars from ui.SingleBorder()

@@ -135,13 +135,13 @@ surface or a route namespace.
 | `session_mac_key` | Store in memory only; **never** log, persist to disk unencrypted, or ship in analytics. Used for HMAC-SHA256 request signing. The server **derives** this from rotating epoch material (12-hour UTC windows); see **Session MAC key rotation** below. |
 | `expires_at_utc` | Refresh the session before expiry (call `/v1/session/open` again with the same labels, or implement refresh policy your product needs). |
 
-**Dead-peer orphan recovery:** before enforcing the per-UID active-session limit, Loopgate performs a request-driven sweep for existing sessions owned by the same Unix-peer UID whose recorded peer PID no longer exists. Those orphaned sessions are retired server-side, with pending approvals cancelled and attached morphlings terminated under `parent_session_terminated`, before the new session open proceeds.
+**Dead-peer orphan recovery:** before enforcing the per-UID active-session limit, Loopgate performs a request-driven sweep for existing sessions owned by the same Unix-peer UID whose recorded peer PID no longer exists. Those orphaned sessions are retired server-side and any pending approvals are cancelled before the new session open proceeds.
 
 **`POST /v1/session/close`** — same authentication as other signed Bearer routes: `Authorization: Bearer …` plus the signed POST envelope (§6) with an empty body.
 
 - Use this on **graceful client shutdown** or before deliberately rebuilding the local client transport.
 - Loopgate retires the current control session, removes its capability and approval tokens, and records a `session.closed` audit event.
-- The close fails **closed** with `denial_code: "session_close_blocked"` if the session still has **pending approvals** or **active morphlings**. Clients should surface that truth rather than pretending the session was retired.
+- The close fails **closed** with `denial_code: "session_close_blocked"` if the session still has **pending approvals**. Clients should surface that truth rather than pretending the session was retired.
 
 ### Session MAC key rotation (12-hour epochs)
 
@@ -253,9 +253,6 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
 | `POST /v1/memory/discover` / `recall` / `remember` | Memory surfaces |
 | `POST /v1/memory/inspections/…` | Inspection governance |
-| `POST /v1/morphlings/spawn` / `terminate` / `review` / `worker/launch` | Bounded worker (**morphling**) lifecycle mutation routes (**`morphling.write`**) |
-| `POST /v1/morphlings/status` | Bounded worker (**morphling**) status projection (**`morphling.read`**) |
-| `POST /v1/morphlings/worker/open` / `start` / `update` / `complete` | Dedicated morphling worker token/session path (not a Bearer control route) |
 | `POST /v1/quarantine/metadata` / `view` | Quarantine metadata / bounded payload view (**`quarantine.read`**) |
 | `POST /v1/quarantine/prune` | Quarantine blob prune while preserving metadata (**`quarantine.write`**) |
 | `GET` / `PUT /v1/config/…` | Policy, runtime, connections, etc. (capability-gated). `PUT /v1/config/policy` hot-reloads the already signed on-disk `core/policy/policy.yaml`; it does not trust policy content sent in the HTTP body. |

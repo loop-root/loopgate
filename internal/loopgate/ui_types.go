@@ -62,7 +62,6 @@ type UIStatusResponse struct {
 	TurnCount                int                         `json:"turn_count"`
 	DistillCursorLine        int                         `json:"distill_cursor_line"`
 	PendingApprovals         int                         `json:"pending_approvals"`
-	ActiveMorphlings         int                         `json:"active_morphlings"`
 	CapabilityCount          int                         `json:"capability_count"`
 	ConnectionCount          int                         `json:"connection_count"`
 	OperatorMountWriteGrants []UIOperatorMountWriteGrant `json:"operator_mount_write_grants,omitempty"`

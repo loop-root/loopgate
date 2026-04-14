@@ -76,7 +76,6 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 		TurnCount:                runtimeState.TurnCount,
 		DistillCursorLine:        runtimeState.DistillCursorLine,
 		PendingApprovals:         pendingCount,
-		ActiveMorphlings:         server.activeMorphlingCount(server.now().UTC()),
 		CapabilityCount:          len(tokenClaims.AllowedCapabilities),
 		ConnectionCount:          len(server.connectionStatuses()),
 		OperatorMountWriteGrants: writeGrants,

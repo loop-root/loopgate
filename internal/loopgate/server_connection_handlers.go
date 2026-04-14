@@ -69,7 +69,6 @@ func (server *Server) handleStatus(writer http.ResponseWriter, request *http.Req
 		Capabilities:        server.capabilitySummaries(),
 		ControlCapabilities: controlCapabilitySummaries(),
 		PendingApprovals:    pendingCount,
-		ActiveMorphlings:    server.activeMorphlingCount(server.now().UTC()),
 	}
 	if capabilityScopeAllowed(tokenClaims, controlCapabilityConnectionRead) {
 		response.Connections = server.connectionStatuses()

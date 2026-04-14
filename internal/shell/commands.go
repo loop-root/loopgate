@@ -35,10 +35,9 @@ type CommandResult struct {
 	RuntimeConfigChanged bool
 	UpdatedRuntimeConfig modelruntime.Config
 	RequiredAuditEvents  []CommandAuditEvent
-	SpawnedMorphling     *loopgate.MorphlingSpawnResponse
 }
 
-// HandleCommand parses and executes Morph slash-commands.
+// HandleCommand parses and executes Loopgate slash-commands.
 func HandleCommand(commandContext CommandContext, input string, rl *readline.Instance, logTool ToolLogger) CommandResult {
 	fields := strings.Fields(strings.TrimSpace(input))
 	if len(fields) == 0 {
@@ -55,7 +54,7 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 		}
 	}
 
-	// Check for help flags on any command: /morphling help, /goal --help, etc.
+	// Check for help flags on any command: /goal help, /todo --help, etc.
 	if len(fields) >= 2 && isHelpRequest(strings.ToLower(fields[1])) {
 		if manPage, found := LookupManPage(cmd); found {
 			return CommandResult{Output: manPage, Handled: true, ToolEventSeen: toolEventSeen}
@@ -68,7 +67,7 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 
 	case "/man":
 		if len(fields) < 2 {
-			return CommandResult{Output: "Usage: /man <command>  (e.g. /man morphling)", Handled: true, ToolEventSeen: toolEventSeen}
+			return CommandResult{Output: "Usage: /man <command>  (e.g. /man goal)", Handled: true, ToolEventSeen: toolEventSeen}
 		}
 		target := strings.ToLower(fields[1])
 		if !strings.HasPrefix(target, "/") {
@@ -331,101 +330,6 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 			return CommandResult{Output: formatSandboxOperationResponse(sandboxResponse), Handled: true, ToolEventSeen: true}
 		default:
 			return CommandResult{Output: "Usage: /sandbox [import|stage|metadata|export] ...", Handled: true, ToolEventSeen: toolEventSeen}
-		}
-
-	case "/morphling":
-		if commandContext.LoopgateClient == nil {
-			return CommandResult{Output: "Denied: morphling operations require Loopgate.", Handled: true, ToolEventSeen: true}
-		}
-		if len(fields) < 2 {
-			return CommandResult{Output: "Usage: /morphling [spawn|status|review|terminate] ...", Handled: true, ToolEventSeen: toolEventSeen}
-		}
-		switch strings.ToLower(fields[1]) {
-		case "spawn":
-			if rl == nil {
-				return CommandResult{Output: "Denied: morphling spawn requires an interactive terminal prompt.", Handled: true, ToolEventSeen: true}
-			}
-			className, requestedCapabilities, inputPaths, goalText, usageError := parseMorphlingSpawnArguments(fields)
-			if usageError != "" {
-				return CommandResult{Output: usageError, Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			fmt.Println(ui.Approval(ui.ApprovalRequest{
-				Tool:   "morphling spawn",
-				Class:  loopgate.ApprovalClassLabel(loopgate.ApprovalClassLaunchMorphling),
-				Path:   morphlingApprovalPath(inputPaths),
-				Reason: fmt.Sprintf("%s: %s", className, goalText),
-			}))
-			oldPrompt := ui.Prompt(0)
-			rl.SetPrompt(ui.ApprovalPrompt("morphling spawn"))
-			answer, readErr := rl.Readline()
-			rl.SetPrompt(oldPrompt)
-			rl.Refresh()
-			if readErr != nil {
-				return CommandResult{Output: "Denied: could not read morphling spawn approval input.", Handled: true, ToolEventSeen: true}
-			}
-			if !strings.EqualFold(strings.TrimSpace(answer), "y") {
-				return CommandResult{Output: "Denied: morphling spawn was declined.", Handled: true, ToolEventSeen: true}
-			}
-			spawnResponse, err := commandContext.LoopgateClient.SpawnMorphling(context.Background(), loopgate.MorphlingSpawnRequest{
-				Class:                 className,
-				Goal:                  goalText,
-				RequestedCapabilities: requestedCapabilities,
-				Inputs:                morphlingInputsFromPaths(inputPaths),
-			})
-			if err != nil {
-				return CommandResult{Output: "Error: " + err.Error(), Handled: true, ToolEventSeen: true}
-			}
-			return CommandResult{Output: formatMorphlingSpawnResponse(spawnResponse), Handled: true, ToolEventSeen: true, SpawnedMorphling: &spawnResponse}
-		case "status":
-			statusRequest := loopgate.MorphlingStatusRequest{}
-			if len(fields) >= 3 {
-				statusRequest.MorphlingID = strings.TrimSpace(fields[2])
-				statusRequest.IncludeTerminated = true
-			}
-			statusResponse, err := commandContext.LoopgateClient.MorphlingStatus(context.Background(), statusRequest)
-			if err != nil {
-				return CommandResult{Output: "Error: " + err.Error(), Handled: true, ToolEventSeen: true}
-			}
-			return CommandResult{Output: formatMorphlingStatusResponse(statusResponse), Handled: true, ToolEventSeen: true}
-		case "terminate":
-			if len(fields) < 3 {
-				return CommandResult{Output: "Usage: /morphling terminate <morphling-id> [reason text]", Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			terminationReason := ""
-			if len(fields) > 3 {
-				terminationReason = strings.Join(fields[3:], " ")
-			}
-			terminateResponse, err := commandContext.LoopgateClient.TerminateMorphling(context.Background(), loopgate.MorphlingTerminateRequest{
-				MorphlingID: strings.TrimSpace(fields[2]),
-				Reason:      terminationReason,
-			})
-			if err != nil {
-				return CommandResult{Output: "Error: " + err.Error(), Handled: true, ToolEventSeen: true}
-			}
-			return CommandResult{Output: formatMorphlingSummary("terminated", terminateResponse.Morphling), Handled: true, ToolEventSeen: true}
-		case "review":
-			if len(fields) < 4 {
-				return CommandResult{Output: "Usage: /morphling review <morphling-id> <approve|reject>", Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			approved := false
-			switch strings.ToLower(strings.TrimSpace(fields[3])) {
-			case "approve", "approved", "accept":
-				approved = true
-			case "reject", "rejected", "deny":
-				approved = false
-			default:
-				return CommandResult{Output: "Usage: /morphling review <morphling-id> <approve|reject>", Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			reviewResponse, err := commandContext.LoopgateClient.ReviewMorphling(context.Background(), loopgate.MorphlingReviewRequest{
-				MorphlingID: strings.TrimSpace(fields[2]),
-				Approved:    approved,
-			})
-			if err != nil {
-				return CommandResult{Output: "Error: " + err.Error(), Handled: true, ToolEventSeen: true}
-			}
-			return CommandResult{Output: formatMorphlingSummary("reviewed", reviewResponse.Morphling), Handled: true, ToolEventSeen: true}
-		default:
-			return CommandResult{Output: "Usage: /morphling [spawn|status|review|terminate] ...", Handled: true, ToolEventSeen: toolEventSeen}
 		}
 
 	case "/quarantine":
@@ -1037,196 +941,6 @@ func formatSandboxArtifactMetadataResponse(metadataResponse loopgate.SandboxArti
 		fmt.Sprintf("review_action: %s", metadataResponse.ReviewAction),
 		fmt.Sprintf("export_action: %s", metadataResponse.ExportAction),
 	}, "\n")
-}
-
-func formatMorphlingStatusResponse(statusResponse loopgate.MorphlingStatusResponse) string {
-	if len(statusResponse.Morphlings) == 0 {
-		return strings.Join([]string{
-			fmt.Sprintf("spawn_enabled: %t", statusResponse.SpawnEnabled),
-			fmt.Sprintf("max_active: %d", statusResponse.MaxActive),
-			fmt.Sprintf("active_count: %d", statusResponse.ActiveCount),
-			fmt.Sprintf("pending_review_count: %d", statusResponse.PendingReviewCount),
-			"morphlings: none",
-		}, "\n")
-	}
-	lines := []string{
-		fmt.Sprintf("spawn_enabled: %t", statusResponse.SpawnEnabled),
-		fmt.Sprintf("max_active: %d", statusResponse.MaxActive),
-		fmt.Sprintf("active_count: %d", statusResponse.ActiveCount),
-		fmt.Sprintf("pending_review_count: %d", statusResponse.PendingReviewCount),
-		fmt.Sprintf("morphlings: %d", len(statusResponse.Morphlings)),
-	}
-	for _, morphlingSummary := range statusResponse.Morphlings {
-		lines = append(lines, "")
-		lines = append(lines, formatMorphlingSummary("morphling", morphlingSummary))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func formatMorphlingSpawnResponse(spawnResponse loopgate.MorphlingSpawnResponse) string {
-	lines := []string{
-		fmt.Sprintf("request_id: %s", defaultSummaryValue(spawnResponse.RequestID, "none")),
-		fmt.Sprintf("status: %s", spawnResponse.Status),
-	}
-	if spawnResponse.DenialCode != "" {
-		lines = append(lines, fmt.Sprintf("denial_code: %s", spawnResponse.DenialCode))
-	}
-	if spawnResponse.DenialReason != "" {
-		lines = append(lines, fmt.Sprintf("denial_reason: %s", spawnResponse.DenialReason))
-	}
-	if spawnResponse.MorphlingID != "" {
-		lines = append(lines, fmt.Sprintf("morphling_id: %s", spawnResponse.MorphlingID))
-	}
-	if spawnResponse.TaskID != "" {
-		lines = append(lines, fmt.Sprintf("task_id: %s", spawnResponse.TaskID))
-	}
-	if spawnResponse.State != "" {
-		lines = append(lines, fmt.Sprintf("state: %s", spawnResponse.State))
-	}
-	if spawnResponse.Class != "" {
-		lines = append(lines, fmt.Sprintf("class: %s", spawnResponse.Class))
-	}
-	if spawnResponse.ApprovalID != "" {
-		lines = append(lines, fmt.Sprintf("approval_id: %s", spawnResponse.ApprovalID))
-	}
-	if spawnResponse.ApprovalDeadlineUTC != "" {
-		lines = append(lines, fmt.Sprintf("approval_deadline_utc: %s", spawnResponse.ApprovalDeadlineUTC))
-	}
-	if spawnResponse.VirtualSandboxPath != "" {
-		lines = append(lines, fmt.Sprintf("virtual_sandbox_path: %s", spawnResponse.VirtualSandboxPath))
-	}
-	if len(spawnResponse.GrantedCapabilities) > 0 {
-		lines = append(lines, fmt.Sprintf("granted_capabilities: %s", formatList(spawnResponse.GrantedCapabilities, "none")))
-	}
-	if spawnResponse.SpawnedAtUTC != "" {
-		lines = append(lines, fmt.Sprintf("spawned_at_utc: %s", spawnResponse.SpawnedAtUTC))
-	}
-	if spawnResponse.TokenExpiryUTC != "" {
-		lines = append(lines, fmt.Sprintf("token_expiry_utc: %s", spawnResponse.TokenExpiryUTC))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func formatMorphlingSummary(label string, morphlingSummary loopgate.MorphlingSummary) string {
-	lines := []string{
-		fmt.Sprintf("%s_id: %s", label, morphlingSummary.MorphlingID),
-		fmt.Sprintf("task_id: %s", defaultSummaryValue(morphlingSummary.TaskID, "none")),
-		fmt.Sprintf("class: %s", morphlingSummary.Class),
-		fmt.Sprintf("state: %s", morphlingSummary.State),
-		fmt.Sprintf("status_text: %s", defaultSummaryValue(morphlingSummary.StatusText, "none")),
-		fmt.Sprintf("goal_hint: %s", defaultSummaryValue(morphlingSummary.GoalHint, "none")),
-		fmt.Sprintf("virtual_sandbox_path: %s", defaultSummaryValue(morphlingSummary.VirtualSandboxPath, "none")),
-		fmt.Sprintf("input_paths: %s", formatList(morphlingSummary.InputPaths, "none")),
-		fmt.Sprintf("allowed_paths: %s", formatList(morphlingSummary.AllowedPaths, "none")),
-		fmt.Sprintf("requested_capabilities: %s", formatList(morphlingSummary.RequestedCapabilities, "none")),
-		fmt.Sprintf("granted_capabilities: %s", formatList(morphlingSummary.GrantedCapabilities, "none")),
-		fmt.Sprintf("memory_strings: %s", formatList(morphlingSummary.MemoryStrings, "none")),
-		fmt.Sprintf("memory_string_count: %d", morphlingSummary.MemoryStringCount),
-		fmt.Sprintf("artifact_count: %d", morphlingSummary.ArtifactCount),
-		fmt.Sprintf("staged_artifact_refs: %s", formatList(morphlingSummary.StagedArtifactRefs, "none")),
-		fmt.Sprintf("pending_review: %t", morphlingSummary.PendingReview),
-		fmt.Sprintf("requires_review: %t", morphlingSummary.RequiresReview),
-		fmt.Sprintf("time_budget_seconds: %d", morphlingSummary.TimeBudgetSeconds),
-		fmt.Sprintf("token_budget: %d", morphlingSummary.TokenBudget),
-		fmt.Sprintf("created_at_utc: %s", morphlingSummary.CreatedAtUTC),
-	}
-	if morphlingSummary.ApprovalID != "" {
-		lines = append(lines, fmt.Sprintf("approval_id: %s", morphlingSummary.ApprovalID))
-	}
-	if morphlingSummary.ApprovalDeadlineUTC != "" {
-		lines = append(lines, fmt.Sprintf("approval_deadline_utc: %s", morphlingSummary.ApprovalDeadlineUTC))
-	}
-	if morphlingSummary.ReviewDeadlineUTC != "" {
-		lines = append(lines, fmt.Sprintf("review_deadline_utc: %s", morphlingSummary.ReviewDeadlineUTC))
-	}
-	if morphlingSummary.SpawnedAtUTC != "" {
-		lines = append(lines, fmt.Sprintf("spawned_at_utc: %s", morphlingSummary.SpawnedAtUTC))
-	}
-	if morphlingSummary.LastEventAtUTC != "" {
-		lines = append(lines, fmt.Sprintf("last_event_at_utc: %s", morphlingSummary.LastEventAtUTC))
-	}
-	if morphlingSummary.TokenExpiryUTC != "" {
-		lines = append(lines, fmt.Sprintf("token_expiry_utc: %s", morphlingSummary.TokenExpiryUTC))
-	}
-	if morphlingSummary.Outcome != "" {
-		lines = append(lines, fmt.Sprintf("outcome: %s", morphlingSummary.Outcome))
-	}
-	if morphlingSummary.TerminatedAtUTC != "" {
-		lines = append(lines, fmt.Sprintf("terminated_at_utc: %s", morphlingSummary.TerminatedAtUTC))
-	}
-	if morphlingSummary.TerminationReason != "" {
-		lines = append(lines, fmt.Sprintf("termination_reason: %s", morphlingSummary.TerminationReason))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func parseMorphlingSpawnArguments(fields []string) (string, []string, []string, string, string) {
-	if len(fields) < 6 {
-		return "", nil, nil, "", "Usage: /morphling spawn <class> <capability[,capability...]> [<sandbox-input> ...] -- <goal text>"
-	}
-	className := strings.TrimSpace(fields[2])
-	if className == "" {
-		return "", nil, nil, "", "Usage: /morphling spawn <class> <capability[,capability...]> [<sandbox-input> ...] -- <goal text>"
-	}
-	requestedCapabilities := make([]string, 0)
-	for _, rawCapabilityName := range strings.Split(strings.TrimSpace(fields[3]), ",") {
-		capabilityName := strings.TrimSpace(rawCapabilityName)
-		if capabilityName == "" {
-			continue
-		}
-		requestedCapabilities = append(requestedCapabilities, capabilityName)
-	}
-	if len(requestedCapabilities) == 0 {
-		return "", nil, nil, "", "Usage: /morphling spawn <class> <capability[,capability...]> [<sandbox-input> ...] -- <goal text>"
-	}
-	separatorIndex := -1
-	for index := 4; index < len(fields); index++ {
-		if fields[index] == "--" {
-			separatorIndex = index
-			break
-		}
-	}
-	if separatorIndex == -1 || separatorIndex == len(fields)-1 {
-		return "", nil, nil, "", "Usage: /morphling spawn <class> <capability[,capability...]> [<sandbox-input> ...] -- <goal text>"
-	}
-	inputPaths := make([]string, 0, separatorIndex-4)
-	for _, rawInputPath := range fields[4:separatorIndex] {
-		trimmedInputPath := strings.TrimSpace(rawInputPath)
-		if trimmedInputPath == "" {
-			continue
-		}
-		inputPaths = append(inputPaths, trimmedInputPath)
-	}
-	goalText := strings.TrimSpace(strings.Join(fields[separatorIndex+1:], " "))
-	if goalText == "" {
-		return "", nil, nil, "", "Usage: /morphling spawn <class> <capability[,capability...]> [<sandbox-input> ...] -- <goal text>"
-	}
-	return className, requestedCapabilities, inputPaths, goalText, ""
-}
-
-func morphlingInputsFromPaths(inputPaths []string) []loopgate.MorphlingInput {
-	inputSpecs := make([]loopgate.MorphlingInput, 0, len(inputPaths))
-	for index, inputPath := range inputPaths {
-		inputRole := "input"
-		if index == 0 {
-			inputRole = "primary"
-		}
-		inputSpecs = append(inputSpecs, loopgate.MorphlingInput{
-			SandboxPath: inputPath,
-			Role:        inputRole,
-		})
-	}
-	return inputSpecs
-}
-
-func morphlingApprovalPath(inputPaths []string) string {
-	if len(inputPaths) == 0 {
-		return sandbox.VirtualAgents
-	}
-	if len(inputPaths) == 1 {
-		return displaySandboxPath(inputPaths[0])
-	}
-	return fmt.Sprintf("%d sandbox inputs", len(inputPaths))
 }
 
 func displaySandboxPath(rawPath string) string {

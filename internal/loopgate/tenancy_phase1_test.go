@@ -8,55 +8,6 @@ import (
 	"time"
 )
 
-func TestMorphlingTenantMismatchDeniesStatus(t *testing.T) {
-	repoRoot := t.TempDir()
-	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	now := server.now().UTC()
-	server.morphlingsMu.Lock()
-	server.morphlings["morphling-test"] = morphlingRecord{
-		SchemaVersion:          "loopgate.morphling.v2",
-		MorphlingID:            "morphling-test",
-		TaskID:                 "task-test",
-		RequestID:              "req_test",
-		ParentControlSessionID: "control-session-1",
-		TenantID:               "tenant-org-a",
-		ActorLabel:             "test",
-		ClientSessionLabel:     "cli",
-		Class:                  "research",
-		GoalText:               "goal",
-		GoalHMAC:               "deadbeef",
-		State:                  morphlingStateRunning,
-		CreatedAtUTC:           now.Format(time.RFC3339Nano),
-		LastEventAtUTC:         now.Format(time.RFC3339Nano),
-	}
-	server.morphlingsMu.Unlock()
-
-	tokenWrongTenant := capabilityToken{
-		ControlSessionID:   "control-session-1",
-		TenantID:           "tenant-org-b",
-		ActorLabel:         "test",
-		ClientSessionLabel: "cli",
-	}
-	_, err := server.morphlingStatus(tokenWrongTenant, MorphlingStatusRequest{MorphlingID: "morphling-test"})
-	if err != errMorphlingNotFound {
-		t.Fatalf("expected errMorphlingNotFound for tenant mismatch, got %v", err)
-	}
-
-	tokenMatch := capabilityToken{
-		ControlSessionID:   "control-session-1",
-		TenantID:           "tenant-org-a",
-		ActorLabel:         "test",
-		ClientSessionLabel: "cli",
-	}
-	resp, err := server.morphlingStatus(tokenMatch, MorphlingStatusRequest{MorphlingID: "morphling-test"})
-	if err != nil {
-		t.Fatalf("morphlingStatus: %v", err)
-	}
-	if len(resp.Morphlings) != 1 || resp.Morphlings[0].MorphlingID != "morphling-test" {
-		t.Fatalf("expected one morphling in response, got %#v", resp.Morphlings)
-	}
-}
-
 func TestLogEventAddsTenantFromSession(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

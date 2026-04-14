@@ -957,81 +957,6 @@ func TestHandleCommand_SandboxExportRequiresInteractivePrompt(t *testing.T) {
 	}
 }
 
-func TestHandleCommand_MorphlingSpawnRequiresInteractivePrompt(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, status := startTestLoopgate(t, repoRoot, testPolicyYAMLWithMorphlings(false, true, 5))
-
-	commandResult := HandleCommand(CommandContext{
-		RepoRoot:       repoRoot,
-		Policy:         status.Policy,
-		LoopgateClient: client,
-		LoopgateStatus: status,
-	}, "/morphling spawn editor fs_read,fs_write -- write a patch", nil, nil)
-	if !strings.Contains(commandResult.Output, "requires an interactive terminal prompt") {
-		t.Fatalf("expected interactive prompt denial, got %q", commandResult.Output)
-	}
-}
-
-func TestHandleCommand_MorphlingStatusShowsPool(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, status := startTestLoopgate(t, repoRoot, testPolicyYAMLWithMorphlings(false, true, 5))
-	hostRootPath := t.TempDir()
-	configureHavenSandboxSession(client, status, "shell-morphling-status", hostRootPath)
-	hostSourcePath := filepath.Join(hostRootPath, "spec.md")
-	if err := os.WriteFile(hostSourcePath, []byte("hello morphling"), 0o600); err != nil {
-		t.Fatalf("write host source: %v", err)
-	}
-	if _, err := client.SandboxImport(context.Background(), loopgate.SandboxImportRequest{
-		HostSourcePath:  hostSourcePath,
-		DestinationName: "spec.md",
-	}); err != nil {
-		t.Fatalf("sandbox import: %v", err)
-	}
-	spawnResponse, err := client.SpawnMorphling(context.Background(), loopgate.MorphlingSpawnRequest{
-		Class:                 "reviewer",
-		Goal:                  "Update the imported spec",
-		RequestedCapabilities: []string{"fs_list", "fs_read"},
-		Inputs: []loopgate.MorphlingInput{{
-			SandboxPath: "/morph/home/imports/spec.md",
-			Role:        "primary",
-		}},
-	})
-	if err != nil {
-		t.Fatalf("spawn morphling: %v", err)
-	}
-	if spawnResponse.Status != loopgate.ResponseStatusSuccess {
-		t.Fatalf("expected spawned morphling response, got %#v", spawnResponse)
-	}
-
-	commandResult := HandleCommand(CommandContext{
-		RepoRoot:       repoRoot,
-		Policy:         status.Policy,
-		LoopgateClient: client,
-		LoopgateStatus: status,
-	}, "/morphling status", nil, nil)
-	if !commandResult.Handled {
-		t.Fatal("expected command to be handled")
-	}
-	if !strings.Contains(commandResult.Output, "morphlings: 1") {
-		t.Fatalf("expected morphling count, got %q", commandResult.Output)
-	}
-	if !strings.Contains(commandResult.Output, spawnResponse.MorphlingID) {
-		t.Fatalf("expected morphling id in output, got %q", commandResult.Output)
-	}
-	if !strings.Contains(commandResult.Output, "virtual_sandbox_path: /morph/home/agents/") {
-		t.Fatalf("expected virtual sandbox path in output, got %q", commandResult.Output)
-	}
-	if !strings.Contains(commandResult.Output, "memory_strings: none") {
-		t.Fatalf("expected memory_strings line in output, got %q", commandResult.Output)
-	}
-}
-
-type stubMorphlingReviewClient struct {
-	loopgate.ControlPlaneClient
-	response loopgate.MorphlingReviewResponse
-	err      error
-}
-
 type stubMemoryClient struct {
 	loopgate.ControlPlaneClient
 	recallResponse   loopgate.MemoryRecallResponse
@@ -1065,50 +990,11 @@ func (stubClient stubMemoryClient) RememberMemoryFact(ctx context.Context, reque
 	return stubClient.rememberResponse, nil
 }
 
-func (stubClient stubMorphlingReviewClient) ReviewMorphling(context.Context, loopgate.MorphlingReviewRequest) (loopgate.MorphlingReviewResponse, error) {
-	if stubClient.err != nil {
-		return loopgate.MorphlingReviewResponse{}, stubClient.err
-	}
-	return stubClient.response, nil
-}
-
-func TestHandleCommand_MorphlingReviewUsesLoopgateClient(t *testing.T) {
-	commandResult := HandleCommand(CommandContext{
-		LoopgateClient: stubMorphlingReviewClient{
-			response: loopgate.MorphlingReviewResponse{
-				Status: loopgate.ResponseStatusSuccess,
-				Morphling: loopgate.MorphlingSummary{
-					MorphlingID:        "morphling-review-1",
-					TaskID:             "task-review-1",
-					Class:              "reviewer",
-					State:              "terminated",
-					StatusText:         "terminated",
-					Outcome:            "approved",
-					StagedArtifactRefs: []string{"staged://artifacts/worker-output"},
-				},
-			},
-		},
-	}, "/morphling review morphling-review-1 approve", nil, nil)
-
-	if !commandResult.Handled {
-		t.Fatal("expected command to be handled")
-	}
-	if !strings.Contains(commandResult.Output, "reviewed_id: morphling-review-1") {
-		t.Fatalf("expected reviewed morphling id in output, got %q", commandResult.Output)
-	}
-	if !strings.Contains(commandResult.Output, "staged_artifact_refs: staged://artifacts/worker-output") {
-		t.Fatalf("expected staged artifact refs in output, got %q", commandResult.Output)
-	}
-	if !strings.Contains(commandResult.Output, "status_text: terminated") {
-		t.Fatalf("expected projected status_text in output, got %q", commandResult.Output)
-	}
-}
-
 func TestHandleCommand_HelpIncludesAllCommands(t *testing.T) {
 	commandResult := HandleCommand(CommandContext{}, "/help", nil, nil)
 	for _, expected := range []string{
 		"/agent", "/model", "/quarantine", "/site",
-		"/sandbox", "/morphling", "/goal", "/todo",
+		"/sandbox", "/goal", "/todo",
 		"/memory", "/connections", "/man",
 	} {
 		if !strings.Contains(commandResult.Output, expected) {
@@ -1136,7 +1022,6 @@ func startTestLoopgate(t *testing.T, repoRoot string, policyYAML string) (*loopg
 	if err := os.WriteFile(policyPath, []byte(policyYAML), 0o600); err != nil {
 		t.Fatalf("write policy: %v", err)
 	}
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	testExecutablePath, err := os.Executable()
 	if err != nil {
 		t.Fatalf("resolve test executable: %v", err)
@@ -1192,22 +1077,6 @@ func configureHavenSandboxSession(client *loopgate.Client, status loopgate.Statu
 	client.ConfigureSession("haven", sessionID, capabilityNamesFromStatus(status))
 }
 
-func writeTestMorphlingClassPolicy(t *testing.T, repoRoot string) {
-	t.Helper()
-
-	classPolicyPath := filepath.Join(repoRoot, "core", "policy", "morphling_classes.yaml")
-	if err := os.MkdirAll(filepath.Dir(classPolicyPath), 0o755); err != nil {
-		t.Fatalf("mkdir morphling class policy dir: %v", err)
-	}
-	classPolicyBytes, err := os.ReadFile(filepath.Join("..", "..", "core", "policy", "morphling_classes.yaml"))
-	if err != nil {
-		t.Fatalf("read default morphling class policy: %v", err)
-	}
-	if err := os.WriteFile(classPolicyPath, classPolicyBytes, 0o600); err != nil {
-		t.Fatalf("write morphling class policy: %v", err)
-	}
-}
-
 func capabilityNamesFromStatus(status loopgate.StatusResponse) []string {
 	names := make([]string, 0, len(status.Capabilities)+len(status.ControlCapabilities))
 	for _, capability := range status.Capabilities {
@@ -1261,57 +1130,6 @@ func testPolicyYAML(writeRequiresApproval bool) string {
 		"    enabled: false\n" +
 		"    allowed_commands: []\n" +
 		"    requires_approval: true\n" +
-		"  morphlings:\n" +
-		"    spawn_enabled: false\n" +
-		"    max_active: 5\n" +
-		"    require_template: true\n" +
-		"logging:\n" +
-		"  log_commands: true\n" +
-		"  log_tool_calls: true\n" +
-		"  log_memory_promotions: true\n" +
-		"memory:\n" +
-		"  auto_distillate: true\n" +
-		"  require_promotion_approval: true\n" +
-		"safety:\n" +
-		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n"
-}
-
-func testPolicyYAMLWithMorphlings(writeRequiresApproval bool, spawnEnabled bool, maxActive int) string {
-	approvalValue := "false"
-	if writeRequiresApproval {
-		approvalValue = "true"
-	}
-	spawnEnabledValue := "false"
-	if spawnEnabled {
-		spawnEnabledValue = "true"
-	}
-	if maxActive <= 0 {
-		maxActive = 5
-	}
-
-	return "version: 0.1.0\n\n" +
-		"tools:\n" +
-		"  filesystem:\n" +
-		"    allowed_roots:\n" +
-		"      - \".\"\n" +
-		"    denied_paths: []\n" +
-		"    read_enabled: true\n" +
-		"    write_enabled: true\n" +
-		"    write_requires_approval: " + approvalValue + "\n" +
-		"  http:\n" +
-		"    enabled: false\n" +
-		"    allowed_domains: []\n" +
-		"    requires_approval: true\n" +
-		"    timeout_seconds: 10\n" +
-		"  shell:\n" +
-		"    enabled: false\n" +
-		"    allowed_commands: []\n" +
-		"    requires_approval: true\n" +
-		"  morphlings:\n" +
-		"    spawn_enabled: " + spawnEnabledValue + "\n" +
-		fmt.Sprintf("    max_active: %d\n", maxActive) +
-		"    require_template: true\n" +
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +

@@ -66,7 +66,6 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
   - stage sandbox artifacts into sandbox outputs
   - inspect staged artifact metadata before export
   - export staged sandbox outputs back to a host destination
-- authoritative morphling class policy loaded from `core/policy/morphling_classes.yaml` and validated at startup
 - Loopgate-owned durable continuity and memory artifacts:
   - append-only continuity event log under `runtime/state/memory/continuity_events.jsonl`
   - derived goal/profile event streams under `runtime/state/memory/goal_events.jsonl` and `runtime/state/memory/profile_events.jsonl`
@@ -79,31 +78,9 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
   - explicit remembered profile-fact writes through a narrow `/v1/memory/remember` surface
   - Loopgate-owned explicit memory-write rate limiting for anti-flood protection
   - socket-bound memory discovery and recall
-- formal morphling lifecycle state machine with Loopgate-owned states:
-  - `requested`
-  - `authorizing`
-  - `pending_spawn_approval`
-  - `spawned`
-  - `running`
-  - `completing`
-  - `pending_review`
-  - `terminating`
-  - `terminated`
-- morphling pool management through the same local Unix-socket control plane:
-  - spawn morphling
-  - list/status morphlings
-  - launch a bound local worker session for a spawned morphling
-  - accept bounded worker lifecycle updates for `status_text` and `memory_strings`
-  - complete a morphling into staged artifacts and explicit operator review
-  - review staged morphling output
-  - terminate morphling
-  - return display-safe status text and Loopgate-owned memory strings to the operator client
-- request-level morphling denials that stay outside the instantiated lifecycle and never mint a `morphling_id`
-- raw morphling goal text retained only in Loopgate-owned task/state records, with session-bound `goal_hmac` written to append-only audit instead of the raw goal
-- deterministic restart recovery that resolves every nonterminal morphling record before new requests are accepted
 - local model inference endpoint for the operator client, with Loopgate-owned live secret resolution
 - append-only quarantine lifecycle with `artifact.viewed`, `artifact.promoted`, and `artifact.blob_pruned` events
-- append-only hash-linked audit for morphling lifecycle events such as `morphling.spawn_requested`, `morphling.spawned`, and `morphling.terminated`
+- append-only hash-linked audit for governance-relevant local actions
 Implemented endpoints:
 
 - `GET /v1/health` (liveness, no auth)
@@ -133,15 +110,6 @@ Implemented endpoints:
 - `POST /v1/memory/inspections/{id}/tombstone`
 - `POST /v1/memory/inspections/{id}/purge`
 
-- `POST /v1/morphlings/spawn` (`morphling.write`)
-- `POST /v1/morphlings/status` (`morphling.read`)
-- `POST /v1/morphlings/review` (`morphling.write`)
-- `POST /v1/morphlings/terminate` (`morphling.write`)
-- `POST /v1/morphlings/worker/launch` (`morphling.write`)
-- `POST /v1/morphlings/worker/open`
-- `POST /v1/morphlings/worker/start`
-- `POST /v1/morphlings/worker/update`
-- `POST /v1/morphlings/worker/complete`
 - `POST /v1/session/open`
 - `POST /v1/model/validate`
 - `POST /v1/model/reply`

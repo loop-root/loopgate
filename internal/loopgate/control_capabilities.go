@@ -117,18 +117,6 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Operation:   "write",
 		Description: "Prepare governed MCP approvals, launch or stop declared MCP servers, and execute approved MCP tool calls through the local control plane.",
 	},
-	controlCapabilityMorphlingRead: {
-		Name:        controlCapabilityMorphlingRead,
-		Category:    "morphling",
-		Operation:   "read",
-		Description: "Read bounded morphling lifecycle status projections through the local control plane.",
-	},
-	controlCapabilityMorphlingWrite: {
-		Name:        controlCapabilityMorphlingWrite,
-		Category:    "morphling",
-		Operation:   "write",
-		Description: "Create, review, terminate, and launch bounded morphling workers through the local control plane.",
-	},
 	controlCapabilityModelReply: {
 		Name:        controlCapabilityModelReply,
 		Category:    "model",

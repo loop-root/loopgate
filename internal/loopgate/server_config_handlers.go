@@ -10,10 +10,9 @@ import (
 )
 
 var validConfigSections = map[string]struct{}{
-	"policy":            {},
-	"morphling_classes": {},
-	"runtime":           {},
-	"connections":       {},
+	"policy":      {},
+	"runtime":     {},
+	"connections": {},
 }
 
 func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -61,14 +60,6 @@ func (server *Server) handleConfigGet(w http.ResponseWriter, section string) {
 	switch section {
 	case "policy":
 		result = policyRuntime.policy
-	case "morphling_classes":
-		mcp := policyRuntime.morphlingClassPolicy
-		// Convert to the file representation for API consumers.
-		classList := make([]morphlingClassYAMLDef, 0, len(mcp.Classes))
-		for _, cls := range mcp.Classes {
-			classList = append(classList, validatedClassToYAMLDef(cls))
-		}
-		result = morphlingClassPolicyFile{Version: mcp.Version, Classes: classList}
 	case "runtime":
 		result = server.runtimeConfig
 	case "connections":
@@ -89,8 +80,6 @@ func (server *Server) handleConfigPut(w http.ResponseWriter, section string, bod
 	switch section {
 	case "policy":
 		server.handleConfigPutPolicy(w, tokenClaims, body)
-	case "morphling_classes":
-		server.handleConfigPutMorphlingClasses(w, body)
 	case "runtime":
 		server.handleConfigPutRuntime(w, body)
 	case "connections":
@@ -161,32 +150,6 @@ func (server *Server) handleConfigPutPolicy(w http.ResponseWriter, tokenClaims c
 	})
 }
 
-func (server *Server) handleConfigPutMorphlingClasses(w http.ResponseWriter, body []byte) {
-	policyRuntime := server.currentPolicyRuntime()
-
-	mcp, err := loadMorphlingClassPolicyFromJSON(body, policyRuntime.registry)
-	if err != nil {
-		http.Error(w, "invalid morphling classes: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	var fileData morphlingClassPolicyFile
-	if jsonErr := json.Unmarshal(body, &fileData); jsonErr != nil {
-		http.Error(w, "decode morphling classes: "+jsonErr.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := config.SaveJSONConfig(server.configStateDir, "morphling_classes", fileData); err != nil {
-		http.Error(w, "save morphling classes: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	policyRuntime.morphlingClassPolicy = mcp
-	server.storePolicyRuntime(policyRuntime)
-
-	w.Header().Set("Content-Type", contentTypeApplicationJSON)
-	fmt.Fprintln(w, `{"status":"ok"}`)
-}
-
 func (server *Server) handleConfigPutRuntime(w http.ResponseWriter, body []byte) {
 	var rc config.RuntimeConfig
 	if err := json.Unmarshal(body, &rc); err != nil {
@@ -241,33 +204,6 @@ func (server *Server) handleConfigPutConnections(w http.ResponseWriter, body []b
 
 	w.Header().Set("Content-Type", contentTypeApplicationJSON)
 	fmt.Fprintln(w, `{"status":"ok"}`)
-}
-
-// validatedClassToYAMLDef converts a validated morphling class back to its file representation.
-func validatedClassToYAMLDef(cls validatedMorphlingClass) morphlingClassYAMLDef {
-	return morphlingClassYAMLDef{
-		Name:        cls.Name,
-		Description: cls.Description,
-		Capabilities: struct {
-			Allowed []string `yaml:"allowed" json:"allowed"`
-		}{Allowed: cls.AllowedCapabilities},
-		Sandbox: struct {
-			AllowedZones []string `yaml:"allowed_zones" json:"allowed_zones"`
-		}{AllowedZones: cls.AllowedZones},
-		ResourceLimits: struct {
-			MaxTimeSeconds int   `yaml:"max_time_seconds" json:"max_time_seconds"`
-			MaxTokens      int   `yaml:"max_tokens" json:"max_tokens"`
-			MaxDiskBytes   int64 `yaml:"max_disk_bytes" json:"max_disk_bytes"`
-		}{MaxTimeSeconds: cls.MaxTimeSeconds, MaxTokens: cls.MaxTokens, MaxDiskBytes: cls.MaxDiskBytes},
-		TTL: struct {
-			SpawnApprovalTTLSeconds   int `yaml:"spawn_approval_ttl_seconds" json:"spawn_approval_ttl_seconds"`
-			CapabilityTokenTTLSeconds int `yaml:"capability_token_ttl_seconds" json:"capability_token_ttl_seconds"`
-			ReviewTTLSeconds          int `yaml:"review_ttl_seconds" json:"review_ttl_seconds"`
-		}{SpawnApprovalTTLSeconds: cls.SpawnApprovalTTLSeconds, CapabilityTokenTTLSeconds: cls.CapabilityTokenTTLSeconds, ReviewTTLSeconds: cls.ReviewTTLSeconds},
-		SpawnRequiresApproval:    cls.SpawnRequiresApproval,
-		CompletionRequiresReview: cls.CompletionRequiresReview,
-		MaxConcurrent:            cls.MaxConcurrent,
-	}
 }
 
 // connectionsToConfigFiles converts the runtime maps back to the array of connectionConfigFile.
