@@ -13,12 +13,11 @@ func TestBuildNativeToolDefs_ReturnsOnlyAllowlistedTools(t *testing.T) {
 	reg.Register(&tools.FSList{RepoRoot: "/tmp"})
 	reg.Register(&tools.FSWrite{RepoRoot: "/tmp"})
 	reg.Register(&tools.FSMkdir{RepoRoot: "/tmp"})
-	reg.Register(&tools.MemoryRemember{})
 	reg.Register(&tools.ShellExec{WorkDir: "/tmp"})
 
 	defs := BuildNativeToolDefs(reg)
-	if len(defs) != 6 {
-		t.Fatalf("expected 6 defs, got %d", len(defs))
+	if len(defs) != 5 {
+		t.Fatalf("expected 5 defs, got %d", len(defs))
 	}
 
 	names := map[string]bool{}
@@ -37,9 +36,6 @@ func TestBuildNativeToolDefs_ReturnsOnlyAllowlistedTools(t *testing.T) {
 	if !names["fs_mkdir"] {
 		t.Error("expected fs_mkdir in defs")
 	}
-	if !names["memory.remember"] {
-		t.Error("expected memory.remember in defs")
-	}
 	if !names["shell_exec"] {
 		t.Error("expected shell_exec in defs")
 	}
@@ -49,12 +45,11 @@ func TestBuildNativeToolDefsForAllowedNames_FiltersToGrantedCapabilities(t *test
 	reg := tools.NewRegistry()
 	reg.Register(&tools.FSRead{RepoRoot: "/tmp"})
 	reg.Register(&tools.FSMkdir{RepoRoot: "/tmp"})
-	reg.Register(&tools.MemoryRemember{})
 	reg.Register(&tools.ShellExec{WorkDir: "/tmp"})
 
 	defs := BuildNativeToolDefsForAllowedNames(reg, []string{
 		"fs_read",
-		"memory.remember",
+		"shell_exec",
 	})
 
 	if len(defs) != 2 {
@@ -69,14 +64,11 @@ func TestBuildNativeToolDefsForAllowedNames_FiltersToGrantedCapabilities(t *test
 	if !names["fs_read"] {
 		t.Fatal("expected fs_read in defs")
 	}
-	if !names["memory.remember"] {
-		t.Fatal("expected memory.remember in defs")
+	if !names["shell_exec"] {
+		t.Fatal("expected shell_exec in defs")
 	}
 	if names["fs_mkdir"] {
 		t.Fatal("did not expect fs_mkdir without a granted capability")
-	}
-	if names["shell_exec"] {
-		t.Fatal("did not expect shell_exec without a granted capability")
 	}
 }
 
@@ -193,22 +185,18 @@ func TestBuildNativeToolDefs_CompactNativeTools_SingleDef(t *testing.T) {
 	}
 }
 
-func TestBuildNativeToolDefsForAllowedNamesWithOptions_UserIntentGuardsAppendToDescription(t *testing.T) {
+func TestBuildNativeToolDefsForAllowedNamesWithOptions_UserIntentGuardsDoNotAffectUngardedTools(t *testing.T) {
 	reg := tools.NewRegistry()
-	reg.Register(&tools.MemoryRemember{})
 	reg.Register(&tools.FSRead{RepoRoot: "/tmp"})
 
-	defs := BuildNativeToolDefsForAllowedNamesWithOptions(reg, []string{"memory.remember", "fs_read"}, NativeToolDefBuildOptions{
+	defs := BuildNativeToolDefsForAllowedNamesWithOptions(reg, []string{"fs_read"}, NativeToolDefBuildOptions{
 		HavenUserIntentGuards: true,
 	})
-	if len(defs) != 2 {
-		t.Fatalf("expected 2 defs, got %d", len(defs))
+	if len(defs) != 1 {
+		t.Fatalf("expected 1 def, got %d", len(defs))
 	}
 	for _, d := range defs {
 		hasGuard := strings.Contains(d.Description, "Only call when the user explicitly asked")
-		if d.Name == "memory.remember" && !hasGuard {
-			t.Fatalf("expected guard suffix on %q, got description %q", d.Name, d.Description)
-		}
 		if d.Name == "fs_read" && hasGuard {
 			t.Fatalf("did not expect guard suffix on %q, got description %q", d.Name, d.Description)
 		}

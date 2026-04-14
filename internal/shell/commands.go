@@ -65,7 +65,7 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 
 	case "/man":
 		if len(fields) < 2 {
-			return CommandResult{Output: "Usage: /man <command>  (e.g. /man goal)", Handled: true, ToolEventSeen: toolEventSeen}
+			return CommandResult{Output: "Usage: /man <command>  (e.g. /man sandbox)", Handled: true, ToolEventSeen: toolEventSeen}
 		}
 		target := strings.ToLower(fields[1])
 		if !strings.HasPrefix(target, "/") {
@@ -404,52 +404,6 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 
 	case "/tools":
 		return CommandResult{Output: summarizeTools(commandContext), Handled: true, ToolEventSeen: toolEventSeen}
-
-	case "/memory":
-		if commandContext.LoopgateClient == nil {
-			return CommandResult{Output: "Denied: memory operations require Loopgate.", Handled: true, ToolEventSeen: true}
-		}
-		if len(fields) >= 2 {
-			switch strings.ToLower(fields[1]) {
-			case "recall":
-				if len(fields) < 3 {
-					return CommandResult{Output: "Usage: /memory recall <key-id>", Handled: true, ToolEventSeen: toolEventSeen}
-				}
-				recallResponse, err := commandContext.LoopgateClient.RecallMemory(context.Background(), loopgate.MemoryRecallRequest{
-					RequestedKeys: []string{fields[2]},
-				})
-				if err != nil {
-					return CommandResult{Output: "Error: " + err.Error(), Handled: true, ToolEventSeen: toolEventSeen}
-				}
-				return CommandResult{Output: loopgateresult.FormatMemoryRecallResponse(recallResponse), Handled: true, ToolEventSeen: true}
-			case "discover":
-				if len(fields) < 3 {
-					return CommandResult{Output: "Usage: /memory discover <terms...>", Handled: true, ToolEventSeen: toolEventSeen}
-				}
-				discoveryResponse, err := commandContext.LoopgateClient.DiscoverMemory(context.Background(), loopgate.MemoryDiscoverRequest{
-					Query: strings.Join(fields[2:], " "),
-				})
-				if err != nil {
-					return CommandResult{Output: "Error: " + err.Error(), Handled: true, ToolEventSeen: toolEventSeen}
-				}
-				return CommandResult{Output: loopgateresult.FormatMemoryDiscoverResponse(discoveryResponse), Handled: true, ToolEventSeen: true}
-			case "remember":
-				if len(fields) < 4 {
-					return CommandResult{Output: "Usage: /memory remember <fact-key> <value>", Handled: true, ToolEventSeen: toolEventSeen}
-				}
-				rememberResponse, err := commandContext.LoopgateClient.RememberMemoryFact(context.Background(), loopgate.MemoryRememberRequest{
-					FactKey:         strings.TrimSpace(fields[2]),
-					FactValue:       strings.TrimSpace(strings.Join(fields[3:], " ")),
-					CandidateSource: "explicit_fact",
-					SourceChannel:   "shell_command",
-				})
-				if err != nil {
-					return CommandResult{Output: "Error: " + loopgate.SafeMemoryRememberErrorText(err), Handled: true, ToolEventSeen: true}
-				}
-				return CommandResult{Output: loopgateresult.FormatMemoryRememberResponse(rememberResponse), Handled: true, ToolEventSeen: true}
-			}
-		}
-		return CommandResult{Output: summarizeMemory(commandContext), Handled: true, ToolEventSeen: toolEventSeen}
 
 	case "/model":
 		if len(fields) >= 2 {

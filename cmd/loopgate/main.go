@@ -10,7 +10,6 @@ import (
 	"syscall"
 
 	"loopgate/internal/loopgate"
-	"loopgate/internal/memory"
 )
 
 var exitProcess = os.Exit
@@ -32,14 +31,6 @@ func main() {
 	} else {
 		repoRoot = filepath.Clean(repoRoot)
 	}
-	unsupportedRawMemoryArtifacts, rawMemoryInspectErr := memory.InspectUnsupportedRawMemoryArtifacts(repoRoot)
-	if rawMemoryInspectErr != nil {
-		fmt.Fprintln(os.Stderr, "WARN: inspect unsupported raw memory artifacts:", rawMemoryInspectErr)
-	}
-	for _, rawMemoryArtifact := range unsupportedRawMemoryArtifacts {
-		fmt.Fprintln(os.Stderr, "WARN:", memory.FormatUnsupportedRawMemoryArtifactWarning(rawMemoryArtifact))
-	}
-
 	socketPath := filepath.Join(repoRoot, "runtime", "state", "loopgate.sock")
 	if envSocket := strings.TrimSpace(os.Getenv("LOOPGATE_SOCKET")); envSocket != "" {
 		socketPath = envSocket

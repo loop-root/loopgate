@@ -143,16 +143,14 @@ func TestNewServer_FailsClosedAndSurfacesContinuityReplayFailure(t *testing.T) {
 		t.Fatalf("write corrupt continuity events: %v", err)
 	}
 
-	socketFile, err := os.CreateTemp("", "loopgate-*.sock")
-	if err != nil {
-		t.Fatalf("create temp socket file: %v", err)
+	socketPath := filepath.Join(repoRoot, "runtime", "state", "l.sock")
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
+		t.Fatalf("create test socket dir: %v", err)
 	}
-	socketPath := socketFile.Name()
-	_ = socketFile.Close()
 	_ = os.Remove(socketPath)
 	t.Cleanup(func() { _ = os.Remove(socketPath) })
 
-	_, err = NewServer(repoRoot, socketPath)
+	_, err := NewServer(repoRoot, socketPath)
 	if err == nil {
 		t.Fatal("expected NewServer to fail on corrupt continuity replay")
 	}
@@ -248,6 +246,68 @@ func TestRetiredHavenSandboxCapabilitiesAreAbsent(t *testing.T) {
 		if containsCapability(refreshedStatus.Capabilities, capabilityName) {
 			t.Fatalf("expected %s to stay absent in refreshed status", capabilityName)
 		}
+	}
+}
+
+func TestRetiredMemoryRoutesAreNotRegistered(t *testing.T) {
+	repoRoot := newShortLoopgateTestRepoRoot(t)
+	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
+
+	socketPath := filepath.Join(repoRoot, "runtime", "state", "l.sock")
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	for _, path := range []string{
+		"/v1/memory/wake-state",
+		"/v1/memory/diagnostic-wake",
+		"/v1/memory/discover",
+		"/v1/memory/artifacts/lookup",
+		"/v1/memory/recall",
+		"/v1/memory/artifacts/get",
+		"/v1/memory/remember",
+		"/v1/memory/inspections/test-id/review",
+		"/v1/memory/inspections/test-id/tombstone",
+		"/v1/memory/inspections/test-id/purge",
+	} {
+		method := http.MethodPost
+		if strings.HasSuffix(path, "wake-state") || strings.HasSuffix(path, "diagnostic-wake") {
+			method = http.MethodGet
+		}
+		request := httptest.NewRequest(method, path, strings.NewReader(`{}`))
+		recorder := httptest.NewRecorder()
+		server.server.Handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("expected retired memory route %s to return 404, got %d", path, recorder.Code)
+		}
+	}
+}
+
+func TestRetiredMemorySurfaceIsAbsentFromStatus(t *testing.T) {
+	repoRoot := newShortLoopgateTestRepoRoot(t)
+	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
+
+	socketPath := filepath.Join(repoRoot, "runtime", "state", "l.sock")
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	for _, hiddenControlCapability := range []string{
+		"memory.read",
+		"memory.write",
+		"memory.reset",
+		"memory.review",
+		"memory.lineage",
+	} {
+		if containsCapability(controlCapabilitySummaries(), hiddenControlCapability) {
+			t.Fatalf("expected retired control capability %s to be absent", hiddenControlCapability)
+		}
+	}
+
+	if server.currentPolicyRuntime().registry.Has("memory.remember") {
+		t.Fatal("expected memory.remember to be absent after memory surface retirement")
 	}
 }
 
@@ -6447,6 +6507,26 @@ func ageQuarantineRecordForPrune(t *testing.T, repoRoot string, quarantineRef st
 	}
 }
 
+func newShortLoopgateTestRepoRoot(t *testing.T) string {
+	t.Helper()
+
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	workspaceRoot := filepath.Clean(filepath.Join(workingDirectory, "..", ".."))
+	baseDir := filepath.Join(workspaceRoot, ".tmp-loopgate-tests")
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		t.Fatalf("mkdir short test base dir: %v", err)
+	}
+	repoRoot, err := os.MkdirTemp(baseDir, "rt-")
+	if err != nil {
+		t.Fatalf("mkdir short test repo root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(repoRoot) })
+	return repoRoot
+}
+
 func startLoopgateServer(t *testing.T, repoRoot string, policyYAML string) (*Client, StatusResponse, *Server) {
 	return startLoopgateServerWithRuntime(t, repoRoot, policyYAML, nil, true)
 }
@@ -6498,12 +6578,10 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 		}
 	}
 
-	socketFile, err := os.CreateTemp("", "loopgate-*.sock")
-	if err != nil {
-		t.Fatalf("create temp socket file: %v", err)
+	socketPath := filepath.Join(repoRoot, "runtime", "state", "l.sock")
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
+		t.Fatalf("create test socket dir: %v", err)
 	}
-	socketPath := socketFile.Name()
-	_ = socketFile.Close()
 	_ = os.Remove(socketPath)
 	t.Cleanup(func() { _ = os.Remove(socketPath) })
 	server, err := NewServer(repoRoot, socketPath)
@@ -6516,9 +6594,10 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 
 	serverContext, cancel := context.WithCancel(context.Background())
 	serverDone := make(chan struct{})
+	serveErrCh := make(chan error, 1)
 	go func() {
 		defer close(serverDone)
-		_ = server.Serve(serverContext)
+		serveErrCh <- server.Serve(serverContext)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -6531,6 +6610,11 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 		_, err = client.Health(context.Background())
 		if err == nil {
 			break
+		}
+		select {
+		case serveErr := <-serveErrCh:
+			t.Fatalf("loopgate serve exited before health check: %v", serveErr)
+		default:
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("wait for loopgate health: %v", err)

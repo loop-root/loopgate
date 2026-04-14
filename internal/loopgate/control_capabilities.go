@@ -79,36 +79,6 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Operation:   "write",
 		Description: "Update or sync folder-access and shared-folder state through the local control plane.",
 	},
-	controlCapabilityMemoryRead: {
-		Name:        controlCapabilityMemoryRead,
-		Category:    "memory",
-		Operation:   "read",
-		Description: "Read Loopgate wake state, discovery results, and recall outputs through the local control plane.",
-	},
-	controlCapabilityMemoryWrite: {
-		Name:        controlCapabilityMemoryWrite,
-		Category:    "memory",
-		Operation:   "write",
-		Description: "Submit explicit or continuity-derived memory candidates for governed persistence through the local control plane.",
-	},
-	controlCapabilityMemoryReset: {
-		Name:        controlCapabilityMemoryReset,
-		Category:    "memory",
-		Operation:   "write",
-		Description: "Archive and reinitialize authoritative memory state through the local control plane.",
-	},
-	controlCapabilityMemoryReview: {
-		Name:        controlCapabilityMemoryReview,
-		Category:    "memory",
-		Operation:   "review",
-		Description: "Review a pending memory inspection lineage decision through the local control plane.",
-	},
-	controlCapabilityMemoryLineage: {
-		Name:        controlCapabilityMemoryLineage,
-		Category:    "memory",
-		Operation:   "write",
-		Description: "Apply lineage transitions such as tombstone or purge to governed memory artifacts through the local control plane.",
-	},
 	controlCapabilityMCPGatewayWrite: {
 		Name:        controlCapabilityMCPGatewayWrite,
 		Category:    "mcp_gateway",

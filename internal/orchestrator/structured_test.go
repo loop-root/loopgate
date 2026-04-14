@@ -168,25 +168,6 @@ func TestExtractStructuredCalls_FSList(t *testing.T) {
 	}
 }
 
-func TestExtractStructuredCalls_RememberAliasToMemoryRemember(t *testing.T) {
-	// Kimi and some OpenAI-compatible stacks shorten dotted tool names to a single segment.
-	reg := tools.NewRegistry()
-	reg.Register(&tools.MemoryRemember{})
-	blocks := []model.ToolUseBlock{
-		{ID: "call_r1", Name: "remember", Input: map[string]string{"fact_key": "preference.tea", "fact_value": "oolong"}},
-	}
-	calls, errs := ExtractStructuredCalls(blocks, reg)
-	if len(errs) != 0 {
-		t.Fatalf("unexpected errors: %v", errs)
-	}
-	if len(calls) != 1 {
-		t.Fatalf("expected 1 call, got %d", len(calls))
-	}
-	if calls[0].Name != "memory.remember" {
-		t.Fatalf("expected canonical name memory.remember, got %q", calls[0].Name)
-	}
-}
-
 func TestExtractStructuredCalls_ListAliasToFSList(t *testing.T) {
 	reg := newTestRegistry()
 	blocks := []model.ToolUseBlock{

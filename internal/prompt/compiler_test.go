@@ -199,6 +199,9 @@ func TestCompiler_IncludesRuntimeContractAndCommands(t *testing.T) {
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory.") {
 		t.Fatalf("compiled prompt missing raw-memory filesystem rule: %s", compiledPrompt.SystemInstruction)
 	}
+	if !strings.Contains(compiledPrompt.SystemInstruction, "Those stores are internal extraction debt, not an operator API.") {
+		t.Fatalf("compiled prompt missing continuity extraction rule: %s", compiledPrompt.SystemInstruction)
+	}
 }
 
 func TestCompiler_NativeToolsUseGenericSelfDescriptionRules(t *testing.T) {
@@ -268,5 +271,8 @@ func TestCompiler_GenericToolCallProtocol_UsesLoopgateAgnosticLanguage(t *testin
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory") {
 		t.Fatalf("generic tool-call path missing raw memory store warning: %s", compiledPrompt.SystemInstruction)
+	}
+	if !strings.Contains(compiledPrompt.SystemInstruction, "That continuity layer is not part of the active Loopgate operator surface.") {
+		t.Fatalf("generic tool-call path missing continuity extraction warning: %s", compiledPrompt.SystemInstruction)
 	}
 }

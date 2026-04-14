@@ -47,11 +47,11 @@ The current working set in this directory is:
 
 These files must change together with the tool registry and client-injected runtime facts so every operator surface sees the same capability truth.
 
-The newest active example here is `memory.remember`:
+The newest active examples here are filesystem and host-folder capabilities:
 
-- it must exist in `internal/tools`
-- it must be allowed here
-- it must be described honestly in the injected runtime facts used by local chat surfaces
+- they must exist in `internal/tools`
+- they must be allowed here
+- they must be described honestly in the injected runtime facts used by local chat surfaces
 - and Loopgate still remains the authority for execution
 
 ## Important Watchouts

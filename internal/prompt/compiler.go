@@ -218,7 +218,7 @@ func buildSystemInstruction(request Request) (string, error) {
 			"Do not deny built-in product features that are listed in RUNTIME CONTRACT or AVAILABLE COMMANDS.",
 			"If a matching capability is not listed, say it is unavailable. Do not substitute an unrelated capability just because it is available.",
 			"Only mention slash commands that are explicitly listed in AVAILABLE COMMANDS. Do not invent slash namespaces or subcommands such as /memory/remembered-events.",
-			"Do not treat raw filesystem paths like runtime/state/memory as the memory product surface. Memory is Loopgate-governed and exposed through the listed memory commands only.",
+			"Do not treat raw filesystem paths like runtime/state/memory as a user-facing product surface. Those stores are internal extraction debt, not an operator API.",
 		})
 	}
 
@@ -230,7 +230,6 @@ func buildSystemInstruction(request Request) (string, error) {
 				"Do not claim a tool succeeded unless you received a tool result.",
 				"Use tools only when needed to answer the user's current request or to complete work they explicitly asked for. Prefer the smallest set of tool calls that suffices.",
 				"Do not start side work: do not add tasks, journal entries, sticky notes, or durable memories for your own planning unless the user asked for that outcome.",
-				"When the user clearly asks to remember something or states an explicit stable fact about themselves, use the memory tool if listed. If you are guessing whether something is durable, ask one brief question instead of storing.",
 				"Do not re-invoke tools from earlier turns just because they appear in the transcript; use prior tool results unless the user explicitly asks to redo or you need fresh data they requested.",
 				"Each new tool invocation must use a new tool-use id from the API. Never reuse an id from a previous assistant message — the control plane rejects duplicate ids as retries.",
 			})
@@ -240,7 +239,6 @@ func buildSystemInstruction(request Request) (string, error) {
 				"The structured tool definitions attached to this request are authoritative for each tool's name, parameters, and when to use it.",
 				"Do not claim a tool succeeded unless you received a tool result.",
 				"Use tools proactively when they help answer the user's question or accomplish their request.",
-				"When the user asks or clearly implies that a stable fact should persist, prefer the memory tool if one is listed. If the fact is ambiguous, ask one brief clarifying question.",
 			})
 		}
 	} else {
@@ -256,8 +254,8 @@ func buildSystemInstruction(request Request) (string, error) {
 			"If you are unsure whether a listed tool matches, do not emit a tool call for it.",
 			"Do not claim a tool succeeded unless you received a tool result.",
 			"Never emit <tool_result>. Tool results are generated only by the runtime after actual execution.",
-			"Never emit <tool_call> for local product commands such as /memory, /site, or /setup.",
-			"Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory. Use only the listed memory commands or explain that the memory write surface is not exposed.",
+			"Never emit <tool_call> for local product commands such as /site or /setup.",
+			"Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory. That continuity layer is not part of the active Loopgate operator surface.",
 			"If the user asks how to use a local product command, answer in plain text instead of emitting a tool call.",
 		})
 	}

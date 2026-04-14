@@ -11,7 +11,7 @@ func TestChatMessageToolRoleMarshalsNameField(t *testing.T) {
 		Role:       "tool",
 		Content:    `{"status":"ok"}`,
 		ToolCallID: "call_abc",
-		Name:       "memory.remember",
+		Name:       "fs_read",
 	}
 	raw, err := json.Marshal(msg)
 	if err != nil {
@@ -21,7 +21,7 @@ func TestChatMessageToolRoleMarshalsNameField(t *testing.T) {
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded["name"] != "memory.remember" {
+	if decoded["name"] != "fs_read" {
 		t.Fatalf("expected name in JSON, got %v", decoded["name"])
 	}
 	if decoded["tool_call_id"] != "call_abc" {

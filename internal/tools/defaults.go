@@ -59,10 +59,6 @@ func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []strin
 		return nil, err
 	}
 
-	if err := reg.TryRegister(&MemoryRemember{}); err != nil {
-		return nil, err
-	}
-
 	// Host folder capabilities are Loopgate-executed; never mark as trusted-sandbox-local.
 	if err := reg.TryRegister(&HostFolderList{}); err != nil {
 		return nil, err

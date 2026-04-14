@@ -20,9 +20,7 @@ type NativeToolDefBuildOptions struct {
 
 const havenUserIntentGuardSuffix = " Only call when the user explicitly asked for this outcome or it is strictly required to fulfill their current request; do not use for your own planning."
 
-var havenNativeToolUserIntentGuards = map[string]bool{
-	"memory.remember": true,
-}
+var havenNativeToolUserIntentGuards = map[string]bool{}
 
 // nativeToolAllowlist defines which tools are eligible for the native
 // structured tool-use API. Only tools in this list will be sent as
@@ -40,7 +38,6 @@ var nativeToolAllowlist = map[string]bool{
 	"operator_mount.fs_write": true,
 	"operator_mount.fs_list":  true,
 	"operator_mount.fs_mkdir": true,
-	"memory.remember":         true,
 	"shell_exec":              true,
 	"host.folder.list":        true,
 	"host.folder.read":        true,

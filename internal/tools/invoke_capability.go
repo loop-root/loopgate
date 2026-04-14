@@ -21,7 +21,7 @@ func (t *InvokeCapability) Schema() Schema {
 		Args: []ArgDef{
 			{
 				Name:        "capability",
-				Description: "Exact capability id to invoke (e.g. fs_read, memory.remember)",
+				Description: "Exact capability id to invoke (e.g. fs_read, host.folder.list)",
 				Required:    true,
 				Type:        "string",
 				MaxLen:      128,

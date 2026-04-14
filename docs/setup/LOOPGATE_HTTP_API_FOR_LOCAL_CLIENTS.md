@@ -21,7 +21,7 @@ The historical **`/v1/haven/...`** compatibility aliases are removed. The sessio
 
 | Item | Detail |
 |------|--------|
-| **Process** | Loopgate — local authority for capabilities, approvals, audit, secrets, sandbox, memory, etc. |
+| **Process** | Loopgate — local authority for capabilities, approvals, audit, secrets, sandbox, and the governed MCP path. |
 | **Wire protocol** | **HTTP/1.1** (JSON bodies, `Content-Type: application/json`) |
 | **Transport** | **Unix domain stream socket** only in v1 — **not** TCP to `localhost` |
 | **Default socket path** | `{repoRoot}/runtime/state/loopgate.sock` when Loopgate is started with cwd = repo root (`cmd/loopgate`) |
@@ -249,10 +249,6 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`**; host import/export additionally require a pinned client session bound to matching `operator_mount_paths`, and export requires an active operator-mount write grant |
 | `POST /v1/sandbox/metadata` | Sandbox artifact metadata — **`fs_read`** |
 | `POST /v1/sandbox/list` | Sandbox directory listing — **`fs_list`** |
-| `GET /v1/memory/wake-state` | Wake state projection |
-| `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
-| `POST /v1/memory/discover` / `recall` / `remember` | Memory surfaces |
-| `POST /v1/memory/inspections/…` | Inspection governance |
 | `POST /v1/quarantine/metadata` / `view` | Quarantine metadata / bounded payload view (**`quarantine.read`**) |
 | `POST /v1/quarantine/prune` | Quarantine blob prune while preserving metadata (**`quarantine.write`**) |
 | `GET` / `PUT /v1/config/…` | Policy, runtime, connections, etc. (capability-gated). `PUT /v1/config/policy` hot-reloads the already signed on-disk `core/policy/policy.yaml`; it does not trust policy content sent in the HTTP body. |

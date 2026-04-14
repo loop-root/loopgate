@@ -5,14 +5,11 @@ This file maps the main Loopgate package files. **Loopgate** is the authority an
 Use it when changing:
 
 - capability inventory and status surfaces
-- explicit memory persistence
-- wake-state and memory diagnostics
 - capability-specific execution paths
 - **local HTTP client** surfaces (`internal/loopgate/client.go`, neutral `/v1/...` routes)
-- task execution classes and standing approvals
 - mirrored host-folder grants and sync behavior
 - the next permissioned host plan/apply model for real user-folder actions
-- continuity-backed task and approval substrates (Loopgate-owned, not UI-owned)
+- continuity extraction boundaries that still live in-tree as cleanup debt
 
 ## Core Role
 
@@ -23,10 +20,9 @@ Use it when changing:
 For integrators it matters in four ways:
 
 - it defines which capabilities actually exist
-- it exposes the memory APIs **local clients** must call (not optional side channels)
-- it produces the status data **Security / Activity / continuity UIs** render from projections
+- it produces the status data clients render from authoritative projections
 - it owns the authoritative bridge between explicit host-folder grants and **client-visible** mirrored folders
-- it centralizes tasks, approvals, memory, and host-action state so **every client** (IDE, CLI, TUI, or other local client) shares one auditable substrate
+- it centralizes approvals, policy, audit, MCP governance, and host-action state so **every client** shares one auditable substrate
 
 ## Key Files
 
@@ -36,7 +32,7 @@ For integrators it matters in four ways:
   - server construction
   - tool registry wiring
   - capability summaries derived from the registry
-  - dispatch point for capability-specific execution paths such as `memory.remember`
+  - dispatch point for capability-specific execution paths such as host-folder plan/apply helpers
   - now also contains some legacy actor-scoped branches that should continue shrinking rather than becoming product surface
   - handler panics and operator-relevant errors should log via the diagnostic **`slog`** loggers (`internal/loopdiag`, levels from `config/runtime.yaml` → `logging.diagnostic`) with **`tenant_id` / `user_id`** on the log record when a control session is bound, so admins can troubleshoot without a debugger and filter by tenant in multi-tenant deployments
 - `folder_access.go`
@@ -44,9 +40,6 @@ For integrators it matters in four ways:
   - compare-before-sync mirror logic
   - current place where host-folder changes become **audited, client-visible** updates
   - likely starting point for the future granted-folder resource model that separates read, plan, and apply scopes
-- `memory_capability.go`
-  - authoritative execution for `memory.remember`
-  - bridges native tool calls onto the explicit remember-memory API
 - `todo_contract.go`
   - legacy explicit-task continuity constants retained only so older persisted continuity records still parse deterministically after task-board retirement
 - `todo_legacy_helpers.go`
@@ -79,7 +72,7 @@ For integrators it matters in four ways:
 - `types_connections.go`
   - connection status, PKCE, model-connection store, and site-inspection/trust wire contracts plus validators
 - `types_memory.go`
-  - continuity inspection, wake-state, memory lookup/recall/artifact, and legacy todo replay wire contracts plus request validation helpers
+  - in-tree continuity request and record contracts that are now extraction debt, not active Loopgate operator API
 - `types_sandbox.go`
   - sandbox import/export/list/metadata wire contracts plus request validation helpers
 
@@ -95,7 +88,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 
 - `server_sandbox_handlers.go` — sandbox import/export/list/stage; `redactSandboxError` returns stable sentinel strings only (no wrapped host paths in client-visible errors)
 - `server_sandbox_handlers_test.go` — `TestRedactSandboxError_DoesNotExposeAbsolutePaths`
-- `server_memory_handlers.go` — memory endpoints (see Memory section below)
 - `server_capability_handlers.go` — capability execution
 - `server_model_handlers.go` — model connection APIs; **session open** stamps `TenantID` / `UserID` from `config/runtime.yaml` → `tenancy` (see `docs/setup/TENANCY.md`, ADR 0004)
 - `server_config_handlers.go` — configuration
@@ -115,8 +107,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - public Go client surface core (`Client`, constructors, model/connections/site wrappers) over the Unix socket — **wire reference** for non-Go integrators; see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`
 - `client_session.go`
   - control-session bootstrap, delegated-session refresh state, approval-token flows, and capability-execution wrappers
-- `client_memory.go`
-  - continuity, wake, and memory governance wrappers used by local clients and test harnesses
 - `client_sandbox.go`
   - sandbox import/export/list/metadata wrappers over the signed local control plane
 - `client_transport.go`
@@ -126,7 +116,7 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `configured_capability_extract.go`
   - configured response extraction, HTML/Markdown/JSON selectors, and result-field classification helpers
 
-### Memory and Continuity
+### Continuity Extraction Debt
 
 - `memory_partition.go`
   - **`memoryBasePath`** + per-tenant **`memoryPartitions`** map: each tenant gets its own continuity root under `memory/partitions/<key>/` (`default` for empty deployment tenant; hashed directory name for non-empty — no raw tenant string in paths)
@@ -142,12 +132,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
   - continuity backend now owns the explicit remember candidate-builder seam, so targeted TCL failure injection no longer depends on a `Server` hook
   - explicit remember normalization, denial audit, and continuity fact candidate analysis live together on the backend side of the memory authority boundary
 
-- `memory_conflict_anchor_test.go`
-  - Phase 1 anchor persistence and fail-closed TCL failures: `TestRememberMemoryFact_SupersedesOnlyWhenAnchorTupleMatches`, `TestRememberMemoryFact_CoexistsWhenTCLReturnsNoAnchor`, `TestRememberMemoryFact_FailsClosedWhenTCLValidationFails`
-  - additional wake/replay coverage for anchor tuples lives in `continuity_memory_test.go` (see implementation plan Task 4 test names)
-
-- `server_memory_handlers.go`
-  - memory endpoints, including explicit remember and diagnostic wake
 - `continuity_memory_access.go`
   - continuity request normalization, inspect/discover/recall adapters, and backend lookup
 - `continuity_memory_mutation.go`
@@ -199,27 +183,16 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 The current working set in this directory is:
 
 - `client.go`
-- `server_memory_handlers.go`
-- `continuity_memory.go`
 - `folder_access.go`
-- `memory_capability.go`
-- `todo_execution.go`
-- `todo_mutation.go`
-- `goal_mutation.go`
 - `server.go`
 - `server_connection_handlers.go`
 - `ui_types.go`
 
 These files matter because:
 
-- **Clients** must not depend on vague memory claims; Loopgate exposes explicit APIs and diagnostics
-- explicit "remember this" should route through `RememberMemoryFact`
-- explicit Todo mutations should route through the same continuity authority model instead of a **client-local** parallel store
-- open tasks should be durable operational objects, not only UI strings
-- native `memory.remember` tool calls should not bypass the explicit remember pipeline
+- **Clients** must not depend on vague product claims; Loopgate exposes the governance surfaces that actually exist
 - the capability inventory should stay authoritative even if a **UI** renders friendlier names
   - actor-scoped low-friction execution (including the current `haven` compatibility actor) must stay inside Loopgate policy, not leak into generic evaluation for other actors
-- standing approvals are still Loopgate authority, not UI preference state
 - host-folder mirroring should stay explicit, audited, and compare-before-sync instead of becoming a noisy or implicit watcher path
 - the next host-help slice should build as a plan/apply system on top of Loopgate, not as raw writable host filesystem authority
 

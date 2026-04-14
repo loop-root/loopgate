@@ -196,13 +196,11 @@ func parseArgumentsJSONString(jsonStr string) (map[string]string, error) {
 
 // openAIToolNameAliases maps common mis-names from OpenAI-compatible models
 // (including Kimi) to registered capability names. Moonshot docs recommend
-// function names using [A-Za-z0-9_-] only; models sometimes shorten dotted
-// names like memory.remember to "remember".
+// function names using [A-Za-z0-9_-] only; models sometimes rewrite or
+// flatten dotted capability names.
 //
 // Only aliases that resolve to a tool present in the registry are applied.
 var openAIToolNameAliases = map[string]string{
-	"remember":           "memory.remember",
-	"memory_remember":    "memory.remember",
 	"list":               "fs_list",
 	"host_folder_list":   "host.folder.list",
 	"host_folder_read":   "host.folder.read",

@@ -15,7 +15,8 @@ It is the enforcement point for capabilities, approvals, integration auth, and o
 
 Older Haven route and tool surfaces are being retired. Treat the active
 Loopgate product as the governance kernel for Claude hooks, approvals, audit,
-policy, and the MCP gateway path.
+policy, and the MCP gateway path. Memory and continuity remain in-tree
+extraction debt, not part of the active Loopgate operator surface.
 
 ## Current state
 
@@ -66,18 +67,6 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
   - stage sandbox artifacts into sandbox outputs
   - inspect staged artifact metadata before export
   - export staged sandbox outputs back to a host destination
-- Loopgate-owned durable continuity and memory artifacts:
-  - append-only continuity event log under `runtime/state/memory/continuity_events.jsonl`
-  - derived goal/profile event streams under `runtime/state/memory/goal_events.jsonl` and `runtime/state/memory/profile_events.jsonl`
-  - idempotent sealed-thread inspection
-  - inspection-root review and lineage governance
-  - derived distillates
-  - governed resonate keys
-  - runtime wake-state projection plus a separate diagnostic wake report
-  - resolved profile snapshot, correction artifacts, and revalidation tickets
-  - explicit remembered profile-fact writes through a narrow `/v1/memory/remember` surface
-  - Loopgate-owned explicit memory-write rate limiting for anti-flood protection
-  - socket-bound memory discovery and recall
 - local model inference endpoint for the operator client, with Loopgate-owned live secret resolution
 - append-only quarantine lifecycle with `artifact.viewed`, `artifact.promoted`, and `artifact.blob_pruned` events
 - append-only hash-linked audit for governance-relevant local actions
@@ -102,14 +91,6 @@ Implemented endpoints:
 - `POST /v1/sandbox/stage`
 - `POST /v1/sandbox/metadata`
 - `POST /v1/sandbox/export` (`fs_write`; host destination must match a bound operator mount from a pinned expected client session and an active write grant)
-- `GET /v1/memory/wake-state`
-- `POST /v1/memory/discover`
-- `POST /v1/memory/recall`
-- `POST /v1/memory/remember`
-- `POST /v1/memory/inspections/{id}/review`
-- `POST /v1/memory/inspections/{id}/tombstone`
-- `POST /v1/memory/inspections/{id}/purge`
-
 - `POST /v1/session/open`
 - `POST /v1/model/validate`
 - `POST /v1/model/reply`
@@ -136,7 +117,7 @@ Current MVP note:
 
 - the active transport is the local Unix-socket control plane for Claude hooks, operator clients, and out-of-tree bridges
 - retired Haven and morphling surfaces are no longer part of the active product boundary
-- memory remains in-tree as continuity infrastructure, but it is not part of the Claude hooks MVP contract
+- memory and continuity remain in-tree as extraction debt, but they are not part of the active Loopgate operator contract
 
 Not yet implemented:
 
@@ -165,7 +146,7 @@ Not yet implemented:
 - integration auth and secret handling
 - outbound integration execution
 - structured result filtering and redaction
-- durable memory derivation, resonate-key minting, wake-state projection, and governed recall/discovery
+- the governed MCP broker lifecycle and execution path
 
 ## Core rule
 

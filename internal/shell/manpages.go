@@ -93,28 +93,6 @@ func padCmd(s string, width int) string {
 
 // ── Man pages ────────────────────────────────────────────────────────────────
 
-func manMemory() commandManPage {
-	return commandManPage{
-		Title:    "MEMORY",
-		Synopsis: "/memory [subcommand] [args...]",
-		Description: []string{
-			"Inspect memory policy and interact with durable memory.",
-			"Without a subcommand, shows the current memory policy.",
-		},
-		Subcommands: []manSubcommand{
-			{Name: "discover", Args: "<terms...>", Desc: "search for remembered keys by term"},
-			{Name: "recall", Args: "<key-id>", Desc: "retrieve a remembered value"},
-			{Name: "remember", Args: "<key> <value>", Desc: "explicitly store a profile fact"},
-		},
-		Examples: []manExample{
-			{Command: "/memory", Desc: "show memory policy summary"},
-			{Command: "/memory discover auth provider", Desc: "search for auth-related keys"},
-			{Command: "/memory recall user.preferred_language", Desc: "retrieve a stored fact"},
-			{Command: "/memory remember user.role backend engineer", Desc: "store a profile fact"},
-		},
-	}
-}
-
 func manSandbox() commandManPage {
 	return commandManPage{
 		Title:    "SANDBOX",
@@ -312,7 +290,6 @@ func manMan() commandManPage {
 			"The command argument should include the leading slash.",
 		},
 		Examples: []manExample{
-			{Command: "/man /memory", Desc: "show the memory command man page"},
 			{Command: "/man /sandbox", Desc: "show the sandbox man page"},
 		},
 	}
@@ -466,7 +443,6 @@ func manPolicy() commandManPage {
 // commandManPages returns the man page lookup table.
 func commandManPages() map[string]commandManPage {
 	return map[string]commandManPage{
-		"/memory":      manMemory(),
 		"/sandbox":     manSandbox(),
 		"/site":        manSite(),
 		"/connections": manConnections(),

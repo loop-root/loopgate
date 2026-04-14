@@ -429,14 +429,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	mux.HandleFunc("/v1/sandbox/metadata", server.handleSandboxMetadata)
 	mux.HandleFunc("/v1/sandbox/export", server.handleSandboxExport)
 	mux.HandleFunc("/v1/sandbox/list", server.handleSandboxList)
-	mux.HandleFunc("/v1/memory/wake-state", server.handleMemoryWakeState)
-	mux.HandleFunc("/v1/memory/diagnostic-wake", server.handleMemoryDiagnosticWake)
-	mux.HandleFunc("/v1/memory/discover", server.handleMemoryDiscover)
-	mux.HandleFunc("/v1/memory/artifacts/lookup", server.handleMemoryArtifactLookup)
-	mux.HandleFunc("/v1/memory/recall", server.handleMemoryRecall)
-	mux.HandleFunc("/v1/memory/artifacts/get", server.handleMemoryArtifactGet)
-	mux.HandleFunc("/v1/memory/remember", server.handleMemoryRemember)
-	mux.HandleFunc("/v1/memory/inspections/", server.handleMemoryInspectionGovernance)
 	mux.HandleFunc("/v1/quarantine/metadata", server.handleQuarantineMetadata)
 	mux.HandleFunc("/v1/quarantine/view", server.handleQuarantineView)
 	mux.HandleFunc("/v1/quarantine/prune", server.handleQuarantinePrune)
@@ -982,9 +974,6 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 	}
 
-	if capabilityRequest.Capability == "memory.remember" {
-		return server.executeMemoryRememberCapability(effectiveTokenClaims, capabilityRequest)
-	}
 	if capabilityRequest.Capability == "host.folder.list" {
 		return server.executeHostFolderListCapability(effectiveTokenClaims, capabilityRequest)
 	}

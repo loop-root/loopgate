@@ -30,6 +30,8 @@ cmd/haven/frontend/dist/
 
 # Local caches
 .cache/go-build/
+.gocache/
+.tmp-loopgate-tests/
 
 # Ephemeral dirs
 /tmp/

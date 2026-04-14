@@ -104,11 +104,10 @@ func HelpPanel(commands []HelpCommandEntry) string {
 	fileGroup := []string{"/pwd", "/ls", "/cat", "/write"}
 	modelGroup := []string{"/setup", "/model", "/policy", "/agent", "/persona", "/settings"}
 	toolGroup := []string{"/tools", "/config", "/network", "/connections"}
-	workflowGroup := []string{"/memory"}
 	sandboxGroup := []string{"/sandbox", "/quarantine", "/site"}
 	debugGroup := []string{"/debug"}
 
-	groups := [][]string{sessionGroup, fileGroup, modelGroup, toolGroup, workflowGroup, sandboxGroup, debugGroup}
+	groups := [][]string{sessionGroup, fileGroup, modelGroup, toolGroup, sandboxGroup, debugGroup}
 
 	// Build lookup from command entries
 	lookup := make(map[string]HelpCommandEntry, len(commands))

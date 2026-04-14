@@ -57,7 +57,7 @@ The current native tool schema path only supports scalar arguments:
 That means new sandbox-local tools should initially use flat APIs like:
 
 - `fs_write(path, content)`
-- `memory.remember(kind, value, source)`
+- `host.folder.read(folder_name, path)`
 
 and not nested object graphs like a full paint stroke array.
 
@@ -66,7 +66,6 @@ and not nested object graphs like a full paint stroke array.
 The current working set in this directory is:
 
 - `defaults.go`
-- `memory_tools.go`
 - filesystem tools
 - host folder tools
 - shell execution tools

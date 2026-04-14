@@ -36,7 +36,6 @@ func commandCatalog() []slashCommandInfo {
 		{Name: "/quarantine", Args: "[metadata|view|prune] <quarantine-ref>", ShortArgs: "<subcommand> <ref>", Description: "inspect, explicitly view, or prune quarantined content", ShortDesc: "inspect quarantined content"},
 		{Name: "/config", Args: "", Description: "show config file paths"},
 		{Name: "/tools", Args: "", Description: "show registered tools"},
-		{Name: "/memory", Args: "[discover <terms...>|recall <key-id>|remember <fact-key> <value>]", ShortArgs: "<subcommand> ...", Description: "show memory policy, discover keys, recall remembered continuity, or explicitly remember a profile fact", ShortDesc: "memory policy and recall"},
 		{Name: "/policy", Args: "", Description: "show loaded policy summary"},
 		{Name: "/debug", Args: "help", Description: "diagnostic subcommands"},
 	}

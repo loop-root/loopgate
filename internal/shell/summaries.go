@@ -111,8 +111,6 @@ func summarizeSettings(commandContext CommandContext) string {
 		fmt.Sprintf("filesystem_write_requires_approval: %t", commandContext.Policy.Tools.Filesystem.WriteRequiresApproval),
 		fmt.Sprintf("http_enabled: %t", commandContext.Policy.Tools.HTTP.Enabled),
 		fmt.Sprintf("shell_enabled: %t", commandContext.Policy.Tools.Shell.Enabled),
-		fmt.Sprintf("memory_auto_distillate: %t", commandContext.Policy.Memory.AutoDistillate),
-		fmt.Sprintf("memory_promotion_requires_approval: %t", commandContext.Policy.Memory.RequirePromotionApproval),
 		fmt.Sprintf("model_runtime_config_path: %s", modelruntime.ConfigPath(commandContext.RepoRoot)),
 	}
 	return strings.Join(lines, "\n")
@@ -184,7 +182,6 @@ func summarizeConfigPaths(commandContext CommandContext) string {
 		{label: "loopgate_connections", path: filepath.Join(commandContext.RepoRoot, "loopgate", "connections")},
 		{label: "state", path: filepath.Join(commandContext.RepoRoot, "runtime", "state", "working_state.json")},
 		{label: "continuity_threads", path: filepath.Join(commandContext.RepoRoot, "runtime", "state", "continuity_threads.json")},
-		{label: "loopgate_memory", path: filepath.Join(commandContext.RepoRoot, "runtime", "state", "loopgate_memory.json")},
 		{label: "model_runtime", path: modelruntime.ConfigPath(commandContext.RepoRoot)},
 		{label: "ledger", path: filepath.Join(commandContext.RepoRoot, "core", "memory", "ledger", "ledger.jsonl")},
 	}
@@ -211,26 +208,6 @@ func summarizeTools(commandContext CommandContext) string {
 	lines := []string{fmt.Sprintf("registered_capabilities: %d", len(commandContext.LoopgateStatus.Capabilities))}
 	for _, capability := range commandContext.LoopgateStatus.Capabilities {
 		lines = append(lines, fmt.Sprintf("%s: category=%s operation=%s description=%s", capability.Name, capability.Category, capability.Operation, capability.Description))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func summarizeMemory(commandContext CommandContext) string {
-	lines := []string{
-		fmt.Sprintf("auto_distillate: %t", commandContext.Policy.Memory.AutoDistillate),
-		fmt.Sprintf("promotion_requires_approval: %t", commandContext.Policy.Memory.RequirePromotionApproval),
-		fmt.Sprintf("submit_previous_min_events: %d", commandContext.Policy.Memory.SubmitPreviousMinEvents),
-		fmt.Sprintf("submit_previous_min_payload_bytes: %d", commandContext.Policy.Memory.SubmitPreviousMinPayloadBytes),
-		fmt.Sprintf("submit_previous_min_prompt_tokens: %d", commandContext.Policy.Memory.SubmitPreviousMinPromptTokens),
-		"durable_memory_authority: loopgate",
-		"continuity_roles: current,next,previous",
-		"memory_commands: /memory discover <terms...> | /memory recall <key-id> | /memory remember <fact-key> <value>",
-		"memory_surface: bounded historical continuity only; no raw transcript browsing",
-		"raw_memory_files_are_not_operator_surface: .morph/memory and runtime/state/memory are not supported command targets",
-		fmt.Sprintf("persona_requires_review: %t", commandContext.Persona.Memory.RequireUserReview),
-		fmt.Sprintf("record_promotion_rationale: %t", commandContext.Persona.Memory.RecordPromotionRationale),
-		fmt.Sprintf("allow_automatic_promotion: %t", commandContext.Persona.Memory.AllowAutomaticPromotion),
-		fmt.Sprintf("allow_persona_self_edit: %t", commandContext.Persona.Memory.AllowPersonaSelfEdit),
 	}
 	return strings.Join(lines, "\n")
 }
