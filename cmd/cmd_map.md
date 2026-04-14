@@ -16,7 +16,6 @@ Use it when changing:
 
 - `main.go`
   - constructs socket path `runtime/state/loopgate.sock` under cwd-as-repo-root
-  - runs `memory.InspectUnsupportedRawMemoryArtifacts` with warnings to stderr
   - starts `loopgate.NewServerWithOptions` and runs until signal
 
 ## `cmd/loopgate-policy-sign/`

@@ -71,12 +71,6 @@ func TestRepositoryRuntimeConfigFile_LoadsWithStrictSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runtime config must decode strictly: %v", err)
 	}
-	if runtimeConfig.Memory.CandidatePanelSize <= 0 {
-		t.Fatal("expected positive candidate panel size")
-	}
-	if runtimeConfig.Memory.SoftWorkerConcurrency <= 0 {
-		t.Fatal("expected positive soft worker concurrency")
-	}
 	if runtimeConfig.Logging.AuditLedger.MaxEventBytes <= 0 {
 		t.Fatal("expected positive audit max_event_bytes")
 	}

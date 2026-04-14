@@ -481,17 +481,9 @@ func integrationPolicyYAML(writeEnabled bool) string {
 			"    enabled: false\n"+
 			"    allowed_commands: []\n"+
 			"    requires_approval: true\n"+
-			"  morphlings:\n"+
-			"    spawn_enabled: false\n"+
-			"    max_active: 5\n"+
-			"    require_template: true\n"+
 			"logging:\n"+
 			"  log_commands: true\n"+
 			"  log_tool_calls: true\n"+
-			"  log_memory_promotions: true\n"+
-			"memory:\n"+
-			"  auto_distillate: true\n"+
-			"  require_promotion_approval: true\n"+
 			"safety:\n"+
 			"  allow_persona_modification: false\n"+
 			"  allow_policy_modification: false\n",

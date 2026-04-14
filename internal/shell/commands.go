@@ -430,8 +430,6 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 			DeniedPaths:           fsCfg.DeniedPaths,
 			LogCommands:           commandContext.Policy.Logging.LogCommands,
 			LogToolCalls:          commandContext.Policy.Logging.LogToolCalls,
-			LogMemoryPromotions:   commandContext.Policy.Logging.LogMemoryPromotions,
-			AutoDistillate:        commandContext.Policy.Memory.AutoDistillate,
 		}), Handled: true, ToolEventSeen: toolEventSeen}
 
 	case "/ls":

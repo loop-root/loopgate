@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -21,18 +20,12 @@ import (
 const runtimeConfigVersion = "1"
 
 const DefaultSupersededLineageRetentionWindow = 30 * 24 * time.Hour
-const DefaultMemoryBackend = "continuity_tcl"
-const benchmarkOnlyMemoryBackendErrorSuffix = "is benchmark-only; runtime config currently supports continuity_tcl or hybrid"
-const DefaultHybridEvidenceMaxItems = 2
-const DefaultHybridEvidenceMaxHintBytes = 580
-const defaultHybridEvidencePythonExecutable = "python3"
-const defaultHybridEvidenceHelperScriptPath = "cmd/memorybench/rag_search.py"
 const expectedSessionClientExecutableEnv = "LOOPGATE_EXPECTED_SESSION_CLIENT_EXECUTABLE"
 
 // DiagnosticLogging configures optional text log files (slog) for local troubleshooting.
 // DefaultLevel: error | warn | info | debug | trace (trace is finer than debug).
 // Per-channel levels in Levels override DefaultLevel for that channel key:
-// audit, server, client, socket, memory, ledger, model.
+// audit, server, client, socket, ledger, model.
 type DiagnosticLogging struct {
 	Enabled      bool              `yaml:"enabled" json:"enabled"`
 	DefaultLevel string            `yaml:"default_level" json:"default_level"`
@@ -47,7 +40,6 @@ type DiagnosticFiles struct {
 	Server string `yaml:"server" json:"server"`
 	Client string `yaml:"client" json:"client"`
 	Socket string `yaml:"socket" json:"socket"`
-	Memory string `yaml:"memory" json:"memory"`
 	Ledger string `yaml:"ledger" json:"ledger"`
 	Model  string `yaml:"model" json:"model"`
 }
@@ -133,58 +125,6 @@ type RuntimeConfig struct {
 		// It must not replace loopgate_events.jsonl; never log secrets or raw tokens.
 		Diagnostic DiagnosticLogging `yaml:"diagnostic" json:"diagnostic"`
 	} `yaml:"logging" json:"logging"`
-	Memory struct {
-		Backend                 string `yaml:"backend" json:"backend"`
-		CandidatePanelSize      int    `yaml:"candidate_panel_size" json:"candidate_panel_size"`
-		DecompositionPreference string `yaml:"decomposition_preference" json:"decomposition_preference"`
-		ReviewPreference        string `yaml:"review_preference" json:"review_preference"`
-		SoftWorkerConcurrency   int    `yaml:"soft_worker_concurrency" json:"soft_worker_concurrency"`
-		BatchingPreference      string `yaml:"batching_preference" json:"batching_preference"`
-		ExplicitFactWrites      struct {
-			WindowSeconds       int `yaml:"window_seconds" json:"window_seconds"`
-			MaxWritesPerSession int `yaml:"max_writes_per_session" json:"max_writes_per_session"`
-			MaxWritesPerPeerUID int `yaml:"max_writes_per_peer_uid" json:"max_writes_per_peer_uid"`
-			MaxValueBytes       int `yaml:"max_value_bytes" json:"max_value_bytes"`
-		} `yaml:"explicit_fact_writes" json:"explicit_fact_writes"`
-		Scoring struct {
-			ImportanceBase struct {
-				NotImportant      int `yaml:"not_important" json:"not_important"`
-				SomewhatImportant int `yaml:"somewhat_important" json:"somewhat_important"`
-				Critical          int `yaml:"critical" json:"critical"`
-			} `yaml:"importance_base" json:"importance_base"`
-			ApprovedGoalAnchor     int `yaml:"approved_goal_anchor" json:"approved_goal_anchor"`
-			ExplicitUserBonus      int `yaml:"explicit_user_bonus" json:"explicit_user_bonus"`
-			StalePenaltyResolved30 int `yaml:"stale_penalty_resolved_30d" json:"stale_penalty_resolved_30d"`
-			HotnessBase            struct {
-				NotImportant      int `yaml:"not_important" json:"not_important"`
-				SomewhatImportant int `yaml:"somewhat_important" json:"somewhat_important"`
-				Critical          int `yaml:"critical" json:"critical"`
-			} `yaml:"hotness_base" json:"hotness_base"`
-			ActiveGoalBonus                 int `yaml:"active_goal_bonus" json:"active_goal_bonus"`
-			DueBonusWithin24H               int `yaml:"due_bonus_within_24h" json:"due_bonus_within_24h"`
-			DueBonusWithin7D                int `yaml:"due_bonus_within_7d" json:"due_bonus_within_7d"`
-			CurrentGoalMatchBonus           int `yaml:"current_goal_match_bonus" json:"current_goal_match_bonus"`
-			StalePenaltyOverdue             int `yaml:"stale_penalty_overdue" json:"stale_penalty_overdue"`
-			DuplicateFamilyPenalty          int `yaml:"duplicate_family_penalty" json:"duplicate_family_penalty"`
-			PositiveSupportReviewedAccepted int `yaml:"positive_support_reviewed_accepted" json:"positive_support_reviewed_accepted"`
-			NegativeTaskDismissal           int `yaml:"negative_task_dismissal" json:"negative_task_dismissal"`
-			NegativeGoalRejection           int `yaml:"negative_goal_rejection" json:"negative_goal_rejection"`
-			NegativeCompletionRejection     int `yaml:"negative_completion_rejection" json:"negative_completion_rejection"`
-			PromotionThresholdActive        int `yaml:"promotion_threshold_active" json:"promotion_threshold_active"`
-			PromotionThresholdEmerging      int `yaml:"promotion_threshold_emerging" json:"promotion_threshold_emerging"`
-		} `yaml:"scoring" json:"scoring"`
-		Corrections    []RuntimeMemoryCorrection `yaml:"corrections,omitempty" json:"corrections,omitempty"`
-		HybridEvidence struct {
-			PythonExecutable string `yaml:"python_executable" json:"python_executable"`
-			HelperScriptPath string `yaml:"helper_script_path" json:"helper_script_path"`
-			QdrantURL        string `yaml:"qdrant_url" json:"qdrant_url"`
-			CollectionName   string `yaml:"collection_name" json:"collection_name"`
-			EmbeddingModel   string `yaml:"embedding_model" json:"embedding_model"`
-			RerankerModel    string `yaml:"reranker_model" json:"reranker_model"`
-			MaxItems         int    `yaml:"max_items" json:"max_items"`
-			MaxHintBytes     int    `yaml:"max_hint_bytes" json:"max_hint_bytes"`
-		} `yaml:"hybrid_evidence" json:"hybrid_evidence"`
-	} `yaml:"memory" json:"memory"`
 	// Tenancy holds deployment-scoped identity for single-node enterprise prep.
 	// Values are applied at control-session open (never taken from untrusted client JSON).
 	Tenancy struct {
@@ -197,23 +137,6 @@ type RuntimeConfig struct {
 		// resolve to this absolute executable path (after filepath.Clean). Empty disables pinning.
 		ExpectedSessionClientExecutable string `yaml:"expected_session_client_executable" json:"expected_session_client_executable"`
 	} `yaml:"control_plane" json:"control_plane"`
-}
-
-type RuntimeMemoryCorrection struct {
-	ID                    string `yaml:"id" json:"id"`
-	Type                  string `yaml:"type" json:"type"`
-	Scope                 string `yaml:"scope" json:"scope"`
-	GoalType              string `yaml:"goal_type,omitempty" json:"goal_type,omitempty"`
-	GoalFamilyID          string `yaml:"goal_family_id,omitempty" json:"goal_family_id,omitempty"`
-	TargetRuleClass       string `yaml:"target_rule_class,omitempty" json:"target_rule_class,omitempty"`
-	TargetDerivationStage string `yaml:"target_derivation_stage,omitempty" json:"target_derivation_stage,omitempty"`
-	TargetOutputKind      string `yaml:"target_output_kind,omitempty" json:"target_output_kind,omitempty"`
-	StrengthClass         string `yaml:"strength_class" json:"strength_class"`
-	Reason                string `yaml:"reason,omitempty" json:"reason,omitempty"`
-	InterceptedProposal   string `yaml:"intercepted_proposal,omitempty" json:"intercepted_proposal,omitempty"`
-	InterceptedStage      string `yaml:"intercepted_stage,omitempty" json:"intercepted_stage,omitempty"`
-	CreatedAtUTC          string `yaml:"created_at_utc,omitempty" json:"created_at_utc,omitempty"`
-	ReviewAtUTC           string `yaml:"review_at_utc,omitempty" json:"review_at_utc,omitempty"`
 }
 
 func LoadRuntimeConfig(repoRoot string) (RuntimeConfig, error) {
@@ -328,113 +251,11 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	if strings.TrimSpace(d.Files.Socket) == "" {
 		d.Files.Socket = "socket.log"
 	}
-	if strings.TrimSpace(d.Files.Memory) == "" {
-		d.Files.Memory = "memory.log"
-	}
 	if strings.TrimSpace(d.Files.Ledger) == "" {
 		d.Files.Ledger = "ledger.log"
 	}
 	if strings.TrimSpace(d.Files.Model) == "" {
 		d.Files.Model = "model.log"
-	}
-	if runtimeConfig.Memory.CandidatePanelSize <= 0 {
-		runtimeConfig.Memory.CandidatePanelSize = 3
-	}
-	if strings.TrimSpace(runtimeConfig.Memory.Backend) == "" {
-		runtimeConfig.Memory.Backend = DefaultMemoryBackend
-	}
-	if strings.TrimSpace(runtimeConfig.Memory.DecompositionPreference) == "" {
-		runtimeConfig.Memory.DecompositionPreference = "hybrid_schema_guided"
-	}
-	if strings.TrimSpace(runtimeConfig.Memory.ReviewPreference) == "" {
-		runtimeConfig.Memory.ReviewPreference = "risk_tiered"
-	}
-	if runtimeConfig.Memory.SoftWorkerConcurrency <= 0 {
-		runtimeConfig.Memory.SoftWorkerConcurrency = 3
-	}
-	if strings.TrimSpace(runtimeConfig.Memory.BatchingPreference) == "" {
-		runtimeConfig.Memory.BatchingPreference = "pause_on_wave_failure"
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.WindowSeconds <= 0 {
-		runtimeConfig.Memory.ExplicitFactWrites.WindowSeconds = 60
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerSession <= 0 {
-		// Large enough for model-driven bursts (many memory.remember calls in one turn);
-		// still bounded so hostile or buggy clients cannot spam explicit writes.
-		runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerSession = 50
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerPeerUID <= 0 {
-		runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerPeerUID = 50
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxValueBytes <= 0 {
-		runtimeConfig.Memory.ExplicitFactWrites.MaxValueBytes = 128
-	}
-	if runtimeConfig.Memory.Scoring.ImportanceBase.SomewhatImportant == 0 {
-		runtimeConfig.Memory.Scoring.ImportanceBase.NotImportant = 0
-		runtimeConfig.Memory.Scoring.ImportanceBase.SomewhatImportant = 30
-		runtimeConfig.Memory.Scoring.ImportanceBase.Critical = 60
-	}
-	if runtimeConfig.Memory.Scoring.ApprovedGoalAnchor == 0 {
-		runtimeConfig.Memory.Scoring.ApprovedGoalAnchor = 25
-	}
-	if runtimeConfig.Memory.Scoring.ExplicitUserBonus == 0 {
-		runtimeConfig.Memory.Scoring.ExplicitUserBonus = 25
-	}
-	if runtimeConfig.Memory.Scoring.StalePenaltyResolved30 == 0 {
-		runtimeConfig.Memory.Scoring.StalePenaltyResolved30 = 20
-	}
-	if runtimeConfig.Memory.Scoring.HotnessBase.SomewhatImportant == 0 {
-		runtimeConfig.Memory.Scoring.HotnessBase.NotImportant = 0
-		runtimeConfig.Memory.Scoring.HotnessBase.SomewhatImportant = 20
-		runtimeConfig.Memory.Scoring.HotnessBase.Critical = 35
-	}
-	if runtimeConfig.Memory.Scoring.ActiveGoalBonus == 0 {
-		runtimeConfig.Memory.Scoring.ActiveGoalBonus = 25
-	}
-	if runtimeConfig.Memory.Scoring.DueBonusWithin24H == 0 {
-		runtimeConfig.Memory.Scoring.DueBonusWithin24H = 25
-	}
-	if runtimeConfig.Memory.Scoring.DueBonusWithin7D == 0 {
-		runtimeConfig.Memory.Scoring.DueBonusWithin7D = 10
-	}
-	if runtimeConfig.Memory.Scoring.CurrentGoalMatchBonus == 0 {
-		runtimeConfig.Memory.Scoring.CurrentGoalMatchBonus = 20
-	}
-	if runtimeConfig.Memory.Scoring.StalePenaltyOverdue == 0 {
-		runtimeConfig.Memory.Scoring.StalePenaltyOverdue = 10
-	}
-	if runtimeConfig.Memory.Scoring.DuplicateFamilyPenalty == 0 {
-		runtimeConfig.Memory.Scoring.DuplicateFamilyPenalty = 15
-	}
-	if runtimeConfig.Memory.Scoring.PositiveSupportReviewedAccepted == 0 {
-		runtimeConfig.Memory.Scoring.PositiveSupportReviewedAccepted = 12
-	}
-	if runtimeConfig.Memory.Scoring.NegativeTaskDismissal == 0 {
-		runtimeConfig.Memory.Scoring.NegativeTaskDismissal = 8
-	}
-	if runtimeConfig.Memory.Scoring.NegativeGoalRejection == 0 {
-		runtimeConfig.Memory.Scoring.NegativeGoalRejection = 10
-	}
-	if runtimeConfig.Memory.Scoring.NegativeCompletionRejection == 0 {
-		runtimeConfig.Memory.Scoring.NegativeCompletionRejection = 15
-	}
-	if runtimeConfig.Memory.Scoring.PromotionThresholdEmerging == 0 {
-		runtimeConfig.Memory.Scoring.PromotionThresholdEmerging = 2
-	}
-	if runtimeConfig.Memory.Scoring.PromotionThresholdActive == 0 {
-		runtimeConfig.Memory.Scoring.PromotionThresholdActive = 3
-	}
-	if strings.TrimSpace(runtimeConfig.Memory.HybridEvidence.PythonExecutable) == "" {
-		runtimeConfig.Memory.HybridEvidence.PythonExecutable = defaultHybridEvidencePythonExecutable
-	}
-	if strings.TrimSpace(runtimeConfig.Memory.HybridEvidence.HelperScriptPath) == "" {
-		runtimeConfig.Memory.HybridEvidence.HelperScriptPath = defaultHybridEvidenceHelperScriptPath
-	}
-	if runtimeConfig.Memory.HybridEvidence.MaxItems <= 0 {
-		runtimeConfig.Memory.HybridEvidence.MaxItems = DefaultHybridEvidenceMaxItems
-	}
-	if runtimeConfig.Memory.HybridEvidence.MaxHintBytes <= 0 {
-		runtimeConfig.Memory.HybridEvidence.MaxHintBytes = DefaultHybridEvidenceMaxHintBytes
 	}
 }
 
@@ -469,39 +290,6 @@ func validateRuntimeConfig(repoRoot string, runtimeConfig RuntimeConfig) error {
 				return fmt.Errorf("logging.diagnostic.levels[%s]: %w", channel, err)
 			}
 		}
-	}
-	if runtimeConfig.Memory.CandidatePanelSize <= 0 {
-		return fmt.Errorf("candidate_panel_size must be positive")
-	}
-	switch trimmedMemoryBackend := strings.TrimSpace(runtimeConfig.Memory.Backend); trimmedMemoryBackend {
-	case DefaultMemoryBackend, "hybrid":
-	default:
-		switch trimmedMemoryBackend {
-		case "rag_baseline":
-			return fmt.Errorf("memory.backend %q %s", trimmedMemoryBackend, benchmarkOnlyMemoryBackendErrorSuffix)
-		default:
-			return fmt.Errorf("memory.backend must be %s or hybrid", DefaultMemoryBackend)
-		}
-	}
-	if strings.TrimSpace(runtimeConfig.Memory.Backend) == "hybrid" {
-		if err := validateHybridEvidenceConfig(repoRoot, runtimeConfig); err != nil {
-			return err
-		}
-	}
-	if runtimeConfig.Memory.SoftWorkerConcurrency <= 0 {
-		return fmt.Errorf("soft_worker_concurrency must be positive")
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.WindowSeconds <= 0 {
-		return fmt.Errorf("explicit_fact_writes.window_seconds must be positive")
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerSession <= 0 {
-		return fmt.Errorf("explicit_fact_writes.max_writes_per_session must be positive")
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerPeerUID <= 0 {
-		return fmt.Errorf("explicit_fact_writes.max_writes_per_peer_uid must be positive")
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxValueBytes <= 0 {
-		return fmt.Errorf("explicit_fact_writes.max_value_bytes must be positive")
 	}
 	if err := validateOptionalDeploymentIdentity("tenancy.deployment_tenant_id", runtimeConfig.Tenancy.DeploymentTenantID); err != nil {
 		return err
@@ -695,76 +483,6 @@ func isLocalhostRuntimeHost(hostname string) bool {
 	}
 	parsedIP := net.ParseIP(hostname)
 	return parsedIP != nil && parsedIP.IsLoopback()
-}
-
-func validateHybridEvidenceConfig(repoRoot string, runtimeConfig RuntimeConfig) error {
-	hybridEvidenceConfig := runtimeConfig.Memory.HybridEvidence
-	if strings.TrimSpace(hybridEvidenceConfig.QdrantURL) == "" {
-		return fmt.Errorf("memory.hybrid_evidence.qdrant_url is required when memory.backend=hybrid")
-	}
-	if strings.TrimSpace(hybridEvidenceConfig.CollectionName) == "" {
-		return fmt.Errorf("memory.hybrid_evidence.collection_name is required when memory.backend=hybrid")
-	}
-	if hybridEvidenceConfig.MaxItems < 1 || hybridEvidenceConfig.MaxItems > 5 {
-		return fmt.Errorf("memory.hybrid_evidence.max_items must be between 1 and 5")
-	}
-	if hybridEvidenceConfig.MaxHintBytes < 64 || hybridEvidenceConfig.MaxHintBytes > 8192 {
-		return fmt.Errorf("memory.hybrid_evidence.max_hint_bytes must be between 64 and 8192")
-	}
-	if _, err := resolveRuntimeExecutableReference(strings.TrimSpace(hybridEvidenceConfig.PythonExecutable)); err != nil {
-		return fmt.Errorf("memory.hybrid_evidence.python_executable %w", err)
-	}
-	if _, err := resolveRuntimeRepoPath(repoRoot, strings.TrimSpace(hybridEvidenceConfig.HelperScriptPath)); err != nil {
-		return fmt.Errorf("memory.hybrid_evidence.helper_script_path %w", err)
-	}
-	return nil
-}
-
-func resolveRuntimeExecutableReference(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", fmt.Errorf("is required")
-	}
-	if strings.ContainsAny(trimmed, "\x00\n\r") {
-		return "", fmt.Errorf("contains control characters")
-	}
-	if filepath.IsAbs(trimmed) {
-		if _, err := os.Stat(trimmed); err != nil {
-			return "", fmt.Errorf("is unavailable: %w", err)
-		}
-		return trimmed, nil
-	}
-	resolvedExecutablePath, err := exec.LookPath(trimmed)
-	if err != nil {
-		return "", fmt.Errorf("is unavailable: %w", err)
-	}
-	return resolvedExecutablePath, nil
-}
-
-func resolveRuntimeRepoPath(repoRoot string, rawPath string) (string, error) {
-	trimmedPath := strings.TrimSpace(rawPath)
-	if trimmedPath == "" {
-		return "", fmt.Errorf("is required")
-	}
-	if strings.ContainsAny(trimmedPath, "\x00\n\r") {
-		return "", fmt.Errorf("contains control characters")
-	}
-	if filepath.IsAbs(trimmedPath) {
-		resolvedPath := filepath.Clean(trimmedPath)
-		if _, err := os.Stat(resolvedPath); err != nil {
-			return "", fmt.Errorf("is unavailable: %w", err)
-		}
-		return resolvedPath, nil
-	}
-	cleanedPath := filepath.Clean(trimmedPath)
-	if cleanedPath == "." || cleanedPath == ".." || strings.HasPrefix(cleanedPath, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("must stay within the repository root")
-	}
-	resolvedPath := filepath.Join(repoRoot, cleanedPath)
-	if _, err := os.Stat(resolvedPath); err != nil {
-		return "", fmt.Errorf("is unavailable: %w", err)
-	}
-	return resolvedPath, nil
 }
 
 const maxExpectedSessionClientExecutableRunes = 4096

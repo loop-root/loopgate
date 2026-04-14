@@ -172,15 +172,6 @@ func (server *Server) diagnosticTextAfterAuditEvent(auditEvent ledger.Event) {
 			"event_hash_prefix", hashPrefix,
 		)
 	}
-	if strings.HasPrefix(auditEvent.Type, "memory.") && server.diagnostic.Memory != nil {
-		server.diagnostic.Memory.Debug("memory_audit",
-			"type", auditEvent.Type,
-			"session", auditEvent.Session,
-			"tenant_id", tenantID,
-			"user_id", userID,
-			"audit_sequence", auditSequence,
-		)
-	}
 	server.diagnosticServerControlPlaneFromAuditEvent(auditEvent)
 	server.diagnosticModelFromAuditEvent(auditEvent)
 }

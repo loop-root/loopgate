@@ -46,9 +46,9 @@ Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/2
 - `docs/product-rfcs/` — legacy `RFC-MORPH-*` material retained for historical context; not the active source of truth for the current product
 - `docs/TCL-RFCs/` — Thought Compression Language
 
-## Benchmarks
+## Benchmarks and historical PoCs
 
-- `docs/memorybench_*.md`
+- `docs/memorybench_*.md` — historical memory/continuity benchmark material, not part of the active Loopgate product surface
 
 ## Superpowers / agent planning (`docs/superpowers/`)
 

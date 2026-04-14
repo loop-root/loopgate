@@ -9,7 +9,6 @@ Use it when changing:
 - **local HTTP client** surfaces (`internal/loopgate/client.go`, neutral `/v1/...` routes)
 - mirrored host-folder grants and sync behavior
 - the next permissioned host plan/apply model for real user-folder actions
-- continuity extraction boundaries that still live in-tree as cleanup debt
 
 ## Core Role
 
@@ -40,14 +39,6 @@ For integrators it matters in four ways:
   - compare-before-sync mirror logic
   - current place where host-folder changes become **audited, client-visible** updates
   - likely starting point for the future granted-folder resource model that separates read, plan, and apply scopes
-- `todo_contract.go`
-  - legacy explicit-task continuity constants retained only so older persisted continuity records still parse deterministically after task-board retirement
-- `todo_legacy_helpers.go`
-  - legacy read-only task/goal continuity helpers retained for replay and memory-state loading
-  - does not expose a live task-board API, standing-grant control surface, or `todo.*` capability execution path
-- `task_standing_grants.go`
-  - reduced to legacy task execution-class metadata helpers needed for continuity replay
-  - no longer exposes a standing-grant API or persisted operator toggle state
 - `server_connection_handlers.go`
   - `/v1/status`
   - current global capability inventory surface
@@ -71,8 +62,6 @@ For integrators it matters in four ways:
     - `CapabilityResponse`
 - `types_connections.go`
   - connection status, PKCE, model-connection store, and site-inspection/trust wire contracts plus validators
-- `types_memory.go`
-  - in-tree continuity request and record contracts that are now extraction debt, not active Loopgate operator API
 - `types_sandbox.go`
   - sandbox import/export/list/metadata wire contracts plus request validation helpers
 
@@ -102,7 +91,6 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `ui_types.go`
   - client-facing UI summaries and event envelopes
   - includes folder-access sync/status response types used by **local HTTP clients**
-  - now also includes standing task grant summaries for the Security room
 - `client.go`
   - public Go client surface core (`Client`, constructors, model/connections/site wrappers) over the Unix socket — **wire reference** for non-Go integrators; see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`
 - `client_session.go`
@@ -116,67 +104,12 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `configured_capability_extract.go`
   - configured response extraction, HTML/Markdown/JSON selectors, and result-field classification helpers
 
-### Continuity Extraction Debt
+### Retired In-Tree Memory Layer
 
-- `memory_partition.go`
-  - **`memoryBasePath`** + per-tenant **`memoryPartitions`** map: each tenant gets its own continuity root under `memory/partitions/<key>/` (`default` for empty deployment tenant; hashed directory name for non-empty — no raw tenant string in paths)
-  - **`maybeMigrateMemoryToPartitionedLayout`**: one-time move of legacy top-level artifacts into `partitions/default/` when `partitions/` is absent; idempotent when already migrated
-  - **`ensureMemoryPartitionLocked`**, wake rebuild and SQLite sync iterate partitions so each namespace stays consistent with its own authoritative JSON/JSONL
-- `memory_tcl.go`
-  - bridges explicit remember requests into `internal/tcl` through `buildValidatedMemoryRememberCandidate`
-  - legacy request parsing now stops at a `tcl.ValidatedMemoryCandidate`; persistence and benchmark governance consume that contract instead of loose analysis fields
-  - explicit-memory denials for unsupported key families are audited with stable `memory_candidate_invalid` fields instead of falling through as silent persistence misses
-  - current preference supersession still depends on a narrow secondary fallback facet table for `preference.stated_preference`; see ADR 0007
-  - explicit profile/settings writes now feed `profile.timezone` and `profile.locale` through the same validated contract instead of synthetic retrieval-only anchors
-- `memory_backend_continuity_tcl_candidate.go`
-  - continuity backend now owns the explicit remember candidate-builder seam, so targeted TCL failure injection no longer depends on a `Server` hook
-  - explicit remember normalization, denial audit, and continuity fact candidate analysis live together on the backend side of the memory authority boundary
-
-- `continuity_memory_access.go`
-  - continuity request normalization, inspect/discover/recall adapters, and backend lookup
-- `continuity_memory_mutation.go`
-  - continuity mutation ordering and explicit memory fact write-budget enforcement
-- `continuity_memory_records.go`
-  - continuity inspect / lineage record types, schema constants, and distillate-record JSON compatibility helpers
-- `continuity_memory_wake.go`
-  - core Loopgate wake-state builder and diagnostic-wake assembly
-- `continuity_memory_wake_selection.go`
-  - wake fact-candidate precedence, anchor tuple resolution, and authoritative-vs-derived state classification
-- `continuity_memory_wake_projection.go`
-  - wake-state projection helpers and token-budget trimming
-- `continuity_mutation_ordering_test.go`
-  - `TestMutateContinuityMemory_*`, `TestContinuityInspectRequest_*`, corrupt-replay coverage per Phase 1 Tasks 1 and 5
-- `continuity_runtime_contract.go`
-  - continuity runtime constants, replay/event contract structs, and partition artifact-path layout
-- `continuity_runtime.go`
-  - continuity runtime derivation helpers: goal normalization, resolved profile snapshots, ranking cache, and task/review snapshot reconstruction
-  - important when new continuity event payloads or projection fields are introduced
-- `continuity_runtime_storage.go`
-  - continuity artifact persistence, JSONL append/replay, and derived snapshot materialization
-  - the fail-closed path for replaying authoritative continuity events back into memory state
-
-- `memory_backend.go` / `memory_backend_continuity_tcl.go`
-  - swappable backend boundary
-  - current `continuity_tcl` wrapper
-  - projected-node discovery path used by the benchmark harness
-
-- `memory_sqlite_store.go`
-  - derived SQLite store open/init path and shared schema/types
-- `memory_sqlite_store_benchmark.go`
-  - benchmark and fixture seeding path for projected-node SQLite tests and memorybench scenarios
-- `memory_sqlite_store_projection.go`
-  - authoritative projected-node sync from continuity state into SQLite-backed search classes
-- `memory_sqlite_store_search.go`
-  - projected-node list/search/debug logic, including slot-preference ranking for exact state queries
-
-- `memorybench_bridge.go`
-  - narrow internal bridge that lets `cmd/memorybench` read the `continuity_tcl`
-    projected discovery surface without widening Loopgate’s public API
-  - projected-node backend openers plus production-parity seeding helpers for benchmark scenarios
-- `memorybench_bridge_control_plane.go`
-  - product-valid control-plane scenario seeding and discover/recall replay for benchmark parity runs
-- `memorybench_bridge_candidate.go`
-  - benchmark-only memory candidate governance adapter that reuses the production TCL validation path without pretending benchmark inputs are product API shapes
+The old in-tree continuity and memory subsystem has been removed from the
+active Loopgate runtime. Remaining memory or continuity references elsewhere in
+the repo should be treated as extraction, archival, or documentation cleanup
+debt rather than active operator surface.
 
 ## Current Sprint Focus
 
@@ -196,25 +129,8 @@ These files matter because:
 - host-folder mirroring should stay explicit, audited, and compare-before-sync instead of becoming a noisy or implicit watcher path
 - the next host-help slice should build as a plan/apply system on top of Loopgate, not as raw writable host filesystem authority
 
-## Existing Strengths To Reuse
-
-The memory system already has more structure than some **client summaries** currently surface.
-
-Notable existing pieces:
-
-- explicit remembered-fact API
-- wake-state generation
-- diagnostic wake report with included and excluded entries
-- inspection outcomes such as `skipped_under_threshold`
-
-That means the first diagnostics pass should expose existing truth before inventing a new algorithm.
-
 ## Important Watchouts
 
 - Do not weaken Loopgate's internal identifiers just to get friendlier UI.
-- Keep explicit memory writes deterministic and auditable.
 - If a capability appears in a **client**, it should still come from Loopgate's registered tool inventory.
-- Keep explicit memory denials and diagnostic state visible. Silent success-looking memory failures will make the **operator experience** feel unreliable very quickly.
 - Compare-before-sync exists to preserve observability without flooding the audit trail. Do not turn routine folder polling into fake security activity.
-- Keep retrieval tuning bounded and inspectable. Do not turn discover-memory ranking into a hidden heuristic stack that can bypass current eligibility rules.
-- Benchmark bridges must stay read-only and internal. Do not turn them into a public convenience API.

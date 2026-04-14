@@ -24,9 +24,6 @@ func TestWriteRuntimeConfigYAMLRoundTrip(t *testing.T) {
 	if !loaded.Logging.Diagnostic.Enabled {
 		t.Fatal("expected diagnostic enabled after round trip")
 	}
-	if loaded.Memory.Backend != DefaultMemoryBackend {
-		t.Fatalf("expected backend %q after round trip, got %q", DefaultMemoryBackend, loaded.Memory.Backend)
-	}
 	if loaded.Logging.Diagnostic.DefaultLevel != "debug" {
 		t.Fatalf("expected default_level debug, got %q", loaded.Logging.Diagnostic.DefaultLevel)
 	}

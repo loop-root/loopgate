@@ -48,22 +48,12 @@ type Policy struct {
 	} `yaml:"tools" json:"tools"`
 
 	Logging struct {
-		LogCommands         bool `yaml:"log_commands" json:"log_commands"`
-		LogMemoryPromotions bool `yaml:"log_memory_promotions" json:"log_memory_promotions"`
-		LogToolCalls        bool `yaml:"log_tool_calls" json:"log_tool_calls"`
-		AuditDetail         struct {
+		LogCommands  bool `yaml:"log_commands" json:"log_commands"`
+		LogToolCalls bool `yaml:"log_tool_calls" json:"log_tool_calls"`
+		AuditDetail  struct {
 			HookProjectionLevel string `yaml:"hook_projection_level" json:"hook_projection_level"`
 		} `yaml:"audit_detail" json:"audit_detail"`
 	} `yaml:"logging" json:"logging"`
-
-	Memory struct {
-		AutoDistillate                bool `yaml:"auto_distillate" json:"auto_distillate"`
-		RequirePromotionApproval      bool `yaml:"require_promotion_approval" json:"require_promotion_approval"`
-		ContinuityReviewRequired      bool `yaml:"continuity_review_required" json:"continuity_review_required"`
-		SubmitPreviousMinEvents       int  `yaml:"submit_previous_min_events" json:"submit_previous_min_events"`
-		SubmitPreviousMinPayloadBytes int  `yaml:"submit_previous_min_payload_bytes" json:"submit_previous_min_payload_bytes"`
-		SubmitPreviousMinPromptTokens int  `yaml:"submit_previous_min_prompt_tokens" json:"submit_previous_min_prompt_tokens"`
-	} `yaml:"memory" json:"memory"`
 
 	Safety struct {
 		AllowPersonaModification bool `yaml:"allow_persona_modification" json:"allow_persona_modification"`
@@ -253,15 +243,6 @@ func applyPolicyDefaults(pol *Policy) error {
 	}
 	if pol.Tools.HTTP.TimeoutSeconds <= 0 {
 		pol.Tools.HTTP.TimeoutSeconds = 10
-	}
-	if pol.Memory.SubmitPreviousMinEvents <= 0 {
-		pol.Memory.SubmitPreviousMinEvents = 3
-	}
-	if pol.Memory.SubmitPreviousMinPayloadBytes <= 0 {
-		pol.Memory.SubmitPreviousMinPayloadBytes = 512
-	}
-	if pol.Memory.SubmitPreviousMinPromptTokens <= 0 {
-		pol.Memory.SubmitPreviousMinPromptTokens = 120
 	}
 	switch strings.TrimSpace(pol.Logging.AuditDetail.HookProjectionLevel) {
 	case "", "full":

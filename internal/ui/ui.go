@@ -169,8 +169,6 @@ type PolicyConfig struct {
 	DeniedPaths           []string
 	LogCommands           bool
 	LogToolCalls          bool
-	LogMemoryPromotions   bool
-	AutoDistillate        bool
 }
 
 // Policy renders the /policy command panel.
@@ -213,11 +211,6 @@ func Policy(cfg PolicyConfig) string {
 	lines = append(lines, "  "+Dim("logging"))
 	lines = append(lines, row("  commands", boolVal(cfg.LogCommands)))
 	lines = append(lines, row("  tool calls", boolVal(cfg.LogToolCalls)))
-	lines = append(lines, row("  memory promotions", boolVal(cfg.LogMemoryPromotions)))
-
-	lines = append(lines, blankLine())
-	lines = append(lines, "  "+Dim("memory"))
-	lines = append(lines, row("  auto-distillate", boolVal(cfg.AutoDistillate)))
 	lines = append(lines, blankLine())
 
 	return RenderBox("POLICY", lines, SingleBorder(), 66, Magenta)

@@ -686,10 +686,6 @@ func testPolicyYAML(writeRequiresApproval bool) string {
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +
-		"  log_memory_promotions: true\n" +
-		"memory:\n" +
-		"  auto_distillate: true\n" +
-		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
 		"  allow_policy_modification: false\n"

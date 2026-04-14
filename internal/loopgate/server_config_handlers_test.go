@@ -47,7 +47,7 @@ func TestConfigPutRequiresConfigWriteScope(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	runtimeConfigUpdate := config.DefaultRuntimeConfig()
-	runtimeConfigUpdate.Memory.CandidatePanelSize = 9
+	runtimeConfigUpdate.Logging.AuditExport.MaxBatchEvents = 777
 
 	writerDeniedClient := NewClient(client.socketPath)
 	writerDeniedClient.ConfigureSession("config-writer", "config-write-denied", []string{controlCapabilityConfigRead})
@@ -72,8 +72,8 @@ func TestConfigPutRequiresConfigWriteScope(t *testing.T) {
 	if okResponse["status"] != "ok" {
 		t.Fatalf("unexpected config write response: %#v", okResponse)
 	}
-	if server.runtimeConfig.Memory.CandidatePanelSize != runtimeConfigUpdate.Memory.CandidatePanelSize {
-		t.Fatalf("expected updated runtime config in memory, got %#v", server.runtimeConfig.Memory.CandidatePanelSize)
+	if server.runtimeConfig.Logging.AuditExport.MaxBatchEvents != runtimeConfigUpdate.Logging.AuditExport.MaxBatchEvents {
+		t.Fatalf("expected updated runtime config in memory, got %#v", server.runtimeConfig.Logging.AuditExport.MaxBatchEvents)
 	}
 }
 

@@ -43,7 +43,6 @@ func WriteOperatorBundle(repoRoot string, rc config.RuntimeConfig, outDir string
 		rc.Logging.Diagnostic.Files.Server,
 		rc.Logging.Diagnostic.Files.Client,
 		rc.Logging.Diagnostic.Files.Socket,
-		rc.Logging.Diagnostic.Files.Memory,
 		rc.Logging.Diagnostic.Files.Ledger,
 		rc.Logging.Diagnostic.Files.Model,
 	}

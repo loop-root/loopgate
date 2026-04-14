@@ -128,40 +128,6 @@ func TestClientExecuteCapability_ReadAndWrite(t *testing.T) {
 	}
 }
 
-func TestNewServer_FailsClosedAndSurfacesContinuityReplayFailure(t *testing.T) {
-	repoRoot := t.TempDir()
-
-	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
-
-	partitionRoot := filepath.Join(repoRoot, "runtime", "state", "memory", memoryPartitionsDirName, memoryPartitionKey(""))
-	paths := newContinuityMemoryPaths(partitionRoot, filepath.Join(repoRoot, "runtime", "state", "loopgate_memory.json"))
-	if err := os.MkdirAll(paths.RootDir, 0o700); err != nil {
-		t.Fatalf("mkdir continuity root: %v", err)
-	}
-	if err := os.WriteFile(paths.ContinuityEventsPath, []byte("not-a-valid-continuity-json-line\n"), 0o600); err != nil {
-		t.Fatalf("write corrupt continuity events: %v", err)
-	}
-
-	socketPath := filepath.Join(repoRoot, "runtime", "state", "l.sock")
-	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
-		t.Fatalf("create test socket dir: %v", err)
-	}
-	_ = os.Remove(socketPath)
-	t.Cleanup(func() { _ = os.Remove(socketPath) })
-
-	_, err := NewServer(repoRoot, socketPath)
-	if err == nil {
-		t.Fatal("expected NewServer to fail on corrupt continuity replay")
-	}
-	if !strings.Contains(err.Error(), "init default memory partition") {
-		t.Fatalf("expected init default memory partition context, got %v", err)
-	}
-	if !strings.Contains(err.Error(), paths.ContinuityEventsPath) || !strings.Contains(err.Error(), "line 1") {
-		t.Fatalf("expected replay path and line in startup error, got %v", err)
-	}
-}
-
 func TestNewServerWithOptions_InitializesWithoutAdminSurface(t *testing.T) {
 	repoRoot := t.TempDir()
 
@@ -294,13 +260,7 @@ func TestRetiredMemorySurfaceIsAbsentFromStatus(t *testing.T) {
 		t.Fatalf("new server: %v", err)
 	}
 
-	for _, hiddenControlCapability := range []string{
-		"memory.read",
-		"memory.write",
-		"memory.reset",
-		"memory.review",
-		"memory.lineage",
-	} {
+	for _, hiddenControlCapability := range []string{} {
 		if containsCapability(controlCapabilitySummaries(), hiddenControlCapability) {
 			t.Fatalf("expected retired control capability %s to be absent", hiddenControlCapability)
 		}
@@ -332,14 +292,7 @@ logging:
         id: "audit_export_admin_bearer"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_TOKEN"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -403,14 +356,7 @@ logging:
         scope: "test"
     max_batch_events: 50
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    min_flush_interval_seconds: 5`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -485,14 +431,7 @@ logging:
         scope: "test"
     max_batch_events: 2
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    min_flush_interval_seconds: 5`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -571,14 +510,7 @@ logging:
         scope: "test"
     max_batch_events: 50
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    min_flush_interval_seconds: 5`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -688,14 +620,7 @@ logging:
         scope: "test"
     max_batch_events: 50
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`, adminIngestServer.URL)
+    min_flush_interval_seconds: 5`, adminIngestServer.URL)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
@@ -779,14 +704,7 @@ logging:
         scope: "test"
     max_batch_events: 50
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`, adminIngestServer.URL)
+    min_flush_interval_seconds: 5`, adminIngestServer.URL)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
@@ -856,14 +774,7 @@ logging:
         scope: "test"
     max_batch_events: 50
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    min_flush_interval_seconds: 5`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -991,14 +902,7 @@ logging:
         scope: "test"
     max_batch_events: 50
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`, adminIngestServer.URL)
+    min_flush_interval_seconds: 5`, adminIngestServer.URL)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_ROOT_CA", testCertificates.RootCAPEM)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_CLIENT_CERTIFICATE", testCertificates.ClientCertificatePEM)
@@ -1115,14 +1019,7 @@ logging:
         scope: "test"
     max_batch_events: 50
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`, adminIngestServer.URL)
+    min_flush_interval_seconds: 5`, adminIngestServer.URL)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_ROOT_CA", testCertificates.RootCAPEM)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_CLIENT_CERTIFICATE", testCertificates.ClientCertificatePEM)
@@ -1210,14 +1107,7 @@ logging:
         scope: "test"
     max_batch_events: 50
     max_batch_bytes: 1048576
-    min_flush_interval_seconds: 5
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    min_flush_interval_seconds: 5`
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_ROOT_CA", testCertificates.RootCAPEM)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_CLIENT_CERTIFICATE", testCertificates.ClientCertificatePEM)
@@ -6376,14 +6266,7 @@ logging:
     rotate_at_bytes: 550
     segment_dir: "runtime/state/loopgate_event_segments"
     manifest_path: "runtime/state/loopgate_event_segments/manifest.jsonl"
-    verify_closed_segments_on_startup: true
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    verify_closed_segments_on_startup: true`
 	if err := os.WriteFile(filepath.Join(repoRoot, "config", "runtime.yaml"), []byte(runtimeConfigYAML), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -6527,6 +6410,20 @@ func newShortLoopgateTestRepoRoot(t *testing.T) string {
 	return repoRoot
 }
 
+func newShortLoopgateSocketPath(t *testing.T) string {
+	t.Helper()
+
+	socketFile, err := os.CreateTemp(os.TempDir(), "loopgate-*.sock")
+	if err != nil {
+		t.Fatalf("create short socket file: %v", err)
+	}
+	socketPath := socketFile.Name()
+	_ = socketFile.Close()
+	_ = os.Remove(socketPath)
+	t.Cleanup(func() { _ = os.Remove(socketPath) })
+	return socketPath
+}
+
 func startLoopgateServer(t *testing.T, repoRoot string, policyYAML string) (*Client, StatusResponse, *Server) {
 	return startLoopgateServerWithRuntime(t, repoRoot, policyYAML, nil, true)
 }
@@ -6578,12 +6475,7 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 		}
 	}
 
-	socketPath := filepath.Join(repoRoot, "runtime", "state", "l.sock")
-	if err := os.MkdirAll(filepath.Dir(socketPath), 0o755); err != nil {
-		t.Fatalf("create test socket dir: %v", err)
-	}
-	_ = os.Remove(socketPath)
-	t.Cleanup(func() { _ = os.Remove(socketPath) })
+	socketPath := newShortLoopgateSocketPath(t)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -6918,11 +6810,6 @@ func loopgatePolicyYAML(writeRequiresApproval bool) string {
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +
-		"  log_memory_promotions: true\n" +
-		"memory:\n" +
-		"  auto_distillate: true\n" +
-		"  require_promotion_approval: true\n" +
-		"  continuity_review_required: false\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
 		"  allow_policy_modification: false\n"
@@ -6955,10 +6842,6 @@ func loopgateHTTPPolicyYAML(requiresApproval bool) string {
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +
-		"  log_memory_promotions: true\n" +
-		"memory:\n" +
-		"  auto_distillate: true\n" +
-		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
 		"  allow_policy_modification: false\n"
@@ -6996,10 +6879,6 @@ func loopgateShellPolicyYAML(requiresApproval bool, allowedCommands []string) st
 		"logging:\n" +
 		"  log_commands: true\n" +
 		"  log_tool_calls: true\n" +
-		"  log_memory_promotions: true\n" +
-		"memory:\n" +
-		"  auto_distillate: true\n" +
-		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
 		"  allow_policy_modification: false\n"

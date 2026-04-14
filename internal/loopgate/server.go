@@ -47,14 +47,11 @@ type Server struct {
 	derivedArtifactDir         string
 	connectionPath             string
 	modelConnectionPath        string
-	memoryBasePath             string
-	memoryLegacyPath           string
 	claudeHookSessionsPath     string
 	claudeHookSessionsRoot     string
 	mcpGatewayManifests        map[string]mcpGatewayServerManifest
 	mcpGatewayApprovalRequests map[string]pendingMCPGatewayApprovalRequest
 	mcpGatewayLaunchedServers  map[string]*mcpGatewayLaunchedServer
-	memoryPartitions           map[string]*memoryPartition
 	sandboxPaths               sandbox.Paths
 	policy                     config.Policy
 	runtimeConfig              config.RuntimeConfig
@@ -62,8 +59,6 @@ type Server struct {
 	checker                    *policypkg.Checker
 	now                        func() time.Time
 	appendAuditEvent           func(string, ledger.Event) error
-	saveMemoryState            func(string, continuityMemoryState, config.RuntimeConfig) error
-	newMemoryEvidenceRetriever func(string, config.RuntimeConfig) (memoryEvidenceRetriever, error)
 	resolveSecretStore         func(secrets.SecretRef) (secrets.SecretStore, error)
 	reportResponseWriteError   func(httpStatus int, cause error)
 	reportSecurityWarning      func(eventCode string, cause error)
@@ -98,10 +93,6 @@ type Server struct {
 
 	modelConnectionsMu sync.Mutex
 	modelConnections   map[string]modelConnectionRecord
-
-	memoryMu                  sync.Mutex
-	memoryFactWritesBySession map[string][]time.Time
-	memoryFactWritesByUID     map[uint32][]time.Time
 
 	hostAccessPlansMu sync.Mutex
 	hostAccessPlans   map[string]*hostAccessStoredPlan
@@ -274,14 +265,11 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		derivedArtifactDir:         filepath.Join(repoRoot, "runtime", "state", "derived_artifacts"),
 		connectionPath:             filepath.Join(repoRoot, "runtime", "state", "loopgate_connections.json"),
 		modelConnectionPath:        filepath.Join(repoRoot, "runtime", "state", "loopgate_model_connections.json"),
-		memoryBasePath:             filepath.Join(repoRoot, "runtime", "state", "memory"),
 		claudeHookSessionsPath:     filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions.json"),
 		claudeHookSessionsRoot:     filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions"),
 		mcpGatewayManifests:        map[string]mcpGatewayServerManifest{},
 		mcpGatewayApprovalRequests: make(map[string]pendingMCPGatewayApprovalRequest),
 		mcpGatewayLaunchedServers:  make(map[string]*mcpGatewayLaunchedServer),
-		memoryPartitions:           make(map[string]*memoryPartition),
-		memoryLegacyPath:           filepath.Join(repoRoot, "runtime", "state", "loopgate_memory.json"),
 		sandboxPaths:               sandbox.PathsForRepo(repoRoot),
 		policy:                     policy,
 		policyContentSHA256:        policyLoadResult.ContentSHA256,
@@ -289,8 +277,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		registry:                   nil,
 		checker:                    nil,
 		now:                        time.Now,
-		saveMemoryState:            nil,
-		newMemoryEvidenceRetriever: newRuntimeMemoryEvidenceRetriever,
 		resolveSecretStore:         secrets.NewStoreForRef,
 		reportResponseWriteError: func(httpStatus int, cause error) {
 			fmt.Fprintf(os.Stderr, "ERROR: response_write status=%d class=%s\n", httpStatus, secrets.LoopgateOperatorErrorClass(cause))
@@ -307,8 +293,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		configuredCapabilities:               configuredCapabilities,
 		httpClient:                           &http.Client{Timeout: time.Duration(policy.Tools.HTTP.TimeoutSeconds) * time.Second},
 		pkceSessions:                         make(map[string]pendingPKCESession),
-		memoryFactWritesBySession:            make(map[string][]time.Time),
-		memoryFactWritesByUID:                make(map[uint32][]time.Time),
 		sessions:                             make(map[string]controlSession),
 		tokens:                               make(map[string]capabilityToken),
 		approvals:                            make(map[string]pendingApproval),
@@ -332,35 +316,17 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	if pin := normalizeSessionExecutablePinPath(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); pin != "" {
 		server.expectedClientPath = pin
 	}
-	server.saveMemoryState = func(path string, st continuityMemoryState, cfg config.RuntimeConfig) error {
-		return saveContinuityMemoryState(path, st, cfg, server.now().UTC())
-	}
 	initialPolicyRuntime, err := server.buildPolicyRuntime(policyLoadResult, cloneConfiguredCapabilities(configuredCapabilities))
 	if err != nil {
 		return nil, err
 	}
 	server.storePolicyRuntime(initialPolicyRuntime)
-	if err := maybeMigrateMemoryToPartitionedLayout(server.memoryBasePath); err != nil {
-		return nil, fmt.Errorf("migrate memory layout: %w", err)
-	}
 	server.appendAuditEvent = func(path string, auditEvent ledger.Event) error {
 		return ledger.AppendWithRotation(path, auditEvent, server.auditLedgerRotationSettings())
 	}
 	server.newModelClientFromConfig = server.newModelClientFromRuntimeConfig
 	if err := server.sandboxPaths.Ensure(); err != nil {
 		return nil, fmt.Errorf("ensure sandbox paths: %w", err)
-	}
-	server.memoryMu.Lock()
-	if err := server.initDefaultMemoryPartitionLocked(); err != nil {
-		server.memoryMu.Unlock()
-		return nil, fmt.Errorf("init default memory partition: %w", err)
-	}
-	server.memoryMu.Unlock()
-	if err := server.rebuildContinuityWakeStateFromAuthority(); err != nil {
-		return nil, fmt.Errorf("rebuild continuity wake state: %w", err)
-	}
-	if err := server.syncMemoryBackendFromAuthority(); err != nil {
-		return nil, fmt.Errorf("sync memory backend: %w", err)
 	}
 	loadedConnections, err := loadConnectionRecords(server.connectionPath)
 	if err != nil {

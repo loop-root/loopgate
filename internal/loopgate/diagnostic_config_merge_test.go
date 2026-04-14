@@ -28,45 +28,8 @@ logging:
       server: server.log
       client: client.log
       socket: socket.log
-      memory: memory.log
       ledger: ledger.log
       model: model.log
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-  explicit_fact_writes:
-    window_seconds: 60
-    max_writes_per_session: 50
-    max_writes_per_peer_uid: 50
-    max_value_bytes: 128
-  corrections: []
-  scoring:
-    importance_base:
-      not_important: 0
-      somewhat_important: 30
-      critical: 60
-    approved_goal_anchor: 25
-    explicit_user_bonus: 25
-    stale_penalty_resolved_30d: 20
-    hotness_base:
-      not_important: 0
-      somewhat_important: 20
-      critical: 35
-    active_goal_bonus: 25
-    due_bonus_within_24h: 25
-    due_bonus_within_7d: 10
-    current_goal_match_bonus: 20
-    stale_penalty_overdue: 10
-    duplicate_family_penalty: 15
-    positive_support_reviewed_accepted: 12
-    negative_task_dismissal: 8
-    negative_goal_rejection: 10
-    negative_completion_rejection: 10
-    promotion_threshold_emerging: 2
-    promotion_threshold_active: 3
 `
 
 func TestNewServer_DiagnosticConfigFollowsYAMLDespiteFrozenRuntimeJSON(t *testing.T) {

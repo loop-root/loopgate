@@ -747,12 +747,8 @@ tools:
     allowed_roots:
       - "."
     denied_paths:
-      - ".morph/memory"
-      - "core/memory/ledger"
-      - "core/memory/distillates"
       - "core/policy"
       - "persona"
-      - "runtime/state/memory"
     read_enabled: true
     write_enabled: true
     write_requires_approval: true
@@ -768,14 +764,6 @@ tools:
 logging:
   log_commands: true
   log_tool_calls: true
-  log_memory_promotions: true
-memory:
-  auto_distillate: true
-  require_promotion_approval: true
-  continuity_review_required: false
-  submit_previous_min_events: 3
-  submit_previous_min_payload_bytes: 512
-  submit_previous_min_prompt_tokens: 120
 safety:
   allow_persona_modification: false
   allow_policy_modification: false
@@ -855,12 +843,8 @@ tools:
     allowed_roots:
       - "."
     denied_paths:
-      - ".morph/memory"
-      - "core/memory/ledger"
-      - "core/memory/distillates"
       - "core/policy"
       - "persona"
-      - "runtime/state/memory"
     read_enabled: true
     write_enabled: true
     write_requires_approval: true
@@ -905,14 +889,6 @@ tools:
 logging:
   log_commands: true
   log_tool_calls: true
-  log_memory_promotions: true
-memory:
-  auto_distillate: true
-  require_promotion_approval: true
-  continuity_review_required: false
-  submit_previous_min_events: 3
-  submit_previous_min_payload_bytes: 512
-  submit_previous_min_prompt_tokens: 120
 safety:
   allow_persona_modification: false
   allow_policy_modification: false

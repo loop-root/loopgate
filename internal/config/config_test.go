@@ -90,17 +90,9 @@ tools:
     enabled: false
     allowed_commands: []
     requires_approval: true
-  morphlings:
-    spawn_enabled: false
-    max_active: 5
-    require_template: true
 logging:
   log_commands: true
   log_tool_calls: true
-  log_memory_promotions: true
-memory:
-  auto_distillate: true
-  require_promotion_approval: true
 safety:
   allow_persona_modification: false
   allow_policy_modification: false
@@ -166,17 +158,9 @@ tools:
     enabled: false
     allowed_commands: []
     requires_approval: true
-  morphlings:
-    spawn_enabled: false
-    max_active: 5
-    require_template: true
 logging:
   log_commands: true
   log_tool_calls: true
-  log_memory_promotions: true
-memory:
-  auto_distillate: true
-  require_promotion_approval: true
 safety:
   allow_persona_modification: false
   allow_policy_modification: false
@@ -243,18 +227,6 @@ func TestLoadRuntimeConfig_MissingFileGetsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load default runtime config: %v", err)
 	}
-	if runtimeConfig.Memory.CandidatePanelSize != 3 {
-		t.Fatalf("unexpected candidate panel size: %d", runtimeConfig.Memory.CandidatePanelSize)
-	}
-	if runtimeConfig.Memory.Backend != DefaultMemoryBackend {
-		t.Fatalf("unexpected memory backend default: %q", runtimeConfig.Memory.Backend)
-	}
-	if runtimeConfig.Memory.Scoring.PositiveSupportReviewedAccepted != 12 {
-		t.Fatalf("unexpected positive support default: %d", runtimeConfig.Memory.Scoring.PositiveSupportReviewedAccepted)
-	}
-	if runtimeConfig.Memory.Scoring.PromotionThresholdActive != 3 {
-		t.Fatalf("unexpected active promotion threshold: %d", runtimeConfig.Memory.Scoring.PromotionThresholdActive)
-	}
 	if runtimeConfig.Logging.AuditLedger.MaxEventBytes != 256*1024 {
 		t.Fatalf("unexpected audit max_event_bytes default: %d", runtimeConfig.Logging.AuditLedger.MaxEventBytes)
 	}
@@ -279,18 +251,6 @@ func TestLoadRuntimeConfig_MissingFileGetsDefaults(t *testing.T) {
 	if runtimeConfig.Logging.AuditExport.MinFlushIntervalSeconds != 5 {
 		t.Fatalf("unexpected audit export min flush interval default: %d", runtimeConfig.Logging.AuditExport.MinFlushIntervalSeconds)
 	}
-	if runtimeConfig.Memory.ExplicitFactWrites.WindowSeconds != 60 {
-		t.Fatalf("unexpected explicit_fact_writes.window_seconds default: %d", runtimeConfig.Memory.ExplicitFactWrites.WindowSeconds)
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerSession != 50 {
-		t.Fatalf("unexpected explicit_fact_writes.max_writes_per_session default: %d", runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerSession)
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerPeerUID != 50 {
-		t.Fatalf("unexpected explicit_fact_writes.max_writes_per_peer_uid default: %d", runtimeConfig.Memory.ExplicitFactWrites.MaxWritesPerPeerUID)
-	}
-	if runtimeConfig.Memory.ExplicitFactWrites.MaxValueBytes != 128 {
-		t.Fatalf("unexpected explicit_fact_writes.max_value_bytes default: %d", runtimeConfig.Memory.ExplicitFactWrites.MaxValueBytes)
-	}
 	if DefaultSupersededLineageRetentionWindow != 30*24*time.Hour {
 		t.Fatalf("unexpected superseded lineage retention default: %s", DefaultSupersededLineageRetentionWindow)
 	}
@@ -304,13 +264,10 @@ func TestLoadRuntimeConfig_StrictRejectsUnknownField(t *testing.T) {
 	}
 
 	rawRuntimeConfig := `version: "1"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-  unknown_field: true
+logging:
+  diagnostic:
+    enabled: true
+unknown_field: true
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
@@ -336,14 +293,7 @@ logging:
     rotate_at_bytes: 134217728
     segment_dir: "../segments"
     manifest_path: "runtime/state/loopgate_event_segments/manifest.jsonl"
-    verify_closed_segments_on_startup: true
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    verify_closed_segments_on_startup: true`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -382,14 +332,7 @@ logging:
   audit_export:
     enabled: true
     destination_label: "corp-admin"
-    endpoint_url: "https://admin.example.com/v1/admin/audit/ingest"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    endpoint_url: "https://admin.example.com/v1/admin/audit/ingest"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -447,14 +390,7 @@ logging:
     state_path: "runtime/state/audit_export_state.json"
     max_batch_events: 250
     max_batch_bytes: 524288
-    min_flush_interval_seconds: 15
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    min_flush_interval_seconds: 15`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -501,14 +437,7 @@ logging:
   audit_export:
     enabled: true
     destination_kind: "admin_node"
-    destination_label: "corp-admin"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    destination_label: "corp-admin"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -535,14 +464,7 @@ logging:
     enabled: true
     destination_kind: "admin_node"
     destination_label: "corp-admin"
-    endpoint_url: "https://admin.example.com/v1/admin/audit/ingest"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    endpoint_url: "https://admin.example.com/v1/admin/audit/ingest"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -575,14 +497,7 @@ logging:
         id: "audit_export_admin_bearer"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_TOKEN"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -615,14 +530,7 @@ logging:
         id: "audit_export_admin_bearer"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_TOKEN"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -655,14 +563,7 @@ logging:
         id: "audit_export_admin_bearer"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_TOKEN"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -696,14 +597,7 @@ logging:
         id: "audit_export_admin_bearer"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_TOKEN"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -748,14 +642,7 @@ logging:
         id: "audit_export_client_private_key"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_CLIENT_PRIVATE_KEY"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -800,14 +687,7 @@ logging:
         id: "audit_export_client_private_key"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_CLIENT_PRIVATE_KEY"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -852,14 +732,7 @@ logging:
         id: "audit_export_client_certificate"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_CLIENT_CERTIFICATE"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -910,14 +783,7 @@ logging:
         id: "audit_export_client_private_key"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_CLIENT_PRIVATE_KEY"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -968,14 +834,7 @@ logging:
         id: "audit_export_client_private_key"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_CLIENT_PRIVATE_KEY"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -1048,14 +907,7 @@ logging:
     rotate_at_bytes: 134217728
     segment_dir: "runtime/state/loopgate_event_segments"
     manifest_path: "runtime/state/loopgate_event_segments/manifest.jsonl"
-    verify_closed_segments_on_startup: false
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    verify_closed_segments_on_startup: false`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -1088,14 +940,7 @@ logging:
   diagnostic:
     enabled: true
     default_level: info
-    directory: tmp/evil
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    directory: tmp/evil`
 	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -1121,145 +966,13 @@ logging:
   diagnostic:
     enabled: true
     default_level: verbose
-    directory: runtime/logs
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+    directory: runtime/logs`
 	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
 	_, err := LoadRuntimeConfig(repoRoot)
 	if err == nil {
 		t.Fatal("expected invalid diagnostic default_level to fail")
-	}
-}
-
-func TestLoadRuntimeConfig_RejectsUnsupportedMemoryBackend(t *testing.T) {
-	testCases := []struct {
-		name         string
-		backendName  string
-		wantFragment string
-	}{
-		{
-			name:         "unknown_backend",
-			backendName:  "mystery_backend",
-			wantFragment: "memory.backend must be continuity_tcl or hybrid",
-		},
-		{
-			name:         "benchmark_only_rag_baseline",
-			backendName:  "rag_baseline",
-			wantFragment: benchmarkOnlyMemoryBackendErrorSuffix,
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			repoRoot := t.TempDir()
-			runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
-			if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
-				t.Fatalf("mkdir: %v", err)
-			}
-
-			raw := `version: "1"
-memory:
-  backend: "` + testCase.backendName + `"
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
-			if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
-				t.Fatalf("write runtime config: %v", err)
-			}
-
-			_, err := LoadRuntimeConfig(repoRoot)
-			if err == nil {
-				t.Fatal("expected unsupported memory backend to fail closed")
-			}
-			if !strings.Contains(err.Error(), testCase.wantFragment) {
-				t.Fatalf("expected error containing %q, got %v", testCase.wantFragment, err)
-			}
-		})
-	}
-}
-
-func TestLoadRuntimeConfig_RejectsHybridWithoutEvidenceConfig(t *testing.T) {
-	repoRoot := t.TempDir()
-	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
-	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	raw := `version: "1"
-memory:
-  backend: "hybrid"
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
-	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
-		t.Fatalf("write runtime config: %v", err)
-	}
-
-	_, err := LoadRuntimeConfig(repoRoot)
-	if err == nil {
-		t.Fatal("expected hybrid backend without evidence config to fail closed")
-	}
-	if !strings.Contains(err.Error(), "memory.hybrid_evidence.qdrant_url") {
-		t.Fatalf("expected hybrid evidence config error, got %v", err)
-	}
-}
-
-func TestLoadRuntimeConfig_AcceptsHybridWithEvidenceConfig(t *testing.T) {
-	repoRoot := t.TempDir()
-	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
-	helperScriptPath := filepath.Join(repoRoot, "cmd", "memorybench", "rag_search.py")
-	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
-		t.Fatalf("mkdir runtime config dir: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(helperScriptPath), 0o755); err != nil {
-		t.Fatalf("mkdir helper dir: %v", err)
-	}
-	if err := os.WriteFile(helperScriptPath, []byte("#!/usr/bin/env python3\n"), 0o700); err != nil {
-		t.Fatalf("write helper script: %v", err)
-	}
-
-	raw := `version: "1"
-memory:
-  backend: "hybrid"
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-  hybrid_evidence:
-    python_executable: "/bin/sh"
-    helper_script_path: "cmd/memorybench/rag_search.py"
-    qdrant_url: "http://127.0.0.1:6333"
-    collection_name: "memorybench_default"
-    max_items: 2
-    max_hint_bytes: 580
-`
-	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
-		t.Fatalf("write runtime config: %v", err)
-	}
-
-	loadedRuntimeConfig, err := LoadRuntimeConfig(repoRoot)
-	if err != nil {
-		t.Fatalf("load hybrid runtime config: %v", err)
-	}
-	if loadedRuntimeConfig.Memory.Backend != "hybrid" {
-		t.Fatalf("expected hybrid backend, got %q", loadedRuntimeConfig.Memory.Backend)
-	}
-	if loadedRuntimeConfig.Memory.HybridEvidence.CollectionName != "memorybench_default" {
-		t.Fatalf("unexpected hybrid collection: %#v", loadedRuntimeConfig.Memory.HybridEvidence)
 	}
 }
 
@@ -1281,17 +994,9 @@ tools:
     enabled: false
     allowed_commands: []
     requires_approval: true
-  morphlings:
-    spawn_enabled: false
-    max_active: 5
-    require_template: true
 logging:
   log_commands: true
   log_tool_calls: true
-  log_memory_promotions: true
-memory:
-  auto_distillate: true
-  require_promotion_approval: true
 safety:
   allow_persona_modification: false
   allow_policy_modification: false
@@ -1355,14 +1060,6 @@ func TestLoadPolicy_RejectsTamperedSignature(t *testing.T) {
 	}
 }
 
-const testRuntimeConfigMemoryBlock = `memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
-
 func TestLoadRuntimeConfig_RejectsHMACCheckpointEnabledWithoutSecretRef(t *testing.T) {
 	repoRoot := t.TempDir()
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
@@ -1381,7 +1078,7 @@ logging:
     hmac_checkpoint:
       enabled: true
       interval_events: 2
-` + testRuntimeConfigMemoryBlock
+`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -1418,7 +1115,7 @@ logging:
         backend: "env"
         account_name: "SOME_VAR"
         scope: "test"
-` + testRuntimeConfigMemoryBlock
+`
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}

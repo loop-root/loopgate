@@ -20,14 +20,11 @@ type claudeHookSessionStateTestFile struct {
 }
 
 type claudeHookSessionTestWire struct {
-	SessionID        string `json:"session_id"`
-	State            string `json:"state"`
-	StartedAtUTC     string `json:"started_at_utc"`
-	EndedAtUTC       string `json:"ended_at_utc,omitempty"`
-	ExitReason       string `json:"exit_reason,omitempty"`
-	CurrentThreadID  string `json:"current_thread_id,omitempty"`
-	NextThreadID     string `json:"next_thread_id,omitempty"`
-	PreviousThreadID string `json:"previous_thread_id,omitempty"`
+	SessionID    string `json:"session_id"`
+	State        string `json:"state"`
+	StartedAtUTC string `json:"started_at_utc"`
+	EndedAtUTC   string `json:"ended_at_utc,omitempty"`
+	ExitReason   string `json:"exit_reason,omitempty"`
 }
 
 type claudeHookApprovalStateTestFile struct {
@@ -615,21 +612,11 @@ func TestHookPreValidate_SessionStartStaysAuditOnly(t *testing.T) {
 	if sessionState.Sessions[0].State != claudeHookSessionStateActive {
 		t.Fatalf("expected active session state, got %#v", sessionState.Sessions[0])
 	}
-	if sessionState.Sessions[0].CurrentThreadID == "" || sessionState.Sessions[0].NextThreadID == "" {
-		t.Fatalf("expected continuity thread ids, got %#v", sessionState.Sessions[0])
-	}
 }
 
 func TestHookPreValidate_UserPromptSubmitStaysAuditOnlyEvenWhenMemoryWouldMatch(t *testing.T) {
 	repoRoot := t.TempDir()
-	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	if _, err := client.RememberMemoryFact(context.Background(), MemoryRememberRequest{
-		FactKey:   "name",
-		FactValue: "Ada",
-	}); err != nil {
-		t.Fatalf("remember memory fact: %v", err)
-	}
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	requestBody := bytes.NewBufferString(`{"hook_event_name":"UserPromptSubmit","prompt":"please use my name when drafting the command","session_id":"session-hook"}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
@@ -696,8 +683,8 @@ func TestHookPreValidate_UserPromptSubmitNoMatchStaysAuditOnly(t *testing.T) {
 	if hookHandlingMode, _ := lastAuditEvent.Data["hook_handling_mode"].(string); hookHandlingMode != claudeCodeHookHandlingModeAuditOnly {
 		t.Fatalf("expected audit-only handling mode, got %#v", lastAuditEvent.Data["hook_handling_mode"])
 	}
-	if continuityThreadID, _ := lastAuditEvent.Data["continuity_thread_id"].(string); continuityThreadID == "" {
-		t.Fatalf("expected continuity_thread_id in audit, got %#v", lastAuditEvent.Data["continuity_thread_id"])
+	if _, exists := lastAuditEvent.Data["continuity_thread_id"]; exists {
+		t.Fatalf("expected no continuity_thread_id in audit, got %#v", lastAuditEvent.Data["continuity_thread_id"])
 	}
 }
 

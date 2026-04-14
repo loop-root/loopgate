@@ -24,20 +24,23 @@ Product surfaces:
 
 This repository centers on **Loopgate** as the governance engine.
 
+Note: older memory, continuity, task-board, and morphling references may still
+appear deeper in this local map while cleanup continues. Treat those as
+historical or extraction notes, not the active Loopgate product surface.
+
 ## Current Product Shape
 
-- `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, memory continuity, morphling lifecycle.
+- `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, Claude hook governance, and the MCP broker path.
 - The **current product surface** is a direct local client model: **Claude Code hooks** over the local control plane, plus optional **HTTP-native** clients and **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
 - **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile). Admin node connects via mTLS over TCP. Apple XPC is optional post-launch hardening (no committed date).
-- `Morphlings` are bounded subordinate workers governed by Loopgate, not free agents.
-- **Multi-tenancy:** `tenant_id` namespace isolation is the foundation for enterprise deployment — being added now. Every resource, audit event, and capability grant will carry a `tenant_id`.
+- Retired Haven, Morph, morphling, task-board, and in-tree memory surfaces are cleanup or extraction debt, not the active product surface.
 
 Useful mental model (enterprise):
 
 ```text
 Developer IDE or local HTTP client
   -> Loopgate **HTTP on UDS** (local node)
-  -> Policy evaluation, audit, memory, approvals
+  -> Policy evaluation, audit, approvals
   -> Admin node (governance, IDP, audit aggregation)
 ```
 
@@ -72,14 +75,13 @@ If you are new to the repo, read in this order:
 5. `AGENTS/BUILD_NOW.md` — current implementation slice and priorities
 6. `internal/loopgate/server.go` — central authority runtime: server construction, serve loop, and capability execution core
 7. `internal/loopgate/loopgate_map.md` — current module map for the split Loopgate package
-8. `internal/tcl/` — Thought Compression Language: memory normalization, anchors, policy
-9. `docs/reviews/memory_reviewGaps.md` — documented memory system gaps and fixes
-10. `docs/plans/` — session handoff docs (if present)
+8. `docs/setup/OPERATOR_GUIDE.md` — active local operator workflow
+9. `docs/plans/` — session handoff docs (if present)
 
 Notes:
 
 - `AGENTS.md` at the repo root is the tracked security constitution; `AGENTS/` is a local-only directory (gitignored). It may not exist on every clone.
-- The current direction is **Claude Code hooks**, **HTTP-native integrations**, and multi-tenancy groundwork; **proxy mode is dropped** and **in-tree MCP remains deprecated**.
+- The current direction is **Claude Code hooks**, **HTTP-native integrations**, and a thinner local-first governance kernel; **proxy mode is dropped** and **in-tree MCP remains deprecated**.
 
 ## Top-Level Map
 

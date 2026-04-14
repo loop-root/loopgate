@@ -15,8 +15,7 @@ It is the enforcement point for capabilities, approvals, integration auth, and o
 
 Older Haven route and tool surfaces are being retired. Treat the active
 Loopgate product as the governance kernel for Claude hooks, approvals, audit,
-policy, and the MCP gateway path. Memory and continuity remain in-tree
-extraction debt, not part of the active Loopgate operator surface.
+policy, sandbox mediation, and the MCP gateway path.
 
 ## Current state
 
@@ -117,7 +116,7 @@ Current MVP note:
 
 - the active transport is the local Unix-socket control plane for Claude hooks, operator clients, and out-of-tree bridges
 - retired Haven and morphling surfaces are no longer part of the active product boundary
-- memory and continuity remain in-tree as extraction debt, but they are not part of the active Loopgate operator contract
+- the retired in-tree memory and continuity layers are being separated out of Loopgate rather than treated as part of the active operator contract
 
 Not yet implemented:
 
@@ -134,7 +133,6 @@ Not yet implemented:
 - operator UX (Claude Code, IDE, or other local HTTP client; MCP hosts via **out-of-tree** forwarders unless a future ADR adds a thin in-tree adapter)
 - model interaction and prompt compilation (where applicable)
 - local session state
-- local append-only continuity ledger and explicit `current / next / previous` role state (where used)
 - rendering Loopgate decisions and approval prompts
 
 ### Loopgate owns
@@ -154,7 +152,7 @@ The model never calls third-party systems directly.
 
 The intended execution path is:
 
-`model output -> client parsing/validation -> Loopgate capability request -> adapter/tool execution -> structured response -> client continuity stream / Loopgate durable memory`
+`model output -> client parsing/validation -> Loopgate capability request -> adapter/tool execution -> structured response -> client rendering or storage outside the authority boundary`
 
 ## Secret rule
 

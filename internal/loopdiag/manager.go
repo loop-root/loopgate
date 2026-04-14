@@ -21,13 +21,12 @@ import (
 
 const slogTraceLevel = slog.Level(-8)
 
-// Manager holds per-channel slog loggers writing to separate files (audit, server, client, socket, memory, ledger, model).
+// Manager holds per-channel slog loggers writing to separate files (audit, server, client, socket, ledger, model).
 type Manager struct {
 	Audit  *slog.Logger
 	Server *slog.Logger
 	Client *slog.Logger
 	Socket *slog.Logger
-	Memory *slog.Logger
 	Ledger *slog.Logger
 	Model  *slog.Logger
 
@@ -55,14 +54,13 @@ func Open(repoRoot string, cfg config.DiagnosticLogging) (*Manager, error) {
 		{"server", cfg.Files.Server, &m.Server},
 		{"client", cfg.Files.Client, &m.Client},
 		{"socket", cfg.Files.Socket, &m.Socket},
-		{"memory", cfg.Files.Memory, &m.Memory},
 		{"ledger", cfg.Files.Ledger, &m.Ledger},
 		{"model", cfg.Files.Model, &m.Model},
 	}
 
 	defaultBasenames := map[string]string{
 		"audit": "audit.log", "server": "server.log", "client": "client.log",
-		"socket": "socket.log", "memory": "memory.log", "ledger": "ledger.log", "model": "model.log",
+		"socket": "socket.log", "ledger": "ledger.log", "model": "model.log",
 	}
 	for _, ch := range channels {
 		level := parseDiagLevel(cfg.LevelForChannel(ch.name))

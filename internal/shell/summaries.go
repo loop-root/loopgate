@@ -181,9 +181,8 @@ func summarizeConfigPaths(commandContext CommandContext) string {
 		{label: "policy", path: filepath.Join(commandContext.RepoRoot, "core", "policy", "policy.yaml")},
 		{label: "loopgate_connections", path: filepath.Join(commandContext.RepoRoot, "loopgate", "connections")},
 		{label: "state", path: filepath.Join(commandContext.RepoRoot, "runtime", "state", "working_state.json")},
-		{label: "continuity_threads", path: filepath.Join(commandContext.RepoRoot, "runtime", "state", "continuity_threads.json")},
 		{label: "model_runtime", path: modelruntime.ConfigPath(commandContext.RepoRoot)},
-		{label: "ledger", path: filepath.Join(commandContext.RepoRoot, "core", "memory", "ledger", "ledger.jsonl")},
+		{label: "audit", path: filepath.Join(commandContext.RepoRoot, "runtime", "state", "loopgate_events.jsonl")},
 	}
 	sandboxPaths := sandbox.PathsForRepo(commandContext.RepoRoot)
 

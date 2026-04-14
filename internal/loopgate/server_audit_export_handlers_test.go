@@ -172,14 +172,7 @@ logging:
         id: "audit_export_admin_bearer"
         backend: "env"
         account_name: "LOOPGATE_AUDIT_EXPORT_TOKEN"
-        scope: "test"
-memory:
-  candidate_panel_size: 3
-  decomposition_preference: "hybrid_schema_guided"
-  review_preference: "risk_tiered"
-  soft_worker_concurrency: 3
-  batching_preference: "pause_on_wave_failure"
-`
+        scope: "test"`
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)

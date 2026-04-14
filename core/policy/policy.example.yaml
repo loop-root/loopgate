@@ -247,7 +247,6 @@ tools:
 logging:
   log_commands: true
   log_tool_calls: true
-  log_memory_promotions: true
   audit_detail:
     # Hook decisions remain must-persist. This only controls how much extra
     # redacted projection detail gets attached to hook audit events.
@@ -259,14 +258,6 @@ logging:
     #   - omit preview strings to reduce audit noise
     #   - still keep hashes, verbs, resolved targets, approval state, and session linkage
     hook_projection_level: full
-
-memory:
-  auto_distillate: true
-  require_promotion_approval: true
-  continuity_review_required: false
-  submit_previous_min_events: 3
-  submit_previous_min_payload_bytes: 512
-  submit_previous_min_prompt_tokens: 120
 
 safety:
   # Never let the model rewrite persona or policy through tools.
