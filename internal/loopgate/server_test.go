@@ -1777,28 +1777,6 @@ func TestNewServer_IgnoresStalePolicyJSONForOperatorMountWriteApproval(t *testin
 	}
 }
 
-func TestShouldAutoAllowTrustedSandboxCapability_DeniesOperatorMountWrites(t *testing.T) {
-	tool := fakeLoopgateTool{
-		name:      "operator_mount.fs_write",
-		category:  "filesystem",
-		operation: toolspkg.OpWrite,
-		trusted:   true,
-	}
-
-	enabled := true
-	policy := config.Policy{}
-	policy.Safety.HavenTrustedSandboxAutoAllow = &enabled
-	server := &Server{
-		policy:   policy,
-		sessions: map[string]controlSession{"cs-haven": {TrustedHavenClient: true}},
-	}
-	if server.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven", ControlSessionID: "cs-haven"}, tool.Name(), tool, policypkg.CheckResult{
-		Decision: policypkg.NeedsApproval,
-	}) {
-		t.Fatalf("expected operator_mount writes to keep approval semantics")
-	}
-}
-
 func TestSandboxImportAndStageAndExport(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
@@ -5981,7 +5959,6 @@ type fakeLoopgateTool struct {
 	operation   string
 	description string
 	output      string
-	trusted     bool
 }
 
 func (fakeTool fakeLoopgateTool) Name() string      { return fakeTool.name }
@@ -5993,20 +5970,6 @@ func (fakeTool fakeLoopgateTool) Schema() toolspkg.Schema {
 func (fakeTool fakeLoopgateTool) Execute(context.Context, map[string]string) (string, error) {
 	return fakeTool.output, nil
 }
-func (fakeTool fakeLoopgateTool) TrustedSandboxLocal() bool { return fakeTool.trusted }
-
-func TestIsHighRiskCapability_TrustedSandboxWriteIsNotEscalated(t *testing.T) {
-	tool := fakeLoopgateTool{
-		name:      "notes.write",
-		category:  "filesystem",
-		operation: toolspkg.OpWrite,
-		trusted:   true,
-	}
-
-	if isHighRiskCapability(tool, policypkg.CheckResult{Decision: policypkg.Allow}) {
-		t.Fatalf("expected trusted sandbox-local write to avoid high-risk execution token path")
-	}
-}
 
 func TestIsHighRiskCapability_UntrustedWriteRemainsHighRisk(t *testing.T) {
 	tool := fakeLoopgateTool{
@@ -6017,151 +5980,6 @@ func TestIsHighRiskCapability_UntrustedWriteRemainsHighRisk(t *testing.T) {
 
 	if !isHighRiskCapability(tool, policypkg.CheckResult{Decision: policypkg.Allow}) {
 		t.Fatalf("expected untrusted write to remain high risk")
-	}
-}
-
-func TestShouldAutoAllowTrustedSandboxCapability_HavenTrustedWrite(t *testing.T) {
-	tool := fakeLoopgateTool{
-		name:      "notes.write",
-		category:  "filesystem",
-		operation: toolspkg.OpWrite,
-		trusted:   true,
-	}
-
-	enabled := true
-	pol := config.Policy{}
-	pol.Safety.HavenTrustedSandboxAutoAllow = &enabled
-	srv := &Server{
-		policy:   pol,
-		sessions: map[string]controlSession{"cs-haven": {TrustedHavenClient: true}},
-	}
-	allowed := srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven", ControlSessionID: "cs-haven"}, tool.Name(), tool, policypkg.CheckResult{
-		Decision: policypkg.NeedsApproval,
-	})
-	if !allowed {
-		t.Fatalf("expected Haven trusted sandbox write to bypass approval friction")
-	}
-}
-
-func TestShouldAutoAllowTrustedSandboxCapability_UntrustedHavenActorDenied(t *testing.T) {
-	tool := fakeLoopgateTool{
-		name:      "notes.write",
-		category:  "filesystem",
-		operation: toolspkg.OpWrite,
-		trusted:   true,
-	}
-
-	enabled := true
-	policy := config.Policy{}
-	policy.Safety.HavenTrustedSandboxAutoAllow = &enabled
-	srv := &Server{
-		policy:   policy,
-		sessions: map[string]controlSession{"cs-haven": {TrustedHavenClient: false}},
-	}
-	allowed := srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven", ControlSessionID: "cs-haven"}, tool.Name(), tool, policypkg.CheckResult{
-		Decision: policypkg.NeedsApproval,
-	})
-	if allowed {
-		t.Fatalf("expected untrusted haven session to keep approval semantics")
-	}
-}
-
-func TestShouldAutoAllowTrustedSandboxCapability_NonHavenActorDenied(t *testing.T) {
-	tool := fakeLoopgateTool{
-		name:      "notes.write",
-		category:  "filesystem",
-		operation: toolspkg.OpWrite,
-		trusted:   true,
-	}
-
-	enabled := true
-	policy := config.Policy{}
-	policy.Safety.HavenTrustedSandboxAutoAllow = &enabled
-	srv := &Server{
-		policy:   policy,
-		sessions: map[string]controlSession{"cs-other": {TrustedHavenClient: true}},
-	}
-	allowed := srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "test-actor", ControlSessionID: "cs-other"}, tool.Name(), tool, policypkg.CheckResult{
-		Decision: policypkg.NeedsApproval,
-	})
-	if allowed {
-		t.Fatalf("expected non-Haven actor to keep approval semantics")
-	}
-}
-
-func TestShouldAutoAllowTrustedSandboxCapability_PolicyDisablesHavenAutoAllow(t *testing.T) {
-	tool := fakeLoopgateTool{
-		name:      "notes.write",
-		category:  "filesystem",
-		operation: toolspkg.OpWrite,
-		trusted:   true,
-	}
-	policy := config.Policy{}
-	disabled := false
-	policy.Safety.HavenTrustedSandboxAutoAllow = &disabled
-	srv := &Server{
-		policy:   policy,
-		sessions: map[string]controlSession{"cs-haven": {TrustedHavenClient: true}},
-	}
-	if srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven", ControlSessionID: "cs-haven"}, tool.Name(), tool, policypkg.CheckResult{
-		Decision: policypkg.NeedsApproval,
-	}) {
-		t.Fatalf("expected policy to disable Haven trusted-sandbox auto-allow")
-	}
-}
-
-func TestShouldAutoAllowTrustedSandboxCapability_EmptyAllowlistDeniesAll(t *testing.T) {
-	tool := fakeLoopgateTool{
-		name:      "notes.write",
-		category:  "filesystem",
-		operation: toolspkg.OpWrite,
-		trusted:   true,
-	}
-	enabled := true
-	policy := config.Policy{}
-	policy.Safety.HavenTrustedSandboxAutoAllow = &enabled
-	empty := []string{}
-	policy.Safety.HavenTrustedSandboxAutoAllowCapabilities = &empty
-	srv := &Server{
-		policy:   policy,
-		sessions: map[string]controlSession{"cs-haven": {TrustedHavenClient: true}},
-	}
-	if srv.shouldAutoAllowTrustedSandboxCapability(capabilityToken{ActorLabel: "haven", ControlSessionID: "cs-haven"}, tool.Name(), tool, policypkg.CheckResult{
-		Decision: policypkg.NeedsApproval,
-	}) {
-		t.Fatalf("expected empty explicit allowlist to deny auto-allow")
-	}
-}
-
-func TestShouldAutoAllowTrustedSandboxCapability_AllowlistRestrictsCapabilities(t *testing.T) {
-	toolWrite := fakeLoopgateTool{
-		name:      "notes.write",
-		category:  "filesystem",
-		operation: toolspkg.OpWrite,
-		trusted:   true,
-	}
-	enabled := true
-	policy := config.Policy{}
-	policy.Safety.HavenTrustedSandboxAutoAllow = &enabled
-	onlyRead := []string{"notes.read"}
-	policy.Safety.HavenTrustedSandboxAutoAllowCapabilities = &onlyRead
-	srv := &Server{
-		policy:   policy,
-		sessions: map[string]controlSession{"cs-haven": {TrustedHavenClient: true}},
-	}
-	token := capabilityToken{ActorLabel: "haven", ControlSessionID: "cs-haven"}
-	needsApproval := policypkg.CheckResult{Decision: policypkg.NeedsApproval}
-	if srv.shouldAutoAllowTrustedSandboxCapability(token, toolWrite.Name(), toolWrite, needsApproval) {
-		t.Fatalf("expected allowlist to exclude notes.write")
-	}
-	toolRead := fakeLoopgateTool{
-		name:      "notes.read",
-		category:  "filesystem",
-		operation: toolspkg.OpRead,
-		trusted:   true,
-	}
-	if !srv.shouldAutoAllowTrustedSandboxCapability(token, toolRead.Name(), toolRead, needsApproval) {
-		t.Fatalf("expected allowlist to include notes.read")
 	}
 }
 
@@ -7222,8 +7040,7 @@ func loopgatePolicyYAML(writeRequiresApproval bool) string {
 		"  continuity_review_required: false\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n" +
-		"  haven_trusted_sandbox_auto_allow: true\n"
+		"  allow_policy_modification: false\n"
 }
 
 func loopgateMorphlingPolicyYAML(writeRequiresApproval bool, spawnEnabled bool, maxActive int) string {
@@ -7270,8 +7087,7 @@ func loopgateMorphlingPolicyYAML(writeRequiresApproval bool, spawnEnabled bool, 
 		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n" +
-		"  haven_trusted_sandbox_auto_allow: true\n"
+		"  allow_policy_modification: false\n"
 }
 
 func loopgateHTTPPolicyYAML(requiresApproval bool) string {
@@ -7311,8 +7127,7 @@ func loopgateHTTPPolicyYAML(requiresApproval bool) string {
 		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n" +
-		"  haven_trusted_sandbox_auto_allow: true\n"
+		"  allow_policy_modification: false\n"
 }
 
 func loopgateShellPolicyYAML(requiresApproval bool, allowedCommands []string) string {
@@ -7357,8 +7172,7 @@ func loopgateShellPolicyYAML(requiresApproval bool, allowedCommands []string) st
 		"  require_promotion_approval: true\n" +
 		"safety:\n" +
 		"  allow_persona_modification: false\n" +
-		"  allow_policy_modification: false\n" +
-		"  haven_trusted_sandbox_auto_allow: true\n"
+		"  allow_policy_modification: false\n"
 }
 
 func writeConfiguredConnectionYAML(t *testing.T, repoRoot string, providerBaseURL string) {

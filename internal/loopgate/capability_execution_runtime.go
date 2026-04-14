@@ -3,7 +3,6 @@ package loopgate
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,63 +15,7 @@ func isHighRiskCapability(tool toolspkg.Tool, policyDecision policypkg.CheckResu
 	if policyDecision.Decision == policypkg.NeedsApproval {
 		return true
 	}
-	if trustedTool, ok := tool.(interface{ TrustedSandboxLocal() bool }); ok && trustedTool.TrustedSandboxLocal() {
-		return false
-	}
 	return tool.Operation() == toolspkg.OpWrite
-}
-
-func (server *Server) hasTrustedHavenSession(tokenClaims capabilityToken) bool {
-	if !strings.EqualFold(strings.TrimSpace(tokenClaims.ActorLabel), "haven") {
-		return false
-	}
-	server.mu.Lock()
-	controlSession, sessionFound := server.sessions[tokenClaims.ControlSessionID]
-	server.mu.Unlock()
-	if !sessionFound {
-		return false
-	}
-	return controlSession.TrustedHavenClient
-}
-
-func (server *Server) requireTrustedHavenSession(writer http.ResponseWriter, tokenClaims capabilityToken, denialReason string) bool {
-	if server.hasTrustedHavenSession(tokenClaims) {
-		return true
-	}
-	normalizedDenialReason := strings.TrimSpace(denialReason)
-	if normalizedDenialReason == "" {
-		normalizedDenialReason = "trusted Haven session required"
-	}
-	server.writeJSON(writer, 403, CapabilityResponse{
-		Status:       ResponseStatusDenied,
-		DenialReason: normalizedDenialReason,
-		DenialCode:   DenialCodeCapabilityTokenInvalid,
-	})
-	return false
-}
-
-func (server *Server) shouldAutoAllowTrustedSandboxCapability(tokenClaims capabilityToken, capabilityName string, tool toolspkg.Tool, policyDecision policypkg.CheckResult) bool {
-	if policyDecision.Decision != policypkg.NeedsApproval {
-		return false
-	}
-	policyRuntime := server.currentPolicyRuntime()
-	// Host-mounted project tools are never "trusted sandbox" work. They reach the
-	// real host filesystem under operator-granted roots and must preserve normal
-	// approval semantics even if someone accidentally tags them trusted later.
-	if strings.HasPrefix(strings.TrimSpace(capabilityName), "operator_mount.") {
-		return false
-	}
-	if !policyRuntime.policy.HavenTrustedSandboxAutoAllowEnabled() {
-		return false
-	}
-	if !policyRuntime.policy.HavenTrustedSandboxAutoAllowMatchesCapability(capabilityName) {
-		return false
-	}
-	if !server.hasTrustedHavenSession(tokenClaims) {
-		return false
-	}
-	trustedTool, ok := tool.(interface{ TrustedSandboxLocal() bool })
-	return ok && trustedTool.TrustedSandboxLocal()
 }
 
 func deriveExecutionToken(baseToken capabilityToken, capabilityRequest CapabilityRequest) capabilityToken {

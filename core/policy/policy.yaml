@@ -157,9 +157,3 @@ memory:
 safety:
   allow_persona_modification: false
   allow_policy_modification: false
-  # Explicit opt-in: when true, actor haven may auto-allow TrustedSandboxLocal tools that otherwise need approval.
-  # Omitted or false keeps strict approval for those tools (secure default).
-  haven_trusted_sandbox_auto_allow: true
-  # Optional: restrict auto-allow to named capabilities. Omit for all TrustedSandboxLocal tools; `[]` disables auto-allow.
-  # haven_trusted_sandbox_auto_allow_capabilities:
-  #   - "notes.write"

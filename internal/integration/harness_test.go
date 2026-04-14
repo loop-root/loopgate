@@ -494,8 +494,7 @@ func integrationPolicyYAML(writeEnabled bool) string {
 			"  require_promotion_approval: true\n"+
 			"safety:\n"+
 			"  allow_persona_modification: false\n"+
-			"  allow_policy_modification: false\n"+
-			"  haven_trusted_sandbox_auto_allow: true\n",
+			"  allow_policy_modification: false\n",
 		writeEnabledValue,
 	)
 }

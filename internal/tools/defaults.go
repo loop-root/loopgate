@@ -6,7 +6,7 @@ import "morph/internal/config"
 // rooted at repoRoot. Used by the Haven client and the Loopgate server.
 func NewDefaultRegistry(repoRoot string, policy config.Policy) (*Registry, error) {
 	fsCfg := policy.Tools.Filesystem
-	return newRegistryWithRoot(repoRoot, fsCfg.AllowedRoots, fsCfg.DeniedPaths, policy, false)
+	return newRegistryWithRoot(repoRoot, fsCfg.AllowedRoots, fsCfg.DeniedPaths, policy)
 }
 
 // NewSandboxRegistry creates a registry with filesystem tools rooted in a
@@ -16,7 +16,7 @@ func NewSandboxRegistry(sandboxHome string, policy config.Policy) (*Registry, er
 	// Denied paths protect sandbox internals.
 	allowedRoots := []string{"."}
 	deniedPaths := []string{"agents", "logs"}
-	registry, err := newRegistryWithRoot(sandboxHome, allowedRoots, deniedPaths, policy, true)
+	registry, err := newRegistryWithRoot(sandboxHome, allowedRoots, deniedPaths, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -24,16 +24,10 @@ func NewSandboxRegistry(sandboxHome string, policy config.Policy) (*Registry, er
 	return registry, nil
 }
 
-func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []string, policy config.Policy, trustedSandboxLocal bool) (*Registry, error) {
+func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []string, policy config.Policy) (*Registry, error) {
 	reg := NewRegistry()
-	registerTool := func(tool Tool) error {
-		if trustedSandboxLocal {
-			return reg.TryRegister(WrapTrustedSandboxLocal(tool))
-		}
-		return reg.TryRegister(tool)
-	}
 
-	if err := registerTool(&FSRead{
+	if err := reg.TryRegister(&FSRead{
 		RepoRoot:     root,
 		AllowedRoots: allowedRoots,
 		DeniedPaths:  deniedPaths,
@@ -41,7 +35,7 @@ func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []strin
 		return nil, err
 	}
 
-	if err := registerTool(&FSWrite{
+	if err := reg.TryRegister(&FSWrite{
 		RepoRoot:     root,
 		AllowedRoots: allowedRoots,
 		DeniedPaths:  deniedPaths,
@@ -49,7 +43,7 @@ func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []strin
 		return nil, err
 	}
 
-	if err := registerTool(&FSList{
+	if err := reg.TryRegister(&FSList{
 		RepoRoot:     root,
 		AllowedRoots: allowedRoots,
 		DeniedPaths:  deniedPaths,
@@ -57,7 +51,7 @@ func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []strin
 		return nil, err
 	}
 
-	if err := registerTool(&FSMkdir{
+	if err := reg.TryRegister(&FSMkdir{
 		RepoRoot:     root,
 		AllowedRoots: allowedRoots,
 		DeniedPaths:  deniedPaths,
@@ -65,7 +59,7 @@ func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []strin
 		return nil, err
 	}
 
-	if err := registerTool(&MemoryRemember{}); err != nil {
+	if err := reg.TryRegister(&MemoryRemember{}); err != nil {
 		return nil, err
 	}
 

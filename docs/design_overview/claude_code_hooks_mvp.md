@@ -225,8 +225,7 @@ They are not the current build target.
 
 ## 6. Naming note
 
-Some runtime identifiers still use historical names such as `morphling`,
-`TrustedHavenClient`, or `haven_trusted_sandbox_auto_allow`.
+Some runtime identifiers still use historical names such as `morphling`.
 
 Those names remain in code for now to avoid high-churn refactors during the
 pivot.

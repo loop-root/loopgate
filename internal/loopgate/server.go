@@ -191,10 +191,6 @@ type controlSession struct {
 	ActorLabel         string
 	ClientSessionLabel string
 	WorkspaceID        string
-	// TrustedHavenClient is true only when the session opened as actor haven and
-	// the connecting process matched Loopgate's pinned expected client executable.
-	// It gates friction-reduction paths such as trusted-sandbox auto-allow.
-	TrustedHavenClient bool
 	// OperatorMountPaths are absolute host directories bound from a pinned Haven client at
 	// session open. They scope operator_mount.fs_* tools — never from model text or a
 	// generic unpinned local client.
@@ -751,7 +747,6 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 	}
 	originalPolicyDecision := policyDecision
-	trustedSandboxAutoAllowed := false
 	lowRiskHostPlanAutoAllowed := false
 	if operatorMountGrant, granted, grantErr := operatorMountWriteGrantForRequest(server, tokenClaims.ControlSessionID, capabilityRequest); grantErr == nil && granted {
 		policyDecision = policypkg.CheckResult{
@@ -759,29 +754,9 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			Reason:   "active operator-mounted write grant for " + operatorMountGrant.root,
 		}
 	}
-	if server.shouldAutoAllowTrustedSandboxCapability(tokenClaims, capabilityRequest.Capability, tool, policyDecision) {
-		policyDecision = policypkg.CheckResult{
-			Decision: policypkg.Allow,
-			Reason:   "trusted Haven-native sandbox capability",
-		}
-		trustedSandboxAutoAllowed = true
-	}
 	if adjustedDecision, adjusted := server.autoAllowLowRiskHostPlanApply(tokenClaims.ControlSessionID, capabilityRequest, policyDecision); adjusted {
 		policyDecision = adjustedDecision
 		lowRiskHostPlanAutoAllowed = true
-	}
-	// Distinct audit when policy would have required approval but Haven trusted-sandbox auto-allow applied.
-	// Operators grep this event to verify the bypass path; failure to persist is fail-closed like other capability audits.
-	if originalPolicyDecision.Decision == policypkg.NeedsApproval && policyDecision.Decision == policypkg.Allow && trustedSandboxAutoAllowed {
-		if err := server.logEvent("capability.haven_trusted_sandbox_auto_allow", tokenClaims.ControlSessionID, map[string]interface{}{
-			"request_id":           capabilityRequest.RequestID,
-			"capability":           capabilityRequest.Capability,
-			"actor_label":          tokenClaims.ActorLabel,
-			"client_session_label": tokenClaims.ClientSessionLabel,
-			"control_session_id":   tokenClaims.ControlSessionID,
-		}); err != nil {
-			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-		}
 	}
 	if originalPolicyDecision.Decision == policypkg.NeedsApproval && policyDecision.Decision == policypkg.Allow && lowRiskHostPlanAutoAllowed {
 		if err := server.logEvent("capability.low_risk_host_plan_auto_allow", tokenClaims.ControlSessionID, map[string]interface{}{

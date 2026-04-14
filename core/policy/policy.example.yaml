@@ -279,9 +279,3 @@ safety:
   # Never let the model rewrite persona or policy through tools.
   allow_persona_modification: false
   allow_policy_modification: false
-  # Legacy compatibility knob for trusted local UI flows.
-  # Omit or false = more prompts (secure default).
-  haven_trusted_sandbox_auto_allow: true
-  # Optional narrow list; use [] to disable auto-allow entirely:
-  # haven_trusted_sandbox_auto_allow_capabilities:
-  #   - "notes.read"

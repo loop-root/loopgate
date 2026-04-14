@@ -17,8 +17,8 @@ func TestBuildNativeToolDefs_ReturnsOnlyAllowlistedTools(t *testing.T) {
 	reg.Register(&tools.NoteCreate{StateDir: "/tmp"})
 
 	defs := BuildNativeToolDefs(reg)
-	if len(defs) != 6 {
-		t.Fatalf("expected 6 defs, got %d", len(defs))
+	if len(defs) != 4 {
+		t.Fatalf("expected 4 defs, got %d", len(defs))
 	}
 
 	names := map[string]bool{}
@@ -34,14 +34,14 @@ func TestBuildNativeToolDefs_ReturnsOnlyAllowlistedTools(t *testing.T) {
 	if !names["fs_write"] {
 		t.Error("expected fs_write in defs")
 	}
-	if !names["journal.write"] {
-		t.Error("expected journal.write in defs")
-	}
 	if !names["memory.remember"] {
 		t.Error("expected memory.remember in defs")
 	}
-	if !names["note.create"] {
-		t.Error("expected note.create in defs")
+	if names["journal.write"] {
+		t.Error("did not expect retired journal.write in defs")
+	}
+	if names["note.create"] {
+		t.Error("did not expect retired note.create in defs")
 	}
 }
 
@@ -201,8 +201,8 @@ func TestBuildNativeToolDefsForAllowedNamesWithOptions_HavenGuardsAppendToDescri
 	defs := BuildNativeToolDefsForAllowedNamesWithOptions(reg, []string{"memory.remember", "journal.write"}, NativeToolDefBuildOptions{
 		HavenUserIntentGuards: true,
 	})
-	if len(defs) != 2 {
-		t.Fatalf("expected 2 defs, got %d", len(defs))
+	if len(defs) != 1 {
+		t.Fatalf("expected 1 def, got %d", len(defs))
 	}
 	for _, d := range defs {
 		if !strings.Contains(d.Description, "Only call when the user explicitly asked") {

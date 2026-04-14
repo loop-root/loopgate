@@ -22,7 +22,6 @@ const havenUserIntentGuardSuffix = " Only call when the user explicitly asked fo
 
 var havenNativeToolUserIntentGuards = map[string]bool{
 	"memory.remember": true,
-	"journal.write":   true,
 }
 
 // nativeToolAllowlist defines which tools are eligible for the native
@@ -41,18 +40,7 @@ var nativeToolAllowlist = map[string]bool{
 	"operator_mount.fs_write": true,
 	"operator_mount.fs_list":  true,
 	"operator_mount.fs_mkdir": true,
-	"journal.list":            true,
-	"journal.read":            true,
-	"journal.write":           true,
-	"haven.operator_context":  true,
-	"notes.list":              true,
-	"notes.read":              true,
-	"notes.write":             true,
 	"memory.remember":         true,
-	"paint.list":              true,
-	"paint.save":              true,
-	"note.create":             true,
-	"desktop.organize":        true,
 	"shell_exec":              true,
 	"host.folder.list":        true,
 	"host.folder.read":        true,

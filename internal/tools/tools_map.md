@@ -32,15 +32,9 @@ This layer is important because:
 - `defaults.go`
   - default registry builders
   - currently the place where sandbox and default tool bundles are assembled
-  - sandbox tools now carry an explicit trusted-sandbox-local wrapper so Loopgate can treat **actor-scoped** in-world actions differently from host-rooted/default registries
-- `trusted_sandbox_tool.go`
-  - marker wrapper for trusted sandbox-local tools (typically `haven` actor)
-  - used so Loopgate can reduce approval friction for the `haven` actor without trusting the same tool names globally
 - `journal_tools.go`
   - journal list/read/write tools
-- `haven_operator_context.go`
-  - read-only `haven.operator_context` tool: Loopgate-maintained operator guide for Haven (mounts, TUI, troubleshooting); trusted-sandbox-local registration
-- **Operator mount tools** (`operator_mount.fs_*`) are registered from `internal/loopgate/operator_mount.go` (not this package): session-scoped host directory access from Haven `operator_mount_paths` on `POST /v1/session/open`, accepted only when Loopgate is pinning the expected Haven client executable; optional `primary_operator_mount_path` selects the default root for relative paths without widening allowed roots
+- **Operator mount tools** (`operator_mount.fs_*`) are registered from `internal/loopgate/operator_mount.go` (not this package): session-scoped host directory access from pinned operator mount paths on `POST /v1/session/open`; optional `primary_operator_mount_path` selects the default root for relative paths without widening allowed roots
 - `paint_tools.go`
   - flat prompt-oriented paint save/list tools
 - `note_create.go`
@@ -73,7 +67,7 @@ The current native tool schema path only supports scalar arguments:
 - `int`
 - `bool`
 
-That means new **trusted sandbox-local** tools should initially use flat APIs like:
+That means new sandbox-local tools should initially use flat APIs like:
 
 - `journal.write(title, body)`
 - `note.create(kind, title, body)`

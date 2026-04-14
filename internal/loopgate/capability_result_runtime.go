@@ -50,18 +50,6 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 				Memory: false,
 			},
 		}, ""
-	case "journal.read", "journal.write", "journal.list",
-		"haven.operator_context",
-		"notes.read", "notes.write", "notes.list",
-		"note.create", "paint.save", "paint.list",
-		"desktop.organize":
-		return ResultClassification{
-			Exposure: ResultExposureDisplay,
-			Eligibility: ResultEligibility{
-				Prompt: true,
-				Memory: false,
-			},
-		}, ""
 	default:
 		return ResultClassification{
 			Exposure: ResultExposureAudit,

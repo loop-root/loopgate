@@ -18,10 +18,6 @@ type UIStatusPolicySummary struct {
 	ReadEnabled           bool `json:"read_enabled"`
 	WriteEnabled          bool `json:"write_enabled"`
 	WriteRequiresApproval bool `json:"write_requires_approval"`
-	// HavenTrustedSandboxAutoAllow mirrors policy.safety.haven_trusted_sandbox_auto_allow (secure default false when omitted).
-	HavenTrustedSandboxAutoAllow bool `json:"haven_trusted_sandbox_auto_allow"`
-	// HavenTrustedSandboxAllowlistMode is "all" (nil list), "none" (empty list), or "restricted" (explicit names).
-	HavenTrustedSandboxAllowlistMode string `json:"haven_trusted_sandbox_allowlist_mode"`
 }
 
 const (

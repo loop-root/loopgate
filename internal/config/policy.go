@@ -74,12 +74,6 @@ type Policy struct {
 	Safety struct {
 		AllowPersonaModification bool `yaml:"allow_persona_modification" json:"allow_persona_modification"`
 		AllowPolicyModification  bool `yaml:"allow_policy_modification" json:"allow_policy_modification"`
-		// HavenTrustedSandboxAutoAllow, when nil, defaults to false (secure default; explicit true required for Haven UX).
-		// When true, the control plane may upgrade NeedsApproval to Allow for actor haven + TrustedSandboxLocal tools.
-		HavenTrustedSandboxAutoAllow *bool `yaml:"haven_trusted_sandbox_auto_allow" json:"haven_trusted_sandbox_auto_allow"`
-		// HavenTrustedSandboxAutoAllowCapabilities, when nil, allows any TrustedSandboxLocal capability name.
-		// When non-nil and empty, auto-allow is disabled for all capabilities. When non-nil with entries, only listed names match.
-		HavenTrustedSandboxAutoAllowCapabilities *[]string `yaml:"haven_trusted_sandbox_auto_allow_capabilities" json:"haven_trusted_sandbox_auto_allow_capabilities"`
 	} `yaml:"safety" json:"safety"`
 }
 
@@ -378,30 +372,6 @@ func applyMCPGatewayPolicyDefaults(policy *MCPGatewayPolicy) error {
 		policy.Servers[serverID] = serverPolicy
 	}
 	return nil
-}
-
-// HavenTrustedSandboxAutoAllowEnabled reports whether Haven may auto-allow TrustedSandboxLocal capabilities
-// that would otherwise require approval. Omitted policy field defaults to false.
-func (p Policy) HavenTrustedSandboxAutoAllowEnabled() bool {
-	if p.Safety.HavenTrustedSandboxAutoAllow == nil {
-		return false
-	}
-	return *p.Safety.HavenTrustedSandboxAutoAllow
-}
-
-// HavenTrustedSandboxAutoAllowMatchesCapability reports whether capabilityName is permitted for
-// Haven trusted-sandbox auto-allow. Omitted allowlist means all capabilities; a non-nil empty
-// slice matches nothing; a non-nil non-empty slice is an explicit allowlist.
-func (p Policy) HavenTrustedSandboxAutoAllowMatchesCapability(capabilityName string) bool {
-	listPtr := p.Safety.HavenTrustedSandboxAutoAllowCapabilities
-	if listPtr == nil {
-		return true
-	}
-	list := *listPtr
-	if len(list) == 0 {
-		return false
-	}
-	return slices.Contains(list, capabilityName)
 }
 
 func normalizeConfiguredPaths(rawPaths []string) []string {

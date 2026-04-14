@@ -924,5 +924,4 @@ memory:
 safety:
   allow_persona_modification: false
   allow_policy_modification: false
-  haven_trusted_sandbox_auto_allow: true
 `
