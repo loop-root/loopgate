@@ -75,7 +75,7 @@ func TestRepositoryRuntimeConfigFile_LoadsWithStrictSchema(t *testing.T) {
 		t.Fatal("expected positive candidate panel size")
 	}
 	if runtimeConfig.Memory.SoftWorkerConcurrency <= 0 {
-		t.Fatal("expected positive soft morphling concurrency")
+		t.Fatal("expected positive soft worker concurrency")
 	}
 	if runtimeConfig.Logging.AuditLedger.MaxEventBytes <= 0 {
 		t.Fatal("expected positive audit max_event_bytes")
@@ -85,21 +85,6 @@ func TestRepositoryRuntimeConfigFile_LoadsWithStrictSchema(t *testing.T) {
 	}
 	if runtimeConfig.Logging.AuditLedger.VerifyClosedSegmentsOnStartup == nil {
 		t.Fatal("expected audit verify_closed_segments_on_startup to be populated")
-	}
-}
-
-func TestRepositoryGoalAliasesFile_LoadsWithStrictSchema(t *testing.T) {
-	repoRoot := repositoryRootFromTestFile(t)
-
-	goalAliases, err := LoadGoalAliases(repoRoot)
-	if err != nil {
-		t.Fatalf("goal aliases must decode strictly: %v", err)
-	}
-	if len(goalAliases.Aliases) == 0 {
-		t.Fatal("expected goal aliases to be populated")
-	}
-	if _, found := goalAliases.Aliases["technical_review"]; !found {
-		t.Fatal("expected technical_review aliases")
 	}
 }
 

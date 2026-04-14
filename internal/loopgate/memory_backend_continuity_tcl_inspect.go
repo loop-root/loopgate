@@ -602,7 +602,7 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(observedPa
 					SemanticProjection: deriveGoalOpSemanticProjection("opened", strings.TrimSpace(goalText), "continuity_inspection", tclpkg.TrustInferred),
 				})
 				if distillateRecord.GoalFamilyID == "" {
-					goalNormalization := normalizeGoalFamily(goalText, backend.server.goalAliases)
+					goalNormalization := normalizeGoalFamily(goalText)
 					distillateRecord.GoalType = goalNormalization.GoalType
 					distillateRecord.GoalFamilyID = goalNormalization.GoalFamilyID
 					distillateRecord.NormalizationVersion = goalNormalization.NormalizationVersion
@@ -649,7 +649,7 @@ func (backend *continuityTCLMemoryBackend) deriveContinuityDistillate(observedPa
 	})
 	distillateRecord.Tags = normalizeLoopgateMemoryTags(append([]string(nil), normalizedLoopgateTagSet(discoveredTags)...))
 	if distillateRecord.GoalType == "" {
-		goalNormalization := normalizeGoalFamily(strings.Join(distillateRecord.Tags, " "), backend.server.goalAliases)
+		goalNormalization := normalizeGoalFamily(strings.Join(distillateRecord.Tags, " "))
 		distillateRecord.GoalType = goalNormalization.GoalType
 		distillateRecord.GoalFamilyID = goalNormalization.GoalFamilyID
 		distillateRecord.NormalizationVersion = goalNormalization.NormalizationVersion

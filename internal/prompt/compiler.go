@@ -256,7 +256,7 @@ func buildSystemInstruction(request Request) (string, error) {
 			"If you are unsure whether a listed tool matches, do not emit a tool call for it.",
 			"Do not claim a tool succeeded unless you received a tool result.",
 			"Never emit <tool_result>. Tool results are generated only by the runtime after actual execution.",
-			"Never emit <tool_call> for local product commands such as /goal, /memory, /morphling, /site, or /setup.",
+			"Never emit <tool_call> for local product commands such as /memory, /site, or /setup.",
 			"Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory. Use only the listed memory commands or explain that the memory write surface is not exposed.",
 			"If the user asks how to use a local product command, answer in plain text instead of emitting a tool call.",
 		})

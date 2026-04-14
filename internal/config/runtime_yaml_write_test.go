@@ -114,19 +114,3 @@ func TestWritePolicyYAMLRoundTrip(t *testing.T) {
 		t.Fatalf("stat stale policy json: %v", err)
 	}
 }
-
-func TestWriteGoalAliasesYAMLRoundTrip(t *testing.T) {
-	repoRoot := t.TempDir()
-	ga := DefaultGoalAliases()
-	ga.Aliases["workflow_followup"] = []string{"carry_forward"}
-	if err := WriteGoalAliasesYAML(repoRoot, ga); err != nil {
-		t.Fatalf("WriteGoalAliasesYAML: %v", err)
-	}
-	loaded, err := LoadGoalAliases(repoRoot)
-	if err != nil {
-		t.Fatalf("LoadGoalAliases: %v", err)
-	}
-	if len(loaded.Aliases["workflow_followup"]) != 1 || loaded.Aliases["workflow_followup"][0] != "carry_forward" {
-		t.Fatalf("unexpected aliases: %#v", loaded.Aliases["workflow_followup"])
-	}
-}

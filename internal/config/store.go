@@ -59,8 +59,8 @@ func SaveJSONConfig[T any](stateDir, section string, config T) error {
 }
 
 // LoadOrSeed tries to load a JSON config from the state directory.
-// Loopgate runtime and goal aliases use YAML on disk instead; this remains for
-// morphling_classes, connections, and small local toggles.
+// Loopgate runtime uses YAML on disk instead; this remains for connections and
+// small local toggles.
 // If the JSON file doesn't exist, it falls back to loading from a YAML seed file.
 // If the YAML seed also doesn't exist, it uses the provided default function.
 // When seeding from YAML or defaults, the result is persisted as JSON.

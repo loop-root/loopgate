@@ -226,7 +226,7 @@ Implemented now:
 - inspection-root review state and lineage status
 - authoritative tombstone and purge exclusion for wake, discovery, recall, and replay
 - startup wake-state rebuild from authoritative Loopgate memory state
-- deterministic internal goal-family normalization from `config/goal_aliases.yaml` with fallback family IDs
+- deterministic internal continuity-family normalization without a separate checked-in alias table
 - centralized scoring weights and explicit memory correction config from `config/runtime.yaml`
 - no client-local durable wake-state, key, or distillate writes on the active
   path

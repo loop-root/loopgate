@@ -296,21 +296,6 @@ func TestLoadRuntimeConfig_MissingFileGetsDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadGoalAliases_MissingFileGetsDefaults(t *testing.T) {
-	repoRoot := t.TempDir()
-
-	goalAliases, err := LoadGoalAliases(repoRoot)
-	if err != nil {
-		t.Fatalf("load default goal aliases: %v", err)
-	}
-	if len(goalAliases.Aliases) == 0 {
-		t.Fatal("expected default goal aliases")
-	}
-	if _, found := goalAliases.Aliases["technical_review"]; !found {
-		t.Fatal("expected technical_review aliases in defaults")
-	}
-}
-
 func TestLoadRuntimeConfig_StrictRejectsUnknownField(t *testing.T) {
 	repoRoot := t.TempDir()
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
@@ -1367,29 +1352,6 @@ func TestLoadPolicy_RejectsTamperedSignature(t *testing.T) {
 
 	if _, err := LoadPolicy(repoRoot); err == nil || (!strings.Contains(err.Error(), "verification failed") && !strings.Contains(err.Error(), "decode policy signature")) {
 		t.Fatalf("expected tampered policy signature to fail, got %v", err)
-	}
-}
-
-func TestLoadGoalAliases_StrictRejectsUnknownField(t *testing.T) {
-	repoRoot := t.TempDir()
-	goalAliasesPath := filepath.Join(repoRoot, "config", "goal_aliases.yaml")
-	if err := os.MkdirAll(filepath.Dir(goalAliasesPath), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	rawGoalAliases := `version: "1"
-aliases:
-  technical_review:
-    - rfc_review
-unknown_field: true
-`
-	if err := os.WriteFile(goalAliasesPath, []byte(rawGoalAliases), 0o600); err != nil {
-		t.Fatalf("write goal aliases: %v", err)
-	}
-
-	_, err := LoadGoalAliases(repoRoot)
-	if err == nil {
-		t.Fatal("expected strict decode error for unknown goal aliases field")
 	}
 }
 

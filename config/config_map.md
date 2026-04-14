@@ -11,13 +11,9 @@ Use it when changing:
 - `runtime.yaml`
   - default model/runtime hints (checked-in baseline; live runtime often under `runtime/state/`)
 
-- `goal_aliases.yaml`
-  - internal goal-family alias table consumed by continuity internals
-  - not exposed as a live `/v1/config/*` control-plane section in the current Loopgate MVP
-
 ## Relationship Notes
 
-- Go-side loading: `internal/config/goal_aliases.go`, `internal/config/runtime.go` where applicable
+- Go-side loading: `internal/config/runtime.go` where applicable
 - Persona: `persona/default.yaml` (separate directory)
 
 ## Important Watchouts

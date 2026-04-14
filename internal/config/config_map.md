@@ -7,7 +7,6 @@ Use it when changing:
 - policy struct shape vs `core/policy/policy.yaml`
 - morphling class loading vs `core/policy/morphling_classes.yaml`
 - persona loading vs `persona/default.yaml`
-- goal aliases vs `config/goal_aliases.yaml`
 - atomic JSON read/write helpers for `runtime/state/*.json`
 
 ## Core Role
@@ -22,9 +21,6 @@ Use it when changing:
 
 - `persona.go`
   - persona document loading
-
-- `goal_aliases.go`
-  - goal alias rules aligned with `config/goal_aliases.yaml`
 
 - `runtime.go`
   - `RuntimeConfig` including `logging.diagnostic` and **`tenancy.deployment_tenant_id` / `deployment_user_id`** (validated opaque strings; applied at Loopgate session open)

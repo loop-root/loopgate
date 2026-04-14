@@ -71,35 +71,6 @@ func WritePolicyYAML(repoRoot string, policy Policy) error {
 	return nil
 }
 
-// WriteGoalAliasesYAML writes config/goal_aliases.yaml atomically after validation.
-// It removes runtime/state/config/goal_aliases.json if present.
-func WriteGoalAliasesYAML(repoRoot string, goalAliases GoalAliases) error {
-	if err := validateGoalAliases(goalAliases); err != nil {
-		return fmt.Errorf("validate goal aliases: %w", err)
-	}
-	destPath := filepath.Join(repoRoot, "config", "goal_aliases.yaml")
-	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
-	}
-	var buf bytes.Buffer
-	encoder := yaml.NewEncoder(&buf)
-	encoder.SetIndent(2)
-	if err := encoder.Encode(&goalAliases); err != nil {
-		return fmt.Errorf("marshal goal_aliases yaml: %w", err)
-	}
-	if err := encoder.Close(); err != nil {
-		return fmt.Errorf("close yaml encoder: %w", err)
-	}
-	if err := atomicWriteFile(destPath, buf.Bytes(), 0o600); err != nil {
-		return err
-	}
-	staleJSON := filepath.Join(repoRoot, "runtime", "state", "config", "goal_aliases.json")
-	if rmErr := os.Remove(staleJSON); rmErr != nil && !os.IsNotExist(rmErr) {
-		return fmt.Errorf("remove stale %s: %w", staleJSON, rmErr)
-	}
-	return nil
-}
-
 func atomicWriteFile(destPath string, data []byte, mode os.FileMode) error {
 	dir := filepath.Dir(destPath)
 	tmpFile, err := os.CreateTemp(dir, ".runtime-config-*.yaml.tmp")

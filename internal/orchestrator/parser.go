@@ -34,8 +34,6 @@ var reservedMorphCommandNames = map[string]struct{}{
 	"config":      {},
 	"tools":       {},
 	"memory":      {},
-	"goal":        {},
-	"todo":        {},
 }
 
 // ParseResult contains parsed tool calls and any remaining text.

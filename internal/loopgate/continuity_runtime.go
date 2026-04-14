@@ -42,25 +42,9 @@ func normalizeGoalSummarySlug(rawGoalSummary string) string {
 	return slugValue
 }
 
-func normalizeGoalFamily(goalSummary string, goalAliases config.GoalAliases) continuityGoalNormalization {
+func normalizeGoalFamily(goalSummary string) continuityGoalNormalization {
 	normalizedSummarySlug := normalizeGoalSummarySlug(goalSummary)
 	lowerGoalSummary := strings.ToLower(strings.TrimSpace(goalSummary))
-
-	for _, goalType := range config.GoalTypeKeys(goalAliases) {
-		for _, rawAlias := range goalAliases.Aliases[goalType] {
-			normalizedAlias := config.NormalizeGoalAliasPublic(rawAlias)
-			aliasNeedle := strings.ReplaceAll(normalizedAlias, "_", " ")
-			if strings.Contains(lowerGoalSummary, aliasNeedle) || normalizedSummarySlug == normalizedAlias {
-				return continuityGoalNormalization{
-					GoalType:             goalType,
-					GoalFamilyID:         goalType + ":" + normalizedAlias,
-					NormalizationVersion: continuityNormalizationVersion,
-					AliasMatched:         true,
-					AliasKey:             normalizedAlias,
-				}
-			}
-		}
-	}
 
 	switch {
 	case strings.Contains(lowerGoalSummary, "security") || strings.Contains(lowerGoalSummary, "hardening") || strings.Contains(lowerGoalSummary, "threat"):
@@ -91,7 +75,6 @@ func fallbackGoalNormalization(goalType string, summarySlug string) continuityGo
 		GoalType:             goalType,
 		GoalFamilyID:         goalType + ":fallback_" + summarySlug,
 		NormalizationVersion: continuityNormalizationVersion,
-		NeedsAliasCuration:   true,
 	}
 }
 

@@ -58,7 +58,6 @@ type Server struct {
 	sandboxPaths               sandbox.Paths
 	policy                     config.Policy
 	runtimeConfig              config.RuntimeConfig
-	goalAliases                config.GoalAliases
 	registry                   *toolspkg.Registry
 	checker                    *policypkg.Checker
 	now                        func() time.Time
@@ -259,10 +258,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		return nil, fmt.Errorf("load runtime config: %w", err)
 	}
 
-	goalAliases, err := config.LoadGoalAliases(repoRoot)
-	if err != nil {
-		return nil, fmt.Errorf("load goal aliases: %w", err)
-	}
 	// Load connections: JSON state → YAML seed → empty.
 	configuredConnections, configuredCapabilities, err := loadConfiguredConnectionsWithSeed(configStateDir, repoRoot)
 	if err != nil {
@@ -291,7 +286,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		policy:                     policy,
 		policyContentSHA256:        policyLoadResult.ContentSHA256,
 		runtimeConfig:              runtimeConfig,
-		goalAliases:                goalAliases,
 		registry:                   nil,
 		checker:                    nil,
 		now:                        time.Now,

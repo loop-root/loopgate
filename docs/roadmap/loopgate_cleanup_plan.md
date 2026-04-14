@@ -63,6 +63,8 @@ Status: in progress
 Goals:
 - remove or isolate stale product code paths
 - keep Loopgate core thinner, more legible, and easier to audit
+- prepare memory/continuity for extraction behind a narrower interface and
+  eventual standalone repo boundary
 
 Mapped buckets:
 - Safe now:
@@ -89,6 +91,11 @@ Completed in this phase so far:
 - renamed the Go module from `morph` to `loopgate` and rewrote internal package imports
 - renamed the lingering `soft_morphling_concurrency` runtime/profile field to `soft_worker_concurrency`
 - removed `/goal` and `/todo` from the active shell command/catalog/man-page surface
+- removed the external `goal_aliases` config path so continuity classification
+  no longer depends on checked-in Loopgate tuning files
+
+Related plan:
+- [Continuity extraction plan](./continuity_extraction_plan.md)
 
 ## Phase 4: Repo hygiene and sanitization
 

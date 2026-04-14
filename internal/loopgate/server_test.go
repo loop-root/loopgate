@@ -1718,7 +1718,7 @@ func TestNewServer_IgnoresStalePolicyJSONForOperatorMountWriteApproval(t *testin
       "write_enabled": true,
       "write_requires_approval": false,
       "allowed_roots": ["."],
-      "denied_paths": ["runtime/state", "runtime/audit", "runtime/tmp", "core/policy", "config/runtime.yaml", "config/goal_aliases.yaml"]
+      "denied_paths": ["runtime/state", "runtime/audit", "runtime/tmp", "core/policy", "config/runtime.yaml"]
     }
   }
 }`), 0o600); err != nil {

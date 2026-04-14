@@ -75,7 +75,7 @@ Implemented:
   - governed discovery and recall
 - inspection-root review and lineage governance is now authoritative for continuity-derived memory eligibility
 - startup prompt continuity is now the combination of Loopgate durable wake state plus client-local thread projection
-- memory scoring weights now live in `config/runtime.yaml` and goal-family aliases live in `config/goal_aliases.yaml`
+- memory scoring weights now live in `config/runtime.yaml` and continuity classification remains internal to the memory subsystem
 - Loopgate memory now writes split derived artifacts under `runtime/state/memory/` instead of a single flat snapshot file
 - end-to-end integration tests now cover:
   - local socket replay rejection

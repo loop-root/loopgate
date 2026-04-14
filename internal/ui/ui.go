@@ -104,7 +104,7 @@ func HelpPanel(commands []HelpCommandEntry) string {
 	fileGroup := []string{"/pwd", "/ls", "/cat", "/write"}
 	modelGroup := []string{"/setup", "/model", "/policy", "/agent", "/persona", "/settings"}
 	toolGroup := []string{"/tools", "/config", "/network", "/connections"}
-	workflowGroup := []string{"/goal", "/todo", "/memory"}
+	workflowGroup := []string{"/memory"}
 	sandboxGroup := []string{"/sandbox", "/quarantine", "/site"}
 	debugGroup := []string{"/debug"}
 
