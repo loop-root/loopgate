@@ -134,13 +134,13 @@ type RuntimeConfig struct {
 		Diagnostic DiagnosticLogging `yaml:"diagnostic" json:"diagnostic"`
 	} `yaml:"logging" json:"logging"`
 	Memory struct {
-		Backend                  string `yaml:"backend" json:"backend"`
-		CandidatePanelSize       int    `yaml:"candidate_panel_size" json:"candidate_panel_size"`
-		DecompositionPreference  string `yaml:"decomposition_preference" json:"decomposition_preference"`
-		ReviewPreference         string `yaml:"review_preference" json:"review_preference"`
-		SoftMorphlingConcurrency int    `yaml:"soft_morphling_concurrency" json:"soft_morphling_concurrency"`
-		BatchingPreference       string `yaml:"batching_preference" json:"batching_preference"`
-		ExplicitFactWrites       struct {
+		Backend                 string `yaml:"backend" json:"backend"`
+		CandidatePanelSize      int    `yaml:"candidate_panel_size" json:"candidate_panel_size"`
+		DecompositionPreference string `yaml:"decomposition_preference" json:"decomposition_preference"`
+		ReviewPreference        string `yaml:"review_preference" json:"review_preference"`
+		SoftWorkerConcurrency   int    `yaml:"soft_worker_concurrency" json:"soft_worker_concurrency"`
+		BatchingPreference      string `yaml:"batching_preference" json:"batching_preference"`
+		ExplicitFactWrites      struct {
 			WindowSeconds       int `yaml:"window_seconds" json:"window_seconds"`
 			MaxWritesPerSession int `yaml:"max_writes_per_session" json:"max_writes_per_session"`
 			MaxWritesPerPeerUID int `yaml:"max_writes_per_peer_uid" json:"max_writes_per_peer_uid"`
@@ -349,8 +349,8 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	if strings.TrimSpace(runtimeConfig.Memory.ReviewPreference) == "" {
 		runtimeConfig.Memory.ReviewPreference = "risk_tiered"
 	}
-	if runtimeConfig.Memory.SoftMorphlingConcurrency <= 0 {
-		runtimeConfig.Memory.SoftMorphlingConcurrency = 3
+	if runtimeConfig.Memory.SoftWorkerConcurrency <= 0 {
+		runtimeConfig.Memory.SoftWorkerConcurrency = 3
 	}
 	if strings.TrimSpace(runtimeConfig.Memory.BatchingPreference) == "" {
 		runtimeConfig.Memory.BatchingPreference = "pause_on_wave_failure"
@@ -488,8 +488,8 @@ func validateRuntimeConfig(repoRoot string, runtimeConfig RuntimeConfig) error {
 			return err
 		}
 	}
-	if runtimeConfig.Memory.SoftMorphlingConcurrency <= 0 {
-		return fmt.Errorf("soft_morphling_concurrency must be positive")
+	if runtimeConfig.Memory.SoftWorkerConcurrency <= 0 {
+		return fmt.Errorf("soft_worker_concurrency must be positive")
 	}
 	if runtimeConfig.Memory.ExplicitFactWrites.WindowSeconds <= 0 {
 		return fmt.Errorf("explicit_fact_writes.window_seconds must be positive")

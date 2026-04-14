@@ -277,7 +277,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -348,7 +348,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -430,7 +430,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -516,7 +516,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -633,7 +633,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `, adminIngestServer.URL)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
@@ -724,7 +724,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `, adminIngestServer.URL)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
@@ -801,7 +801,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -936,7 +936,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `, adminIngestServer.URL)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
@@ -1060,7 +1060,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `, adminIngestServer.URL)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
@@ -1155,7 +1155,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_TOKEN", "test-admin-export-token")
@@ -6321,7 +6321,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(filepath.Join(repoRoot, "config", "runtime.yaml"), []byte(runtimeConfigYAML), 0o600); err != nil {

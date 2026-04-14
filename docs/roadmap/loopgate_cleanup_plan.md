@@ -87,6 +87,8 @@ Completed in this phase so far:
 - removed the morphling runtime/state-machine/worker file cluster from `internal/loopgate/`
 - removed active morphling route, shell, config, status, and policy/template surfaces
 - renamed the Go module from `morph` to `loopgate` and rewrote internal package imports
+- renamed the lingering `soft_morphling_concurrency` runtime/profile field to `soft_worker_concurrency`
+- removed `/goal` and `/todo` from the active shell command/catalog/man-page surface
 
 ## Phase 4: Repo hygiene and sanitization
 

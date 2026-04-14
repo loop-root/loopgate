@@ -6,7 +6,7 @@ Use it when changing:
 
 - the real capability surface available to operator clients (via Loopgate)
 - native structured tool definitions
-- `haven`-actor-scoped tool registration (legacy actor label; see policy)
+- legacy actor-scoped tool registration labels that are still being cleaned up
 - explicit remembered-fact tools
 - sandbox-local execution behavior
 
@@ -32,23 +32,10 @@ This layer is important because:
 - `defaults.go`
   - default registry builders
   - currently the place where sandbox and default tool bundles are assembled
-- `journal_tools.go`
-  - journal list/read/write tools
 - **Operator mount tools** (`operator_mount.fs_*`) are registered from `internal/loopgate/operator_mount.go` (not this package): session-scoped host directory access from pinned operator mount paths on `POST /v1/session/open`; optional `primary_operator_mount_path` selects the default root for relative paths without widening allowed roots
-- `paint_tools.go`
-  - flat prompt-oriented paint save/list tools
-- `note_create.go`
-  - sticky-note creation tool that writes desk-note state (`haven_desk_notes.json`)
 - `memory_tools.go`
   - explicit remembered-fact tool definition
   - capability contract only; real execution is routed through Loopgate's dedicated memory path
-- `todo_tools.go`
-  - Todo add/complete/list capability definitions
-  - contract only; real execution is routed through Loopgate's dedicated continuity path
-  - add now carries task-board metadata such as task kind, source, next step, scheduled time, and execution class
-- `notes_tools.go`
-  - working-notes list/read/write tools for private notebook-style scratch space under `scratch/notes`
-  - intentionally separate from Journal because this is operational working memory, not reflective writing
 - `fs_read.go`
 - `fs_list.go`
 - `fs_write.go`
@@ -79,21 +66,15 @@ and not nested object graphs like a full paint stroke array.
 The current working set in this directory is:
 
 - `defaults.go`
-- `journal_tools.go`
-- `paint_tools.go`
-- `note_create.go`
 - `memory_tools.go`
-- `todo_tools.go`
-- `notes_tools.go`
+- filesystem tools
+- host folder tools
+- shell execution tools
+- capability dispatch helpers
 
-The next capability pass should make this directory the source of truth for:
-
-- journal tools
-- paint/save tools with flat arguments
-- sticky note tools
-- explicit remember tools
-- todo tools
-- working-notes tools
+The next capability pass should keep this directory narrow and aligned with the
+active Loopgate product surface rather than reintroducing retired Haven or
+task-board tools.
 
 ## Important Watchouts
 

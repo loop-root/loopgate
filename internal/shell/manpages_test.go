@@ -20,7 +20,7 @@ func TestIsHelpRequest(t *testing.T) {
 
 func TestLookupManPage_KnownCommands(t *testing.T) {
 	knownCommands := []string{
-		"/goal", "/todo", "/memory", "/sandbox",
+		"/memory", "/sandbox",
 		"/site", "/connections", "/model", "/quarantine", "/debug",
 		"/write", "/ls", "/cat",
 		"/help", "/man", "/exit", "/reset", "/pwd", "/setup",
@@ -46,23 +46,23 @@ func TestLookupManPage_UnknownCommand(t *testing.T) {
 	}
 }
 
-func TestRenderManPage_GoalContainsSubcommands(t *testing.T) {
-	page, found := LookupManPage("/goal")
+func TestRenderManPage_MemoryContainsSubcommands(t *testing.T) {
+	page, found := LookupManPage("/memory")
 	if !found {
-		t.Fatal("no man page for /goal")
+		t.Fatal("no man page for /memory")
 	}
 
-	for _, expected := range []string{"add", "close", "list"} {
+	for _, expected := range []string{"discover", "recall", "remember"} {
 		if !strings.Contains(page, expected) {
-			t.Errorf("goal man page missing subcommand %q", expected)
+			t.Errorf("memory man page missing subcommand %q", expected)
 		}
 	}
 }
 
 func TestRenderManPage_HasBorders(t *testing.T) {
-	page, found := LookupManPage("/goal")
+	page, found := LookupManPage("/memory")
 	if !found {
-		t.Fatal("no man page for /goal")
+		t.Fatal("no man page for /memory")
 	}
 
 	// Single border chars from ui.SingleBorder()

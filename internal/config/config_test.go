@@ -323,7 +323,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
   unknown_field: true
 `
@@ -356,7 +356,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -402,7 +402,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -467,7 +467,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -521,7 +521,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -555,7 +555,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -595,7 +595,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -635,7 +635,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -675,7 +675,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -716,7 +716,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -768,7 +768,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -820,7 +820,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -872,7 +872,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -930,7 +930,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -988,7 +988,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -1068,7 +1068,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
@@ -1108,7 +1108,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
@@ -1141,7 +1141,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
@@ -1185,7 +1185,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 			if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
@@ -1216,7 +1216,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 	if err := os.WriteFile(runtimeConfigPath, []byte(raw), 0o600); err != nil {
@@ -1252,7 +1252,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
   hybrid_evidence:
     python_executable: "/bin/sh"
@@ -1397,7 +1397,7 @@ const testRuntimeConfigMemoryBlock = `memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
 `
 

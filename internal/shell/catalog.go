@@ -37,8 +37,6 @@ func commandCatalog() []slashCommandInfo {
 		{Name: "/config", Args: "", Description: "show config file paths"},
 		{Name: "/tools", Args: "", Description: "show registered tools"},
 		{Name: "/memory", Args: "[discover <terms...>|recall <key-id>|remember <fact-key> <value>]", ShortArgs: "<subcommand> ...", Description: "show memory policy, discover keys, recall remembered continuity, or explicitly remember a profile fact", ShortDesc: "memory policy and recall"},
-		{Name: "/goal", Args: "add <text> | close [text-or-id] | list", ShortArgs: "<subcommand> ...", Description: "record or inspect explicit active-goal transitions", ShortDesc: "track active goals"},
-		{Name: "/todo", Args: "[add|resolve] <text-or-id>", ShortArgs: "<subcommand> ...", Description: "record explicit unresolved-item transitions", ShortDesc: "track unresolved items"},
 		{Name: "/policy", Args: "", Description: "show loaded policy summary"},
 		{Name: "/debug", Args: "help", Description: "diagnostic subcommands"},
 	}

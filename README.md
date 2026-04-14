@@ -13,7 +13,7 @@ Current product scope:
 **Current MVP harness:** **Claude Code + project hooks + Loopgate**
 
 This repository is being trimmed toward a single product: **Loopgate**.
-It is **not** currently presenting Morph, Haven, morphlings, multi-tenant deployment, or admin-node export as the active product story.
+It is **not** currently presenting retired product lines or distributed deployment as the active product story.
 
 ## What Loopgate does
 
@@ -47,10 +47,10 @@ What is active now:
 - local operator CLI flows
 
 What is not the active product story right now:
-- a new Haven desktop UI
-- a separate Morph assistant product
+- a new desktop UI surface
+- a separate assistant product
 - morphlings as a near-term core feature
-- multi-tenant/admin-node deployment
+- distributed enterprise deployment
 - automatic memory as part of the Claude v1 path
 
 ## Quick start

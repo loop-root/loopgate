@@ -31,7 +31,7 @@ logging:
     #     account_name: "loopgate.audit_ledger_hmac"
     #     scope: "local"
   # Optional local-first export cursor for streaming the authoritative audit
-  # ledger to an admin node or external SIEM later. Local append still happens
+  # ledger to a configured downstream sink later. Local append still happens
   # first; this state is only the shipping cursor and retry metadata.
   audit_export:
     enabled: false
@@ -40,7 +40,7 @@ logging:
     endpoint_url: ""
     authorization:
       scheme: "bearer"
-      # secret_ref is required when enabled with destination_kind: "admin_node"
+      # secret_ref is required when enabled for a remote authenticated sink.
       # Example:
       # secret_ref:
       #   id: "audit_export_admin_bearer"
@@ -52,13 +52,13 @@ logging:
       server_name: ""
       pinned_server_public_key_sha256: ""
       minimum_remaining_validity_seconds: 0
-      # For remote admin_node export, mTLS should be enabled and backed by
+      # For remote TLS export, mTLS should be enabled and backed by
       # secret refs rather than plaintext file paths.
       # pinned_server_public_key_sha256 is optional defense in depth when the
-      # admin node has a stable public key and operators want explicit pin-based
+      # remote sink has a stable public key and operators want explicit pin-based
       # trust repair on rotation.
       # minimum_remaining_validity_seconds can fail closed before a client cert,
-      # root CA, or admin-node leaf cert is too close to expiry.
+      # root CA, or remote leaf cert is too close to expiry.
       # root_ca_secret_ref:
       #   id: "audit_export_root_ca"
       #   backend: "macos_keychain"
@@ -103,7 +103,7 @@ memory:
   candidate_panel_size: 3
   decomposition_preference: "hybrid_schema_guided"
   review_preference: "risk_tiered"
-  soft_morphling_concurrency: 3
+  soft_worker_concurrency: 3
   batching_preference: "pause_on_wave_failure"
   explicit_fact_writes:
     window_seconds: 60

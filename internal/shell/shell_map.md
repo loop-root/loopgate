@@ -9,12 +9,13 @@ Use it when changing:
 
 ## Core Role
 
-`internal/shell/` implements `HandleCommand` and a large catalog of **operator commands** (runtime config, tools, sandbox, memory, and other local control-plane workflows). This package supports terminal-based workflows and integration tests that drive the same Loopgate backends as **HTTP** control-plane clients (**in-tree MCP removed** — ADR 0010).
+`internal/shell/` implements `HandleCommand` and a catalog of **operator commands** for the active Loopgate MVP (runtime config, tools, sandbox, memory, and other local control-plane workflows). This package supports terminal-based workflows and integration tests that drive the same Loopgate backends as **HTTP** control-plane clients (**in-tree MCP removed** — ADR 0010).
 
 ## Key Files
 
 - `commands.go`
   - `HandleCommand`, command dispatch, Loopgate client usage
+  - retired `/goal` and `/todo` shell commands are intentionally absent from the active product surface
 
 - `catalog.go`, `manpages.go`, `manpages_test.go`
   - discoverable command list and help strings

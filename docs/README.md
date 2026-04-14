@@ -51,7 +51,7 @@ Known categories under cleanup:
 - Haven / Morph compatibility language
 - morphling-specific design and product RFCs
 - memory-heavy design work that is not part of the current Claude v1 path
-- multi-tenant and admin-node forward-looking material
+- distributed-deployment forward-looking material
 - docs containing hardcoded local filesystem paths
 
 Those materials are not deleted in this slice. They are being tracked in:

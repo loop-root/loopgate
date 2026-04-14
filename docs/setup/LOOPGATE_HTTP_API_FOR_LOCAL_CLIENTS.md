@@ -96,7 +96,7 @@ Loopgate records the **Unix socket peer identity** (e.g. UID/PID on macOS) when 
 
 Design your Swift app so the **same process** that called `/v1/session/open` performs subsequent signed requests (or you refresh the session from that same process).
 
-**Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch, or inability to resolve the connecting executable, returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable. Haven-specific `operator_mount_paths` bindings are rejected unless this pin is configured.
+**Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch, or inability to resolve the connecting executable, returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable. Operator-mount bindings are rejected unless this pin is configured.
 
 **Legacy compatibility note:** some runtime and policy internals still use `haven`
 as a historical label. Treat that as cleanup debt, not as an active product
@@ -119,8 +119,8 @@ surface or a route namespace.
 | `session_id` | Yes | Client-side session label (safe identifier). |
 | `requested_capabilities` | Yes | **Non-empty** array of capability **names** to request. Must be a subset of what the server exposes. **Unknown names are rejected.** |
 | `workspace_id` | No | Compatibility workspace hint for multi-surface clients. Loopgate derives the authoritative workspace binding from the current repo/runtime and rejects mismatches. |
-| `operator_mount_paths` | No | Haven compatibility field for host-directory bindings. Loopgate canonicalizes and rejects unsafe paths, but only accepts them when the server is pinning the expected Haven executable for session open. |
-| `primary_operator_mount_path` | No | Optional default root for relative `operator_mount.fs_*` paths. Must match one of `operator_mount_paths` after Loopgate canonicalization and is accepted only with the same pinned Haven binding. |
+| `operator_mount_paths` | No | Compatibility field for host-directory bindings. Loopgate canonicalizes and rejects unsafe paths, but only accepts them when the server is pinning an expected client executable for session open. |
+| `primary_operator_mount_path` | No | Optional default root for relative `operator_mount.fs_*` paths. Must match one of `operator_mount_paths` after Loopgate canonicalization and is accepted only with the same client-executable pinning. |
 | `correlation_id` | No | Optional tracing. |
 
 **Capability names for `requested_capabilities`:** you must use names the server’s tool registry actually registers. **Ship a fixed allowlist** in your client (recommended), or call **`GET /v1/status` after** `POST /v1/session/open` with a **minimal bootstrap** session (e.g. one known tool such as `fs_list`) and the **signed GET envelope** (§6). The status response includes `capabilities[]` with a `name` field per tool. **Unauthenticated `GET /v1/status` is not supported** — it returns **401** without `Authorization` and the HMAC headers.
@@ -236,7 +236,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/mcp-gateway/invocation/validate-execution` | Validate the exact future MCP execution envelope against one granted approval — **`mcp_gateway.write`** + **signed POST**. Verifies `approval_request_id`, `approval_manifest_sha256`, and the canonical invocation body hash; appends `mcp_gateway.execution_checked`; still does not launch anything. |
 | `POST /v1/mcp-gateway/invocation/execute` | Execute one approved MCP tool call against an already launched declared `stdio` server — **`mcp_gateway.write`** + **signed POST**. Re-validates the exact approval binding, appends `mcp_gateway.execution_started`, consumes the granted approval, performs a synchronous JSON-RPC `tools/call`, and appends `mcp_gateway.execution_completed` or `mcp_gateway.execution_failed`. |
 | `GET /v1/audit/export/trust-check` | Read-only audit-export trust preflight summary — **`diagnostic.read`** + **signed GET with empty body**. No cursor movement and no downstream network write. |
-| `POST /v1/audit/export/flush` | Trigger one local-first audit export flush to the configured downstream sink — **`audit.export`** + **signed POST with empty body**. Admin-node delivery uses the server-side `logging.audit_export.authorization.secret_ref` and, for non-loopback admin-node sinks, `logging.audit_export.tls.*` mTLS material; the client does not supply downstream credentials on this route. |
+| `POST /v1/audit/export/flush` | Trigger one local-first audit export flush to the configured downstream sink — **`audit.export`** + **signed POST with empty body**. Delivery to a configured downstream sink uses the server-side `logging.audit_export.authorization.secret_ref` and, for non-loopback TLS sinks, `logging.audit_export.tls.*` client material; the client does not supply downstream credentials on this route. |
 | `POST /v1/session/open` | Obtain tokens and MAC key |
 | `POST /v1/session/close` | Retire the current idle control session — **Bearer + signed POST** |
 | `POST /v1/model/reply` | Model round-trip through Loopgate — **`model.reply`** |
@@ -246,7 +246,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/connections/validate` | Validate a configured connection — **`connection.write`** |
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows — **`connection.write`** |
 | `POST /v1/sites/inspect` / `trust-draft` | Site inspection / trust draft — **`site.inspect`** / **`site.trust.write`** |
-| `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`**; host import/export additionally require a pinned-Haven session bound to matching `operator_mount_paths`, and export requires an active operator-mount write grant |
+| `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`**; host import/export additionally require a pinned client session bound to matching `operator_mount_paths`, and export requires an active operator-mount write grant |
 | `POST /v1/sandbox/metadata` | Sandbox artifact metadata — **`fs_read`** |
 | `POST /v1/sandbox/list` | Sandbox directory listing — **`fs_list`** |
 | `GET /v1/memory/wake-state` | Wake state projection |
@@ -462,7 +462,7 @@ Important current constraint:
 - the generic delegated-session helper does **not** relax Unix peer binding
 - a distinct OS subprocess reusing another process's capability token will still be denied
 - today this helper is only appropriate for same-peer / same-process continuation
-- real cross-process worker execution uses a dedicated process-specific session path such as the morphling worker launch/open flow
+- real cross-process worker execution should use a dedicated process-specific session path rather than reusing the main operator session
 
 ---
 

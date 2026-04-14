@@ -74,7 +74,7 @@ func TestRepositoryRuntimeConfigFile_LoadsWithStrictSchema(t *testing.T) {
 	if runtimeConfig.Memory.CandidatePanelSize <= 0 {
 		t.Fatal("expected positive candidate panel size")
 	}
-	if runtimeConfig.Memory.SoftMorphlingConcurrency <= 0 {
+	if runtimeConfig.Memory.SoftWorkerConcurrency <= 0 {
 		t.Fatal("expected positive soft morphling concurrency")
 	}
 	if runtimeConfig.Logging.AuditLedger.MaxEventBytes <= 0 {

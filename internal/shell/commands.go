@@ -6,11 +6,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"loopgate/internal/loopgate"
 	"loopgate/internal/loopgateresult"
-	"loopgate/internal/memory"
 	modelruntime "loopgate/internal/modelruntime"
 	"loopgate/internal/safety"
 	"loopgate/internal/sandbox"
@@ -54,7 +52,7 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 		}
 	}
 
-	// Check for help flags on any command: /goal help, /todo --help, etc.
+	// Check for help flags on any supported slash command.
 	if len(fields) >= 2 && isHelpRequest(strings.ToLower(fields[1])) {
 		if manPage, found := LookupManPage(cmd); found {
 			return CommandResult{Output: manPage, Handled: true, ToolEventSeen: toolEventSeen}
@@ -452,152 +450,6 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 			}
 		}
 		return CommandResult{Output: summarizeMemory(commandContext), Handled: true, ToolEventSeen: toolEventSeen}
-
-	case "/goal":
-		if len(fields) < 2 {
-			return CommandResult{Output: "Usage: /goal add <text> | /goal close [text-or-id] | /goal list", Handled: true, ToolEventSeen: toolEventSeen}
-		}
-		switch strings.ToLower(fields[1]) {
-		case "list":
-			continuityState, err := memory.LoadGlobalContinuityState(filepath.Join(commandContext.RepoRoot, "core", "memory", "ledger", "ledger.jsonl"))
-			if err != nil {
-				return CommandResult{Output: "Error: unable to load continuity state: " + err.Error(), Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			return CommandResult{
-				Output:        formatActiveGoals(continuityState.GoalsByID),
-				Handled:       true,
-				ToolEventSeen: toolEventSeen,
-			}
-		case "add":
-			goalText := strings.TrimSpace(strings.Join(fields[2:], " "))
-			if goalText == "" {
-				return CommandResult{Output: "Usage: /goal add <text>", Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			goalID := "goal_" + time.Now().UTC().Format("20060102T150405.000000000Z")
-			return CommandResult{
-				Output:        fmt.Sprintf("goal added: %s\ntext: %s", goalID, goalText),
-				Handled:       true,
-				ToolEventSeen: toolEventSeen,
-				RequiredAuditEvents: []CommandAuditEvent{{
-					Type: "memory.goal.opened",
-					Data: memory.AnnotateContinuityEvent(
-						map[string]interface{}{
-							"goal_id": goalID,
-							"text":    goalText,
-						},
-						"goal_opened",
-						memory.MemoryScopeGlobal,
-						memory.EpistemicFlavorRemembered,
-						nil,
-						map[string]interface{}{
-							"goal_id": goalID,
-							"text":    goalText,
-						},
-					),
-				}},
-			}
-		case "close":
-			goalTarget := strings.TrimSpace(strings.Join(fields[2:], " "))
-			continuityState, err := memory.LoadGlobalContinuityState(filepath.Join(commandContext.RepoRoot, "core", "memory", "ledger", "ledger.jsonl"))
-			if err != nil {
-				return CommandResult{Output: "Error: unable to load continuity state: " + err.Error(), Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			goalID, goalText, resolveErr := resolveGoalTarget(continuityState.GoalsByID, goalTarget)
-			if resolveErr != nil {
-				return CommandResult{Output: resolveErr.Error(), Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			return CommandResult{
-				Output:        fmt.Sprintf("goal closed: %s\ntext: %s", goalID, goalText),
-				Handled:       true,
-				ToolEventSeen: toolEventSeen,
-				RequiredAuditEvents: []CommandAuditEvent{{
-					Type: "memory.goal.closed",
-					Data: memory.AnnotateContinuityEvent(
-						map[string]interface{}{
-							"goal_id": goalID,
-						},
-						"goal_closed",
-						memory.MemoryScopeGlobal,
-						memory.EpistemicFlavorRemembered,
-						nil,
-						map[string]interface{}{
-							"goal_id": goalID,
-						},
-					),
-				}},
-			}
-		default:
-			return CommandResult{Output: "Usage: /goal add <text> | /goal close [text-or-id] | /goal list", Handled: true, ToolEventSeen: toolEventSeen}
-		}
-
-	case "/todo":
-		if len(fields) < 3 {
-			return CommandResult{Output: "Usage: /todo [add|resolve] <text-or-id>", Handled: true, ToolEventSeen: toolEventSeen}
-		}
-		switch strings.ToLower(fields[1]) {
-		case "add":
-			itemText := strings.TrimSpace(strings.Join(fields[2:], " "))
-			if itemText == "" {
-				return CommandResult{Output: "Usage: /todo add <text>", Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			itemID := "todo_" + time.Now().UTC().Format("20060102T150405.000000000Z")
-			return CommandResult{
-				Output:        fmt.Sprintf("unresolved item added: %s\ntext: %s", itemID, itemText),
-				Handled:       true,
-				ToolEventSeen: toolEventSeen,
-				RequiredAuditEvents: []CommandAuditEvent{{
-					Type: "memory.unresolved_item.opened",
-					Data: memory.AnnotateContinuityEvent(
-						map[string]interface{}{
-							"item_id": itemID,
-							"text":    itemText,
-						},
-						"unresolved_item_opened",
-						memory.MemoryScopeGlobal,
-						memory.EpistemicFlavorRemembered,
-						nil,
-						map[string]interface{}{
-							"item_id": itemID,
-							"text":    itemText,
-						},
-					),
-				}},
-			}
-		case "resolve":
-			itemID := strings.TrimSpace(fields[2])
-			if itemID == "" {
-				return CommandResult{Output: "Usage: /todo resolve <item-id>", Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			continuityState, err := memory.LoadGlobalContinuityState(filepath.Join(commandContext.RepoRoot, "core", "memory", "ledger", "ledger.jsonl"))
-			if err != nil {
-				return CommandResult{Output: "Error: unable to load continuity state: " + err.Error(), Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			if _, itemFound := continuityState.UnresolvedItemsByID[itemID]; !itemFound {
-				return CommandResult{Output: fmt.Sprintf("Error: unresolved item is not active or does not exist: %s", itemID), Handled: true, ToolEventSeen: toolEventSeen}
-			}
-			return CommandResult{
-				Output:        fmt.Sprintf("unresolved item resolved: %s", itemID),
-				Handled:       true,
-				ToolEventSeen: toolEventSeen,
-				RequiredAuditEvents: []CommandAuditEvent{{
-					Type: "memory.unresolved_item.resolved",
-					Data: memory.AnnotateContinuityEvent(
-						map[string]interface{}{
-							"item_id": itemID,
-						},
-						"unresolved_item_resolved",
-						memory.MemoryScopeGlobal,
-						memory.EpistemicFlavorRemembered,
-						nil,
-						map[string]interface{}{
-							"item_id": itemID,
-						},
-					),
-				}},
-			}
-		default:
-			return CommandResult{Output: "Usage: /todo [add|resolve] <text-or-id>", Handled: true, ToolEventSeen: toolEventSeen}
-		}
 
 	case "/model":
 		if len(fields) >= 2 {
@@ -1007,73 +859,6 @@ func approvalPreview(content string, maxLen int) (string, bool) {
 		return trimmed[:maxLen] + "... (truncated)", false
 	}
 	return trimmed, false
-}
-
-func formatActiveGoals(goalsByID map[string]string) string {
-	if len(goalsByID) == 0 {
-		return "active goals: none"
-	}
-
-	goalIDs := make([]string, 0, len(goalsByID))
-	for goalID := range goalsByID {
-		goalIDs = append(goalIDs, goalID)
-	}
-	sort.Strings(goalIDs)
-
-	lines := []string{fmt.Sprintf("active goals: %d", len(goalIDs))}
-	for _, goalID := range goalIDs {
-		lines = append(lines, fmt.Sprintf("- %s: %s", goalID, goalsByID[goalID]))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func resolveGoalTarget(goalsByID map[string]string, rawTarget string) (string, string, error) {
-	trimmedTarget := strings.TrimSpace(rawTarget)
-	if trimmedTarget == "" {
-		if len(goalsByID) == 1 {
-			for goalID, goalText := range goalsByID {
-				return goalID, goalText, nil
-			}
-		}
-		if len(goalsByID) == 0 {
-			return "", "", fmt.Errorf("there are no active goals to close")
-		}
-		return "", "", fmt.Errorf("multiple active goals exist, use `/goal list` and close one by id or text")
-	}
-
-	if goalText, goalFound := goalsByID[trimmedTarget]; goalFound {
-		return trimmedTarget, goalText, nil
-	}
-
-	normalizedTarget := strings.ToLower(trimmedTarget)
-	exactTextMatches := make([]string, 0)
-	substringMatches := make([]string, 0)
-	for goalID, goalText := range goalsByID {
-		normalizedGoalText := strings.ToLower(strings.TrimSpace(goalText))
-		if normalizedGoalText == normalizedTarget {
-			exactTextMatches = append(exactTextMatches, goalID)
-			continue
-		}
-		if strings.Contains(strings.ToLower(goalID), normalizedTarget) || strings.Contains(normalizedGoalText, normalizedTarget) {
-			substringMatches = append(substringMatches, goalID)
-		}
-	}
-
-	if len(exactTextMatches) == 1 {
-		goalID := exactTextMatches[0]
-		return goalID, goalsByID[goalID], nil
-	}
-	if len(exactTextMatches) > 1 {
-		return "", "", fmt.Errorf("goal target is ambiguous, matching active goals: %s", strings.Join(sortedCopy(exactTextMatches), ", "))
-	}
-	if len(substringMatches) == 1 {
-		goalID := substringMatches[0]
-		return goalID, goalsByID[goalID], nil
-	}
-	if len(substringMatches) > 1 {
-		return "", "", fmt.Errorf("goal target is ambiguous, matching active goals: %s", strings.Join(sortedCopy(substringMatches), ", "))
-	}
-	return "", "", fmt.Errorf("goal is not active or does not exist: %s", trimmedTarget)
 }
 
 func sortedCopy(values []string) []string {

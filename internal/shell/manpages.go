@@ -93,46 +93,6 @@ func padCmd(s string, width int) string {
 
 // ── Man pages ────────────────────────────────────────────────────────────────
 
-func manGoal() commandManPage {
-	return commandManPage{
-		Title:    "GOAL",
-		Synopsis: "/goal <subcommand> [args...]",
-		Description: []string{
-			"Record and track explicit active-goal transitions.",
-			"Goals persist in the audit ledger and inform continuity.",
-		},
-		Subcommands: []manSubcommand{
-			{Name: "add", Args: "<text>", Desc: "record a new active goal"},
-			{Name: "close", Args: "[text-or-id]", Desc: "close an active goal"},
-			{Name: "list", Desc: "show all active goals"},
-		},
-		Examples: []manExample{
-			{Command: "/goal add build user authentication", Desc: "set a new goal"},
-			{Command: "/goal list", Desc: "see what's active"},
-			{Command: "/goal close build user authentication", Desc: "close by text match"},
-		},
-	}
-}
-
-func manTodo() commandManPage {
-	return commandManPage{
-		Title:    "TODO",
-		Synopsis: "/todo <subcommand> <text-or-id>",
-		Description: []string{
-			"Record and resolve explicit unresolved items.",
-			"Items persist in the audit ledger for continuity tracking.",
-		},
-		Subcommands: []manSubcommand{
-			{Name: "add", Args: "<text>", Desc: "record a new unresolved item"},
-			{Name: "resolve", Args: "<item-id>", Desc: "resolve an existing item"},
-		},
-		Examples: []manExample{
-			{Command: "/todo add fix the flaky test in auth_test.go"},
-			{Command: "/todo resolve todo_20260314T120000.000000000Z"},
-		},
-	}
-}
-
 func manMemory() commandManPage {
 	return commandManPage{
 		Title:    "MEMORY",
@@ -352,7 +312,7 @@ func manMan() commandManPage {
 			"The command argument should include the leading slash.",
 		},
 		Examples: []manExample{
-			{Command: "/man /goal", Desc: "show the goal command man page"},
+			{Command: "/man /memory", Desc: "show the memory command man page"},
 			{Command: "/man /sandbox", Desc: "show the sandbox man page"},
 		},
 	}
@@ -506,8 +466,6 @@ func manPolicy() commandManPage {
 // commandManPages returns the man page lookup table.
 func commandManPages() map[string]commandManPage {
 	return map[string]commandManPage{
-		"/goal":        manGoal(),
-		"/todo":        manTodo(),
 		"/memory":      manMemory(),
 		"/sandbox":     manSandbox(),
 		"/site":        manSite(),

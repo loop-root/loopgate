@@ -129,11 +129,11 @@ func hashStableJSONIdentifier(payload interface{}) string {
 
 func runtimeConfigToResolvedProfile(runtimeConfig config.RuntimeConfig) continuityResolvedProfileConfig {
 	return continuityResolvedProfileConfig{
-		CandidatePanelSize:       runtimeConfig.Memory.CandidatePanelSize,
-		DecompositionPreference:  runtimeConfig.Memory.DecompositionPreference,
-		ReviewPreference:         runtimeConfig.Memory.ReviewPreference,
-		SoftMorphlingConcurrency: runtimeConfig.Memory.SoftMorphlingConcurrency,
-		BatchingPreference:       runtimeConfig.Memory.BatchingPreference,
+		CandidatePanelSize:      runtimeConfig.Memory.CandidatePanelSize,
+		DecompositionPreference: runtimeConfig.Memory.DecompositionPreference,
+		ReviewPreference:        runtimeConfig.Memory.ReviewPreference,
+		SoftWorkerConcurrency:   runtimeConfig.Memory.SoftWorkerConcurrency,
+		BatchingPreference:      runtimeConfig.Memory.BatchingPreference,
 	}
 }
 

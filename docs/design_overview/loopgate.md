@@ -128,22 +128,15 @@ The normative token and request-integrity rules are defined in [RFC 0001](../rfc
 The delegated bridge/bootstrap refresh contract is defined in [RFC 0002](../rfcs/0002-delegated-session-refresh.md).
 The current harness boundary note is [Claude Code Hooks MVP](./claude_code_hooks_mvp.md).
 
-These are local socket endpoints, not a public network API. Operator clients and
-morphling workers talk to Loopgate over the same repo-local Unix-socket trust
-boundary.
+These are local socket endpoints, not a public network API. Operator clients
+and out-of-tree bridges talk to Loopgate over the same repo-local Unix-socket
+trust boundary.
 
-Current morphling implementation note:
+Current MVP note:
 
-- Loopgate now issues one-time morphling worker launch tokens over the operator
-  session, binds worker sessions to the authenticated local socket peer that
-  opens them, and accepts only the dedicated worker update surface
-- worker content remains content, not authority: workers can project bounded
-  `status_text`, bounded `memory_strings`, and explicit staged artifact refs,
-  but they do not mint permissions, bypass review, or mutate durable memory
-  directly
-- morphling completions that require review now move through
-  `running -> completing -> pending_review -> terminating -> terminated` on the
-  real socket path rather than only in the persisted state model
+- the active transport is the local Unix-socket control plane for Claude hooks, operator clients, and out-of-tree bridges
+- retired Haven and morphling surfaces are no longer part of the active product boundary
+- memory remains in-tree as continuity infrastructure, but it is not part of the Claude hooks MVP contract
 
 Not yet implemented:
 

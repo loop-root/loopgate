@@ -90,11 +90,11 @@ type continuityResolvedProfileSnapshot struct {
 }
 
 type continuityResolvedProfileConfig struct {
-	CandidatePanelSize       int    `json:"candidate_panel_size"`
-	DecompositionPreference  string `json:"decomposition_preference"`
-	ReviewPreference         string `json:"review_preference"`
-	SoftMorphlingConcurrency int    `json:"soft_morphling_concurrency"`
-	BatchingPreference       string `json:"batching_preference"`
+	CandidatePanelSize      int    `json:"candidate_panel_size"`
+	DecompositionPreference string `json:"decomposition_preference"`
+	ReviewPreference        string `json:"review_preference"`
+	SoftWorkerConcurrency   int    `json:"soft_worker_concurrency"`
+	BatchingPreference      string `json:"batching_preference"`
 }
 
 type continuityLearnedRuleRecord struct {
