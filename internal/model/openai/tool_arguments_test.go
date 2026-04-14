@@ -50,8 +50,8 @@ func TestExtractToolUseBlocks_StringArgumentsUnchanged(t *testing.T) {
 					"id": "call_2",
 					"type": "function",
 					"function": {
-						"name": "notes.write",
-						"arguments": "{\"title\":\"t\",\"body\":\"b\"}"
+						"name": "fs_write",
+						"arguments": "{\"path\":\"notes/t.txt\",\"content\":\"b\"}"
 					}
 				}]
 			},
@@ -66,7 +66,7 @@ func TestExtractToolUseBlocks_StringArgumentsUnchanged(t *testing.T) {
 	if len(blocks) != 1 {
 		t.Fatalf("expected 1 block, got %d", len(blocks))
 	}
-	if blocks[0].Input["title"] != "t" || blocks[0].Input["body"] != "b" {
+	if blocks[0].Input["path"] != "notes/t.txt" || blocks[0].Input["content"] != "b" {
 		t.Fatalf("unexpected input: %#v", blocks[0].Input)
 	}
 }

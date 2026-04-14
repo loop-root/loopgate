@@ -26,9 +26,9 @@ type testCapabilityTool struct {
 	op   string
 }
 
-func (t testCapabilityTool) Name() string     { return t.name }
-func (t testCapabilityTool) Category() string { return "test" }
-func (t testCapabilityTool) Operation() string { return t.op }
+func (t testCapabilityTool) Name() string            { return t.name }
+func (t testCapabilityTool) Category() string        { return "test" }
+func (t testCapabilityTool) Operation() string       { return t.op }
 func (t testCapabilityTool) Schema() toolspkg.Schema { return toolspkg.Schema{} }
 func (t testCapabilityTool) Execute(_ context.Context, _ map[string]string) (string, error) {
 	return "test-output", nil
@@ -86,19 +86,19 @@ func TestCapabilityClass_RealRegistryReadCapabilities(t *testing.T) {
 	// read capabilities correctly. This guards against a tool.go refactor
 	// accidentally changing a read capability to write without updating tests.
 	//
-	// fs_read and notes.list are both OpRead in the current registry.
+	// fs_read and fs_list are both OpRead in the current registry.
 	reg := toolspkg.NewRegistry()
 	reg.Register(testCapabilityTool{name: "fs_read", op: toolspkg.OpRead})
-	reg.Register(testCapabilityTool{name: "notes.list", op: toolspkg.OpRead})
-	reg.Register(testCapabilityTool{name: "notes.write", op: toolspkg.OpWrite})
+	reg.Register(testCapabilityTool{name: "fs_list", op: toolspkg.OpRead})
+	reg.Register(testCapabilityTool{name: "fs_write", op: toolspkg.OpWrite})
 
 	if !classifyCapability(reg, "fs_read").readOnly {
 		t.Error("fs_read must be readOnly")
 	}
-	if !classifyCapability(reg, "notes.list").readOnly {
-		t.Error("notes.list must be readOnly")
+	if !classifyCapability(reg, "fs_list").readOnly {
+		t.Error("fs_list must be readOnly")
 	}
-	if classifyCapability(reg, "notes.write").readOnly {
-		t.Error("notes.write must not be readOnly")
+	if classifyCapability(reg, "fs_write").readOnly {
+		t.Error("fs_write must not be readOnly")
 	}
 }

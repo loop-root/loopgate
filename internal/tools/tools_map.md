@@ -69,8 +69,8 @@ The current native tool schema path only supports scalar arguments:
 
 That means new sandbox-local tools should initially use flat APIs like:
 
-- `journal.write(title, body)`
-- `note.create(kind, title, body)`
+- `fs_write(path, content)`
+- `memory.remember(kind, value, source)`
 
 and not nested object graphs like a full paint stroke array.
 

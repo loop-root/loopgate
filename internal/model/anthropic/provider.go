@@ -102,7 +102,7 @@ func NewProvider(config Config) (*Provider, error) {
 
 // sanitizeAnthropicModelRequest maps capability/tool names to Anthropic-safe identifiers
 // everywhere we send them (tool definitions and tool_use history). Callers may carry
-// dotted registry names (e.g. journal.read) in NativeToolDefs or replayed ToolCalls.
+// dotted registry names (e.g. host.folder.list) in NativeToolDefs or replayed ToolCalls.
 func sanitizeAnthropicModelRequest(request model.Request) model.Request {
 	for i := range request.NativeToolDefs {
 		request.NativeToolDefs[i].Name = model.MessagesAPIToolName(request.NativeToolDefs[i].Name)
@@ -461,9 +461,9 @@ type contentPart struct {
 
 // anthropicImageSource is the source object for Anthropic image content blocks.
 type anthropicImageSource struct {
-	Type      string `json:"type"`        // "base64"
-	MediaType string `json:"media_type"`  // "image/jpeg", "image/png", etc.
-	Data      string `json:"data"`        // base64-encoded image bytes
+	Type      string `json:"type"`       // "base64"
+	MediaType string `json:"media_type"` // "image/jpeg", "image/png", etc.
+	Data      string `json:"data"`       // base64-encoded image bytes
 }
 
 type messagesResponse struct {

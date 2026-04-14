@@ -46,7 +46,7 @@ func TestExtractStructuredCalls_InvokeCapability_ExpandsToInnerTool(t *testing.T
 	reg := newTestRegistry()
 	blocks := []model.ToolUseBlock{
 		{
-			ID: "call_ic1",
+			ID:   "call_ic1",
 			Name: "invoke_capability",
 			Input: map[string]string{
 				"capability":     "fs_read",
@@ -96,7 +96,7 @@ func TestExtractStructuredCalls_InvokeCapability_NestedRejected(t *testing.T) {
 	reg := newTestRegistry()
 	blocks := []model.ToolUseBlock{
 		{
-			ID: "bad",
+			ID:   "bad",
 			Name: "invoke_capability",
 			Input: map[string]string{
 				"capability":     "invoke_capability",
@@ -206,16 +206,16 @@ func TestExtractStructuredCalls_ListAliasToFSList(t *testing.T) {
 
 func TestExtractStructuredCalls_AnthropicStyleDottedNamesAsUnderscores(t *testing.T) {
 	reg := tools.NewRegistry()
-	reg.Register(&tools.JournalRead{Root: "/tmp"})
+	reg.Register(&tools.HostFolderList{})
 	blocks := []model.ToolUseBlock{
-		{ID: "tu1", Name: "journal_read", Input: map[string]string{"path": "a.md"}},
+		{ID: "tu1", Name: "host_folder_list", Input: map[string]string{}},
 	}
 	calls, errs := ExtractStructuredCalls(blocks, reg)
 	if len(errs) != 0 {
 		t.Fatalf("unexpected errors: %#v", errs)
 	}
-	if len(calls) != 1 || calls[0].Name != "journal.read" {
-		t.Fatalf("expected canonical journal.read, got %#v", calls)
+	if len(calls) != 1 || calls[0].Name != "host.folder.list" {
+		t.Fatalf("expected canonical host.folder.list, got %#v", calls)
 	}
 }
 

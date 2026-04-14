@@ -180,10 +180,10 @@ func TestProvider_GenerateIncludesEmptyAssistantContentForToolCalls(t *testing.T
 				ToolCalls: []model.ToolUseBlock{
 					{
 						ID:   "toolu_1",
-						Name: "notes.write",
+						Name: "fs_write",
 						Input: map[string]string{
-							"title": "plan",
-							"body":  "draft",
+							"path":    "notes/plan.txt",
+							"content": "draft",
 						},
 					},
 				},
@@ -191,8 +191,8 @@ func TestProvider_GenerateIncludesEmptyAssistantContentForToolCalls(t *testing.T
 		},
 		NativeToolDefs: []model.NativeToolDef{
 			{
-				Name:        "notes.write",
-				Description: "Write a working note",
+				Name:        "fs_write",
+				Description: "Write a file",
 				InputSchema: map[string]interface{}{"type": "object"},
 			},
 		},
