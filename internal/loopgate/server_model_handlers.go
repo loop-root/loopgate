@@ -165,6 +165,14 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		})
 		return
 	}
+	if err := server.retireDeadPeerSessionsForUID(requestPeerIdentity.UID); err != nil {
+		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: "control-plane orphan session recovery failed",
+			DenialCode:   DenialCodeExecutionFailed,
+		})
+		return
+	}
 	server.mu.Lock()
 	server.pruneExpiredLocked()
 
@@ -393,6 +401,91 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		ClientSessionLabel: tokenClaims.ClientSessionLabel,
 		PersonaName:        personaName,
 		PersonaVersion:     personaVersion,
+	})
+}
+
+func (server *Server) handleSessionClose(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+
+	server.morphlingsMu.Lock()
+	activeMorphlingCount := 0
+	for _, morphlingRecord := range server.morphlings {
+		if morphlingRecord.ParentControlSessionID == tokenClaims.ControlSessionID &&
+			morphlingStateConsumesCapacity(morphlingRecord.State) {
+			activeMorphlingCount++
+		}
+	}
+	server.morphlingsMu.Unlock()
+	if activeMorphlingCount > 0 {
+		server.writeJSON(writer, http.StatusConflict, CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: fmt.Sprintf("control session has %d active morphlings; terminate governed work before closing the session", activeMorphlingCount),
+			DenialCode:   DenialCodeSessionCloseBlocked,
+		})
+		return
+	}
+
+	closedAtUTC := server.now().UTC()
+	server.mu.Lock()
+	server.pruneExpiredLocked()
+
+	if _, found := server.sessions[tokenClaims.ControlSessionID]; !found {
+		server.mu.Unlock()
+		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: "invalid capability token",
+			DenialCode:   DenialCodeCapabilityTokenInvalid,
+		})
+		return
+	}
+
+	pendingApprovalCount := 0
+	for _, pendingApproval := range server.approvals {
+		if pendingApproval.ControlSessionID == tokenClaims.ControlSessionID &&
+			pendingApproval.State == approvalStatePending {
+			pendingApprovalCount++
+		}
+	}
+	if pendingApprovalCount > 0 {
+		server.mu.Unlock()
+		server.writeJSON(writer, http.StatusConflict, CapabilityResponse{
+			Status:       ResponseStatusDenied,
+			DenialReason: fmt.Sprintf("control session has %d pending approvals; resolve or wait for them before closing the session", pendingApprovalCount),
+			DenialCode:   DenialCodeSessionCloseBlocked,
+		})
+		return
+	}
+
+	server.mu.Unlock()
+
+	auditData := map[string]interface{}{
+		"closed_at_utc": closedAtUTC.Format(time.RFC3339Nano),
+	}
+	if err := server.retireControlSession(tokenClaims.ControlSessionID, closedAtUTC, "session.closed", auditData); err != nil {
+		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: "control-plane audit is unavailable",
+			DenialCode:   DenialCodeAuditUnavailable,
+		})
+		return
+	}
+
+	server.writeJSON(writer, http.StatusOK, CloseSessionResponse{
+		Status:           ResponseStatusSuccess,
+		ControlSessionID: tokenClaims.ControlSessionID,
+		ClosedAtUTC:      closedAtUTC.Format(time.RFC3339Nano),
 	})
 }
 

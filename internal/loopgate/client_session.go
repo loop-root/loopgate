@@ -51,6 +51,23 @@ func (client *Client) ConfigureSession(actor string, sessionID string, requested
 	client.requestedCapabilities = append([]string(nil), requestedCapabilities...)
 }
 
+func (client *Client) CloseSession(ctx context.Context) error {
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	var response CloseSessionResponse
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/session/close", capabilityToken, nil, &response, nil); err != nil {
+		return err
+	}
+
+	client.mu.Lock()
+	client.resetSessionCredentialsLocked()
+	client.mu.Unlock()
+	return nil
+}
+
 // SetWorkspaceID sets the workspace identity hint that will be included in the
 // session open request to Loopgate. The server derives the authoritative
 // workspace binding from repoRoot and rejects mismatches, so this remains a

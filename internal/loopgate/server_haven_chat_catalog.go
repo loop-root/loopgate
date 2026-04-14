@@ -8,11 +8,11 @@ const (
 	// it this many times before returning the last assistant text to the client.
 	// Each nudge is an extra full model round-trip in the same HTTP request — high values
 	// multiply latency (e.g. 4 here ⇒ up to 5 sequential Reply calls). Keep this small.
-	maxHavenHostFolderProseOnlyNudges = 2
+	maxHavenHostFolderProseOnlyNudges = 1
 	// After host.organize.plan succeeds, the model often answers with prose claiming Loopgate
 	// approval is pending — but approvals are only created when host.plan.apply runs. Nudge apply
 	// this many times before giving up (each nudge is one extra model round-trip).
-	maxHavenHostPlanApplyNudges = 2
+	maxHavenHostPlanApplyNudges = 1
 	useCompactHavenNativeTools  = true
 )
 
@@ -23,7 +23,7 @@ const havenToolLoopContinuationFact = "You are after tool results in the thread.
 // the toolkit is merely available — that steered models to re-list/re-plan after unrelated tools (e.g. memory.remember).
 //
 // The full capability catalog is not re-sent after the first call to keep later iterations fast.
-const havenToolLoopSlimOrganizeFact = "NEXT STEP (host folders): if the folder was just listed → call host.organize.plan NOW with a plan_json that includes EVERY non-folder entry from the listing — every single file must have a move or mkdir operation, do not leave any files unorganized in the root; if a plan_id was just returned → call host.plan.apply with that plan_id. Do not ask for confirmation — the Loopgate popup IS the approval step."
+const havenToolLoopSlimOrganizeFact = "NEXT STEP (host folders): if the folder was just listed → call host.organize.plan NOW with a plan_json that includes EVERY non-folder entry from the listing — every single file must have a move or mkdir operation, do not leave any files unorganized in the root; if a plan_id was just returned → call host.plan.apply with that plan_id. Do not ask for confirmation in chat."
 
 const havenToolFollowupUserNudge = "Continue from my prior request using the tool results in the thread above. Give the next concrete step or answer with no greeting, and do not ask me to restate the goal unless it was truly ambiguous. Do not start host-folder organize tools unless my latest message asked for that or you are mid list→plan→apply from this same turn."
 
@@ -32,11 +32,11 @@ const havenHostFolderActNowNudge = `Do NOT describe what you will do — call in
 
 // havenHostFolderPlanNowNudge is injected when the folder has already been listed
 // (conversation has prior assistant analysis) but the model returned prose instead of calling host.organize.plan.
-const havenHostFolderPlanNowNudge = `Folder contents are already in the thread above. Do NOT ask the user for confirmation — the Loopgate popup that appears after host.plan.apply IS the approval step. Call invoke_capability RIGHT NOW with capability="host.organize.plan". Your plan_json MUST include a move or mkdir operation for EVERY file in the listing — do not skip any files or leave them in the root. arguments_json must be a JSON-encoded string, e.g. "{\"folder_name\":\"downloads\",\"plan_json\":\"[{\\\"kind\\\":\\\"mkdir\\\",\\\"path\\\":\\\"Archives\\\"},{\\\"kind\\\":\\\"move\\\",\\\"from\\\":\\\"file.zip\\\",\\\"to\\\":\\\"Archives/file.zip\\\"}]\"}". Do not invent capabilities like host.folder.mkdir — all folder creation goes inside plan_json as {\"kind\":\"mkdir\",\"path\":\"Name\"}. Emit a tool call only.`
+const havenHostFolderPlanNowNudge = `Folder contents are already in the thread above. Do NOT ask the user for confirmation in chat. Call invoke_capability RIGHT NOW with capability="host.organize.plan". Your plan_json MUST include a move or mkdir operation for EVERY file in the listing — do not skip any files or leave them in the root. arguments_json must be a JSON-encoded string, e.g. "{\"folder_name\":\"downloads\",\"plan_json\":\"[{\\\"kind\\\":\\\"mkdir\\\",\\\"path\\\":\\\"Archives\\\"},{\\\"kind\\\":\\\"move\\\",\\\"from\\\":\\\"file.zip\\\",\\\"to\\\":\\\"Archives/file.zip\\\"}]\"}". Do not invent capabilities like host.folder.mkdir — all folder creation goes inside plan_json as {\"kind\":\"mkdir\",\"path\":\"Name\"}. Emit a tool call only.`
 
 // havenHostPlanApplyActNowNudge is sent when host.organize.plan already returned a plan_id but the
 // model answered with prose instead of calling host.plan.apply (the only step that enqueues Loopgate approval).
-const havenHostPlanApplyActNowNudge = "host.organize.plan already returned a plan_id in the tool results above. Loopgate does not open an approval prompt until you call host.plan.apply with that plan_id. The operator already confirmed in Messenger — call invoke_capability for host.plan.apply now using the plan_id from the organize.plan result. Do not tell the user approval is waiting until host.plan.apply returns pending_approval."
+const havenHostPlanApplyActNowNudge = "host.organize.plan already returned a plan_id in the tool results above. Call invoke_capability for host.plan.apply now using that plan_id. Low-risk plans may run immediately; higher-risk plans may return pending_approval. Do not tell the user approval is waiting unless host.plan.apply actually returns pending_approval."
 
 const defaultHavenToolResultMaxRunes = 20000
 
@@ -87,11 +87,6 @@ var havenCapabilityCatalog = map[string]havenCapabilityDescriptor{
 	"paint.save":              {DisplayName: "Paint", RuntimeHint: "create a painting from explicit strokes and save it to your gallery"},
 	"note.create":             {DisplayName: "Sticky Notes", RuntimeHint: "leave a sticky note on the desktop for the user"},
 	"desktop.organize":        {DisplayName: "Desktop Layout", RuntimeHint: "rearrange the desktop icons to tidy up Haven"},
-	"todo.add":                {DisplayName: "Task Board", RuntimeHint: "add a task when the user wants a reminder or explicitly asks to track something across sessions"},
-	"todo.complete":           {DisplayName: "Task Board", RuntimeHint: "mark a task as done when it no longer needs attention"},
-	"todo.list":               {DisplayName: "Task Board", RuntimeHint: "review your open tasks and active goals"},
-	"goal.set":                {DisplayName: "Goals", RuntimeHint: "set a named persistent goal for ongoing work or a multi-session objective the user wants to track"},
-	"goal.close":              {DisplayName: "Goals", RuntimeHint: "close a goal when the objective has been achieved or the user no longer wants to track it"},
 	"shell_exec":              {DisplayName: "Terminal Commands", RuntimeHint: "run terminal commands when a task genuinely requires the command line"},
 	"host.folder.list":        {DisplayName: "Granted host folders", RuntimeHint: "list files in a user-granted folder on the real host filesystem"},
 	"host.folder.read":        {DisplayName: "Granted host folders", RuntimeHint: "read a file under a granted host folder on disk"},

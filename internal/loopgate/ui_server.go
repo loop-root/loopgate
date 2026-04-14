@@ -61,6 +61,7 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 
 	personaName, personaVersion := server.loadPersonaDisplaySummary()
 	runtimeState := server.loadRuntimeStateDisplaySummary()
+	policyRuntime := server.currentPolicyRuntime()
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
@@ -93,11 +94,11 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 		ConnectionCount:          len(server.connectionStatuses()),
 		OperatorMountWriteGrants: writeGrants,
 		Policy: UIStatusPolicySummary{
-			ReadEnabled:                      server.policy.Tools.Filesystem.ReadEnabled,
-			WriteEnabled:                     server.policy.Tools.Filesystem.WriteEnabled,
-			WriteRequiresApproval:            server.policy.Tools.Filesystem.WriteRequiresApproval,
-			HavenTrustedSandboxAutoAllow:     server.policy.HavenTrustedSandboxAutoAllowEnabled(),
-			HavenTrustedSandboxAllowlistMode: havenTrustedSandboxAllowlistMode(server.policy),
+			ReadEnabled:                      policyRuntime.policy.Tools.Filesystem.ReadEnabled,
+			WriteEnabled:                     policyRuntime.policy.Tools.Filesystem.WriteEnabled,
+			WriteRequiresApproval:            policyRuntime.policy.Tools.Filesystem.WriteRequiresApproval,
+			HavenTrustedSandboxAutoAllow:     policyRuntime.policy.HavenTrustedSandboxAutoAllowEnabled(),
+			HavenTrustedSandboxAllowlistMode: havenTrustedSandboxAllowlistMode(policyRuntime.policy),
 		},
 	}
 	server.writeJSON(writer, http.StatusOK, response)

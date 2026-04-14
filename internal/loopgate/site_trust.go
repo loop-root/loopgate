@@ -119,6 +119,9 @@ func (server *Server) inspectSite(ctx context.Context, rawURL string) (SiteInspe
 		TLSValid:       inspectedSiteResponse.TLSValid,
 		Certificate:    inspectedSiteResponse.Certificate,
 	}
+	if siteInspectionResponse.HTTPS && !siteInspectionResponse.TLSValid {
+		return siteInspectionResponse, nil
+	}
 
 	draftSuggestion, err := buildSiteTrustDraftSuggestion(inspectedSiteResponse)
 	if err != nil {
@@ -179,7 +182,11 @@ func (server *Server) createSiteTrustDraft(ctx context.Context, tokenClaims capa
 }
 
 func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite validatedSiteTarget) (inspectedSite, error) {
-	inspectionClient := server.siteInspectionHTTPClient()
+	inspected := inspectedSite{
+		Target: validatedSite,
+		HTTPS:  validatedSite.Scheme == "https",
+	}
+	inspectionClient := server.siteInspectionHTTPClient(validatedSite, &inspected)
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, validatedSite.NormalizedURL, nil)
 	if err != nil {
 		return inspectedSite{}, fmt.Errorf("build inspection request: %w", err)
@@ -187,6 +194,9 @@ func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite val
 
 	httpResponse, err := inspectionClient.Do(httpRequest)
 	if err != nil {
+		if inspected.HTTPS && inspected.Certificate != nil && !inspected.TLSValid {
+			return inspected, nil
+		}
 		return inspectedSite{}, fmt.Errorf("inspect site request failed: %w", err)
 	}
 	defer httpResponse.Body.Close()
@@ -201,18 +211,17 @@ func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite val
 		normalizedContentType = mediaType
 	}
 
-	inspected := inspectedSite{
-		Target:         validatedSite,
-		HTTPStatusCode: httpResponse.StatusCode,
-		ContentType:    normalizedContentType,
-		HTTPS:          validatedSite.Scheme == "https",
-		RawBody:        string(rawBodyBytes),
-	}
+	inspected.HTTPStatusCode = httpResponse.StatusCode
+	inspected.ContentType = normalizedContentType
+	inspected.RawBody = string(rawBodyBytes)
 
 	if httpResponse.TLS != nil && len(httpResponse.TLS.PeerCertificates) > 0 {
-		leafCertificate := httpResponse.TLS.PeerCertificates[0]
-		inspected.Certificate = certificateInfoForLeaf(leafCertificate)
-		inspected.TLSValid = verifySiteCertificate(validatedSite.Hostname, httpResponse.TLS.PeerCertificates) == nil
+		if inspected.Certificate == nil {
+			inspected.Certificate = certificateInfoForLeaf(httpResponse.TLS.PeerCertificates[0])
+		}
+		if !inspected.TLSValid {
+			inspected.TLSValid = verifySiteCertificate(validatedSite.Hostname, httpResponse.TLS.PeerCertificates, nil) == nil
+		}
 	}
 	if validatedSite.Scheme == "http" && isLocalhostHost(validatedSite.Hostname) {
 		inspected.TLSValid = false
@@ -220,28 +229,38 @@ func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite val
 	return inspected, nil
 }
 
-func (server *Server) siteInspectionHTTPClient() *http.Client {
+func (server *Server) siteInspectionHTTPClient(validatedSite validatedSiteTarget, inspected *inspectedSite) *http.Client {
 	timeout := 10 * time.Second
-	if server.httpClient != nil && server.httpClient.Timeout > 0 {
-		timeout = server.httpClient.Timeout
+	policyRuntime := server.currentPolicyRuntime()
+	if policyRuntime.httpClient != nil && policyRuntime.httpClient.Timeout > 0 {
+		timeout = policyRuntime.httpClient.Timeout
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if policyRuntime.httpClient != nil {
+		if configuredTransport, ok := policyRuntime.httpClient.Transport.(*http.Transport); ok && configuredTransport != nil {
+			transport = configuredTransport.Clone()
+		}
+	}
+	if validatedSite.Scheme == "https" {
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		} else {
+			transport.TLSClientConfig = transport.TLSClientConfig.Clone()
+		}
+		rootPool := transport.TLSClientConfig.RootCAs
+		transport.TLSClientConfig.InsecureSkipVerify = true
+		transport.TLSClientConfig.VerifyConnection = func(connectionState tls.ConnectionState) error {
+			if len(connectionState.PeerCertificates) > 0 {
+				inspected.Certificate = certificateInfoForLeaf(connectionState.PeerCertificates[0])
+			}
+			verifyErr := verifySiteCertificate(validatedSite.Hostname, connectionState.PeerCertificates, rootPool)
+			inspected.TLSValid = verifyErr == nil
+			return verifyErr
+		}
 	}
 	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   5 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          10,
-			IdleConnTimeout:       30 * time.Second,
-			TLSHandshakeTimeout:   5 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, // inspection only; validity is reported separately
-			},
-		},
+		Timeout:   timeout,
+		Transport: transport,
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
@@ -276,13 +295,16 @@ func certificateInfoForLeaf(leafCertificate *x509.Certificate) *SiteCertificateI
 	}
 }
 
-func verifySiteCertificate(hostname string, peerCertificates []*x509.Certificate) error {
+func verifySiteCertificate(hostname string, peerCertificates []*x509.Certificate, rootPool *x509.CertPool) error {
 	if len(peerCertificates) == 0 {
 		return fmt.Errorf("missing peer certificate")
 	}
-	rootPool, err := x509.SystemCertPool()
-	if err != nil || rootPool == nil {
-		rootPool = x509.NewCertPool()
+	if rootPool == nil {
+		systemRootPool, err := x509.SystemCertPool()
+		if err != nil || systemRootPool == nil {
+			systemRootPool = x509.NewCertPool()
+		}
+		rootPool = systemRootPool
 	}
 	intermediatePool := x509.NewCertPool()
 	for _, intermediateCertificate := range peerCertificates[1:] {

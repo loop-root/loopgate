@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -17,7 +19,8 @@ const (
 
 // ShellExec runs shell commands in the sandbox workspace.
 type ShellExec struct {
-	WorkDir string // working directory for commands (sandbox root)
+	WorkDir         string   // working directory for commands (sandbox root)
+	AllowedCommands []string // explicit command-name or exact-path allowlist
 }
 
 func (t *ShellExec) Name() string      { return "shell_exec" }
@@ -26,11 +29,11 @@ func (t *ShellExec) Operation() string { return OpExecute }
 
 func (t *ShellExec) Schema() Schema {
 	return Schema{
-		Description: "Execute a shell command and return its output. Use this for running scripts, installing packages, compiling code, running tests, or any task that requires a command line.",
+		Description: "Execute a single direct command and return its output. Shell control operators, pipelines, and implicit shell expansion are not available.",
 		Args: []ArgDef{
 			{
 				Name:        "command",
-				Description: "The shell command to execute (passed to /bin/sh -c)",
+				Description: "A single direct command line, parsed into argv without invoking /bin/sh",
 				Required:    true,
 				Type:        "string",
 				MaxLen:      4096,
@@ -39,16 +42,21 @@ func (t *ShellExec) Schema() Schema {
 	}
 }
 
+func (t *ShellExec) ValidatePolicyArguments(args map[string]string) error {
+	_, _, err := t.prepareCommand(args)
+	return err
+}
+
 func (t *ShellExec) Execute(ctx context.Context, args map[string]string) (string, error) {
-	command := strings.TrimSpace(args["command"])
-	if command == "" {
-		return "", fmt.Errorf("empty command")
+	commandLine, argv, err := t.prepareCommand(args)
+	if err != nil {
+		return "", err
 	}
 
 	execCtx, cancel := context.WithTimeout(ctx, defaultShellTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(execCtx, "/bin/sh", "-c", command)
+	cmd := exec.CommandContext(execCtx, argv[0], argv[1:]...)
 	if t.WorkDir != "" {
 		cmd.Dir = t.WorkDir
 	}
@@ -58,7 +66,7 @@ func (t *ShellExec) Execute(ctx context.Context, args map[string]string) (string
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
 
 	// Build output combining stdout and stderr.
 	var result strings.Builder
@@ -94,15 +102,147 @@ func (t *ShellExec) Execute(ctx context.Context, args map[string]string) (string
 		}
 		// Include exit code in output but don't fail — the model needs to see the error
 		if result.Len() > 0 {
-			return fmt.Sprintf("%s\nExit status: %v", result.String(), err), nil
+			return fmt.Sprintf("%s\nExit status: %v\nCommand: %s", result.String(), err, commandLine), nil
 		}
-		return fmt.Sprintf("Command failed: %v", err), nil
+		return fmt.Sprintf("Command failed: %v\nCommand: %s", err, commandLine), nil
 	}
 
 	if result.Len() == 0 {
 		return "(no output)", nil
 	}
 	return result.String(), nil
+}
+
+func (t *ShellExec) prepareCommand(args map[string]string) (string, []string, error) {
+	commandLine := strings.TrimSpace(args["command"])
+	if commandLine == "" {
+		return "", nil, fmt.Errorf("empty command")
+	}
+
+	argv, err := splitDirectCommandLine(commandLine)
+	if err != nil {
+		return commandLine, nil, err
+	}
+	if err := t.validateAllowedCommand(argv[0]); err != nil {
+		return commandLine, nil, err
+	}
+	return commandLine, argv, nil
+}
+
+func (t *ShellExec) validateAllowedCommand(commandName string) error {
+	if len(t.AllowedCommands) == 0 {
+		return fmt.Errorf("shell allowed_commands is empty; configure a direct-command allowlist before enabling shell")
+	}
+
+	trimmedCommandName := strings.TrimSpace(commandName)
+	if trimmedCommandName == "" {
+		return fmt.Errorf("shell command name is required")
+	}
+	if strings.HasPrefix(trimmedCommandName, "-") {
+		return fmt.Errorf("shell command name %q is invalid", trimmedCommandName)
+	}
+
+	hasPathSeparator := strings.ContainsAny(trimmedCommandName, `/\`)
+	normalizedCommandName := trimmedCommandName
+	if hasPathSeparator {
+		normalizedCommandName = filepath.Clean(trimmedCommandName)
+	}
+
+	for _, allowedCommand := range t.AllowedCommands {
+		trimmedAllowedCommand := strings.TrimSpace(allowedCommand)
+		if trimmedAllowedCommand == "" {
+			continue
+		}
+		if strings.ContainsAny(trimmedAllowedCommand, `/\`) {
+			if hasPathSeparator && filepath.Clean(trimmedAllowedCommand) == normalizedCommandName {
+				return nil
+			}
+			continue
+		}
+		if !hasPathSeparator && trimmedAllowedCommand == trimmedCommandName {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("shell command %q is not allowed by policy", trimmedCommandName)
+}
+
+func splitDirectCommandLine(rawCommand string) ([]string, error) {
+	trimmedCommand := strings.TrimSpace(rawCommand)
+	if trimmedCommand == "" {
+		return nil, fmt.Errorf("empty command")
+	}
+
+	arguments := make([]string, 0, 8)
+	var currentArgument strings.Builder
+	inSingleQuotes := false
+	inDoubleQuotes := false
+	escapeNextRune := false
+
+	flushCurrentArgument := func() {
+		if currentArgument.Len() == 0 {
+			return
+		}
+		arguments = append(arguments, currentArgument.String())
+		currentArgument.Reset()
+	}
+
+	for _, currentRune := range rawCommand {
+		if currentRune == '\n' || currentRune == '\r' {
+			return nil, fmt.Errorf("shell control operators are not supported; execute one direct command at a time")
+		}
+		if currentRune != '\t' && unicode.IsControl(currentRune) {
+			return nil, fmt.Errorf("control characters are not allowed in shell commands")
+		}
+
+		switch {
+		case escapeNextRune:
+			currentArgument.WriteRune(currentRune)
+			escapeNextRune = false
+		case inSingleQuotes:
+			if currentRune == '\'' {
+				inSingleQuotes = false
+				continue
+			}
+			currentArgument.WriteRune(currentRune)
+		case inDoubleQuotes:
+			switch currentRune {
+			case '"':
+				inDoubleQuotes = false
+			case '\\':
+				escapeNextRune = true
+			default:
+				currentArgument.WriteRune(currentRune)
+			}
+		default:
+			switch {
+			case unicode.IsSpace(currentRune):
+				flushCurrentArgument()
+			case currentRune == '\'':
+				inSingleQuotes = true
+			case currentRune == '"':
+				inDoubleQuotes = true
+			case currentRune == '\\':
+				escapeNextRune = true
+			case strings.ContainsRune("|&;<>", currentRune):
+				return nil, fmt.Errorf("shell control operators are not supported; execute one direct command at a time")
+			default:
+				currentArgument.WriteRune(currentRune)
+			}
+		}
+	}
+
+	if escapeNextRune {
+		return nil, fmt.Errorf("shell command ends with an unfinished escape sequence")
+	}
+	if inSingleQuotes || inDoubleQuotes {
+		return nil, fmt.Errorf("shell command contains an unterminated quote")
+	}
+	flushCurrentArgument()
+	if len(arguments) == 0 {
+		return nil, fmt.Errorf("empty command")
+	}
+	return arguments, nil
 }
 
 func minimalShellEnvironment(workDir string) []string {

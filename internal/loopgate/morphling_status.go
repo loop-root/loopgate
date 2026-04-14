@@ -12,6 +12,7 @@ func (server *Server) morphlingStatus(tokenClaims capabilityToken, statusRequest
 	if err := server.expirePendingMorphlingReviews(); err != nil {
 		return MorphlingStatusResponse{}, err
 	}
+	policyRuntime := server.currentPolicyRuntime()
 
 	server.morphlingsMu.Lock()
 	defer server.morphlingsMu.Unlock()
@@ -29,15 +30,15 @@ func (server *Server) morphlingStatus(tokenClaims capabilityToken, statusRequest
 		}
 		if !statusRequest.IncludeTerminated && morphlingRecord.State == morphlingStateTerminated {
 			return MorphlingStatusResponse{
-				SpawnEnabled: server.policy.Tools.Morphlings.SpawnEnabled,
-				MaxActive:    server.policy.Tools.Morphlings.MaxActive,
+				SpawnEnabled: policyRuntime.policy.Tools.Morphlings.SpawnEnabled,
+				MaxActive:    policyRuntime.policy.Tools.Morphlings.MaxActive,
 				ActiveCount:  activeMorphlingCountLocked(server.morphlings),
 				Morphlings:   []MorphlingSummary{},
 			}, nil
 		}
 		return MorphlingStatusResponse{
-			SpawnEnabled: server.policy.Tools.Morphlings.SpawnEnabled,
-			MaxActive:    server.policy.Tools.Morphlings.MaxActive,
+			SpawnEnabled: policyRuntime.policy.Tools.Morphlings.SpawnEnabled,
+			MaxActive:    policyRuntime.policy.Tools.Morphlings.MaxActive,
 			ActiveCount:  activeMorphlingCountLocked(server.morphlings),
 			Morphlings:   []MorphlingSummary{morphlingSummaryFromRecord(morphlingRecord)},
 		}, nil
@@ -64,8 +65,8 @@ func (server *Server) morphlingStatus(tokenClaims capabilityToken, statusRequest
 		morphlingSummaries = append(morphlingSummaries, morphlingSummaryFromRecord(morphlingRecord))
 	}
 	return MorphlingStatusResponse{
-		SpawnEnabled:       server.policy.Tools.Morphlings.SpawnEnabled,
-		MaxActive:          server.policy.Tools.Morphlings.MaxActive,
+		SpawnEnabled:       policyRuntime.policy.Tools.Morphlings.SpawnEnabled,
+		MaxActive:          policyRuntime.policy.Tools.Morphlings.MaxActive,
 		ActiveCount:        activeMorphlingCountLocked(server.morphlings),
 		PendingReviewCount: pendingReviewCountLocked(server.morphlings, tokenClaims.ControlSessionID),
 		Morphlings:         morphlingSummaries,

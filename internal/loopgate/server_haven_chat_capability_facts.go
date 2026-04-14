@@ -35,7 +35,6 @@ func buildResidentCapabilityFacts(capabilitySummaries []CapabilitySummary) []str
 	runtimeFacts = append(runtimeFacts, buildHavenOperatorContextFacts(availableCapabilities)...)
 	runtimeFacts = append(runtimeFacts, buildHavenNotesCapabilityFacts(availableCapabilities)...)
 	runtimeFacts = append(runtimeFacts, buildHavenMemoryCapabilityFacts(availableCapabilities)...)
-	runtimeFacts = append(runtimeFacts, buildHavenTodoCapabilityFacts(availableCapabilities)...)
 	runtimeFacts = append(runtimeFacts, buildHavenHostFolderCapabilityFacts(availableCapabilities)...)
 	runtimeFacts = append(runtimeFacts, buildHavenShellCapabilityFacts(availableCapabilities)...)
 	return runtimeFacts
@@ -77,24 +76,15 @@ func buildHavenMemoryCapabilityFacts(availableCapabilities map[string]struct{}) 
 	}
 }
 
-func buildHavenTodoCapabilityFacts(availableCapabilities map[string]struct{}) []string {
-	if !hasAllHavenCapabilities(availableCapabilities, "todo.add", "todo.complete", "todo.list") {
-		return nil
-	}
-	return []string{
-		"You have a Task Board. Use todo.add only when the user wants tracking across sessions or explicitly agrees to add a task. Use todo.complete when something is done and todo.list to review open items.",
-	}
-}
-
 func buildHavenHostFolderCapabilityFacts(availableCapabilities map[string]struct{}) []string {
 	if !hasAllHavenCapabilities(availableCapabilities, "host.folder.list", "host.folder.read", "host.organize.plan", "host.plan.apply") {
 		return nil
 	}
 
 	runtimeFacts := []string{
-		"You have typed host-folder tools for paths the operator granted in Setup. Use host.folder.list and host.folder.read on the real folder, host.organize.plan to propose changes without writing, and host.plan.apply only after approval.",
-		"Critical: host.organize.plan returns a plan_id and does not open Loopgate's approval UI. The operator only sees a Loopgate approval after you call host.plan.apply with that plan_id. If they confirmed in chat, you must still invoke host.plan.apply to start approval — do not claim approval is already pending before that tool runs.",
-		"When the user asks to organize or tidy their files on the Mac, assume they mean a granted host folder (for example Downloads or Desktop if enabled): list -> organize.plan -> plan.apply after approval. Do not claim files were reorganized until apply has succeeded.",
+		"You have typed host-folder tools for paths the operator granted in Setup. Use host.folder.list and host.folder.read on the real folder, host.organize.plan to propose changes without writing, and host.plan.apply to execute the stored plan.",
+		"Critical: host.organize.plan returns a plan_id and does not open Loopgate's approval UI. Only host.plan.apply can trigger execution. Higher-risk plans may open Loopgate approval; low-risk bounded plans may run immediately. Do not claim approval is pending unless the tool result actually says so.",
+		"When the user asks to organize or tidy their files on the Mac, assume they mean a granted host folder (for example Downloads or Desktop if enabled): list -> organize.plan -> plan.apply. Do not claim files were reorganized until apply has succeeded.",
 		"For those requests: call host.folder.list via invoke_capability in the same assistant turn — do not stop after only describing what you will do next. Act first (list/read), then explain results.",
 		"Do not ask the user to type permission, confirmation, or yes/no in Messenger before calling host.folder.list or host.folder.read — chat consent is not authority. Call the tool; when policy requires it, Loopgate opens its own approval surface automatically. Do not tell the user to open Loopgate unless a tool result already indicates pending approval.",
 		"Do not interview the user about sort order (by type vs date) before listing — call host.folder.list first, then propose a concrete plan from real filenames.",

@@ -7,29 +7,6 @@ import (
 	"morph/internal/identifiers"
 )
 
-// UITasksResponse is the task board projection for local operator clients
-// (control session auth; not a capability execute surface).
-type UITasksResponse struct {
-	Goals []string           `json:"goals"`
-	Items []UITasksItemEntry `json:"items"`
-}
-
-// UITasksItemEntry is one row in GET /v1/tasks.
-type UITasksItemEntry struct {
-	ID           string `json:"id"`
-	Text         string `json:"text"`
-	TaskKind     string `json:"task_kind"`
-	SourceKind   string `json:"source_kind"`
-	NextStep     string `json:"next_step,omitempty"`
-	Status       string `json:"status"`
-	CreatedAtUTC string `json:"created_at_utc"`
-}
-
-// UITasksStatusUpdateRequest is the body for PUT /v1/tasks/{id}/status.
-type UITasksStatusUpdateRequest struct {
-	Status string `json:"status"`
-}
-
 // HavenMemoryInventoryResponse is the operator-facing memory inventory projection for GET /v1/ui/memory.
 type HavenMemoryInventoryResponse struct {
 	WakeStateID             string                   `json:"wake_state_id,omitempty"`
@@ -85,28 +62,6 @@ type HavenMemoryResetResponse struct {
 	PreviousDistillateCount  int    `json:"previous_distillate_count"`
 	PreviousResonateKeyCount int    `json:"previous_resonate_key_count"`
 	WakeStateID              string `json:"wake_state_id,omitempty"`
-}
-
-// HavenAgentWorkEnsureRequest is the JSON body for POST /v1/agent/work-item/ensure.
-// The legacy /v1/haven/agent/work-item/ensure alias uses the same payload.
-type HavenAgentWorkEnsureRequest struct {
-	Text     string `json:"text"`
-	NextStep string `json:"next_step,omitempty"`
-}
-
-// HavenAgentWorkItemResponse is returned by work-item ensure and complete routes.
-// The type name is retained for compatibility with existing clients.
-type HavenAgentWorkItemResponse struct {
-	ItemID         string `json:"item_id"`
-	Text           string `json:"text"`
-	AlreadyPresent bool   `json:"already_present"`
-}
-
-// HavenAgentWorkCompleteRequest is the JSON body for POST /v1/agent/work-item/complete.
-// The legacy /v1/haven/agent/work-item/complete alias uses the same payload.
-type HavenAgentWorkCompleteRequest struct {
-	ItemID string `json:"item_id"`
-	Reason string `json:"reason,omitempty"`
 }
 
 // HavenDeskNote is the runtime/state/haven_desk_notes.json entry shape.

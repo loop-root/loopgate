@@ -12,7 +12,7 @@ import (
 type InvokeCapability struct{}
 
 func (t *InvokeCapability) Name() string      { return "invoke_capability" }
-func (t *InvokeCapability) Category() string { return "haven" }
+func (t *InvokeCapability) Category() string  { return "haven" }
 func (t *InvokeCapability) Operation() string { return OpRead }
 
 func (t *InvokeCapability) Schema() Schema {
@@ -21,7 +21,7 @@ func (t *InvokeCapability) Schema() Schema {
 		Args: []ArgDef{
 			{
 				Name:        "capability",
-				Description: "Exact capability id to invoke (e.g. fs_read, todo.add)",
+				Description: "Exact capability id to invoke (e.g. fs_read, memory.remember)",
 				Required:    true,
 				Type:        "string",
 				MaxLen:      128,

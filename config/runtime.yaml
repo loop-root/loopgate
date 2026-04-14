@@ -30,6 +30,54 @@ logging:
     #     backend: "macos_keychain"
     #     account_name: "loopgate.audit_ledger_hmac"
     #     scope: "local"
+  # Optional local-first export cursor for streaming the authoritative audit
+  # ledger to an admin node or external SIEM later. Local append still happens
+  # first; this state is only the shipping cursor and retry metadata.
+  audit_export:
+    enabled: false
+    destination_kind: ""
+    destination_label: ""
+    endpoint_url: ""
+    authorization:
+      scheme: "bearer"
+      # secret_ref is required when enabled with destination_kind: "admin_node"
+      # Example:
+      # secret_ref:
+      #   id: "audit_export_admin_bearer"
+      #   backend: "macos_keychain"
+      #   account_name: "loopgate.audit_export.admin_bearer"
+      #   scope: "local"
+    tls:
+      enabled: false
+      server_name: ""
+      pinned_server_public_key_sha256: ""
+      minimum_remaining_validity_seconds: 0
+      # For remote admin_node export, mTLS should be enabled and backed by
+      # secret refs rather than plaintext file paths.
+      # pinned_server_public_key_sha256 is optional defense in depth when the
+      # admin node has a stable public key and operators want explicit pin-based
+      # trust repair on rotation.
+      # minimum_remaining_validity_seconds can fail closed before a client cert,
+      # root CA, or admin-node leaf cert is too close to expiry.
+      # root_ca_secret_ref:
+      #   id: "audit_export_root_ca"
+      #   backend: "macos_keychain"
+      #   account_name: "loopgate.audit_export.root_ca"
+      #   scope: "local"
+      # client_certificate_secret_ref:
+      #   id: "audit_export_client_certificate"
+      #   backend: "macos_keychain"
+      #   account_name: "loopgate.audit_export.client_certificate"
+      #   scope: "local"
+      # client_private_key_secret_ref:
+      #   id: "audit_export_client_private_key"
+      #   backend: "macos_keychain"
+      #   account_name: "loopgate.audit_export.client_private_key"
+      #   scope: "local"
+    state_path: "runtime/state/audit_export_state.json"
+    max_batch_events: 500
+    max_batch_bytes: 1048576
+    min_flush_interval_seconds: 5
   # Optional text logs under directory (slog). Not authoritative; loopgate_events.jsonl is.
   # Levels: error, warn, info, debug, trace (per-channel keys: audit, server, client, socket, memory, ledger, model).
   # Haven Settings can write runtime/state/loopgate_diagnostic_logging.override.json (merged on load; restart Loopgate).

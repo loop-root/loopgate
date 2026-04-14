@@ -174,3 +174,16 @@ func (state *havenChatLoopState) pendingApprovalOutcome(replyText string, toolRe
 		uxSignals:          state.uxSignals,
 	}
 }
+
+func (state *havenChatLoopState) completedHostPlanApplyOutcome(toolResults []orchestrator.ToolResult) (bool, *havenChatLoopOutcome) {
+	for _, toolResult := range toolResults {
+		if strings.TrimSpace(toolResult.Capability) == "host.plan.apply" && toolResult.Status == orchestrator.StatusSuccess {
+			return true, &havenChatLoopOutcome{
+				modelResponse: state.lastModelResponse,
+				assistantText: "",
+				uxSignals:     state.uxSignals,
+			}
+		}
+	}
+	return false, nil
+}

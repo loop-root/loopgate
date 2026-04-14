@@ -33,6 +33,7 @@ func (backend *continuityTCLMemoryBackend) inspectObservedContinuityAuthoritativ
 	backend.server.memoryMu.Unlock()
 
 	var inspectResponse ContinuityInspectResponse
+	policyRuntime := backend.server.currentPolicyRuntime()
 	// Preserve the double-check inside the mutation closure so concurrent replay or
 	// duplicate submissions cannot race the optimistic read above into divergent state.
 	err = backend.server.mutateContinuityMemory(backend.partition.tenantID, authenticatedSession.ControlSessionID, "memory.continuity.inspected", func(workingState continuityMemoryState, nowUTC time.Time) (continuityMemoryState, map[string]interface{}, continuityMutationEvents, error) {
@@ -78,7 +79,7 @@ func (backend *continuityTCLMemoryBackend) inspectObservedContinuityAuthoritativ
 
 		switch inspectionRecord.DerivationOutcome {
 		case continuityInspectionOutcomeDerived:
-			if backend.server.policy.Memory.ContinuityReviewRequired {
+			if policyRuntime.policy.Memory.ContinuityReviewRequired {
 				inspectionRecord.Review = continuityInspectionReview{
 					Status: continuityReviewStatusPendingReview,
 				}

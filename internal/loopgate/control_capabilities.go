@@ -3,6 +3,7 @@ package loopgate
 import "sort"
 
 const (
+	controlCapabilityAuditExport             = "audit.export"
 	controlCapabilityConfigRead              = "config.read"
 	controlCapabilityConfigWrite             = "config.write"
 	controlCapabilityConnectionRead          = "connection.read"
@@ -10,13 +11,12 @@ const (
 	controlCapabilityDiagnosticRead          = "diagnostic.read"
 	controlCapabilityFolderAccessRead        = "folder_access.read"
 	controlCapabilityFolderAccessWrite       = "folder_access.write"
-	controlCapabilityGoalSet                 = "goal.set"
-	controlCapabilityGoalClose               = "goal.close"
 	controlCapabilityMemoryRead              = "memory.read"
 	controlCapabilityMemoryWrite             = "memory.write"
 	controlCapabilityMemoryReset             = "memory.reset"
 	controlCapabilityMemoryReview            = "memory.review"
 	controlCapabilityMemoryLineage           = "memory.lineage"
+	controlCapabilityMCPGatewayWrite         = "mcp_gateway.write"
 	controlCapabilityMorphlingRead           = "morphling.read"
 	controlCapabilityMorphlingWrite          = "morphling.write"
 	controlCapabilityModelReply              = "model.reply"
@@ -28,17 +28,17 @@ const (
 	controlCapabilityQuarantineWrite         = "quarantine.write"
 	controlCapabilitySiteInspect             = "site.inspect"
 	controlCapabilitySiteTrustWrite          = "site.trust.write"
-	controlCapabilityTaskStandingGrantRead   = "task_standing_grant.read"
-	controlCapabilityTaskStandingGrantWrite  = "task_standing_grant.write"
-	controlCapabilityTaskPlanRead            = "task_plan.read"
-	controlCapabilityTaskPlanWrite           = "task_plan.write"
-	controlCapabilityTasksRead               = "tasks.read"
-	controlCapabilityTasksWrite              = "tasks.write"
 	controlCapabilityUIRead                  = "ui.read"
 	controlCapabilityUIWrite                 = "ui.write"
 )
 
 var internalControlCapabilityCatalog = map[string]CapabilitySummary{
+	controlCapabilityAuditExport: {
+		Name:        controlCapabilityAuditExport,
+		Category:    "audit",
+		Operation:   "write",
+		Description: "Trigger one local-first audit export flush to the configured downstream destination through the local control plane.",
+	},
 	controlCapabilityConfigRead: {
 		Name:        controlCapabilityConfigRead,
 		Category:    "control",
@@ -81,18 +81,6 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Operation:   "write",
 		Description: "Update or sync folder-access and shared-folder state through the local control plane.",
 	},
-	controlCapabilityGoalSet: {
-		Name:        controlCapabilityGoalSet,
-		Category:    "continuity",
-		Operation:   "write",
-		Description: "Set a named persistent goal tracked across sessions in the continuity system.",
-	},
-	controlCapabilityGoalClose: {
-		Name:        controlCapabilityGoalClose,
-		Category:    "continuity",
-		Operation:   "write",
-		Description: "Close a goal when the objective has been achieved or is no longer relevant.",
-	},
 	controlCapabilityMemoryRead: {
 		Name:        controlCapabilityMemoryRead,
 		Category:    "memory",
@@ -122,6 +110,12 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "memory",
 		Operation:   "write",
 		Description: "Apply lineage transitions such as tombstone or purge to governed memory artifacts through the local control plane.",
+	},
+	controlCapabilityMCPGatewayWrite: {
+		Name:        controlCapabilityMCPGatewayWrite,
+		Category:    "mcp_gateway",
+		Operation:   "write",
+		Description: "Prepare governed MCP approvals, launch or stop declared MCP servers, and execute approved MCP tool calls through the local control plane.",
 	},
 	controlCapabilityMorphlingRead: {
 		Name:        controlCapabilityMorphlingRead,
@@ -189,42 +183,6 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Operation:   "write",
 		Description: "Create site trust drafts through the local control plane.",
 	},
-	controlCapabilityTaskStandingGrantRead: {
-		Name:        controlCapabilityTaskStandingGrantRead,
-		Category:    "task",
-		Operation:   "read",
-		Description: "Read task standing-grant configuration through the local control plane.",
-	},
-	controlCapabilityTaskStandingGrantWrite: {
-		Name:        controlCapabilityTaskStandingGrantWrite,
-		Category:    "task",
-		Operation:   "write",
-		Description: "Update task standing-grant configuration through the local control plane.",
-	},
-	controlCapabilityTaskPlanRead: {
-		Name:        controlCapabilityTaskPlanRead,
-		Category:    "task",
-		Operation:   "read",
-		Description: "Read task-plan execution results through the local control plane.",
-	},
-	controlCapabilityTaskPlanWrite: {
-		Name:        controlCapabilityTaskPlanWrite,
-		Category:    "task",
-		Operation:   "write",
-		Description: "Submit, lease, execute, and complete task-plan prototype flows through the local control plane.",
-	},
-	controlCapabilityTasksRead: {
-		Name:        controlCapabilityTasksRead,
-		Category:    "task",
-		Operation:   "read",
-		Description: "Read the task-board projection through the local control plane.",
-	},
-	controlCapabilityTasksWrite: {
-		Name:        controlCapabilityTasksWrite,
-		Category:    "task",
-		Operation:   "write",
-		Description: "Update task-board workflow state through the local control plane.",
-	},
 	controlCapabilityUIRead: {
 		Name:        controlCapabilityUIRead,
 		Category:    "ui",
@@ -245,7 +203,8 @@ func isInternalControlCapability(capabilityName string) bool {
 }
 
 func (server *Server) recognizesCapability(capabilityName string) bool {
-	if server.registry != nil && server.registry.Has(capabilityName) {
+	registry := server.currentPolicyRuntime().registry
+	if registry != nil && registry.Has(capabilityName) {
 		return true
 	}
 	return isInternalControlCapability(capabilityName)

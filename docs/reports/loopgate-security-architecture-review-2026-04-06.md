@@ -219,7 +219,7 @@ Each item: **severity**, **category**, **location**, **issue**, **why it matters
 | Morphling worker | **Open:** peer + JSON, **no** bearer/MAC; **Actions:** worker auth + `readAndVerifyMorphlingWorkerSignedBody` | `/v1/morphlings/worker/open` vs `start|update|complete` |
 | (formerly outlier; now aligned) | Bearer + GET MAC | `GET /v1/diagnostic/report` |
 
-**Deprecated aliases:** `/v1/haven/...` → same handlers as `/v1/...` (`internal/loopgate/server.go`).
+**Historical at review time:** `/v1/haven/...` aliases pointed to the same handlers as `/v1/...` (`internal/loopgate/server.go`). Those aliases have since been removed.
 
 ---
 

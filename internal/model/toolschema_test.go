@@ -15,13 +15,10 @@ func TestBuildNativeToolDefs_ReturnsOnlyAllowlistedTools(t *testing.T) {
 	reg.Register(&tools.JournalWrite{Root: "/tmp"})
 	reg.Register(&tools.MemoryRemember{})
 	reg.Register(&tools.NoteCreate{StateDir: "/tmp"})
-	reg.Register(&tools.TodoAdd{})
-	reg.Register(&tools.TodoComplete{})
-	reg.Register(&tools.TodoList{})
 
 	defs := BuildNativeToolDefs(reg)
-	if len(defs) != 9 {
-		t.Fatalf("expected 9 defs, got %d", len(defs))
+	if len(defs) != 6 {
+		t.Fatalf("expected 6 defs, got %d", len(defs))
 	}
 
 	names := map[string]bool{}
@@ -45,15 +42,6 @@ func TestBuildNativeToolDefs_ReturnsOnlyAllowlistedTools(t *testing.T) {
 	}
 	if !names["note.create"] {
 		t.Error("expected note.create in defs")
-	}
-	if !names["todo.add"] {
-		t.Error("expected todo.add in defs")
-	}
-	if !names["todo.complete"] {
-		t.Error("expected todo.complete in defs")
-	}
-	if !names["todo.list"] {
-		t.Error("expected todo.list in defs")
 	}
 }
 
@@ -208,14 +196,13 @@ func TestBuildNativeToolDefs_CompactNativeTools_SingleDef(t *testing.T) {
 func TestBuildNativeToolDefsForAllowedNamesWithOptions_HavenGuardsAppendToDescription(t *testing.T) {
 	reg := tools.NewRegistry()
 	reg.Register(&tools.MemoryRemember{})
-	reg.Register(&tools.TodoAdd{})
 	reg.Register(&tools.JournalWrite{Root: "/tmp"})
 
-	defs := BuildNativeToolDefsForAllowedNamesWithOptions(reg, []string{"memory.remember", "todo.add", "journal.write"}, NativeToolDefBuildOptions{
+	defs := BuildNativeToolDefsForAllowedNamesWithOptions(reg, []string{"memory.remember", "journal.write"}, NativeToolDefBuildOptions{
 		HavenUserIntentGuards: true,
 	})
-	if len(defs) != 3 {
-		t.Fatalf("expected 3 defs, got %d", len(defs))
+	if len(defs) != 2 {
+		t.Fatalf("expected 2 defs, got %d", len(defs))
 	}
 	for _, d := range defs {
 		if !strings.Contains(d.Description, "Only call when the user explicitly asked") {

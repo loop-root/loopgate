@@ -2,6 +2,9 @@ package loopgate
 
 import (
 	"encoding/hex"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -91,5 +94,64 @@ func TestBuildSessionMACKeysResponse_slots(t *testing.T) {
 	wantDerived := derivedSessionMACKeyString(mat, "abc123")
 	if resp.Current.DerivedSessionMACKey != wantDerived {
 		t.Fatalf("derived mismatch: %q vs %q", resp.Current.DerivedSessionMACKey, wantDerived)
+	}
+}
+
+func TestLoadOrCreateSessionMACRotationMaster_CreatesPrivateMasterFile(t *testing.T) {
+	repoRoot := t.TempDir()
+	server := &Server{
+		repoRoot: repoRoot,
+		now:      time.Now,
+	}
+	if err := server.loadOrCreateSessionMACRotationMaster(); err != nil {
+		t.Fatalf("load/create session mac rotation master: %v", err)
+	}
+	if len(server.sessionMACRotationMaster) != sessionMACRotationMasterByteCount {
+		t.Fatalf("unexpected master length: %d", len(server.sessionMACRotationMaster))
+	}
+
+	masterPath := filepath.Join(repoRoot, "runtime", "state", sessionMACRotationMasterFile)
+	fileInfo, err := os.Stat(masterPath)
+	if err != nil {
+		t.Fatalf("stat session mac rotation master: %v", err)
+	}
+	if fileInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("expected session mac rotation master permissions 0600, got %o", fileInfo.Mode().Perm())
+	}
+
+	reloadedServer := &Server{
+		repoRoot: repoRoot,
+		now:      time.Now,
+	}
+	if err := reloadedServer.loadOrCreateSessionMACRotationMaster(); err != nil {
+		t.Fatalf("reload session mac rotation master: %v", err)
+	}
+	if hex.EncodeToString(reloadedServer.sessionMACRotationMaster) != hex.EncodeToString(server.sessionMACRotationMaster) {
+		t.Fatal("expected reloaded master to match original")
+	}
+}
+
+func TestLoadOrCreateSessionMACRotationMaster_RejectsSymlink(t *testing.T) {
+	repoRoot := t.TempDir()
+	stateDir := filepath.Join(repoRoot, "runtime", "state")
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatalf("mkdir runtime state: %v", err)
+	}
+	targetPath := filepath.Join(t.TempDir(), "outside-master")
+	if err := os.WriteFile(targetPath, bytesRepeat32(7), 0o600); err != nil {
+		t.Fatalf("write outside master: %v", err)
+	}
+	masterPath := filepath.Join(stateDir, sessionMACRotationMasterFile)
+	if err := os.Symlink(targetPath, masterPath); err != nil {
+		t.Fatalf("symlink session mac rotation master: %v", err)
+	}
+
+	server := &Server{
+		repoRoot: repoRoot,
+		now:      time.Now,
+	}
+	err := server.loadOrCreateSessionMACRotationMaster()
+	if err == nil || !strings.Contains(err.Error(), "must not be a symlink") {
+		t.Fatalf("expected symlink rejection, got %v", err)
 	}
 }

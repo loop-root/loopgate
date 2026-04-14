@@ -146,31 +146,6 @@ func (folderAccessUpdateRequest FolderAccessUpdateRequest) Validate() error {
 	return nil
 }
 
-type TaskStandingGrantStatus struct {
-	Class        string `json:"class"`
-	Label        string `json:"label"`
-	Description  string `json:"description"`
-	SandboxOnly  bool   `json:"sandbox_only"`
-	DefaultGrant bool   `json:"default_grant"`
-	Granted      bool   `json:"granted"`
-}
-
-type TaskStandingGrantStatusResponse struct {
-	Grants []TaskStandingGrantStatus `json:"grants"`
-}
-
-type TaskStandingGrantUpdateRequest struct {
-	Class   string `json:"class"`
-	Granted bool   `json:"granted"`
-}
-
-func (taskStandingGrantUpdateRequest TaskStandingGrantUpdateRequest) Validate() error {
-	if strings.TrimSpace(taskStandingGrantUpdateRequest.Class) == "" {
-		return fmt.Errorf("class is required")
-	}
-	return nil
-}
-
 type UIApprovalDecisionRequest struct {
 	Approved *bool `json:"approved"`
 }

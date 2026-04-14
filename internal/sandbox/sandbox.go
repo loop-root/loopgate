@@ -11,7 +11,10 @@ import (
 	"strings"
 	"unicode"
 
+	"morph/internal/safety"
+
 	"golang.org/x/sys/unix"
+	"golang.org/x/text/unicode/norm"
 )
 
 var (
@@ -86,6 +89,7 @@ func NormalizeRelativePath(rawPath string) (string, error) {
 	if trimmedPath == "" {
 		return "", fmt.Errorf("%w: path is required", ErrSandboxPathInvalid)
 	}
+	trimmedPath = norm.NFC.String(trimmedPath)
 	if strings.HasPrefix(trimmedPath, "/") || filepath.IsAbs(trimmedPath) {
 		return "", fmt.Errorf("%w: absolute paths are not allowed", ErrSandboxPathInvalid)
 	}
@@ -104,6 +108,7 @@ func NormalizeHomePath(rawPath string) (string, error) {
 	if trimmedPath == "" {
 		return "", fmt.Errorf("%w: path is required", ErrSandboxPathInvalid)
 	}
+	trimmedPath = norm.NFC.String(trimmedPath)
 	if strings.HasPrefix(trimmedPath, "/") || filepath.IsAbs(trimmedPath) {
 		normalizedPath := path.Clean(strings.ReplaceAll(trimmedPath, "\\", "/"))
 		if normalizedPath == VirtualHome {
@@ -431,7 +436,8 @@ func ensureWithinRoot(rootPath string, targetPath string) error {
 	if err != nil {
 		return fmt.Errorf("%w: compute relative path: %v", ErrSandboxPathOutsideRoot, err)
 	}
-	if relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+	normalizedRelativePath := safety.NormalizePathForOSComparison(filepath.Clean(relativePath))
+	if normalizedRelativePath == ".." || strings.HasPrefix(normalizedRelativePath, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("%w: %s", ErrSandboxPathOutsideRoot, targetAbsolutePath)
 	}
 	return nil

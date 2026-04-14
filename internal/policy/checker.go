@@ -160,6 +160,12 @@ func (c *Checker) checkShell() CheckResult {
 			Reason:   "shell tools are disabled by policy",
 		}
 	}
+	if len(sh.AllowedCommands) == 0 {
+		return CheckResult{
+			Decision: Deny,
+			Reason:   "shell allowed_commands must be configured before shell access is allowed",
+		}
+	}
 	if sh.RequiresApproval {
 		return CheckResult{
 			Decision: NeedsApproval,

@@ -1,13 +1,86 @@
 version: 0.1.0
 
-# Morph Capability Policy
-# This file defines what Morph is allowed to do at runtime.
+# Loopgate Working Policy
+# This checked-in file is the current local development policy for the active
+# Loopgate harness. It is authoritative for local runtime behavior, but it is
+# not yet a polished open-source-safe default.
 # The policy engine enforces these constraints before any tool executes.
 
 tools:
 
+  claude_code:
+    deny_unknown_tools: true
+    tool_policies:
+      Bash:
+        enabled: true
+        allowed_command_prefixes:
+          - "ls"
+          - "pwd"
+          - "find "
+          - "rg "
+          - "grep "
+          - "cat "
+          - "sed -n "
+          - "head "
+          - "tail "
+          - "wc "
+          - "sort "
+          - "git status"
+          - "git diff"
+        denied_command_prefixes:
+          - "rm "
+          - "curl "
+      Read:
+        enabled: true
+        allowed_roots:
+          - "."
+          - "/Users/adalaide/Dev"
+        denied_paths:
+          - "runtime/state"
+          - "core/policy"
+      Glob:
+        enabled: true
+        allowed_roots:
+          - "."
+          - "/Users/adalaide/Dev"
+        denied_paths:
+          - "runtime/state"
+          - "core/policy"
+      Grep:
+        enabled: true
+        allowed_roots:
+          - "."
+          - "/Users/adalaide/Dev"
+        denied_paths:
+          - "runtime/state"
+          - "core/policy"
+      Write:
+        enabled: true
+        requires_approval: true
+        allowed_roots:
+          - "."
+        denied_paths:
+          - "core/policy"
+          - ".claude/settings.json"
+      Edit:
+        enabled: true
+        requires_approval: true
+        allowed_roots:
+          - "."
+      MultiEdit:
+        enabled: true
+        requires_approval: true
+        allowed_roots:
+          - "."
+      WebFetch:
+        enabled: true
+        allowed_domains:
+          - "github.com"
+      WebSearch:
+        enabled: false
+
   filesystem:
-    # Allow the working tree by default so Morph can operate on the repo it owns.
+    # Allow the working tree by default so Loopgate can operate on the repo it owns.
     # Sensitive internal state and policy roots are denied explicitly below.
     allowed_roots:
       - "."
@@ -31,7 +104,36 @@ tools:
 
   shell:
     enabled: true
-    allowed_commands: []
+    allowed_commands:
+      - "git"
+      - "go"
+      - "gofmt"
+      - "rg"
+      - "ls"
+      - "cat"
+      - "pwd"
+      - "printf"
+      - "mkdir"
+      - "cp"
+      - "mv"
+      - "sed"
+      - "grep"
+      - "find"
+      - "head"
+      - "tail"
+      - "wc"
+      - "sort"
+      - "uniq"
+      - "tr"
+      - "xargs"
+      - "make"
+      - "npm"
+      - "pnpm"
+      - "node"
+      - "python3"
+      - "uv"
+      - "swift"
+      - "xcodebuild"
     requires_approval: true
 
   morphlings:

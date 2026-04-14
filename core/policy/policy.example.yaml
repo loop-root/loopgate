@@ -1,5 +1,5 @@
 # =============================================================================
-# Loopgate / Morph policy — EXAMPLE with line-by-line guidance
+# Loopgate policy — EXAMPLE with line-by-line guidance
 # =============================================================================
 #
 # Copy to your deployment's policy seed path only after review. The live file
@@ -22,9 +22,9 @@ version: 0.1.0
 # tools.filesystem — sandbox + operator_mount.* capabilities
 # -----------------------------------------------------------------------------
 # Applies to:
-#   • fs_* inside Haven's sandbox home (/morph/home/...)
-#   • operator_mount.fs_* — host directories bound at session open (Haven sends
-#     operator_mount_paths on POST /v1/session/open for actor "haven" only).
+#   • fs_* inside the Loopgate-owned working tree or sandbox root
+#   • operator_mount.fs_* — host directories bound at session open by a local
+#     operator client when that flow is enabled
 #
 # read_enabled: if false, fs_read and operator_mount.fs_read are denied.
 # write_enabled: if false, all writes denied.
@@ -32,8 +32,150 @@ version: 0.1.0
 # -----------------------------------------------------------------------------
 tools:
 
+  # ---------------------------------------------------------------------------
+  # claude_code — admin-managed policy for Claude Code built-in tools
+  # ---------------------------------------------------------------------------
+  # This governs the hook pre-validation surface.
+  #
+  # Unknown tools are denied by default unless explicitly overridden.
+  # Tool-specific entries can narrow or override category defaults for the named
+  # Claude Code built-in tool.
+  #
+  # Initial supported tools:
+  #   Bash, Read, Write, Edit, MultiEdit, Glob, Grep, WebFetch, WebSearch
+  # ---------------------------------------------------------------------------
+  claude_code:
+    deny_unknown_tools: true
+    tool_policies:
+      Bash:
+        enabled: true
+        allowed_command_prefixes:
+          - "ls"
+          - "pwd"
+          - "find "
+          - "grep "
+          - "cat "
+          - "sed -n "
+          - "head "
+          - "tail "
+          - "wc "
+          - "sort "
+          - "git status"
+          - "git diff"
+          - "go test"
+          - "rg "
+        denied_command_prefixes:
+          - "rm "
+          - "curl "
+      Read:
+        enabled: true
+        allowed_roots:
+          - "."
+        denied_paths:
+          - "runtime/state"
+          - "core/policy"
+      Glob:
+        enabled: true
+        allowed_roots:
+          - "."
+        denied_paths:
+          - "runtime/state"
+          - "core/policy"
+      Grep:
+        enabled: true
+        allowed_roots:
+          - "."
+        denied_paths:
+          - "runtime/state"
+          - "core/policy"
+      Write:
+        enabled: true
+        requires_approval: true
+        allowed_roots:
+          - "."
+        denied_paths:
+          - "core/policy"
+          - ".claude/settings.json"
+      Edit:
+        enabled: true
+        requires_approval: true
+        allowed_roots:
+          - "."
+      MultiEdit:
+        enabled: true
+        requires_approval: true
+        allowed_roots:
+          - "."
+      WebFetch:
+        enabled: false
+        allowed_domains: []
+
+  # ---------------------------------------------------------------------------
+  # mcp_gateway — policy-declared MCP server broker surface (Phase 2)
+  # ---------------------------------------------------------------------------
+  # Loopgate should expose only one governed MCP gateway surface.
+  # Every brokered MCP server must be declared here first; ambient passthrough
+  # to arbitrary MCP servers is out of model.
+  #
+  # Initial transport support is intentionally narrow:
+  #   stdio
+  #
+  # working_directory is an operator-authored repo-relative or absolute path
+  # hint for the future broker lifecycle. It is validated here but not yet
+  # executed by policy parsing alone.
+  #
+  # allowed_environment:
+  #   environment variable names the future broker may pass through from the
+  #   local process environment
+  #
+  # secret_environment:
+  #   environment variables that should be injected from Loopgate secret refs
+  #
+  # tool_policies:
+  #   per-server tool exposure and approval defaults; unknown tools on a known
+  #   server must still deny by default at broker time
+  #   optional first-pass argument constraints are top-level only:
+  #     required_arguments
+  #     allowed_arguments
+  #     denied_arguments
+  #     argument_value_kinds
+  # ---------------------------------------------------------------------------
+  mcp_gateway:
+    deny_unknown_servers: true
+    servers:
+      github:
+        enabled: false
+        requires_approval: true
+        transport: stdio
+        launch:
+          command: "npx"
+          args:
+            - "-y"
+            - "@modelcontextprotocol/server-github"
+        working_directory: "."
+        allowed_environment:
+          - "HOME"
+        secret_environment:
+          GITHUB_TOKEN:
+            id: "github_mcp_pat"
+            backend: "macos_keychain"
+            account_name: "github_mcp_pat"
+            scope: "developer"
+        tool_policies:
+          search_repositories:
+            enabled: true
+            requires_approval: true
+            required_arguments:
+              - "query"
+            allowed_arguments:
+              - "query"
+              - "limit"
+            argument_value_kinds:
+              query: "string"
+              limit: "number"
+
   filesystem:
-    # Sandbox working tree roots (repo-relative "." is the morph sandbox home root).
+    # Sandbox working tree roots (repo-relative "." is the local Loopgate working root).
     allowed_roots:
       - "."
     # Block sensitive subtrees even if a broad allowed_roots would include them.
@@ -47,7 +189,7 @@ tools:
     # Example STRICT: read_enabled: true, write_enabled: false
     read_enabled: true
     write_enabled: true
-    # Example: false only in trusted automation (generally keep true for Haven UX).
+    # Example: false only in tightly controlled automation.
     write_requires_approval: true
 
   # ---------------------------------------------------------------------------
@@ -62,16 +204,49 @@ tools:
     timeout_seconds: 10
 
   # ---------------------------------------------------------------------------
-  # shell — terminal execution (Haven: /shell enable).
+  # shell — terminal execution.
   # ---------------------------------------------------------------------------
   # STRICT MVP: enabled: false
   shell:
     enabled: true
-    allowed_commands: [] # empty = no allowlist pattern (policy engine may still gate)
+    # Direct command names or exact executable paths only. Loopgate executes
+    # these as argv without invoking /bin/sh, so shell control operators and
+    # implicit expansion are intentionally unavailable.
+    allowed_commands:
+      - "git"
+      - "go"
+      - "gofmt"
+      - "rg"
+      - "ls"
+      - "cat"
+      - "pwd"
+      - "printf"
+      - "mkdir"
+      - "cp"
+      - "mv"
+      - "sed"
+      - "grep"
+      - "find"
+      - "head"
+      - "tail"
+      - "wc"
+      - "sort"
+      - "uniq"
+      - "tr"
+      - "xargs"
+      - "make"
+      - "npm"
+      - "pnpm"
+      - "node"
+      - "python3"
+      - "uv"
+      - "swift"
+      - "xcodebuild"
     requires_approval: true
 
   morphlings:
-    # Background / delegated work — keep spawn_enabled false until product enables it.
+    # Legacy delegated-work surface. Keep disabled unless you are explicitly
+    # testing that path; it is not part of the current local-first product story.
     spawn_enabled: false
     max_active: 5
     require_template: true
@@ -80,6 +255,17 @@ logging:
   log_commands: true
   log_tool_calls: true
   log_memory_promotions: true
+  audit_detail:
+    # Hook decisions remain must-persist. This only controls how much extra
+    # redacted projection detail gets attached to hook audit events.
+    #
+    # full:
+    #   - include redacted shell / URL / query previews where applicable
+    #   - keep hashes, verbs, resolved targets, approval state, and session linkage
+    # minimal:
+    #   - omit preview strings to reduce audit noise
+    #   - still keep hashes, verbs, resolved targets, approval state, and session linkage
+    hook_projection_level: full
 
 memory:
   auto_distillate: true
@@ -93,7 +279,7 @@ safety:
   # Never let the model rewrite persona or policy through tools.
   allow_persona_modification: false
   allow_policy_modification: false
-  # When true, actor "haven" may auto-allow TrustedSandboxLocal tools (journal, notes, …).
+  # Legacy compatibility knob for trusted local UI flows.
   # Omit or false = more prompts (secure default).
   haven_trusted_sandbox_auto_allow: true
   # Optional narrow list; use [] to disable auto-allow entirely:

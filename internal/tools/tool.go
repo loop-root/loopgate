@@ -50,6 +50,12 @@ type RawSecretExportProhibited interface {
 	RawSecretExportProhibited() bool
 }
 
+// PolicyArgumentValidator lets a tool apply argument-aware deny rules before
+// approval or execution. Errors are surfaced as policy denials.
+type PolicyArgumentValidator interface {
+	ValidatePolicyArguments(args map[string]string) error
+}
+
 // Schema describes a tool's arguments.
 type Schema struct {
 	Description string   `json:"description"`

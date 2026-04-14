@@ -278,6 +278,8 @@ func signedRequestHTTPStatus(denialCode string) int {
 		return http.StatusUnauthorized
 	case DenialCodeReplayStateSaturated:
 		return http.StatusTooManyRequests
+	case DenialCodeAuditUnavailable:
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusBadRequest
 	}

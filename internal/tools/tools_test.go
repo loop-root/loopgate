@@ -395,18 +395,47 @@ func TestShellExec_DoesNotInheritAmbientSecrets(t *testing.T) {
 	t.Setenv("MORPH_SECRET_TEST", "super-secret-value")
 
 	tmpDir := t.TempDir()
-	tool := &ShellExec{WorkDir: tmpDir}
+	tool := &ShellExec{
+		WorkDir:         tmpDir,
+		AllowedCommands: []string{"env"},
+	}
 	result, err := tool.Execute(context.Background(), map[string]string{
-		"command": `printf 'secret=%s home=%s' "${MORPH_SECRET_TEST}" "${HOME}"`,
+		"command": "env",
 	})
 	if err != nil {
 		t.Fatalf("execute shell command: %v", err)
 	}
-	if strings.Contains(result, "super-secret-value") {
+	if strings.Contains(result, "MORPH_SECRET_TEST=") || strings.Contains(result, "super-secret-value") {
 		t.Fatalf("expected ambient secret env var to be absent, got %q", result)
 	}
-	if !strings.Contains(result, "home="+tmpDir) {
+	if !strings.Contains(result, "HOME="+tmpDir) {
 		t.Fatalf("expected HOME to be sandbox workdir %q, got %q", tmpDir, result)
+	}
+}
+
+func TestShellExec_RejectsCommandOutsidePolicyAllowlist(t *testing.T) {
+	tool := &ShellExec{
+		WorkDir:         t.TempDir(),
+		AllowedCommands: []string{"git"},
+	}
+	_, err := tool.Execute(context.Background(), map[string]string{
+		"command": "env",
+	})
+	if err == nil || !strings.Contains(err.Error(), "not allowed by policy") {
+		t.Fatalf("expected allowlist denial, got %v", err)
+	}
+}
+
+func TestShellExec_RejectsShellControlOperators(t *testing.T) {
+	tool := &ShellExec{
+		WorkDir:         t.TempDir(),
+		AllowedCommands: []string{"echo"},
+	}
+	_, err := tool.Execute(context.Background(), map[string]string{
+		"command": "echo hi | cat",
+	})
+	if err == nil || !strings.Contains(err.Error(), "control operators") {
+		t.Fatalf("expected direct-command denial, got %v", err)
 	}
 }
 
@@ -440,38 +469,6 @@ func TestNoteCreate_PersistsDeskNoteState(t *testing.T) {
 	}
 	if stateFile.Notes[0].Title != "Gym bag" {
 		t.Fatalf("unexpected note title: %s", stateFile.Notes[0].Title)
-	}
-}
-
-func TestTodoTools_ExposeSchemasAndRequireLoopgate(t *testing.T) {
-	todoAdder := &TodoAdd{}
-	if todoAdder.Name() != "todo.add" {
-		t.Fatalf("unexpected todo add name %q", todoAdder.Name())
-	}
-	if todoAdder.Operation() != OpWrite {
-		t.Fatalf("unexpected todo add operation %q", todoAdder.Operation())
-	}
-	if _, err := todoAdder.Execute(context.Background(), map[string]string{"text": "Pack the gym bag"}); err == nil {
-		t.Fatal("expected todo.add to require loopgate execution")
-	}
-
-	todoCompleter := &TodoComplete{}
-	if todoCompleter.Name() != "todo.complete" {
-		t.Fatalf("unexpected todo complete name %q", todoCompleter.Name())
-	}
-	if _, err := todoCompleter.Execute(context.Background(), map[string]string{"item_id": "todo_123"}); err == nil {
-		t.Fatal("expected todo.complete to require loopgate execution")
-	}
-
-	todoLister := &TodoList{}
-	if todoLister.Name() != "todo.list" {
-		t.Fatalf("unexpected todo list name %q", todoLister.Name())
-	}
-	if todoLister.Operation() != OpRead {
-		t.Fatalf("unexpected todo list operation %q", todoLister.Operation())
-	}
-	if _, err := todoLister.Execute(context.Background(), nil); err == nil {
-		t.Fatal("expected todo.list to require loopgate execution")
 	}
 }
 

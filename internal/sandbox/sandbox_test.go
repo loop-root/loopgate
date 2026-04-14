@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -46,6 +48,16 @@ func TestResolveHomePathRejectsVirtualPathOutsideHome(t *testing.T) {
 
 	if _, _, err := paths.ResolveHomePath("/morph/state/secrets.json"); err == nil {
 		t.Fatal("expected virtual path outside /morph/home to be rejected")
+	}
+}
+
+func TestNormalizeHomePathNormalizesUnicodeBeforeTraversalChecks(t *testing.T) {
+	normalizedPath, err := NormalizeHomePath("imports/e\u0301vidence.txt")
+	if err != nil {
+		t.Fatalf("normalize unicode path: %v", err)
+	}
+	if normalizedPath != "imports/\u00e9vidence.txt" {
+		t.Fatalf("expected NFC-normalized path, got %q", normalizedPath)
 	}
 }
 
@@ -233,5 +245,32 @@ func TestMirrorPathAtomicWithFinalizeRollsBackOnFinalizeFailure(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(destinationDirectory, "nested", "child.txt")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected new mirrored content to be rolled back, got %v", err)
+	}
+}
+
+func TestEnsureWithinRootHonorsDarwinCaseFoldAndUnicodeNormalization(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin-specific case-fold and normalization behavior")
+	}
+
+	repoRoot := t.TempDir()
+	paths := PathsForRepo(repoRoot)
+	if err := paths.Ensure(); err != nil {
+		t.Fatalf("ensure sandbox paths: %v", err)
+	}
+
+	normalizedRoot, err := filepath.EvalSymlinks(paths.Home)
+	if err != nil {
+		t.Fatalf("resolve sandbox root: %v", err)
+	}
+	targetPath := filepath.Join(normalizedRoot, "imports", "\u00e9vidence.txt")
+	if err := os.WriteFile(targetPath, []byte("ok"), 0o600); err != nil {
+		t.Fatalf("write normalized target: %v", err)
+	}
+
+	aliasRoot := strings.ToUpper(normalizedRoot)
+	aliasTarget := filepath.Join(aliasRoot, "IMPORTS", "e\u0301vidence.txt")
+	if err := ensureWithinRoot(aliasRoot, aliasTarget); err != nil {
+		t.Fatalf("expected normalized/case-folded path comparison to allow canonical target, got %v", err)
 	}
 }

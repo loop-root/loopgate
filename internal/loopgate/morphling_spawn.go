@@ -18,7 +18,8 @@ func (server *Server) spawnMorphling(tokenClaims capabilityToken, spawnRequest M
 	if err := server.expirePendingMorphlingApprovals(); err != nil {
 		return MorphlingSpawnResponse{}, err
 	}
-	if !server.policy.Tools.Morphlings.SpawnEnabled {
+	policyRuntime := server.currentPolicyRuntime()
+	if !policyRuntime.policy.Tools.Morphlings.SpawnEnabled {
 		return MorphlingSpawnResponse{
 			RequestID:    strings.TrimSpace(spawnRequest.RequestID),
 			Status:       ResponseStatusDenied,
@@ -46,7 +47,7 @@ func (server *Server) spawnMorphling(tokenClaims capabilityToken, spawnRequest M
 		}, nil
 	}
 
-	validatedClass, found := server.morphlingClassPolicy.Class(spawnRequest.Class)
+	validatedClass, found := policyRuntime.morphlingClassPolicy.Class(spawnRequest.Class)
 	if !found {
 		return MorphlingSpawnResponse{
 			RequestID:    spawnRequest.RequestID,
@@ -155,13 +156,13 @@ func (server *Server) spawnMorphling(tokenClaims capabilityToken, spawnRequest M
 
 	server.morphlingsMu.Lock()
 	previousRecords := cloneMorphlingRecords(server.morphlings)
-	if activeMorphlingCountLocked(server.morphlings) >= server.policy.Tools.Morphlings.MaxActive {
+	if activeMorphlingCountLocked(server.morphlings) >= policyRuntime.policy.Tools.Morphlings.MaxActive {
 		server.morphlingsMu.Unlock()
 		return MorphlingSpawnResponse{
 			RequestID:    spawnRequest.RequestID,
 			Status:       ResponseStatusDenied,
 			DenialCode:   DenialCodeMorphlingActiveLimitReached,
-			DenialReason: redactMorphlingError(fmt.Errorf("%w: max_active=%d", errMorphlingActiveLimitReached, server.policy.Tools.Morphlings.MaxActive)),
+			DenialReason: redactMorphlingError(fmt.Errorf("%w: max_active=%d", errMorphlingActiveLimitReached, policyRuntime.policy.Tools.Morphlings.MaxActive)),
 		}, nil
 	}
 	if activeMorphlingCountForClassLocked(server.morphlings, validatedClass.Name) >= validatedClass.MaxConcurrent {
@@ -487,7 +488,8 @@ func (server *Server) resolveMorphlingSpawnApproval(pendingApproval pendingAppro
 				},
 			}, nil
 		}
-		validatedClass, found := server.morphlingClassPolicy.Class(record.Class)
+		policyRuntime := server.currentPolicyRuntime()
+		validatedClass, found := policyRuntime.morphlingClassPolicy.Class(record.Class)
 		if !found {
 			return CapabilityResponse{
 				RequestID:         pendingApproval.Request.RequestID,

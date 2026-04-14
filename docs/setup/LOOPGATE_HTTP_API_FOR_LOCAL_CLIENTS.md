@@ -2,14 +2,18 @@
 
 # Loopgate local HTTP API — guide for HTTP-native clients
 
-This document explains how a **local process** (native app, test harness, or bridge) talks to **Loopgate** over **HTTP on a Unix domain socket**. It is the **only supported in-tree v1 transport** for privileged control-plane calls. **In-tree MCP is deprecated and removed** ([ADR 0010](../adr/0010-macos-supported-target-and-mcp-removal.md)); use this HTTP API directly or an **out-of-tree** MCP→HTTP forwarder if needed.
+This document explains how a **local process** (Claude Code hook helper, native app, test harness, or bridge) talks to **Loopgate** over **HTTP on a Unix domain socket**. It is the **only supported in-tree v1 transport** for privileged control-plane calls. **In-tree MCP is removed** ([ADR 0010](../adr/0010-macos-supported-target-and-mcp-removal.md)); use this HTTP API directly or an **out-of-tree** MCP→HTTP forwarder if needed.
+
+**Current MVP note:** the active operator harness is **Claude Code + project hooks + Loopgate**. For primary governance, prefer a **command hook** that talks to Loopgate over the Unix socket. Claude's raw HTTP hook mode is not a safe primary enforcement mechanism because non-2xx responses, timeouts, and connection failures are non-blocking in Claude Code's hook model.
+
+**Retired surface note:** older Haven-specific routes such as `/v1/chat`, `/v1/model/settings`, `/v1/settings/*`, `/v1/continuity/inspect-thread`, older `/v1/ui/*` projections, and Haven-only sandbox tools like `journal.*`, `notes.*`, `paint.*`, `note.create`, `desktop.organize`, and `haven.operator_context` are retired from the active Loopgate product. This guide should be read as the Claude hooks / governance / MCP control-plane reference.
 
 **Normative details:** [RFC 0001: Loopgate Token and Request Integrity Policy](../rfcs/0001-loopgate-token-policy.md).  
 **Reference implementation:** `internal/loopgate/client.go` (Go) — match its wire behavior byte-for-byte when in doubt.
 
-### Neutral routes, legacy aliases, and the `haven` actor
+### Neutral routes and the `haven` actor
 
-Prefer the neutral routes in this document, such as **`/v1/chat`** and **`/v1/continuity/inspect-thread`**. Loopgate still keeps the historical **`/v1/haven/...`** routes as compatibility aliases for existing local HTTP clients. The session **actor label `haven`** remains a compatibility identifier, not a product boundary. Where Loopgate still exposes Haven-only helper routes, the real gate is the stronger **trusted Haven session** check described below, not the label by itself. **Prefer this HTTP API** for new IDE and native integrations (in-tree MCP removed — see [LOOPGATE_MCP.md](./LOOPGATE_MCP.md)).
+The historical **`/v1/haven/...`** compatibility aliases are removed. The session **actor label `haven`** still appears in some repo types and docs as cleanup debt, but it is not part of the current Loopgate product boundary.
 
 ---
 
@@ -22,7 +26,7 @@ Prefer the neutral routes in this document, such as **`/v1/chat`** and **`/v1/co
 | **Transport** | **Unix domain stream socket** only in v1 — **not** TCP to `localhost` |
 | **Default socket path** | `{repoRoot}/runtime/state/loopgate.sock` when Loopgate is started with cwd = repo root (`cmd/loopgate`) |
 | **Host header** | Any stable placeholder is fine; the Go client uses `http://loopgate` as the base URL. The server routes by path, not host. |
-| **Override path** | Environment variable **`LOOPGATE_SOCKET`** — absolute path to the socket file. Supported by `./start.sh` and `./scripts/start-loopgate-swift-dev.sh` so clients and launcher agree without hardcoding. |
+| **Override path** | Environment variable **`LOOPGATE_SOCKET`** — absolute path to the socket file. Set this explicitly in launchers, hook scripts, or local app config so clients and Loopgate agree without hardcoding. |
 
 There is **no** public HTTP listener for the control plane in v1. Apple XPC is optional future work and **not** required for this API.
 
@@ -58,13 +62,13 @@ You should see:
 Loopgate listening on …/runtime/state/loopgate.sock
 ```
 
-Policy hash changes may require:
+Policy changes now require a valid detached signature:
 
 ```bash
-go run ./cmd/loopgate --accept-policy
+go run ./cmd/loopgate-policy-sign
 ```
 
-See [SETUP.md](./SETUP.md) for repo layout, runtime paths, and policy/runtime config.
+See [SETUP.md](./SETUP.md) and [POLICY_SIGNING.md](./POLICY_SIGNING.md) for repo layout, runtime paths, and signed-policy workflow.
 
 ---
 
@@ -94,7 +98,7 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 
 **Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch, or inability to resolve the connecting executable, returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable. Haven-specific `operator_mount_paths` bindings are rejected unless this pin is configured.
 
-**Trusted Haven session requirement:** Haven-only helper routes such as `/v1/chat`, `/v1/resident/journal-tick`, `/v1/model/settings`, `/v1/settings/*`, `/v1/agent/work-item/*`, and `/v1/continuity/inspect-thread` now require a session that opened as `actor: "haven"` **and** matched the pinned expected client executable. A spoofed actor label is not enough for those product-surface routes.
+**Trusted Haven session requirement:** Haven-only helper routes such as `/v1/chat`, `/v1/model/settings`, `/v1/settings/*`, and `/v1/continuity/inspect-thread` now require a session that opened as `actor: "haven"` **and** matched the pinned expected client executable. A spoofed actor label is not enough for those product-surface routes.
 
 **Haven trusted-sandbox auto-allow:** If the session **`actor`** is **`haven`**, the session opened under the pinned expected Haven executable, and a tool implements **`TrustedSandboxLocal()`**, Loopgate may treat **`NeedsApproval`** policy as **`Allow`** for that capability (audit still records the decision). Operators can tighten this in **`core/policy/policy.yaml`** → **`safety`**: **`haven_trusted_sandbox_auto_allow`** (`false` to disable), and optionally **`haven_trusted_sandbox_auto_allow_capabilities`** (omit = all such tools; `[]` = none; non-empty list = allowlist by capability name).
 
@@ -130,6 +134,14 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 | `approval_token` | Store; send as `X-Loopgate-Approval-Token` for approval UI routes (see RFC 0001). |
 | `session_mac_key` | Store in memory only; **never** log, persist to disk unencrypted, or ship in analytics. Used for HMAC-SHA256 request signing. The server **derives** this from rotating epoch material (12-hour UTC windows); see **Session MAC key rotation** below. |
 | `expires_at_utc` | Refresh the session before expiry (call `/v1/session/open` again with the same labels, or implement refresh policy your product needs). |
+
+**Dead-peer orphan recovery:** before enforcing the per-UID active-session limit, Loopgate performs a request-driven sweep for existing sessions owned by the same Unix-peer UID whose recorded peer PID no longer exists. Those orphaned sessions are retired server-side, with pending approvals cancelled and attached morphlings terminated under `parent_session_terminated`, before the new session open proceeds.
+
+**`POST /v1/session/close`** — same authentication as other signed Bearer routes: `Authorization: Bearer …` plus the signed POST envelope (§6) with an empty body.
+
+- Use this on **graceful client shutdown** or before deliberately rebuilding the local client transport.
+- Loopgate retires the current control session, removes its capability and approval tokens, and records a `session.closed` audit event.
+- The close fails **closed** with `denial_code: "session_close_blocked"` if the session still has **pending approvals** or **active morphlings**. Clients should surface that truth rather than pretending the session was retired.
 
 ### Session MAC key rotation (12-hour epochs)
 
@@ -213,11 +225,23 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `GET /v1/health` | Liveness only: `version`, `ok` — **no token**, **no** policy/capability/connection data |
 | `GET /v1/status` | Capability inventory, policy snapshot, counts — **Bearer + signed GET** |
 | `GET /v1/connections/status` | Connection summaries — **Bearer + signed GET** + **`connection.read`** |
+| `GET /v1/mcp-gateway/inventory` | Declared MCP server/tool inventory and effective read-only decisions — **`diagnostic.read`** + **signed GET with empty body**. No launch, no network write. |
+| `GET /v1/mcp-gateway/server/status` | Read-only launched-server runtime projection for declared MCP servers — **`diagnostic.read`** + **signed GET with empty body**. Returns `absent`, `starting`, or `launched` plus safe runtime facts like PID, initialized flag, and stderr path. |
+| `POST /v1/mcp-gateway/decision` | Typed read-only decision check for one declared MCP server/tool pair — **`diagnostic.read`** + **signed POST**. Returns `allow`, `needs_approval`, or `deny` without launching anything. |
+| `POST /v1/mcp-gateway/server/ensure-launched` | Request-driven launch ownership for one declared `stdio` MCP server — **`mcp_gateway.write`** + **signed POST**. Reuses an already-running declared server inside the same Loopgate runtime, appends `mcp_gateway.server_launched` on first launch, injects only policy-declared env/secret refs, and still does not execute any MCP tool. |
+| `POST /v1/mcp-gateway/server/stop` | Request-driven stop/reset for one launched MCP server — **`mcp_gateway.write`** + **signed POST**. Removes the launched server from authoritative in-memory state, serializes with in-flight stdio I/O, closes pipes, kills the child if present, and appends `mcp_gateway.server_stopped` on a real stop. |
+| `POST /v1/mcp-gateway/invocation/validate` | Strict invocation-envelope validation for one declared MCP server/tool pair — **`diagnostic.read`** + **signed POST**. Validates `server_id`, `tool_name`, and top-level `arguments` object before any launch path exists. |
+| `POST /v1/mcp-gateway/invocation/request-approval` | Prepare a pending MCP approval object for one declared MCP server/tool pair — **`mcp_gateway.write`** + **signed POST**. Reuses validation, dedupes identical pending requests inside one control session, and still does not launch anything. |
+| `POST /v1/mcp-gateway/invocation/decide-approval` | Resolve one prepared MCP approval object — **`mcp_gateway.write`** + **signed POST**. Verifies `approval_request_id`, `decision_nonce`, and, for approval grants, `approval_manifest_sha256`; appends `approval.granted` or `approval.denied`; still does not launch anything. |
+| `POST /v1/mcp-gateway/invocation/validate-execution` | Validate the exact future MCP execution envelope against one granted approval — **`mcp_gateway.write`** + **signed POST**. Verifies `approval_request_id`, `approval_manifest_sha256`, and the canonical invocation body hash; appends `mcp_gateway.execution_checked`; still does not launch anything. |
+| `POST /v1/mcp-gateway/invocation/execute` | Execute one approved MCP tool call against an already launched declared `stdio` server — **`mcp_gateway.write`** + **signed POST**. Re-validates the exact approval binding, appends `mcp_gateway.execution_started`, consumes the granted approval, performs a synchronous JSON-RPC `tools/call`, and appends `mcp_gateway.execution_completed` or `mcp_gateway.execution_failed`. |
+| `GET /v1/audit/export/trust-check` | Read-only audit-export trust preflight summary — **`diagnostic.read`** + **signed GET with empty body**. No cursor movement and no downstream network write. |
+| `POST /v1/audit/export/flush` | Trigger one local-first audit export flush to the configured downstream sink — **`audit.export`** + **signed POST with empty body**. Admin-node delivery uses the server-side `logging.audit_export.authorization.secret_ref` and, for non-loopback admin-node sinks, `logging.audit_export.tls.*` mTLS material; the client does not supply downstream credentials on this route. |
 | `POST /v1/session/open` | Obtain tokens and MAC key |
+| `POST /v1/session/close` | Retire the current idle control session — **Bearer + signed POST** |
 | `POST /v1/model/reply` | Model round-trip through Loopgate — **`model.reply`** |
 | `POST /v1/model/validate` | Validate runtime model config — **`model.validate`** |
 | `POST /v1/model/connections/store` | Store provider credentials (secret handled server-side) — **`connection.write`** |
-| `POST /v1/chat` | Haven chat / tool orchestration entrypoint — **trusted Haven session** + **`model.reply`** |
 | `POST /v1/capabilities/execute` | Execute a registered capability |
 | `POST /v1/connections/validate` | Validate a configured connection — **`connection.write`** |
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows — **`connection.write`** |
@@ -225,9 +249,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/sandbox/import` / `stage` / `export` | Sandbox mutation helpers — **`fs_write`**; host import/export additionally require a pinned-Haven session bound to matching `operator_mount_paths`, and export requires an active operator-mount write grant |
 | `POST /v1/sandbox/metadata` | Sandbox artifact metadata — **`fs_read`** |
 | `POST /v1/sandbox/list` | Sandbox directory listing — **`fs_list`** |
-| `POST /v1/continuity/inspect-thread` | **Trusted Haven session** required — signed POST; body `{ "thread_id": "…" }`; requires **`ui.write`** + **`memory.write`**; Loopgate loads the thread from `internal/threadstore` and proposes continuity (client does **not** send transcript payloads) |
 | `GET /v1/memory/wake-state` | Wake state projection |
-| `GET /v1/tasks` / `PUT /v1/tasks/{id}/status` | Task board sync (**`tasks.read`** / **`tasks.write`**) |
 | `GET /v1/memory/diagnostic-wake` | Diagnostic wake |
 | `POST /v1/memory/discover` / `recall` / `remember` | Memory surfaces |
 | `POST /v1/memory/inspections/…` | Inspection governance |
@@ -236,31 +258,12 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/morphlings/worker/open` / `start` / `update` / `complete` | Dedicated morphling worker token/session path (not a Bearer control route) |
 | `POST /v1/quarantine/metadata` / `view` | Quarantine metadata / bounded payload view (**`quarantine.read`**) |
 | `POST /v1/quarantine/prune` | Quarantine blob prune while preserving metadata (**`quarantine.write`**) |
-| `POST /v1/task/plan` / `lease` / `execute` / `complete` | Task-plan vertical slice (**`task_plan.write`**) |
-| `POST /v1/task/result` | Task-plan result lookup (**`task_plan.read`**) |
-| `GET` / `PUT /v1/config/…` | Policy, runtime, connections, etc. (capability-gated) |
+| `GET` / `PUT /v1/config/…` | Policy, runtime, connections, etc. (capability-gated). `PUT /v1/config/policy` hot-reloads the already signed on-disk `core/policy/policy.yaml`; it does not trust policy content sent in the HTTP body. |
 | `POST /v1/approvals/{id}/decision` | Approval decisions (approval token + manifest binding) |
 | `GET /v1/ui/status` / `events` | Display-safe UI observation (signed Bearer routes; **`ui.read`**) |
 | `GET /v1/ui/approvals` | Pending UI approvals for the current control session (**signed + `X-Loopgate-Approval-Token`**) |
 | `POST /v1/ui/approvals/{id}/decision` | UI approval path (**signed + `X-Loopgate-Approval-Token`**, body `{ "approved": bool }`) |
 | `GET` / `PUT /v1/ui/folder-access`, `POST /v1/ui/folder-access/sync`, `GET /v1/ui/shared-folder`, `POST /v1/ui/shared-folder/sync` | Folder access UI helpers (**`folder_access.read`** / **`folder_access.write`**) |
-| `GET /v1/ui/desk-notes` | Active desk (sticky) notes from `runtime/state/haven_desk_notes.json` (signed GET; **`ui.read`**) |
-| `POST /v1/ui/desk-notes/dismiss` | Archive a desk note by id (signed POST; **`ui.write`**) |
-| `GET /v1/ui/memory` | Display-safe memory inventory for operator UI controls (signed GET; **`memory.read`**; manageable objects, counts, redacted summaries) |
-| `POST /v1/ui/memory/reset` | Archive current memory state and start fresh for demo/operator reset (signed POST; **`memory.reset`**; body `operation_id`, `reason`) |
-| `GET /v1/ui/journal/entries` | Journal entry summaries (signed GET; lists sandbox `scratch/journal`; **`fs_list`**) |
-| `GET /v1/ui/journal/entry` | Single journal file (signed GET; query selects entry; **`fs_read`**) |
-| `GET /v1/ui/working-notes` | Working-note summaries (signed GET; `scratch/notes`; **`fs_list`**) |
-| `GET /v1/ui/working-notes/entry` | Single working note (signed GET; **`fs_read`**) |
-| `POST /v1/ui/working-notes/save` | Save working note content (signed POST; uses `notes.write` capability) |
-| `POST /v1/ui/workspace/list` | Workspace listing for sandbox virtual paths (signed POST; body `path`; **`fs_list`**; root lists `projects`, `imports`, `artifacts`, `research`, `agents`, and optional `shared`) |
-| `POST /v1/ui/workspace/preview` | Read workspace file preview (signed POST; body `path`; **`fs_read`**; using the same virtual path mapping as the list route) |
-| `GET /v1/ui/presence` | Presence projection from `runtime/state/haven_presence.json` (signed GET; **`ui.read`**); Loopgate normalizes the file into a bounded state/anchor projection instead of replaying raw freeform text |
-| `GET /v1/ui/morph-sleep` | Same normalized snapshot as presence plus `is_sleeping` / `is_resting` (signed GET; **`ui.read`**) |
-| `POST /v1/resident/journal-tick` | Haven resident journal helper — **trusted Haven session** + **`model.reply`**; internal model use still requires explicit route scope |
-| `POST /v1/agent/work-item/ensure` | **Trusted Haven session** required — signed POST; requires **`ui.write`** + **`todo.add`**; runs **`todo.add`** with `source_kind: haven_agent` (dedupes by text; see §7.2) |
-| `POST /v1/agent/work-item/complete` | **Trusted Haven session** required — signed POST; requires **`ui.write`** + **`todo.complete`**; runs **`todo.complete`** for a task-board item id |
-| `GET` / `PUT /v1/ui/task-standing-grants` | Task standing-grant controls (**`task_standing_grant.read`** / **`task_standing_grant.write`**) |
 
 For **request/response JSON shapes**, use `internal/loopgate/types.go` as the source of truth (field names are `json` tagged).
 
@@ -292,63 +295,14 @@ silently delete memory in place.
 includes **`connection.read`**. Use `GET /v1/connections/status` when the client
 explicitly needs the connection surface.
 
-### 7.1.1 Task board, folder access, and standing-grant control routes
+### 7.1.1 Folder access control routes
 
-- `GET /v1/tasks`
-  - requires **`tasks.read`**
-  - returns the display-safe task-board projection
-- `PUT /v1/tasks/{id}/status`
-  - requires **`tasks.write`**
-  - updates the workflow status for an existing task-board item
 - `GET /v1/ui/folder-access` and `GET /v1/ui/shared-folder`
   - require **`folder_access.read`**
   - return display-safe folder-access and shared-folder status projections
 - `PUT /v1/ui/folder-access`, `POST /v1/ui/folder-access/sync`, and `POST /v1/ui/shared-folder/sync`
   - require **`folder_access.write`**
   - update or synchronize Loopgate-managed folder-access state
-- `GET /v1/ui/task-standing-grants`
-  - requires **`task_standing_grant.read`**
-  - returns standing-grant status for supported task execution classes
-- `PUT /v1/ui/task-standing-grants`
-  - requires **`task_standing_grant.write`**
-  - updates standing-grant status for a supported task execution class
-
-### 7.1.2 Task-plan prototype routes
-
-The task-plan vertical slice is a compatibility / integration seam, not a
-general-purpose public worker API.
-
-- `POST /v1/task/plan`
-- `POST /v1/task/lease`
-- `POST /v1/task/execute`
-- `POST /v1/task/complete`
-  - require **`task_plan.write`**
-  - submit, lease, execute, and finalize the bounded task-plan flow
-- `POST /v1/task/result`
-  - requires **`task_plan.read`**
-  - returns the current result projection for a submitted plan
-
-Signed local transport is not sufficient on this surface; these routes are
-explicitly capability-gated like the rest of the control plane.
-
-### 7.2 Agent work-item helpers (bounded task board; trusted Haven session)
-
-These routes let a **trusted Haven session** create or complete **Task Board** items through the **same** capability execution path as `POST /v1/capabilities/execute` for `todo.add` / `todo.complete` — policy, audit, and continuity hooks apply unchanged. They do **not** grant new authority; the session token must already include **`ui.write`** plus **`todo.add`** (ensure) or **`todo.complete`** (complete).
-
-**`POST /v1/agent/work-item/ensure`**
-
-- **Auth:** `Authorization: Bearer` + **signed body** + **`ui.write`** (same rules as other signed POSTs for this actor; see §6).
-- **Body:** `{ "text": "<required>", "next_step": "<optional>" }` — `text` is the human-visible task line (trimmed server-side).
-- **Behavior:** Executes `todo.add` with `task_kind` carry-over, `source_kind: haven_agent`, and optional `next_step`. If an equivalent item already exists, the structured result sets `already_present: true` and returns the same `item_id`.
-- **Success (200):** `{ "item_id": "…", "text": "…", "already_present": bool }` — see `HavenAgentWorkItemResponse` in `internal/loopgate/types.go` (Go identifier retained for compatibility).
-
-**`POST /v1/agent/work-item/complete`**
-
-- **Auth:** same as ensure; requires **`ui.write`** + **`todo.complete`** on the token.
-- **Body:** `{ "item_id": "<required>", "reason": "<optional>" }` — default reason if omitted: `haven_agent_work_completed`.
-- **Success (200):** same JSON shape as ensure (`already_present` is always false on this path).
-
-**Product note:** Classification of user messages (answer-only vs task vs tool vs approval-gated), UI phase (`planning`, `waiting_for_approval`, etc.), and deep-link behavior are **unprivileged client** responsibilities. Loopgate only exposes narrow, auditable capability wrappers. Simple host-folder work typically flows through **`/v1/chat`** and normal approvals; use ensure/complete when the client wants an explicit Task Board row.
 
 ### 7.2.1 Haven chat and resident helpers
 
@@ -356,10 +310,6 @@ These routes let a **trusted Haven session** create or complete **Task Board** i
   - requires a **trusted Haven session**
   - requires **`model.reply`**
   - preserves the same signed-body and control-session binding rules as other privileged POST routes
-- `POST /v1/resident/journal-tick`
-  - requires a **trusted Haven session**
-  - requires **`model.reply`**
-  - may still return `status: "skipped"` when the token lacks `fs_write`; the model scope gates the route, not the later journal decision logic
 
 ### 7.3 Continuity inspection (threadstore-loaded; trusted Haven session)
 
@@ -384,9 +334,130 @@ cross the public control-plane surface.
 
 - **Auth:** `Authorization: Bearer` with a valid **capability token** (same peer binding rules as other privileged routes).
 - **Scope:** **`diagnostic.read`**
-- **Response:** JSON aggregate for operators and in-app doctor UIs: ledger chain verification summary (`ledger_verify`), active audit JSONL line count and top event types (`ledger_active`), diagnostic logging flags (`diagnostics`). **No** raw audit JSONL, tool payloads, or secrets.
+- **Response:** JSON aggregate for operators and in-app doctor UIs: ledger chain verification summary (`ledger_verify`), active audit JSONL line count and top event types (`ledger_active`), diagnostic logging flags (`diagnostics`), and audit-export sink / trust-material status (`audit_export`). The `audit_export.trust.*` section includes renewal-window fields such as `renewal_threshold_at_utc`, `seconds_until_renewal_threshold`, `days_until_renewal_threshold`, and `renewal_window_active`. **No** raw audit JSONL, tool payloads, private keys, tokens, or other secrets.
 - **Go client:** `(*loopgate.Client).FetchDiagnosticReport(ctx, &dest)` unmarshals the same JSON.
 - **CLI (no server):** `go run ./cmd/loopgate-doctor report` and `go run ./cmd/loopgate-doctor bundle -out /path/to/dir` write `report.json` plus optional tails of configured diagnostic `*.log` files.
+
+**`GET /v1/audit/export/trust-check`**
+
+- **Auth:** `Authorization: Bearer` with a valid capability token and the same signed GET envelope used by `/v1/diagnostic/report`.
+- **Scope:** **`diagnostic.read`**
+- **Behavior:** read-only audit-export trust preflight. It does **not** move the export cursor, perform a downstream POST, or trigger a new remote handshake.
+- **Response:** concise operator summary with `status`, `action_needed`, `summary`, `recommended_action`, sink metadata, `last_error_class`, `consecutive_failures`, and the same `trust` projection family used under `audit_export` in the full diagnostic report.
+- **Go client:** `(*loopgate.Client).CheckAuditExportTrust(ctx)`.
+
+**`GET /v1/mcp-gateway/inventory`**
+
+- **Auth:** `Authorization: Bearer` with a valid capability token and the same signed GET envelope used by `/v1/diagnostic/report`.
+- **Scope:** **`diagnostic.read`**
+- **Behavior:** returns the policy-declared MCP gateway inventory that Loopgate loaded at startup.
+- **Response:** read-only JSON with `deny_unknown_servers` plus a sorted list of declared servers and declared tools. Secret injection is projected only as environment variable names; secret refs and secret values are not returned.
+- **Go client:** `(*loopgate.Client).LoadMCPGatewayInventory(ctx)`.
+
+**`POST /v1/mcp-gateway/decision`**
+
+- **Auth:** `Authorization: Bearer` with a valid capability token and the same signed POST envelope used by other privileged body-bearing routes.
+- **Scope:** **`diagnostic.read`**
+- **Body:** `{ "server_id": "<required>", "tool_name": "<required>" }`
+- **Behavior:** returns a typed, read-only policy decision for one MCP server/tool pair.
+- **Response:** JSON with `decision` (`allow`, `needs_approval`, or `deny`), `requires_approval`, and typed `denial_code` / `denial_reason` when denied. This route does **not** launch a server or invoke a tool.
+- **Go client:** `(*loopgate.Client).CheckMCPGatewayDecision(ctx, request)`.
+
+**`GET /v1/mcp-gateway/server/status`**
+
+- **Auth:** `Authorization: Bearer` with a valid capability token and the standard signed GET envelope for empty-body routes.
+- **Scope:** **`diagnostic.read`**
+- **Behavior:** projects declared MCP servers against current authoritative launched-server state and returns a safe runtime view for each declared server.
+- **Runtime state values:** `absent`, `starting`, or `launched`
+- **Returned fields:** `server_id`, `declared_enabled`, `transport`, `runtime_state`, and when present safe runtime facts such as `pid`, `initialized`, `started_at_utc`, `working_directory`, `command_path`, and `stderr_path`
+- **Cleanup behavior:** the route performs the same request-driven dead-process cleanup used by execution and launch reuse, so a dead child is projected as `absent` rather than stale `launched`
+- **Go client:** `(*loopgate.Client).LoadMCPGatewayServerStatus(ctx)`.
+
+**`POST /v1/mcp-gateway/invocation/validate`**
+
+- **Auth:** `Authorization: Bearer` with a valid capability token and the same signed POST envelope used by other privileged body-bearing routes.
+- **Scope:** **`diagnostic.read`**
+- **Body:** `{ "server_id": "<required>", "tool_name": "<required>", "arguments": { ... } }`
+- **Behavior:** validates the future MCP invocation envelope without launching anything. Today that validation is intentionally narrow:
+  - `server_id` and `tool_name` must be safe identifiers
+  - `arguments` must be a JSON object
+  - top-level argument names must be bounded and safe
+  - top-level argument values must be valid JSON
+  - optional policy-declared top-level argument constraints may require, allowlist, denylist, or kind-check specific argument keys
+- **Audit:** successful envelope validation appends a minimal `mcp_gateway.invocation_checked` audit event containing `server_id`, `tool_name`, `validated_argument_keys`, and the resulting decision. Raw argument values are not persisted.
+- **Response:** JSON with the same typed policy decision family as the decision route plus `validated_argument_count` and sorted `validated_argument_keys`.
+- **Go client:** `(*loopgate.Client).ValidateMCPGatewayInvocation(ctx, request)`.
+
+**`POST /v1/mcp-gateway/invocation/request-approval`**
+
+- **Auth:** `Authorization: Bearer` with a valid capability token and the same signed POST envelope used by other privileged body-bearing routes.
+- **Scope:** **`mcp_gateway.write`**
+- **Body:** `{ "server_id": "<required>", "tool_name": "<required>", "arguments": { ... } }`
+- **Behavior:** reuses the same strict invocation-envelope validation as `/v1/mcp-gateway/invocation/validate`.
+  - if the validated invocation resolves to `allow` or `deny`, this route returns a typed response with no approval object and appends `mcp_gateway.invocation_checked`
+  - if the validated invocation resolves to `needs_approval`, this route creates or reuses one pending MCP approval object for the control session and appends `approval.created`
+- **Response:** JSON with the typed decision fields plus, on approval preparation, `approval_request_id`, `approval_decision_nonce`, `approval_manifest_sha256`, and `approval_expires_at_utc`
+- **Audit:** raw argument values are not persisted in either `mcp_gateway.invocation_checked` or `approval.created`
+
+**`POST /v1/mcp-gateway/server/stop`**
+
+- **Auth:** `Authorization: Bearer` with a valid capability token and the same signed POST envelope used by other privileged body-bearing routes.
+- **Scope:** **`mcp_gateway.write`**
+- **Body:** `{ "server_id": "<required>" }`
+- **Behavior:** removes the launched server from authoritative in-memory state before any future execution can resolve it, then serializes with the server's stdio mutex, closes retained pipes, kills the child if it still has a PID, and appends `mcp_gateway.server_stopped`.
+- **No-op behavior:** if the server is not currently launched, Loopgate returns `200` with `"stopped": false` and does not append a stop audit event.
+- **Failure truth:** if the child has already been retired but the stop audit append fails, Loopgate returns `audit_unavailable` and does **not** resurrect launched state.
+- **Go client:** `(*loopgate.Client).StopMCPGatewayServer(ctx, request)`.
+
+**`POST /v1/mcp-gateway/invocation/decide-approval`**
+
+- **Purpose:** resolve one previously prepared MCP approval object without launching or executing an MCP server yet
+- **Capability:** `mcp_gateway.write`
+- **Request:** signed POST with:
+  - `approval_request_id`
+  - `approved`
+  - `decision_nonce`
+  - optional `approval_manifest_sha256` (required when `approved=true` and the pending approval carries a manifest)
+- **Behavior:** validates session ownership, expiry, pending state, nonce, and manifest binding before recording the decision
+  - approval grant records `approval.granted` and moves the isolated MCP approval record to `granted`
+  - approval denial records `approval.denied` and moves the isolated MCP approval record to `denied`
+  - this route is still approval-only; it does not launch, execute, or consume MCP tool work
+- **Audit:** decision events persist only MCP approval identity and validated argument keys; raw argument values are not written to the ledger
+- **Go client:** `(*loopgate.Client).DecideMCPGatewayInvocationApproval(ctx, request)`.
+
+**`POST /v1/mcp-gateway/invocation/validate-execution`**
+
+- **Purpose:** validate the exact future MCP execution contract after approval grant, but before any subprocess lifecycle exists
+- **Capability:** `mcp_gateway.write`
+- **Request:** signed POST with:
+  - `approval_request_id`
+  - `approval_manifest_sha256`
+  - `server_id`
+  - `tool_name`
+  - `arguments`
+- **Behavior:** verifies:
+  - the approval exists and belongs to the current control session
+  - the approval is in `granted` state
+  - the submitted manifest matches the granted approval
+  - the canonical invocation body hash of `{server_id, tool_name, arguments}` matches the granted approval exactly
+- **Audit:** successful validation appends `mcp_gateway.execution_checked` with approval id, MCP identity, validated argument keys, and execution method/path. Raw argument values are not written to the ledger.
+- **Go client:** `(*loopgate.Client).ValidateMCPGatewayExecution(ctx, request)`.
+
+**`POST /v1/mcp-gateway/invocation/execute`**
+
+- **Purpose:** execute one exact approved MCP tool call through an already launched declared `stdio` server
+- **Capability:** `mcp_gateway.write`
+- **Request:** the same signed POST envelope and body shape as `validate-execution`:
+  - `approval_request_id`
+  - `approval_manifest_sha256`
+  - `server_id`
+  - `tool_name`
+  - `arguments`
+- **Behavior:** re-validates the same exact granted approval binding as `validate-execution`, requires that the declared server is already launched, appends `mcp_gateway.execution_started`, atomically marks the MCP approval as consumed, then performs a synchronous JSON-RPC `tools/call` over the retained stdio transport. The first execution against a launched server also performs a request-driven MCP `initialize` + `notifications/initialized` handshake.
+- **Failure model:** protocol / transport failures fail closed, mark the consumed approval as `execution_failed`, and drop the launched server from in-memory runtime state. There is still no background restart loop.
+- **Audit:** completion records only MCP identity, validated argument keys, process pid, and result hash / byte count or remote JSON-RPC error metadata. Raw argument values and raw tool result content are not written to the ledger.
+- **Response:** typed JSON including approval/session identity, process pid, and either `tool_result` plus `tool_result_sha256` or `remote_error_code` / `remote_error_message`.
+- **Go client:** `(*loopgate.Client).ExecuteMCPGatewayInvocation(ctx, request)`.
 
 ### 7.5 Model control routes
 

@@ -54,13 +54,14 @@ func buildContinuityInspectResponse(inspectionRecord continuityInspectionRecord)
 }
 
 func (server *Server) continuityThresholdReached(inspectionRecord continuityInspectionRecord) bool {
-	if server.policy.Memory.SubmitPreviousMinEvents > 0 && inspectionRecord.EventCount >= server.policy.Memory.SubmitPreviousMinEvents {
+	policyRuntime := server.currentPolicyRuntime()
+	if policyRuntime.policy.Memory.SubmitPreviousMinEvents > 0 && inspectionRecord.EventCount >= policyRuntime.policy.Memory.SubmitPreviousMinEvents {
 		return true
 	}
-	if server.policy.Memory.SubmitPreviousMinPayloadBytes > 0 && inspectionRecord.ApproxPayloadBytes >= server.policy.Memory.SubmitPreviousMinPayloadBytes {
+	if policyRuntime.policy.Memory.SubmitPreviousMinPayloadBytes > 0 && inspectionRecord.ApproxPayloadBytes >= policyRuntime.policy.Memory.SubmitPreviousMinPayloadBytes {
 		return true
 	}
-	if server.policy.Memory.SubmitPreviousMinPromptTokens > 0 && inspectionRecord.ApproxPromptTokens >= server.policy.Memory.SubmitPreviousMinPromptTokens {
+	if policyRuntime.policy.Memory.SubmitPreviousMinPromptTokens > 0 && inspectionRecord.ApproxPromptTokens >= policyRuntime.policy.Memory.SubmitPreviousMinPromptTokens {
 		return true
 	}
 	return false

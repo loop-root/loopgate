@@ -5,7 +5,7 @@ This file maps `internal/integration/`, **black-box integration tests** for Loop
 Use it when changing:
 
 - end-to-end flows over the real Loopgate server and Unix socket
-- policy denial, sandbox escape attempts, audit chain, quarantine, task-plan runners
+- policy denial, sandbox escape attempts, audit chain, quarantine
 - harness setup for temporary repos
 
 ## Core Role
@@ -21,9 +21,6 @@ Tests spin up `loopgate.Server` with temp policy, exercise HTTP-over-UDS or clie
 
 - `policy_denial_test.go`, `sandbox_escape_test.go`, `audit_chain_test.go`
   - security regression suites
-
-- `taskplan_golden_path_test.go`, `taskplan_runner_test.go`
-  - morphling / task-plan execution paths
 
 - `session_socket_test.go`, `quarantine_lifecycle_test.go`
   - session and quarantine behavior

@@ -100,9 +100,9 @@ const (
 	DenialCodeMemoryCandidateDropped            = "memory_candidate_dropped"
 	DenialCodeMemoryCandidateQuarantineRequired = "memory_candidate_quarantine_required"
 	DenialCodeMemoryCandidateReviewRequired     = "memory_candidate_review_required"
-	DenialCodeTodoItemNotFound                  = "todo_item_not_found"
 	DenialCodeSessionOpenRateLimited            = "session_open_rate_limited"
 	DenialCodeSessionActiveLimitReached         = "session_active_limit_reached"
+	DenialCodeSessionCloseBlocked               = "session_close_blocked"
 	// DenialCodeApprovalManifestMismatch is returned when the submitted approval manifest SHA256
 	// does not match the server-computed manifest for the pending approval. This prevents an
 	// operator decision from being bound to a different action than the one that was displayed.
@@ -117,26 +117,40 @@ const (
 	// general state violations such as a decision on an expired or cancelled approval.
 	DenialCodeApprovalStateConflict = "approval_state_conflict"
 
-	// Task plan denial codes.
-	DenialCodeTaskPlanInvalid            = "task_plan_invalid"
-	DenialCodeTaskPlanHashMismatch       = "task_plan_hash_mismatch"
-	DenialCodeTaskPlanNotFound           = "task_plan_not_found"
-	DenialCodeTaskPlanStateInvalid       = "task_plan_state_invalid"
-	DenialCodeTaskLeaseNotFound          = "task_lease_not_found"
-	DenialCodeTaskLeaseConsumed          = "task_lease_consumed"
-	DenialCodeTaskLeaseExpired           = "task_lease_expired"
-	DenialCodeTaskLeaseMorphlingMismatch = "task_lease_morphling_mismatch"
-	DenialCodeProcessBindingRejected     = "process_binding_rejected"
-	DenialCodeFsReadSizeLimitExceeded    = "fs_read_size_limit_exceeded"
+	DenialCodeProcessBindingRejected      = "process_binding_rejected"
+	DenialCodeFsReadSizeLimitExceeded     = "fs_read_size_limit_exceeded"
+	DenialCodeMCPGatewayServerNotFound    = "mcp_gateway_server_not_found"
+	DenialCodeMCPGatewayServerDisabled    = "mcp_gateway_server_disabled"
+	DenialCodeMCPGatewayServerNotLaunched = "mcp_gateway_server_not_launched"
+	DenialCodeMCPGatewayToolNotFound      = "mcp_gateway_tool_not_found"
+	DenialCodeMCPGatewayToolDisabled      = "mcp_gateway_tool_disabled"
+	DenialCodeMCPGatewayArgumentsInvalid  = "mcp_gateway_arguments_invalid"
+	DenialCodeMCPGatewayApprovalLimit     = "mcp_gateway_approval_limit_reached"
 
 	// Hook denial codes.
 	DenialCodeHookPeerBindingRejected = "hook_peer_binding_rejected"
 	DenialCodeHookUnknownTool         = "hook_unknown_tool"
+	DenialCodeHookUnknownEvent        = "hook_unknown_event"
+	DenialCodeHookEventUnimplemented  = "hook_event_unimplemented"
 )
 
 type ControlPlaneClient interface {
 	Status(ctx context.Context) (StatusResponse, error)
 	ConfigureSession(actor string, sessionID string, requestedCapabilities []string)
+	LoadPolicyConfig(ctx context.Context) (config.Policy, error)
+	ReloadPolicyFromDisk(ctx context.Context) (ConfigPolicyReloadResponse, error)
+	FlushAuditExport(ctx context.Context) (AuditExportFlushResponse, error)
+	CheckAuditExportTrust(ctx context.Context) (AuditExportTrustCheckResponse, error)
+	LoadMCPGatewayInventory(ctx context.Context) (MCPGatewayInventoryResponse, error)
+	LoadMCPGatewayServerStatus(ctx context.Context) (MCPGatewayServerStatusResponse, error)
+	CheckMCPGatewayDecision(ctx context.Context, request MCPGatewayDecisionRequest) (MCPGatewayDecisionResponse, error)
+	EnsureMCPGatewayServerLaunched(ctx context.Context, request MCPGatewayEnsureLaunchRequest) (MCPGatewayEnsureLaunchResponse, error)
+	StopMCPGatewayServer(ctx context.Context, request MCPGatewayStopRequest) (MCPGatewayStopResponse, error)
+	ValidateMCPGatewayInvocation(ctx context.Context, request MCPGatewayInvocationRequest) (MCPGatewayInvocationValidationResponse, error)
+	RequestMCPGatewayInvocationApproval(ctx context.Context, request MCPGatewayInvocationRequest) (MCPGatewayInvocationApprovalResponse, error)
+	DecideMCPGatewayInvocationApproval(ctx context.Context, request MCPGatewayApprovalDecisionRequest) (MCPGatewayApprovalDecisionResponse, error)
+	ValidateMCPGatewayExecution(ctx context.Context, request MCPGatewayExecutionRequest) (MCPGatewayExecutionValidationResponse, error)
+	ExecuteMCPGatewayInvocation(ctx context.Context, request MCPGatewayExecutionRequest) (MCPGatewayExecutionResponse, error)
 	ModelReply(ctx context.Context, request modelpkg.Request) (modelpkg.Response, error)
 	ValidateModelConfig(ctx context.Context, runtimeConfig modelruntime.Config) (modelruntime.Config, error)
 	StoreModelConnection(ctx context.Context, request ModelConnectionStoreRequest) (ModelConnectionStatus, error)
@@ -151,11 +165,8 @@ type ControlPlaneClient interface {
 	SandboxMetadata(ctx context.Context, request SandboxMetadataRequest) (SandboxArtifactMetadataResponse, error)
 	SandboxExport(ctx context.Context, request SandboxExportRequest) (SandboxOperationResponse, error)
 	SandboxList(ctx context.Context, request SandboxListRequest) (SandboxListResponse, error)
-	SubmitHavenContinuityInspectionForThread(ctx context.Context, threadID string) (HavenContinuityInspectThreadResponse, error)
 	LoadMemoryWakeState(ctx context.Context) (MemoryWakeStateResponse, error)
 	LoadMemoryDiagnosticWake(ctx context.Context) (MemoryDiagnosticWakeResponse, error)
-	LoadHavenMemoryInventory(ctx context.Context) (HavenMemoryInventoryResponse, error)
-	ResetHavenMemory(ctx context.Context, request HavenMemoryResetRequest) (HavenMemoryResetResponse, error)
 	DiscoverMemory(ctx context.Context, request MemoryDiscoverRequest) (MemoryDiscoverResponse, error)
 	LookupMemoryArtifacts(ctx context.Context, request MemoryArtifactLookupRequest) (MemoryArtifactLookupResponse, error)
 	RecallMemory(ctx context.Context, request MemoryRecallRequest) (MemoryRecallResponse, error)
@@ -179,10 +190,6 @@ type ControlPlaneClient interface {
 	FolderAccessStatus(ctx context.Context) (FolderAccessStatusResponse, error)
 	SyncFolderAccess(ctx context.Context) (FolderAccessSyncResponse, error)
 	UpdateFolderAccess(ctx context.Context, request FolderAccessUpdateRequest) (FolderAccessStatusResponse, error)
-	TaskStandingGrantStatus(ctx context.Context) (TaskStandingGrantStatusResponse, error)
-	UpdateTaskStandingGrant(ctx context.Context, request TaskStandingGrantUpdateRequest) (TaskStandingGrantStatusResponse, error)
-	HavenAgentWorkItemEnsure(ctx context.Context, request HavenAgentWorkEnsureRequest) (HavenAgentWorkItemResponse, error)
-	HavenAgentWorkItemComplete(ctx context.Context, itemID string, reason string) (HavenAgentWorkItemResponse, error)
 }
 
 type ModelValidateRequest struct {
@@ -217,6 +224,13 @@ type StatusResponse struct {
 	Connections         []ConnectionStatus  `json:"connections"`
 }
 
+type ConfigPolicyReloadResponse struct {
+	Status               string `json:"status"`
+	PreviousPolicySHA256 string `json:"previous_policy_sha256"`
+	PolicySHA256         string `json:"policy_sha256"`
+	PolicyChanged        bool   `json:"policy_changed"`
+}
+
 type OpenSessionRequest struct {
 	Actor                 string   `json:"actor"`
 	SessionID             string   `json:"session_id"`
@@ -242,6 +256,12 @@ type OpenSessionResponse struct {
 	ApprovalToken    string `json:"approval_token"`
 	SessionMACKey    string `json:"session_mac_key"`
 	ExpiresAtUTC     string `json:"expires_at_utc"`
+}
+
+type CloseSessionResponse struct {
+	Status           string `json:"status"`
+	ControlSessionID string `json:"control_session_id"`
+	ClosedAtUTC      string `json:"closed_at_utc"`
 }
 
 // SessionMACKeySlotInfo is one epoch slot in GET /v1/session/mac-keys.
@@ -607,13 +627,27 @@ func (capabilityResponse CapabilityResponse) ValidateStructuredResultFields() er
 }
 
 // HookPreValidateRequest is the request body for POST /v1/hook/pre-validate.
-// It is sent by the Claude Code PreToolUse hook script over the local Unix socket.
+// It is sent by Claude Code hook scripts over the local Unix socket.
 // Auth: Unix socket peer UID binding only — no session or MAC required.
 type HookPreValidateRequest struct {
+	// HookEventName is the Claude Code hook event name.
+	HookEventName string `json:"hook_event_name,omitempty"`
 	// ToolName is the Claude Code tool name (e.g. "Bash", "Write", "Edit").
 	ToolName string `json:"tool_name"`
+	// ToolUseID is Claude Code's stable tool invocation identifier when provided by the hook event.
+	ToolUseID string `json:"tool_use_id,omitempty"`
 	// ToolInput is the raw tool input payload, forwarded as-is for audit.
 	ToolInput map[string]interface{} `json:"tool_input,omitempty"`
+	// Prompt is the submitted user prompt for UserPromptSubmit.
+	Prompt string `json:"prompt,omitempty"`
+	// HookReason is Claude's lifecycle reason for events like SessionEnd.
+	HookReason string `json:"reason,omitempty"`
+	// HookError is Claude's tool failure error text for PostToolUseFailure.
+	HookError string `json:"error,omitempty"`
+	// HookInterrupted reports whether PostToolUseFailure was caused by an interrupt.
+	HookInterrupted bool `json:"is_interrupt,omitempty"`
+	// CWD is Claude Code's working directory for the hook event.
+	CWD string `json:"cwd,omitempty"`
 	// SessionID is an optional hint for correlating audit events.
 	SessionID string `json:"session_id,omitempty"`
 }
@@ -621,10 +655,14 @@ type HookPreValidateRequest struct {
 // HookPreValidateResponse is the response body for POST /v1/hook/pre-validate.
 // The hook script inspects Decision to determine whether to allow or block the tool call.
 type HookPreValidateResponse struct {
-	// Decision is "allow", "block", or "pending_approval".
+	// Decision is "allow", "block", or "ask".
 	Decision string `json:"decision"`
 	// Reason is a human-readable explanation. Present when Decision != "allow".
 	Reason string `json:"reason,omitempty"`
 	// DenialCode is a machine-readable denial code. Present when Decision == "block".
 	DenialCode string `json:"denial_code,omitempty"`
+	// AdditionalContext is bounded historical context for events like SessionStart.
+	AdditionalContext string `json:"additional_context,omitempty"`
+	// ApprovalRequestID is the local Loopgate approval-tracking identifier for Claude hook asks.
+	ApprovalRequestID string `json:"approval_request_id,omitempty"`
 }

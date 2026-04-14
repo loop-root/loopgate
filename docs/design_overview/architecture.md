@@ -4,7 +4,7 @@
 
 This repository is centered on **Loopgate**: the policy-governed **AI governance engine** and local control plane (`cmd/loopgate`, `internal/loopgate`).
 
-**Operator clients** connect over **HTTP on a Unix domain socket** (v1). **Primary direction:** native HTTP clients, the Haven TUI/CLI shell, and optional external forwarders for MCP-shaped hosts (in-tree stdio MCP removed — see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`, `docs/setup/LOOPGATE_MCP.md`). Any remaining in-repo UI shells are legacy code, not current product surfaces.
+**Operator clients** connect over **HTTP on a Unix domain socket** (v1). **Primary direction:** Claude Code hooks, native HTTP clients, and optional external forwarders for MCP-shaped hosts (in-tree stdio MCP removed — see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`). Any remaining in-repo UI shells are legacy code, not current product surfaces.
 
 **Morphlings** are Loopgate-governed bounded workers (naming unchanged).
 
@@ -34,7 +34,7 @@ Supporting subsystems include: `internal/state`, `internal/prompt`, `internal/mo
 
 ### Unprivileged operator clients
 
-- **Shipped integrations:** **HTTP-on-UDS** local clients and the Haven TUI/CLI shell. **In-tree MCP removed** — see `docs/setup/LOOPGATE_MCP.md` (deprecation) and `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative wire).
+- **Shipped integrations:** **Claude Code hooks** and **HTTP-on-UDS** local clients. **In-tree MCP removed** — see ADR 0010 and `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative wire).
 - Persona loading, prompt compilation, model runtime configuration (non-secret), local session state, continuity thread projection, local ledger, approval UX — on the **unprivileged** side of the boundary (same pattern any client must follow).
 
 ### Loopgate

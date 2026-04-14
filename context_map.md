@@ -20,14 +20,14 @@ This repo implements the enforcement runtime (`cmd/loopgate`, `internal/loopgate
 Product surfaces:
 
 - **Primary integration surface:** **HTTP-on-UDS** control plane for native local clients and **out-of-tree** bridges. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR.
-- **Current operator MVP:** the Haven TUI/CLI shell in the separate `haven_cli` repo.
+- **Current operator MVP:** **Claude Code + project hooks + Loopgate**.
 
 This repository centers on **Loopgate** as the governance engine.
 
 ## Current Product Shape
 
 - `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, memory continuity, morphling lifecycle.
-- The **current product surface** is a direct local client model: **HTTP control plane** for native clients, plus the Haven TUI/CLI MVP and optional **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
+- The **current product surface** is a direct local client model: **Claude Code hooks** over the local control plane, plus optional **HTTP-native** clients and **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
 - **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile). Admin node connects via mTLS over TCP. Apple XPC is optional post-launch hardening (no committed date).
 - `Morphlings` are bounded subordinate workers governed by Loopgate, not free agents.
 - **Multi-tenancy:** `tenant_id` namespace isolation is the foundation for enterprise deployment — being added now. Every resource, audit event, and capability grant will carry a `tenant_id`.
@@ -79,7 +79,7 @@ If you are new to the repo, read in this order:
 Notes:
 
 - `AGENTS.md` at the repo root is the tracked security constitution; `AGENTS/` is a local-only directory (gitignored). It may not exist on every clone.
-- The current direction is **HTTP-native integrations**, the Haven TUI/CLI MVP, and multi-tenancy groundwork; **proxy mode is dropped** and **in-tree MCP remains deprecated**.
+- The current direction is **Claude Code hooks**, **HTTP-native integrations**, and multi-tenancy groundwork; **proxy mode is dropped** and **in-tree MCP remains deprecated**.
 
 ## Top-Level Map
 
@@ -126,21 +126,13 @@ They are local/ignored rather than core product docs, so do not assume every clo
 
 ### Primary: HTTP control plane / IDE bridges
 
-- **Docs:** `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative); `docs/setup/LOOPGATE_MCP.md` (**deprecated in-tree MCP**, out-of-tree / future-ADR note).
+- **Docs:** `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative); `docs/setup/POLICY_SIGNING.md` (detached policy signature workflow).
 
 ### `cmd/loopgate/`
 
 The local control-plane server.
 
 - `main.go`: starts Loopgate on the repo-local Unix socket under `runtime/state/loopgate.sock`
-
-### `cmd/morphling-runner/`
-
-Task-plan runner interface binary for the older lease-driven runner seam.
-
-It is a thin execution wrapper, not an isolation boundary. Under current peer
-binding, a distinct subprocess reusing another process's delegated session
-credentials is expected to be denied.
 
 ## Internal Package Map
 
@@ -324,7 +316,7 @@ For a **folder-by-folder overview** of `docs/`, see `docs/docs_map.md`. Agent ph
 - `docs/setup/SETUP.md`
 - `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — Unix-socket HTTP, signing, routes
 - `docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md` — append-only JSONL hash-chain semantics (macOS operator expectations)
-- `docs/setup/LOOPGATE_MCP.md` — **deprecated in-tree MCP** (removed); future reservation (ADR 0010)
+- ADR 0010 — historical record for removed in-tree MCP and any future thin-forwarder constraint
 - `docs/setup/SECRETS.md`
 - `docs/setup/TOOL_USAGE.md`
 
@@ -334,7 +326,7 @@ These `*_map.md` files (gitignored like this file) are the **navigation layer**:
 
 **Entrypoints and top-level trees**
 
-- `cmd/cmd_map.md` — `cmd/loopgate/`, `cmd/morphling-runner/`, other binaries
+- `cmd/cmd_map.md` — `cmd/loopgate/` and other local operator binaries
 - `core/core_map.md` — checked-in policy YAML and `core/memory/` interpretation
 - `config/config_map.md` — tracked `config/*.yaml` (not the Go package)
 - `persona/persona_map.md` — `default.yaml` and values
@@ -415,7 +407,7 @@ The repo currently contains memory-related files under `core/memory/`. Many of t
 Start in:
 
 - `internal/threadstore/` (append-only thread/event storage)
-- `internal/loopgate/server_haven_chat.go` and related handlers (legacy route prefix `/v1/haven/...`)
+- `internal/loopgate/server_haven_chat.go` and related handlers (neutral `/v1/...` routes; internal Haven naming remains)
 
 ### Sandbox / file import / export / shared-space behavior
 
@@ -471,7 +463,6 @@ Start in:
 - `internal/loopgate/morphling_termination.go`
 - `internal/loopgate/morphling_workers.go`
 - `internal/loopgate/morphling_classes.go`
-- `cmd/morphling-runner/main.go`
 
 ### Continuity / memory / wake-state
 
@@ -508,7 +499,7 @@ The enforcement runtime, policy evaluation, audit system, memory continuity, and
 1. **HTTP control plane (v1)** — Integrations use **HTTP on the Unix socket** (session open, signed requests). **In-tree MCP removed** (ADR 0010); **out-of-tree** forwarders or a **future ADR** may add a thin MCP layer without a weaker trust boundary.
 2. **Multi-tenancy foundation** — `tenant_id` isolation across all resources. Prerequisite for everything multi-tenant.
 3. **Memory system fixes** — key registry expansion (`goal.*`, `work.*`), preference facet coverage. Silent data-loss bugs that must be fixed before memory is relied on.
-4. **Chat path hardening** — panic recovery, audit log coverage, typing indicator for legacy HTTP chat handlers (`handleHavenChat` and related; `haven` prefix is a wire/handler name, not a product).
+4. **Chat path hardening** — panic recovery, audit log coverage, typing indicator for the governed HTTP chat handlers (`handleHavenChat` and related; `haven` prefix is an internal handler name, not a product boundary).
 5. **Proxy v0** — automatic memory injection/capture path with strict auditability and bounded latency.
 
 **Engineering invariants that don't change:** HTTP on local Unix socket for local client transport. mTLS over TCP for admin node. XPC optional post-launch. Policy-aligned routes over ad-hoc sprawl.
@@ -521,7 +512,7 @@ These are the known gaps to fix before the next milestone. See `docs/reviews/mem
 
 - No proxy v0. The seamless default developer experience does not exist yet.
 - No `tenant_id` on resources. Multi-tenancy is not implementable without this foundation.
-- Legacy `/v1/haven/...` route and threadstore dependency still need Loopgate-agnostic cleanup.
+- Threadstore coupling still needs Loopgate-agnostic cleanup; the historical `/v1/haven/...` route aliases are removed.
 
 **Memory system (silent data-loss bugs):**
 
@@ -532,7 +523,7 @@ These are the known gaps to fix before the next milestone. See `docs/reviews/mem
 
 **Legacy HTTP chat / reference client (blocking some workflows):**
 
-- Chat regression: Anthropic provider returns "I can't reach home base" for tool-heavy requests. Likely panic in the legacy HTTP chat handler (`handleHavenChat`) that closes the connection before a response is written.
+- Chat regression: Anthropic provider returns "I can't reach home base" for tool-heavy requests. Likely panic in the governed HTTP chat handler (`handleHavenChat`) that closes the connection before a response is written.
 - Chat regression: local model hangs silently for 120s with no typing indicator.
 - Attachments may crash the reference client (nil dereference or JSON decode failure in message handler).
 

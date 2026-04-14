@@ -7,11 +7,15 @@ Loopgate is the policy-governed control plane and enforcement runtime in this re
 It is not just a reverse proxy.
 It is the enforcement point for capabilities, approvals, integration auth, and outbound execution.
 
-**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — IDE bridges, the Haven TUI/CLI shell, and custom integrators attach this way. (An in-tree stdio MCP server was **removed**; see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`.) **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md`, `docs/loopgate-threat-model.md`, and `docs/product-rfcs/RFC-MORPH-0009`.
+**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — Claude Code hook helpers, IDE bridges, tests, and custom integrators attach this way. (An in-tree stdio MCP server was **removed**; see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`.) **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md`, `docs/loopgate-threat-model.md`, and `docs/product-rfcs/RFC-MORPH-0009`.
 
-**Primary integrators:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list). MCP-shaped hosts should use an **external forwarder**; see [LOOPGATE_MCP.md](../setup/LOOPGATE_MCP.md) for **deprecated in-tree MCP**, attack-surface rationale, and **reserved** future thin-forwarder path (new ADR only).
+**Primary integrators:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list). MCP-shaped hosts should use an **external forwarder**. In-tree MCP remains removed; ADR 0010 is the historical record and constraint on any future reintroduction.
 
 **Security posture (honest v1 vs future work):** [Threat model](../loopgate-threat-model.md) and [RFC 0001](../rfcs/0001-loopgate-token-policy.md) — same-user threat scope, **`GET /v1/health`** as the only unauthenticated inventory-free probe, signed **`GET /v1/status`** / **`GET /v1/connections/status`**, peer binding, and v2 backlog (codesign / XPC).
+
+Older Haven route and tool surfaces are being retired. Treat the active
+Loopgate product as the governance kernel for Claude hooks, approvals, audit,
+policy, and the MCP gateway path.
 
 ## Current state
 
@@ -19,7 +23,7 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
 
 - Unix-socket service at `runtime/state/loopgate.sock`
 - authoritative policy loaded inside Loopgate
-- server-issued control sessions for local operator clients (IDE bridges, Haven, tests; **in-tree MCP removed** — external MCP forwarders out-of-tree)
+- server-issued control sessions for local operator clients (Claude Code hook helpers, HTTP-native clients, tests; **in-tree MCP removed** — external MCP forwarders out-of-tree)
 - client-supplied `actor` / `session_id` treated as labels, not approval authority
 - capability and approval tokens bound to the Unix-socket peer identity that opened the session
 - subsequent privileged requests signed with a server-issued session MAC key and single-use request nonces
@@ -37,6 +41,7 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
 - rollover-sealed audit segments under `runtime/state/loopgate_event_segments/`
 - append-only segment manifest at `runtime/state/loopgate_event_segments/manifest.jsonl`
 - config-backed audit ledger limits in `config/runtime.yaml` via `logging.audit_ledger.*`
+- local-first audit export cursor state under `runtime/state/audit_export_state.json` when `logging.audit_export.enabled` is configured
 - explicit denial for secret-export-like capability names
 - explicit `audit_unavailable` failures when pre-execution audit persistence fails
 - explicit must-persist handling for capability execution/error and critical denial audit events
@@ -99,52 +104,14 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
 - local model inference endpoint for the operator client, with Loopgate-owned live secret resolution
 - append-only quarantine lifecycle with `artifact.viewed`, `artifact.promoted`, and `artifact.blob_pruned` events
 - append-only hash-linked audit for morphling lifecycle events such as `morphling.spawn_requested`, `morphling.spawned`, and `morphling.terminated`
-- minimal TaskPlan vertical slice proving the plan → validation → lease → mediated execution → staged result flow:
-  - plan submission and validation against a fail-closed capability registry
-  - canonical SHA256 hash binding between plan content and lease issuance
-  - single-use lease issuance with logical morphling identity binding
-  - lease-bound mediated execution where Loopgate calls the provider internally (caller cannot override capability or arguments)
-  - Loopgate-staged provider output (morphling output is treated as untrusted)
-  - explicit lease finalization via `/v1/task/complete`
-  - separate `taskExecutionRecord` for runtime execution state distinct from plan lifecycle
-  - separate `taskPlansMu` protecting task/lease/execution state (never held simultaneously with `server.mu`)
-  - five distinct plan states: `submitted → validated | denied; validated → lease_issued → executing → completed | failed`
-  - four lease states: `issued → executing → consumed | expired`
-  - typed `json.RawMessage` envelopes for provider output to preserve deterministic hashing
-  - append-only audit events: `task.plan.validated`, `task.lease.issued`, `task.step.executed`, `task.lease.completed`
-- `cmd/morphling-runner` binary preserving the old task-plan runner stdin/stdout interface:
-  - reads `TaskPlanRunnerConfig` as JSON from stdin
-  - reuses delegated session credentials over the Unix socket
-  - calls `/v1/task/execute` then `/v1/task/complete`
-  - writes `TaskPlanRunnerResult` as JSON to stdout
-  - a distinct subprocess is expected to hit peer-binding denial; real cross-process execution uses the morphling worker launch/open flow
-
-Current TaskPlan limitations (intentionally deferred):
-  - morphling is a logical identity, not a separate isolated process
-  - echo provider is a local fake, not real MCP
-  - only single-step plans (Steps[] exists but only step 0 is used)
-  - in-memory only, no persistence across server restarts
-  - `/v1/task/lease` is a prototype/testing seam; the final architecture has Loopgate own dispatch internally
-
 Implemented endpoints:
 
 - `GET /v1/health` (liveness, no auth)
 - `GET /v1/status` (Bearer + signed GET — full inventory)
-- `POST /v1/chat` (trusted Haven session + `model.reply`)
 - `GET /v1/ui/status` (`ui.read`)
 - `GET /v1/ui/events` (`ui.read`)
 - `GET /v1/ui/approvals` (approval-token authenticated UI route)
 - `POST /v1/ui/approvals/{id}/decision` (approval-token authenticated; body `{ "approved": bool }`)
-- `POST /v1/ui/workspace/list` (`ui.read` + `fs_list`)
-- `GET /v1/ui/workspace/host-layout` (`ui.read` + `fs_list`)
-- `POST /v1/ui/workspace/preview` (`ui.read` + `fs_read`)
-- `GET /v1/ui/working-notes`, `GET /v1/ui/working-notes/entry` (`ui.read` + `fs_list` / `fs_read`), `POST /v1/ui/working-notes/save` (`ui.write` + `notes.write`)
-- `GET /v1/ui/journal/entries`, `GET /v1/ui/journal/entry` (`ui.read` + `fs_list` / `fs_read`)
-- `GET /v1/ui/paint/gallery` (`ui.read` + `fs_list` + `fs_read`)
-- `GET /v1/ui/desk-notes` (`ui.read`), `POST /v1/ui/desk-notes/dismiss` (`ui.write`)
-- `GET /v1/ui/memory`
-- `POST /v1/ui/memory/reset`
-- `GET /v1/ui/presence`, `GET /v1/ui/morph-sleep` (`ui.read`; normalized projection, not raw presence-file text)
 - `GET /v1/connections/status` (Bearer + signed GET + `connection.read`)
 - `POST /v1/connections/validate` (`connection.write`)
 - `POST /v1/connections/pkce/start` (`connection.write`)
@@ -154,8 +121,6 @@ Implemented endpoints:
 - `POST /v1/quarantine/prune` (`quarantine.write`)
 - `POST /v1/sites/inspect` (`site.inspect`)
 - `POST /v1/sites/trust-draft` (`site.trust.write`)
-- `POST /v1/resident/journal-tick` (trusted Haven session + `model.reply`)
-- `POST /v1/agent/work-item/ensure`, `POST /v1/agent/work-item/complete` (trusted Haven session + `ui.write` + `todo.add` / `todo.complete`)
 - `POST /v1/sandbox/import` (`fs_write`; host source must be inside the control session's bound operator mounts from a pinned Haven session)
 - `POST /v1/sandbox/stage`
 - `POST /v1/sandbox/metadata`
@@ -189,11 +154,6 @@ The display-safe memory UI routes are intentionally operator-oriented:
 - `POST /v1/model/validate`
 - `POST /v1/model/reply`
 - `POST /v1/capabilities/execute`
-- `POST /v1/task/plan` (`task_plan.write`)
-- `POST /v1/task/lease` (`task_plan.write`)
-- `POST /v1/task/execute` (`task_plan.write`)
-- `POST /v1/task/complete` (`task_plan.write`)
-- `POST /v1/task/result` (`task_plan.read`)
 - `POST /v1/approvals/{id}/decision`
 
 Current authenticated request shape for privileged POSTs:
@@ -206,7 +166,7 @@ Current authenticated request shape for privileged POSTs:
 
 The normative token and request-integrity rules are defined in [RFC 0001](../rfcs/0001-loopgate-token-policy.md).
 The delegated bridge/bootstrap refresh contract is defined in [RFC 0002](../rfcs/0002-delegated-session-refresh.md).
-The normative UI boundary rules are defined in [UI Surface Contract](./ui_surface_contract.md).
+The current harness boundary note is [Claude Code Hooks MVP](./claude_code_hooks_mvp.md).
 
 These are local socket endpoints, not a public network API. Operator clients and
 morphling workers talk to Loopgate over the same repo-local Unix-socket trust
@@ -225,16 +185,6 @@ Current morphling implementation note:
   `running -> completing -> pending_review -> terminating -> terminated` on the
   real socket path rather than only in the persisted state model
 
-Task-plan prototype note:
-
-- the task-plan routes remain a bounded compatibility seam for integration and
-  testing, not the future cross-process worker authority model
-- they are now explicitly capability-gated with `task_plan.write` /
-  `task_plan.read` rather than relying on signed transport alone
-- morphling lifecycle mutation routes are explicitly capability-gated with
-  `morphling.write`, while status uses `morphling.read`; the dedicated worker
-  open/start/update/complete path remains a separate worker-token transport
-
 Not yet implemented:
 
 - Windows Credential Manager and Linux Secret Service backends
@@ -247,7 +197,7 @@ Not yet implemented:
 
 ### Unprivileged operator client owns
 
-- operator UX (IDE, Haven, or other local HTTP client; MCP hosts via **out-of-tree** forwarders unless a future ADR adds a thin in-tree adapter)
+- operator UX (Claude Code, IDE, or other local HTTP client; MCP hosts via **out-of-tree** forwarders unless a future ADR adds a thin in-tree adapter)
 - model interaction and prompt compilation (where applicable)
 - local session state
 - local append-only continuity ledger and explicit `current / next / previous` role state (where used)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -70,6 +71,23 @@ func (server *Server) pruneExpiredLocked() {
 			continue
 		}
 		noteNextSweepCandidate(pendingApproval.ExpiresAt)
+	}
+	for approvalRequestID, approvalRequest := range server.mcpGatewayApprovalRequests {
+		if nowUTC.After(approvalRequest.ExpiresAt) {
+			if approvalRequest.State == approvalStatePending {
+				approvalRequest.State = approvalStateExpired
+				server.mcpGatewayApprovalRequests[approvalRequestID] = approvalRequest
+				noteNextSweepCandidate(approvalRequest.ExpiresAt.Add(requestReplayWindow))
+				continue
+			}
+			if nowUTC.Sub(approvalRequest.ExpiresAt) > requestReplayWindow {
+				delete(server.mcpGatewayApprovalRequests, approvalRequestID)
+				continue
+			}
+			noteNextSweepCandidate(approvalRequest.ExpiresAt.Add(requestReplayWindow))
+			continue
+		}
+		noteNextSweepCandidate(approvalRequest.ExpiresAt)
 	}
 	for requestKey, seenRequest := range server.seenRequests {
 		if nowUTC.Sub(seenRequest.SeenAt) > requestReplayWindow {
@@ -180,33 +198,68 @@ func (server *Server) loadNonceReplayState() error {
 	return nil
 }
 
-func (server *Server) saveNonceReplayState() error {
-	server.mu.Lock()
-	if len(server.seenAuthNonces) == 0 {
-		server.mu.Unlock()
-		return nil
-	}
-	entries := make(map[string]persistedNonce, len(server.seenAuthNonces))
-	for nonceKey, seen := range server.seenAuthNonces {
+func nonceReplaySnapshot(seenAuthNonces map[string]seenRequest) nonceReplayFile {
+	entries := make(map[string]persistedNonce, len(seenAuthNonces))
+	for nonceKey, seen := range seenAuthNonces {
 		entries[nonceKey] = persistedNonce{
 			ControlSessionID: seen.ControlSessionID,
 			SeenAt:           seen.SeenAt.UTC().Format(time.RFC3339Nano),
 		}
 	}
+	return nonceReplayFile{Nonces: entries}
+}
+
+func atomicWritePrivateJSON(path string, jsonBytes []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create state dir: %w", err)
+	}
+	tempFile, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create state temp file: %w", err)
+	}
+	tempPath := tempFile.Name()
+	cleanupTemp := func() {
+		_ = tempFile.Close()
+		_ = os.Remove(tempPath)
+	}
+	if err := tempFile.Chmod(0o600); err != nil {
+		cleanupTemp()
+		return fmt.Errorf("chmod state temp file: %w", err)
+	}
+	if _, err := tempFile.Write(jsonBytes); err != nil {
+		cleanupTemp()
+		return fmt.Errorf("write state temp file: %w", err)
+	}
+	if err := tempFile.Sync(); err != nil {
+		cleanupTemp()
+		return fmt.Errorf("sync state temp file: %w", err)
+	}
+	if err := tempFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("close state temp file: %w", err)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("commit state file: %w", err)
+	}
+	if stateDir, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = stateDir.Sync()
+		_ = stateDir.Close()
+	}
+	return nil
+}
+
+func (server *Server) saveNonceReplayState() error {
+	server.mu.Lock()
+	stateFile := nonceReplaySnapshot(server.seenAuthNonces)
 	server.mu.Unlock()
 
-	stateFile := nonceReplayFile{Nonces: entries}
 	jsonBytes, err := json.Marshal(stateFile)
 	if err != nil {
 		return fmt.Errorf("marshal nonce replay state: %w", err)
 	}
-	tempPath := server.noncePath + ".tmp"
-	if err := os.WriteFile(tempPath, jsonBytes, 0o600); err != nil {
-		return fmt.Errorf("write nonce replay temp: %w", err)
-	}
-	if err := os.Rename(tempPath, server.noncePath); err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("commit nonce replay state: %w", err)
+	if err := atomicWritePrivateJSON(server.noncePath, jsonBytes); err != nil {
+		return fmt.Errorf("persist nonce replay state: %w", err)
 	}
 	return nil
 }
@@ -220,6 +273,20 @@ func (server *Server) countPendingApprovalsForSessionLocked(controlSessionID str
 		if pendingApproval.State == approvalStatePending {
 			pendingCount++
 		}
+	}
+	return pendingCount
+}
+
+func (server *Server) countPendingMCPGatewayApprovalRequestsForSessionLocked(controlSessionID string) int {
+	pendingCount := 0
+	for _, approvalRequest := range server.mcpGatewayApprovalRequests {
+		if approvalRequest.ControlSessionID != controlSessionID {
+			continue
+		}
+		if approvalRequest.State != approvalStatePending {
+			continue
+		}
+		pendingCount++
 	}
 	return pendingCount
 }
@@ -305,9 +372,9 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 func (server *Server) recordAuthNonce(controlSessionID string, requestNonce string) *CapabilityResponse {
 	nonceKey := controlSessionID + ":" + requestNonce
 	server.mu.Lock()
-	defer server.mu.Unlock()
 	server.pruneExpiredLocked()
 	if _, found := server.seenAuthNonces[nonceKey]; found {
+		server.mu.Unlock()
 		return &CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "request nonce replay was rejected",
@@ -315,6 +382,7 @@ func (server *Server) recordAuthNonce(controlSessionID string, requestNonce stri
 		}
 	}
 	if len(server.seenAuthNonces) >= server.maxAuthNonceReplayEntries {
+		server.mu.Unlock()
 		return &CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "request nonce replay store is at capacity",
@@ -326,5 +394,29 @@ func (server *Server) recordAuthNonce(controlSessionID string, requestNonce stri
 		SeenAt:           server.now().UTC(),
 	}
 	server.noteReplayWindowCandidateLocked(server.seenAuthNonces[nonceKey].SeenAt)
+	stateFile := nonceReplaySnapshot(server.seenAuthNonces)
+	server.mu.Unlock()
+
+	jsonBytes, err := json.Marshal(stateFile)
+	if err != nil {
+		server.mu.Lock()
+		delete(server.seenAuthNonces, nonceKey)
+		server.mu.Unlock()
+		return &CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: "nonce replay state is unavailable",
+			DenialCode:   DenialCodeAuditUnavailable,
+		}
+	}
+	if err := atomicWritePrivateJSON(server.noncePath, jsonBytes); err != nil {
+		server.mu.Lock()
+		delete(server.seenAuthNonces, nonceKey)
+		server.mu.Unlock()
+		return &CapabilityResponse{
+			Status:       ResponseStatusError,
+			DenialReason: "nonce replay state is unavailable",
+			DenialCode:   DenialCodeAuditUnavailable,
+		}
+	}
 	return nil
 }

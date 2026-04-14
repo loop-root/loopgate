@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -14,10 +13,12 @@ import (
 	"morph/internal/memory"
 )
 
+var exitProcess = os.Exit
+
 func main() {
-	rootFlags, acceptPolicy := newRootFlagSet()
-	if err := rootFlags.Parse(os.Args[1:]); err != nil {
-		os.Exit(2)
+	if len(os.Args) > 1 {
+		fmt.Fprintln(os.Stderr, "ERROR: startup flags are no longer supported; policy changes require a valid detached signature, not --accept-policy")
+		exitProcess(2)
 	}
 
 	repoRoot := os.Getenv("MORPH_REPO_ROOT")
@@ -26,7 +27,7 @@ func main() {
 		repoRoot, err = os.Getwd()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: determine repo root:", err)
-			os.Exit(1)
+			exitProcess(1)
 		}
 	} else {
 		repoRoot = filepath.Clean(repoRoot)
@@ -43,10 +44,10 @@ func main() {
 	if envSocket := strings.TrimSpace(os.Getenv("LOOPGATE_SOCKET")); envSocket != "" {
 		socketPath = envSocket
 	}
-	server, err := loopgate.NewServerWithOptions(repoRoot, socketPath, *acceptPolicy)
+	server, err := loopgate.NewServerWithOptions(repoRoot, socketPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR: initialize loopgate server:", err)
-		os.Exit(1)
+		exitProcess(1)
 	}
 	defer server.CloseDiagnosticLogs()
 
@@ -60,13 +61,6 @@ func main() {
 	fmt.Printf("Loopgate listening on %s\n", socketPath)
 	if err := server.Serve(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR: serve loopgate:", err)
-		os.Exit(1)
+		exitProcess(1)
 	}
-}
-
-func newRootFlagSet() (*flag.FlagSet, *bool) {
-	rootFlags := flag.NewFlagSet("loopgate", flag.ContinueOnError)
-	rootFlags.SetOutput(os.Stderr)
-	acceptPolicy := rootFlags.Bool("accept-policy", false, "accept a changed policy file hash on startup")
-	return rootFlags, acceptPolicy
 }

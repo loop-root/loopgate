@@ -8,6 +8,7 @@ const (
 	ApprovalClassWriteSandboxPath   = "write_sandbox_path"
 	ApprovalClassExportSandboxArt   = "export_sandbox_artifact"
 	ApprovalClassLaunchMorphling    = "launch_morphling"
+	ApprovalClassMCPGatewayInvoke   = "mcp_gateway_invoke"
 	ApprovalClassProviderCapability = "provider_capability"
 	ApprovalClassCreateTrustDraft   = "create_trust_draft"
 )
@@ -28,6 +29,8 @@ func ApprovalClassLabel(approvalClass string) string {
 		return "export sandbox artifact"
 	case ApprovalClassLaunchMorphling:
 		return "launch morphling"
+	case ApprovalClassMCPGatewayInvoke:
+		return "invoke MCP gateway tool"
 	case ApprovalClassProviderCapability:
 		return "provider capability"
 	case ApprovalClassCreateTrustDraft:

@@ -100,11 +100,10 @@ Responsibilities:
 - IDP integration (SAML, OIDC, OAuth)
 - user and team provisioning
 - audit aggregation from all local nodes
-- org-level memory namespace (shared facts available to all tenant users)
 - admin console UI (policy viewer, audit log, user list)
 - zero-code canvas agent deployment (roadmap)
 
-The admin node does not run model calls. It is a governance authority, not an execution runtime.
+The admin node does not run model calls and does not own continuity memory. It is a governance authority, not an execution runtime.
 
 ---
 
@@ -133,7 +132,7 @@ keeps the governed execution path explicit.
 
 In-repo **Wails + React** prototype only: contract tests, bindings, and parity experiments. **Not** a committed product surface; do not evolve it for new operator features.
 
-Primary integrations: **HTTP control plane** (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`), Haven TUI/CLI, and optional **out-of-tree** forwarders. **Deprecated in-tree MCP:** `docs/setup/LOOPGATE_MCP.md`.
+Primary integrations: **HTTP control plane** (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`), Haven TUI/CLI, and optional **out-of-tree** forwarders. **In-tree MCP was removed** in ADR 0010.
 
 ---
 
@@ -205,7 +204,7 @@ In enterprise deployment, all resources carry a `tenant_id`:
 
 `tenant_id` is set at node initialization and derived from IDP-verified identity. It is not a per-request parameter. Cross-tenant access is always a hard denial — not empty results, not a fallback, a hard denial.
 
-Org-level memory and user-level memory are separate namespaces within the same tenant.
+Continuity memory stays local to each enforcement node and remains tenant-scoped there; the admin node owns policy and audit, not durable memory context.
 
 ---
 

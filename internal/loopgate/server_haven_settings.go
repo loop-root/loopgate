@@ -19,7 +19,6 @@ const (
 )
 
 // havenShellDevResponse is the JSON body for GET and POST /v1/settings/shell-dev.
-// The legacy /v1/haven/settings/shell-dev alias uses the same payload.
 type havenShellDevResponse struct {
 	Enabled bool   `json:"enabled"`
 	Warning string `json:"warning,omitempty"`
@@ -123,7 +122,6 @@ func shellDevResponseFor(enabled bool) havenShellDevResponse {
 // ---------------------------------------------------------------------------
 
 // havenIdleSettingsResponse is the JSON body for GET and POST /v1/settings/idle.
-// The legacy /v1/haven/settings/idle alias uses the same payload.
 type havenIdleSettingsResponse struct {
 	IdleEnabled    bool `json:"idle_enabled"`
 	AmbientEnabled bool `json:"ambient_enabled"`

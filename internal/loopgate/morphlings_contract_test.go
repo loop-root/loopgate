@@ -213,13 +213,7 @@ func TestMorphlingPreSpawnTerminationEmitsSingleAuditEvent(t *testing.T) {
 
 func TestMorphlingRestartDuringTerminatingDoesNotLeakCapacity(t *testing.T) {
 	repoRoot := t.TempDir()
-	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(policyPath), 0o700); err != nil {
-		t.Fatalf("mkdir policy dir: %v", err)
-	}
-	if err := os.WriteFile(policyPath, []byte(loopgateMorphlingPolicyYAML(false, true, 1)), 0o600); err != nil {
-		t.Fatalf("write policy: %v", err)
-	}
+	writeSignedTestPolicyYAML(t, repoRoot, loopgateMorphlingPolicyYAML(false, true, 1))
 	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	nowUTC := time.Date(2026, time.March, 11, 18, 0, 0, 0, time.UTC)
@@ -687,13 +681,7 @@ func TestMorphlingArtifactManifestHashIsStable(t *testing.T) {
 
 func TestNewServerFailsClosedOnInvalidMorphlingClassPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
-	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(policyPath), 0o700); err != nil {
-		t.Fatalf("mkdir policy dir: %v", err)
-	}
-	if err := os.WriteFile(policyPath, []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
-		t.Fatalf("write policy: %v", err)
-	}
+	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
 	classPolicyPath := filepath.Join(repoRoot, "core", "policy", "morphling_classes.yaml")
 	if err := os.WriteFile(classPolicyPath, []byte("version: \"1\"\nclasses:\n  - name: reviewer\n    description: \"broken\"\n    capabilities:\n      allowed:\n        - unknown_capability\n    sandbox:\n      allowed_zones:\n        - workspace\n    resource_limits:\n      max_time_seconds: 1\n      max_tokens: 1\n      max_disk_bytes: 1\n    ttl:\n      spawn_approval_ttl_seconds: 1\n      capability_token_ttl_seconds: 1\n      review_ttl_seconds: 1\n    spawn_requires_approval: false\n    completion_requires_review: true\n    max_concurrent: 1\n"), 0o600); err != nil {
 		t.Fatalf("write invalid morphling class policy: %v", err)

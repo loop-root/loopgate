@@ -55,16 +55,17 @@ func (server *Server) shouldAutoAllowTrustedSandboxCapability(tokenClaims capabi
 	if policyDecision.Decision != policypkg.NeedsApproval {
 		return false
 	}
+	policyRuntime := server.currentPolicyRuntime()
 	// Host-mounted project tools are never "trusted sandbox" work. They reach the
 	// real host filesystem under operator-granted roots and must preserve normal
 	// approval semantics even if someone accidentally tags them trusted later.
 	if strings.HasPrefix(strings.TrimSpace(capabilityName), "operator_mount.") {
 		return false
 	}
-	if !server.policy.HavenTrustedSandboxAutoAllowEnabled() {
+	if !policyRuntime.policy.HavenTrustedSandboxAutoAllowEnabled() {
 		return false
 	}
-	if !server.policy.HavenTrustedSandboxAutoAllowMatchesCapability(capabilityName) {
+	if !policyRuntime.policy.HavenTrustedSandboxAutoAllowMatchesCapability(capabilityName) {
 		return false
 	}
 	if !server.hasTrustedHavenSession(tokenClaims) {

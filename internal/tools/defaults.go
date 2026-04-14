@@ -1,11 +1,6 @@
 package tools
 
-import (
-	"path/filepath"
-	"strings"
-
-	"morph/internal/config"
-)
+import "morph/internal/config"
 
 // NewDefaultRegistry creates a registry with the standard filesystem tools
 // rooted at repoRoot. Used by the Haven client and the Loopgate server.
@@ -15,9 +10,8 @@ func NewDefaultRegistry(repoRoot string, policy config.Policy) (*Registry, error
 }
 
 // NewSandboxRegistry creates a registry with filesystem tools rooted in a
-// sandbox home directory. Used by Haven so Morph operates inside its own
-// virtual filesystem instead of the user's real filesystem.
-func NewSandboxRegistry(repoRoot string, sandboxHome string, policy config.Policy) (*Registry, error) {
+// sandbox home directory.
+func NewSandboxRegistry(sandboxHome string, policy config.Policy) (*Registry, error) {
 	// Override allowed roots to be the sandbox home itself.
 	// Denied paths protect sandbox internals.
 	allowedRoots := []string{"."}
@@ -25,72 +19,6 @@ func NewSandboxRegistry(repoRoot string, sandboxHome string, policy config.Polic
 	registry, err := newRegistryWithRoot(sandboxHome, allowedRoots, deniedPaths, policy, true)
 	if err != nil {
 		return nil, err
-	}
-
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&JournalList{
-		Root: sandboxHome,
-	})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&JournalRead{
-		Root: sandboxHome,
-	})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&JournalWrite{
-		Root: sandboxHome,
-	})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&HavenOperatorContextTool{})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&NotesList{
-		Root: sandboxHome,
-	})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&NotesRead{
-		Root: sandboxHome,
-	})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&NotesWrite{
-		Root: sandboxHome,
-	})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&PaintList{
-		Root: sandboxHome,
-	})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&PaintSave{
-		Root: sandboxHome,
-	})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&TodoAdd{})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&TodoComplete{})); err != nil {
-		return nil, err
-	}
-	if err := registry.TryRegister(WrapTrustedSandboxLocal(&TodoList{})); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(repoRoot) != "" {
-		stateDir := filepath.Join(repoRoot, "runtime", "state")
-		if err := registry.TryRegister(WrapTrustedSandboxLocal(&NoteCreate{
-			StateDir: stateDir,
-		})); err != nil {
-			return nil, err
-		}
-		if err := registry.TryRegister(WrapTrustedSandboxLocal(&DesktopOrganize{
-			StateDir: stateDir,
-		})); err != nil {
-			return nil, err
-		}
 	}
 
 	return registry, nil
@@ -157,7 +85,8 @@ func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []strin
 
 	if policy.Tools.Shell.Enabled {
 		if err := reg.TryRegister(&ShellExec{
-			WorkDir: root,
+			WorkDir:         root,
+			AllowedCommands: append([]string(nil), policy.Tools.Shell.AllowedCommands...),
 		}); err != nil {
 			return nil, err
 		}

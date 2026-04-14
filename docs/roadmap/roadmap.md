@@ -2,12 +2,35 @@
 
 # Loopgate roadmap
 
+## Current product note
+
+This roadmap still contains older implementation detail and forward-looking material that no longer matches the near-term product center.
+
+The active product direction is:
+- Loopgate
+- local-first
+- Claude Code hooks
+- signed policy
+- approvals
+- local audit
+- governed local MCP/runtime work
+
+Not the current product center:
+- Haven as the main product
+- Morph as a separate product
+- morphlings as a near-term core story
+- multi-tenant deployment
+- admin-node deployment
+
+Use this file as historical implementation context, not as the cleanest statement of current scope.
+For current cleanup direction, see [loopgate_cleanup_plan.md](./loopgate_cleanup_plan.md).
+
 ## Current baseline
 
 **Snapshot from:** 2026-03-12 (feature list). **Doc reviewed:** 2026-03-24.
 
 The repo ships the **Loopgate** control plane with a real security boundary.
-**Primary integration targets** are **HTTP-on-UDS local clients** and the separate **Haven TUI/CLI** operator shell. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR; **out-of-tree** MCP→HTTP bridges remain an operator choice. The in-repo **`cmd/haven/`** Wails tree is **reference-only** (contracts/tests).
+**Primary integration targets** are **Claude Code hooks** and **HTTP-on-UDS local clients**. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR; **out-of-tree** MCP→HTTP bridges remain an operator choice. Haven / Morph UI work is no longer the active MVP direction in this repository.
 
 Implemented:
 

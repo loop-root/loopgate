@@ -1,14 +1,19 @@
 package loopgate
 
 import (
+	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"morph/internal/config"
 	"morph/internal/ledger"
+	policypkg "morph/internal/policy"
 	"morph/internal/sandbox"
+	toolspkg "morph/internal/tools"
 )
 
 func TestParseHostOrganizePlanJSON_ArrayAndWrappedString(t *testing.T) {
@@ -96,4 +101,177 @@ func TestExecuteHostPlanApply_DuplicateApplyAfterSuccessHintsAlreadyUsed(t *test
 	if want := "host.organize.plan"; !strings.Contains(resp.DenialReason, want) {
 		t.Fatalf("expected denial to mention %q, got %q", want, resp.DenialReason)
 	}
+}
+
+func TestExecuteCapabilityRequest_HostPlanApplyMoveOnlyWithinGrantedDownloadsBypassesApproval(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := filepath.Join(repoRoot, "home")
+	downloadsDir := filepath.Join(homeDir, "Downloads")
+	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
+		t.Fatalf("mkdir downloads: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(downloadsDir, "report.pdf"), []byte("pdf"), 0o644); err != nil {
+		t.Fatalf("seed source file: %v", err)
+	}
+
+	server := newHostPlanApplyPolicyTestServer(t, repoRoot, homeDir)
+	seedGrantedDownloadsFolderAccess(t, server)
+
+	planID := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	server.hostAccessPlansMu.Lock()
+	server.hostAccessPlans[planID] = &hostAccessStoredPlan{
+		ControlSessionID: "cs-downloads",
+		FolderPresetID:   folderAccessDownloadsID,
+		Operations: []hostOrganizePlanOp{
+			{Kind: "mkdir", Path: "Archives"},
+			{Kind: "move", From: "report.pdf", To: "Archives/report.pdf"},
+		},
+		CreatedAt: server.now().UTC(),
+	}
+	server.hostAccessPlansMu.Unlock()
+
+	resp := server.executeCapabilityRequest(
+		contextBackgroundWithOperatorMount("cs-downloads"),
+		capabilityToken{
+			TokenID:             "tok-downloads-allow",
+			ControlSessionID:    "cs-downloads",
+			ActorLabel:          "haven",
+			ClientSessionLabel:  "haven-session",
+			AllowedCapabilities: capabilitySet([]string{"host.plan.apply"}),
+			ExpiresAt:           server.now().UTC().Add(time.Hour),
+		},
+		CapabilityRequest{
+			RequestID:  "req-downloads-allow",
+			Capability: "host.plan.apply",
+			Arguments:  map[string]string{"plan_id": planID},
+		},
+		true,
+	)
+
+	if resp.ApprovalRequired {
+		t.Fatalf("expected low-risk host plan apply to bypass approval, got %#v", resp)
+	}
+	if resp.Status != ResponseStatusSuccess {
+		t.Fatalf("expected success, got %#v", resp)
+	}
+	if _, err := os.Stat(filepath.Join(downloadsDir, "Archives", "report.pdf")); err != nil {
+		t.Fatalf("expected moved file in Archives, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(downloadsDir, "report.pdf")); !os.IsNotExist(err) {
+		t.Fatalf("expected source file removed after move, stat err=%v", err)
+	}
+}
+
+func TestExecuteCapabilityRequest_HostPlanApplyOverwriteRiskStillRequiresApproval(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := filepath.Join(repoRoot, "home")
+	downloadsDir := filepath.Join(homeDir, "Downloads")
+	if err := os.MkdirAll(filepath.Join(downloadsDir, "Archives"), 0o755); err != nil {
+		t.Fatalf("mkdir downloads archives: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(downloadsDir, "report.pdf"), []byte("new"), 0o644); err != nil {
+		t.Fatalf("seed source file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(downloadsDir, "Archives", "report.pdf"), []byte("existing"), 0o644); err != nil {
+		t.Fatalf("seed conflicting destination file: %v", err)
+	}
+
+	server := newHostPlanApplyPolicyTestServer(t, repoRoot, homeDir)
+	seedGrantedDownloadsFolderAccess(t, server)
+
+	planID := "cccccccccccccccccccccccccccccccc"
+	server.hostAccessPlansMu.Lock()
+	server.hostAccessPlans[planID] = &hostAccessStoredPlan{
+		ControlSessionID: "cs-downloads",
+		FolderPresetID:   folderAccessDownloadsID,
+		Operations: []hostOrganizePlanOp{
+			{Kind: "move", From: "report.pdf", To: "Archives/report.pdf"},
+		},
+		CreatedAt: server.now().UTC(),
+	}
+	server.hostAccessPlansMu.Unlock()
+
+	resp := server.executeCapabilityRequest(
+		contextBackgroundWithOperatorMount("cs-downloads"),
+		capabilityToken{
+			TokenID:             "tok-downloads-approval",
+			ControlSessionID:    "cs-downloads",
+			ActorLabel:          "haven",
+			ClientSessionLabel:  "haven-session",
+			AllowedCapabilities: capabilitySet([]string{"host.plan.apply"}),
+			ExpiresAt:           server.now().UTC().Add(time.Hour),
+		},
+		CapabilityRequest{
+			RequestID:  "req-downloads-approval",
+			Capability: "host.plan.apply",
+			Arguments:  map[string]string{"plan_id": planID},
+		},
+		true,
+	)
+
+	if !resp.ApprovalRequired {
+		t.Fatalf("expected overwrite-risk host plan apply to require approval, got %#v", resp)
+	}
+	if resp.Status != ResponseStatusPendingApproval {
+		t.Fatalf("expected pending approval, got %#v", resp)
+	}
+}
+
+func newHostPlanApplyPolicyTestServer(t *testing.T, repoRoot string, homeDir string) *Server {
+	t.Helper()
+
+	now := time.Date(2026, 4, 12, 12, 0, 0, 0, time.UTC)
+	var policy config.Policy
+	policy.Tools.Filesystem.ReadEnabled = true
+	policy.Tools.Filesystem.WriteEnabled = true
+	policy.Tools.Filesystem.WriteRequiresApproval = true
+	policy.Tools.Filesystem.AllowedRoots = []string{"."}
+
+	server := &Server{
+		sandboxPaths:            sandbox.PathsForRepo(repoRoot),
+		hostAccessPlans:         make(map[string]*hostAccessStoredPlan),
+		hostAccessAppliedPlanAt: make(map[string]time.Time),
+		sessions:                make(map[string]controlSession),
+		tokens:                  make(map[string]capabilityToken),
+		approvals:               make(map[string]pendingApproval),
+		seenRequests:            make(map[string]seenRequest),
+		seenAuthNonces:          make(map[string]seenRequest),
+		usedTokens:              make(map[string]usedToken),
+		approvalTokenIndex:      make(map[string]string),
+		now:                     func() time.Time { return now },
+		appendAuditEvent:        func(string, ledger.Event) error { return nil },
+		auditPath:               filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
+		configStateDir:          filepath.Join(repoRoot, "runtime", "state"),
+		resolveUserHomeDir:      func() (string, error) { return homeDir, nil },
+		checker:                 policypkg.NewChecker(policy),
+		configuredCapabilities:  map[string]configuredCapability{},
+		maxTotalApprovalRecords: 128,
+		maxPendingApprovalsPerControlSession: 64,
+		maxSeenRequestReplayEntries:          defaultMaxSeenRequestReplayEntries,
+		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,
+	}
+	registry, err := toolspkg.NewDefaultRegistry(repoRoot, policy)
+	if err != nil {
+		t.Fatalf("new default registry: %v", err)
+	}
+	server.registry = registry
+	return server
+}
+
+func seedGrantedDownloadsFolderAccess(t *testing.T, server *Server) {
+	t.Helper()
+
+	if err := os.MkdirAll(server.configStateDir, 0o700); err != nil {
+		t.Fatalf("mkdir config state dir: %v", err)
+	}
+	if err := config.SaveJSONConfig(server.configStateDir, folderAccessConfigSection, folderAccessConfigFile{
+		Version:    folderAccessConfigVersion,
+		GrantedIDs: []string{folderAccessSharedID, folderAccessDownloadsID},
+	}); err != nil {
+		t.Fatalf("save granted downloads folder access: %v", err)
+	}
+}
+
+func contextBackgroundWithOperatorMount(controlSessionID string) context.Context {
+	return withOperatorMountControlSession(context.Background(), controlSessionID)
 }

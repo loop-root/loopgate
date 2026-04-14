@@ -20,6 +20,7 @@ import (
 
 	"morph/internal/ledger"
 	"morph/internal/loopgate"
+	"morph/internal/testutil"
 )
 
 type loopgateHarness struct {
@@ -46,15 +47,16 @@ func newLoopgateHarnessWithSetup(t *testing.T, policyYAML string, setupRepo func
 	t.Helper()
 
 	repoRoot := t.TempDir()
-	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(policyPath), 0o700); err != nil {
-		t.Fatalf("mkdir policy dir: %v", err)
-	}
 	if err := os.MkdirAll(filepath.Join(repoRoot, "runtime", "state"), 0o700); err != nil {
 		t.Fatalf("mkdir runtime state dir: %v", err)
 	}
-	if err := os.WriteFile(policyPath, []byte(policyYAML), 0o600); err != nil {
-		t.Fatalf("write policy: %v", err)
+	policySigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new policy test signer: %v", err)
+	}
+	policySigner.ConfigureEnv(t.Setenv)
+	if err := policySigner.WriteSignedPolicyYAML(repoRoot, policyYAML); err != nil {
+		t.Fatalf("write signed policy: %v", err)
 	}
 	writeTestMorphlingClassPolicy(t, repoRoot)
 	if setupRepo != nil {

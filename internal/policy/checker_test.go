@@ -152,6 +152,7 @@ func TestChecker_Shell_DisabledByDefault(t *testing.T) {
 func TestChecker_Shell_EnabledRequiresApproval(t *testing.T) {
 	pol := config.Policy{}
 	pol.Tools.Shell.Enabled = true
+	pol.Tools.Shell.AllowedCommands = []string{"git"}
 	pol.Tools.Shell.RequiresApproval = true
 	checker := NewChecker(pol)
 	tool := &mockTool{name: "shell_exec", category: "shell", operation: "execute"}
@@ -165,6 +166,7 @@ func TestChecker_Shell_EnabledRequiresApproval(t *testing.T) {
 func TestChecker_Shell_EnabledWithoutApprovalAllows(t *testing.T) {
 	pol := config.Policy{}
 	pol.Tools.Shell.Enabled = true
+	pol.Tools.Shell.AllowedCommands = []string{"git"}
 	pol.Tools.Shell.RequiresApproval = false
 	checker := NewChecker(pol)
 	tool := &mockTool{name: "shell_exec", category: "shell", operation: "execute"}
@@ -172,6 +174,22 @@ func TestChecker_Shell_EnabledWithoutApprovalAllows(t *testing.T) {
 	result := checker.Check(tool)
 	if result.Decision != Allow {
 		t.Fatalf("expected Allow, got %v", result.Decision)
+	}
+}
+
+func TestChecker_Shell_EnabledWithoutAllowlistDenies(t *testing.T) {
+	pol := config.Policy{}
+	pol.Tools.Shell.Enabled = true
+	pol.Tools.Shell.RequiresApproval = false
+	checker := NewChecker(pol)
+	tool := &mockTool{name: "shell_exec", category: "shell", operation: "execute"}
+
+	result := checker.Check(tool)
+	if result.Decision != Deny {
+		t.Fatalf("expected Deny, got %v", result.Decision)
+	}
+	if result.Reason == "" {
+		t.Fatal("expected denial reason for missing shell allowlist")
 	}
 }
 

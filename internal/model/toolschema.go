@@ -22,7 +22,6 @@ const havenUserIntentGuardSuffix = " Only call when the user explicitly asked fo
 
 var havenNativeToolUserIntentGuards = map[string]bool{
 	"memory.remember": true,
-	"todo.add":        true,
 	"journal.write":   true,
 }
 
@@ -54,9 +53,6 @@ var nativeToolAllowlist = map[string]bool{
 	"paint.save":              true,
 	"note.create":             true,
 	"desktop.organize":        true,
-	"todo.add":                true,
-	"todo.complete":           true,
-	"todo.list":               true,
 	"shell_exec":              true,
 	"host.folder.list":        true,
 	"host.folder.read":        true,

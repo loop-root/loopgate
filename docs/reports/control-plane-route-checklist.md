@@ -54,7 +54,7 @@ The following paths are registered next to `NewServer` (search for `mux.HandleFu
 - `/v1/resident/journal-tick`
 - `/v1/agent/work-item/ensure`, `/v1/agent/work-item/complete`
 - `/v1/continuity/inspect-thread`
-- `/v1/haven/…` (parallel aliases for several Haven routes)
+- Historical note: the `/v1/haven/…` compatibility aliases were removed. Review only the neutral `/v1/...` routes above.
 - `/v1/capabilities/execute`
 - `/v1/connections/status`, `/v1/connections/validate`, `/v1/connections/pkce/start`, `/v1/connections/pkce/complete`
 - `/v1/sites/inspect`, `/v1/sites/trust-draft`

@@ -75,6 +75,23 @@ func (server *Server) diagnosticServerControlPlaneFromAuditEvent(ev ledger.Event
 			"capability", diagDataString(data, "capability"),
 			"denial_code", diagDataString(data, "denial_code"),
 		}, data)...)
+	case "audit_export.requested", "audit_export.completed", "audit_export.noop":
+		server.diagnostic.Server.Debug("control_plane", diagAppendTenantAttrs([]any{
+			"event", ev.Type,
+			"session", ev.Session,
+			"request_id", diagDataString(data, "request_id"),
+			"destination_kind", diagDataString(data, "destination_kind"),
+			"through_audit_sequence", diagDataString(data, "through_audit_sequence"),
+			"status", diagDataString(data, "status"),
+		}, data)...)
+	case "audit_export.failed":
+		server.diagnostic.Server.Warn("control_plane", diagAppendTenantAttrs([]any{
+			"event", ev.Type,
+			"session", ev.Session,
+			"request_id", diagDataString(data, "request_id"),
+			"destination_kind", diagDataString(data, "destination_kind"),
+			"operator_error_class", diagOperatorErrorClass(data),
+		}, data)...)
 	default:
 		return
 	}

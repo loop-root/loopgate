@@ -2,7 +2,10 @@ package config
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +13,7 @@ import (
 	"time"
 
 	"morph/internal/identifiers"
+	"morph/internal/secrets"
 
 	"gopkg.in/yaml.v3"
 )
@@ -66,6 +70,34 @@ type AuditLedgerHMACSecretRef struct {
 	Scope       string `yaml:"scope" json:"scope"`
 }
 
+type AuditExport struct {
+	Enabled                 bool                     `yaml:"enabled" json:"enabled"`
+	DestinationKind         string                   `yaml:"destination_kind" json:"destination_kind"`
+	DestinationLabel        string                   `yaml:"destination_label" json:"destination_label"`
+	EndpointURL             string                   `yaml:"endpoint_url" json:"endpoint_url"`
+	Authorization           AuditExportAuthorization `yaml:"authorization" json:"authorization"`
+	TLS                     AuditExportTLS           `yaml:"tls" json:"tls"`
+	StatePath               string                   `yaml:"state_path" json:"state_path"`
+	MaxBatchEvents          int                      `yaml:"max_batch_events" json:"max_batch_events"`
+	MaxBatchBytes           int                      `yaml:"max_batch_bytes" json:"max_batch_bytes"`
+	MinFlushIntervalSeconds int                      `yaml:"min_flush_interval_seconds" json:"min_flush_interval_seconds"`
+}
+
+type AuditExportAuthorization struct {
+	Scheme    string             `yaml:"scheme" json:"scheme"`
+	SecretRef *secrets.SecretRef `yaml:"secret_ref,omitempty" json:"secret_ref,omitempty"`
+}
+
+type AuditExportTLS struct {
+	Enabled                         bool               `yaml:"enabled" json:"enabled"`
+	ServerName                      string             `yaml:"server_name" json:"server_name"`
+	PinnedServerPublicKeySHA256     string             `yaml:"pinned_server_public_key_sha256" json:"pinned_server_public_key_sha256"`
+	MinimumRemainingValiditySeconds int                `yaml:"minimum_remaining_validity_seconds" json:"minimum_remaining_validity_seconds"`
+	RootCASecretRef                 *secrets.SecretRef `yaml:"root_ca_secret_ref,omitempty" json:"root_ca_secret_ref,omitempty"`
+	ClientCertificateSecretRef      *secrets.SecretRef `yaml:"client_certificate_secret_ref,omitempty" json:"client_certificate_secret_ref,omitempty"`
+	ClientPrivateKeySecretRef       *secrets.SecretRef `yaml:"client_private_key_secret_ref,omitempty" json:"client_private_key_secret_ref,omitempty"`
+}
+
 // ResolvedDirectory returns the log directory relative to repo root (after defaults).
 func (d DiagnosticLogging) ResolvedDirectory() string {
 	dir := strings.TrimSpace(d.Directory)
@@ -96,6 +128,7 @@ type RuntimeConfig struct {
 			VerifyClosedSegmentsOnStartup *bool                     `yaml:"verify_closed_segments_on_startup" json:"verify_closed_segments_on_startup"`
 			HMACCheckpoint                AuditLedgerHMACCheckpoint `yaml:"hmac_checkpoint" json:"hmac_checkpoint"`
 		} `yaml:"audit_ledger" json:"audit_ledger"`
+		AuditExport AuditExport `yaml:"audit_export" json:"audit_export"`
 		// Diagnostic is non-authoritative operator telemetry (text files under runtime/logs or runtime/state).
 		// It must not replace loopgate_events.jsonl; never log secrets or raw tokens.
 		Diagnostic DiagnosticLogging `yaml:"diagnostic" json:"diagnostic"`
@@ -253,6 +286,24 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 		defaultVerifyClosedSegments := true
 		runtimeConfig.Logging.AuditLedger.VerifyClosedSegmentsOnStartup = &defaultVerifyClosedSegments
 	}
+	if strings.TrimSpace(runtimeConfig.Logging.AuditExport.StatePath) == "" {
+		runtimeConfig.Logging.AuditExport.StatePath = "runtime/state/audit_export_state.json"
+	}
+	if runtimeConfig.Logging.AuditExport.MaxBatchEvents <= 0 {
+		runtimeConfig.Logging.AuditExport.MaxBatchEvents = 500
+	}
+	if runtimeConfig.Logging.AuditExport.MaxBatchBytes <= 0 {
+		runtimeConfig.Logging.AuditExport.MaxBatchBytes = 1024 * 1024
+	}
+	if runtimeConfig.Logging.AuditExport.MinFlushIntervalSeconds <= 0 {
+		runtimeConfig.Logging.AuditExport.MinFlushIntervalSeconds = 5
+	}
+	if strings.TrimSpace(runtimeConfig.Logging.AuditExport.Authorization.Scheme) == "" {
+		runtimeConfig.Logging.AuditExport.Authorization.Scheme = "bearer"
+	}
+	if strings.TrimSpace(runtimeConfig.Logging.AuditExport.TLS.ServerName) == "" {
+		runtimeConfig.Logging.AuditExport.TLS.ServerName = ""
+	}
 	hc := &runtimeConfig.Logging.AuditLedger.HMACCheckpoint
 	// Default only the unset (zero) case so negative values fail validation instead of being coerced.
 	if hc.Enabled && hc.IntervalEvents == 0 {
@@ -403,6 +454,9 @@ func validateRuntimeConfig(repoRoot string, runtimeConfig RuntimeConfig) error {
 	if err := validateRuntimeInternalPath(runtimeConfig.Logging.AuditLedger.ManifestPath, false); err != nil {
 		return fmt.Errorf("logging.audit_ledger.manifest_path %w", err)
 	}
+	if err := validateAuditExport(runtimeConfig.Logging.AuditExport); err != nil {
+		return err
+	}
 	if runtimeConfig.Logging.Diagnostic.Enabled {
 		if err := validateDiagnosticLogDirectory(runtimeConfig.Logging.Diagnostic.Directory); err != nil {
 			return fmt.Errorf("logging.diagnostic.directory %w", err)
@@ -488,6 +542,159 @@ func validateAuditLedgerHMACCheckpoint(hc AuditLedgerHMACCheckpoint) error {
 		return err
 	}
 	return nil
+}
+
+func validateAuditExport(auditExport AuditExport) error {
+	if err := validateRuntimeInternalPath(auditExport.StatePath, false); err != nil {
+		return fmt.Errorf("logging.audit_export.state_path %w", err)
+	}
+	if auditExport.MaxBatchEvents <= 0 {
+		return fmt.Errorf("logging.audit_export.max_batch_events must be positive")
+	}
+	if auditExport.MaxBatchBytes <= 0 {
+		return fmt.Errorf("logging.audit_export.max_batch_bytes must be positive")
+	}
+	if auditExport.MinFlushIntervalSeconds <= 0 {
+		return fmt.Errorf("logging.audit_export.min_flush_interval_seconds must be positive")
+	}
+	trimmedDestinationKind := strings.TrimSpace(auditExport.DestinationKind)
+	switch trimmedDestinationKind {
+	case "", "admin_node", "splunk_hec", "datadog_http":
+	default:
+		return fmt.Errorf("logging.audit_export.destination_kind must be one of: admin_node, splunk_hec, datadog_http")
+	}
+	trimmedDestinationLabel := strings.TrimSpace(auditExport.DestinationLabel)
+	if trimmedDestinationLabel != "" {
+		if err := identifiers.ValidateSafeIdentifier("logging.audit_export.destination_label", trimmedDestinationLabel); err != nil {
+			return err
+		}
+	}
+	trimmedEndpointURL := strings.TrimSpace(auditExport.EndpointURL)
+	if trimmedEndpointURL != "" {
+		if err := validateAuditExportEndpointURL(trimmedEndpointURL); err != nil {
+			return err
+		}
+	}
+	if err := validateAuditExportAuthorization(auditExport.Authorization); err != nil {
+		return err
+	}
+	if err := validateAuditExportTLS(auditExport.TLS); err != nil {
+		return err
+	}
+	if !auditExport.Enabled {
+		return nil
+	}
+	if trimmedDestinationKind == "" {
+		return fmt.Errorf("logging.audit_export.destination_kind is required when enabled")
+	}
+	if trimmedDestinationLabel == "" {
+		return fmt.Errorf("logging.audit_export.destination_label is required when enabled")
+	}
+	if trimmedEndpointURL == "" {
+		return fmt.Errorf("logging.audit_export.endpoint_url is required when enabled")
+	}
+	if trimmedDestinationKind == "admin_node" && auditExport.Authorization.SecretRef == nil {
+		return fmt.Errorf("logging.audit_export.authorization.secret_ref is required when enabled for admin_node")
+	}
+	if trimmedDestinationKind == "admin_node" {
+		parsedURL, err := url.Parse(trimmedEndpointURL)
+		if err != nil {
+			return fmt.Errorf("logging.audit_export.endpoint_url parse: %w", err)
+		}
+		hostname := strings.TrimSpace(parsedURL.Hostname())
+		if !isLocalhostRuntimeHost(hostname) && !auditExport.TLS.Enabled {
+			return fmt.Errorf("logging.audit_export.tls.enabled is required for non-loopback admin_node export")
+		}
+	}
+	return nil
+}
+
+func validateAuditExportAuthorization(authorization AuditExportAuthorization) error {
+	trimmedScheme := strings.ToLower(strings.TrimSpace(authorization.Scheme))
+	switch trimmedScheme {
+	case "", "bearer":
+	default:
+		return fmt.Errorf("logging.audit_export.authorization.scheme must be one of: bearer")
+	}
+	if authorization.SecretRef == nil {
+		return nil
+	}
+	if err := authorization.SecretRef.Validate(); err != nil {
+		return fmt.Errorf("logging.audit_export.authorization.secret_ref: %w", err)
+	}
+	return nil
+}
+
+func validateAuditExportTLS(tlsConfig AuditExportTLS) error {
+	if strings.TrimSpace(tlsConfig.ServerName) != "" {
+		if err := identifiers.ValidateSafeIdentifier("logging.audit_export.tls.server_name", tlsConfig.ServerName); err != nil {
+			return err
+		}
+	}
+	trimmedPinnedServerPublicKeySHA256 := strings.ToLower(strings.TrimSpace(tlsConfig.PinnedServerPublicKeySHA256))
+	if trimmedPinnedServerPublicKeySHA256 != "" {
+		if len(trimmedPinnedServerPublicKeySHA256) != 64 {
+			return fmt.Errorf("logging.audit_export.tls.pinned_server_public_key_sha256 must be a 64-character hex sha256")
+		}
+		if _, err := hex.DecodeString(trimmedPinnedServerPublicKeySHA256); err != nil {
+			return fmt.Errorf("logging.audit_export.tls.pinned_server_public_key_sha256 must be valid hex")
+		}
+	}
+	if tlsConfig.MinimumRemainingValiditySeconds < 0 {
+		return fmt.Errorf("logging.audit_export.tls.minimum_remaining_validity_seconds must be non-negative")
+	}
+	if !tlsConfig.Enabled {
+		return nil
+	}
+	if tlsConfig.RootCASecretRef == nil {
+		return fmt.Errorf("logging.audit_export.tls.root_ca_secret_ref is required when tls.enabled")
+	}
+	if err := tlsConfig.RootCASecretRef.Validate(); err != nil {
+		return fmt.Errorf("logging.audit_export.tls.root_ca_secret_ref: %w", err)
+	}
+	if tlsConfig.ClientCertificateSecretRef == nil {
+		return fmt.Errorf("logging.audit_export.tls.client_certificate_secret_ref is required when tls.enabled")
+	}
+	if err := tlsConfig.ClientCertificateSecretRef.Validate(); err != nil {
+		return fmt.Errorf("logging.audit_export.tls.client_certificate_secret_ref: %w", err)
+	}
+	if tlsConfig.ClientPrivateKeySecretRef == nil {
+		return fmt.Errorf("logging.audit_export.tls.client_private_key_secret_ref is required when tls.enabled")
+	}
+	if err := tlsConfig.ClientPrivateKeySecretRef.Validate(); err != nil {
+		return fmt.Errorf("logging.audit_export.tls.client_private_key_secret_ref: %w", err)
+	}
+	return nil
+}
+
+func validateAuditExportEndpointURL(rawURL string) error {
+	parsedURL, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return fmt.Errorf("logging.audit_export.endpoint_url parse: %w", err)
+	}
+	if parsedURL.User != nil {
+		return fmt.Errorf("logging.audit_export.endpoint_url must not include embedded credentials")
+	}
+	hostname := strings.TrimSpace(parsedURL.Hostname())
+	if hostname == "" {
+		return fmt.Errorf("logging.audit_export.endpoint_url hostname is required")
+	}
+	scheme := strings.ToLower(strings.TrimSpace(parsedURL.Scheme))
+	if scheme == "" {
+		return fmt.Errorf("logging.audit_export.endpoint_url scheme is required")
+	}
+	if scheme != "https" && !isLocalhostRuntimeHost(hostname) {
+		return fmt.Errorf("logging.audit_export.endpoint_url must use https unless hostname is loopback")
+	}
+	return nil
+}
+
+func isLocalhostRuntimeHost(hostname string) bool {
+	if hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1" {
+		return true
+	}
+	parsedIP := net.ParseIP(hostname)
+	return parsedIP != nil && parsedIP.IsLoopback()
 }
 
 func validateHybridEvidenceConfig(repoRoot string, runtimeConfig RuntimeConfig) error {

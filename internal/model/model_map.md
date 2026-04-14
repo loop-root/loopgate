@@ -47,11 +47,11 @@ The current working set in this directory is:
 
 These files must change together with the tool registry and client-injected runtime facts so every operator surface sees the same capability truth.
 
-The newest examples are `memory.remember` and `todo.*`:
+The newest active example here is `memory.remember`:
 
-- they must exist in `internal/tools`
-- they must be allowed here
-- they must be described honestly in the injected runtime facts used by local chat surfaces
+- it must exist in `internal/tools`
+- it must be allowed here
+- it must be described honestly in the injected runtime facts used by local chat surfaces
 - and Loopgate still remains the authority for execution
 
 ## Important Watchouts

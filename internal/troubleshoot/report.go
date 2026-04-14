@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -40,6 +41,46 @@ type Report struct {
 		DirectoryRelative    string `json:"diagnostic_directory_relative,omitempty"`
 		DiagnosticDefaultLog string `json:"diagnostic_default_level,omitempty"`
 	} `json:"diagnostics"`
+	AuditExport AuditExportReport `json:"audit_export"`
+}
+
+type AuditExportReport struct {
+	Enabled                           bool                   `json:"enabled"`
+	DestinationKind                   string                 `json:"destination_kind,omitempty"`
+	DestinationLabel                  string                 `json:"destination_label,omitempty"`
+	EndpointScheme                    string                 `json:"endpoint_scheme,omitempty"`
+	EndpointHost                      string                 `json:"endpoint_host,omitempty"`
+	AuthorizationConfigured           bool                   `json:"authorization_configured,omitempty"`
+	TLSEnabled                        bool                   `json:"tls_enabled,omitempty"`
+	PinnedServerPublicKeyConfigured   bool                   `json:"pinned_server_public_key_configured,omitempty"`
+	PinnedServerPublicKeySHA256Prefix string                 `json:"pinned_server_public_key_sha256_prefix,omitempty"`
+	MinimumRemainingValiditySeconds   int                    `json:"minimum_remaining_validity_seconds,omitempty"`
+	LastAttemptAtUTC                  string                 `json:"last_attempt_at_utc,omitempty"`
+	LastSuccessAtUTC                  string                 `json:"last_success_at_utc,omitempty"`
+	LastExportedAuditSequence         uint64                 `json:"last_exported_audit_sequence,omitempty"`
+	ConsecutiveFailures               int                    `json:"consecutive_failures,omitempty"`
+	LastErrorClass                    string                 `json:"last_error_class,omitempty"`
+	Trust                             AuditExportTrustReport `json:"trust"`
+}
+
+type AuditExportTrustReport struct {
+	OverallStatus     string                       `json:"overall_status,omitempty"`
+	Warnings          []string                     `json:"warnings,omitempty"`
+	RootCA            AuditExportCertificateStatus `json:"root_ca"`
+	ClientCertificate AuditExportCertificateStatus `json:"client_certificate"`
+}
+
+type AuditExportCertificateStatus struct {
+	Configured                   bool   `json:"configured"`
+	Status                       string `json:"status,omitempty"`
+	Subject                      string `json:"subject,omitempty"`
+	NotBeforeUTC                 string `json:"not_before_utc,omitempty"`
+	NotAfterUTC                  string `json:"not_after_utc,omitempty"`
+	RemainingValiditySeconds     int64  `json:"remaining_validity_seconds,omitempty"`
+	RenewalThresholdAtUTC        string `json:"renewal_threshold_at_utc,omitempty"`
+	SecondsUntilRenewalThreshold int64  `json:"seconds_until_renewal_threshold,omitempty"`
+	DaysUntilRenewalThreshold    int64  `json:"days_until_renewal_threshold,omitempty"`
+	RenewalWindowActive          bool   `json:"renewal_window_active,omitempty"`
 }
 
 // TypeCount is an event type histogram bucket.
@@ -92,6 +133,28 @@ func BuildReport(repoRoot string, rc config.RuntimeConfig) (Report, error) {
 		rep.Diagnostics.DirectoryRelative = rc.Logging.Diagnostic.ResolvedDirectory()
 	}
 	rep.Diagnostics.DiagnosticDefaultLog = strings.TrimSpace(rc.Logging.Diagnostic.DefaultLevel)
+	rep.AuditExport.Enabled = rc.Logging.AuditExport.Enabled
+	rep.AuditExport.DestinationKind = strings.TrimSpace(rc.Logging.AuditExport.DestinationKind)
+	rep.AuditExport.DestinationLabel = strings.TrimSpace(rc.Logging.AuditExport.DestinationLabel)
+	rep.AuditExport.AuthorizationConfigured = rc.Logging.AuditExport.Authorization.SecretRef != nil
+	rep.AuditExport.TLSEnabled = rc.Logging.AuditExport.TLS.Enabled
+	rep.AuditExport.MinimumRemainingValiditySeconds = rc.Logging.AuditExport.TLS.MinimumRemainingValiditySeconds
+	trimmedPinnedServerPublicKeySHA256 := strings.TrimSpace(rc.Logging.AuditExport.TLS.PinnedServerPublicKeySHA256)
+	rep.AuditExport.PinnedServerPublicKeyConfigured = trimmedPinnedServerPublicKeySHA256 != ""
+	if trimmedPinnedServerPublicKeySHA256 != "" {
+		rep.AuditExport.PinnedServerPublicKeySHA256Prefix = hashPrefix(trimmedPinnedServerPublicKeySHA256)
+	}
+	if parsedEndpointURL, err := url.Parse(strings.TrimSpace(rc.Logging.AuditExport.EndpointURL)); err == nil {
+		rep.AuditExport.EndpointScheme = strings.TrimSpace(parsedEndpointURL.Scheme)
+		rep.AuditExport.EndpointHost = strings.TrimSpace(parsedEndpointURL.Hostname())
+	}
+	if !rep.AuditExport.Enabled {
+		rep.AuditExport.Trust.OverallStatus = "disabled"
+	} else if !rep.AuditExport.TLSEnabled {
+		rep.AuditExport.Trust.OverallStatus = "tls_disabled"
+	} else {
+		rep.AuditExport.Trust.OverallStatus = "unknown"
+	}
 
 	activePath := ActiveAuditPath(repoRoot)
 	rotation := AuditRotationSettings(repoRoot, rc)

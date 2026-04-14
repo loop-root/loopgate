@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,35 +15,7 @@ import (
 	"morph/internal/config"
 	modelpkg "morph/internal/model"
 	modelruntime "morph/internal/modelruntime"
-	"morph/internal/threadstore"
 )
-
-func TestHavenMemoryUIRoutesRequireScopedCapabilities(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	pinTestProcessAsExpectedClient(t, server)
-
-	inventoryDeniedClient := NewClient(client.socketPath)
-	inventoryDeniedClient.ConfigureSession("haven", "ui-memory-read-denied", []string{"fs_read"})
-	if _, err := inventoryDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied inventory token: %v", err)
-	}
-	if _, err := inventoryDeniedClient.LoadHavenMemoryInventory(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected memory.read scope denial for ui inventory, got %v", err)
-	}
-
-	resetDeniedClient := NewClient(client.socketPath)
-	resetDeniedClient.ConfigureSession("haven", "ui-memory-reset-denied", []string{controlCapabilityMemoryWrite})
-	if _, err := resetDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied reset token: %v", err)
-	}
-	if _, err := resetDeniedClient.ResetHavenMemory(context.Background(), HavenMemoryResetRequest{
-		OperationID: "ui-memory-reset-denied",
-		Reason:      "scope check",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected memory.reset scope denial for ui reset, got %v", err)
-	}
-}
 
 func TestStatusOmitsConnectionsWithoutConnectionReadScope(t *testing.T) {
 	repoRoot := t.TempDir()
@@ -141,6 +114,75 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 	if err := deniedClient.FetchDiagnosticReport(context.Background(), &deniedReport); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected diagnostic.read scope denial, got %v", err)
 	}
+	if _, err := deniedClient.CheckAuditExportTrust(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected diagnostic.read scope denial for audit export trust check, got %v", err)
+	}
+	if _, err := deniedClient.LoadMCPGatewayInventory(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected diagnostic.read scope denial for MCP gateway inventory, got %v", err)
+	}
+	if _, err := deniedClient.LoadMCPGatewayServerStatus(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected diagnostic.read scope denial for MCP gateway server status, got %v", err)
+	}
+	if _, err := deniedClient.CheckMCPGatewayDecision(context.Background(), MCPGatewayDecisionRequest{
+		ServerID: "github",
+		ToolName: "search_repositories",
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected diagnostic.read scope denial for MCP gateway decision, got %v", err)
+	}
+	if _, err := deniedClient.ValidateMCPGatewayInvocation(context.Background(), MCPGatewayInvocationRequest{
+		ServerID: "github",
+		ToolName: "search_repositories",
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected diagnostic.read scope denial for MCP gateway invocation validation, got %v", err)
+	}
+	if _, err := deniedClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+		ServerID: "github",
+		ToolName: "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"query": json.RawMessage(`"loopgate"`),
+		},
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway approval preparation, got %v", err)
+	}
+	if _, err := deniedClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+		ApprovalRequestID: "missing",
+		Approved:          true,
+		DecisionNonce:     "nonce",
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway approval decision, got %v", err)
+	}
+	if _, err := deniedClient.ValidateMCPGatewayExecution(context.Background(), MCPGatewayExecutionRequest{
+		ApprovalRequestID:      "missing",
+		ApprovalManifestSHA256: "abcd",
+		ServerID:               "github",
+		ToolName:               "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"query": json.RawMessage(`"loopgate"`),
+		},
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway execution validation, got %v", err)
+	}
+	if _, err := deniedClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{
+		ServerID: "github",
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway server launch, got %v", err)
+	}
+	if _, err := deniedClient.StopMCPGatewayServer(context.Background(), MCPGatewayStopRequest{
+		ServerID: "github",
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway server stop, got %v", err)
+	}
+	if _, err := deniedClient.ExecuteMCPGatewayInvocation(context.Background(), MCPGatewayExecutionRequest{
+		ApprovalRequestID:      "missing",
+		ApprovalManifestSHA256: "abcd",
+		ServerID:               "github",
+		ToolName:               "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"query": json.RawMessage(`"loopgate"`),
+		},
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway execution, got %v", err)
+	}
 
 	allowedClient := NewClient(client.socketPath)
 	allowedClient.ConfigureSession("test-actor", "diagnostic-read-allowed", []string{controlCapabilityDiagnosticRead})
@@ -150,6 +192,58 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 	var allowedReport map[string]interface{}
 	if err := allowedClient.FetchDiagnosticReport(context.Background(), &allowedReport); err != nil {
 		t.Fatalf("fetch diagnostic report with diagnostic.read: %v", err)
+	}
+	if _, err := allowedClient.CheckAuditExportTrust(context.Background()); err != nil {
+		t.Fatalf("check audit export trust with diagnostic.read: %v", err)
+	}
+	if _, err := allowedClient.LoadMCPGatewayInventory(context.Background()); err != nil {
+		t.Fatalf("load MCP gateway inventory with diagnostic.read: %v", err)
+	}
+	if _, err := allowedClient.LoadMCPGatewayServerStatus(context.Background()); err != nil {
+		t.Fatalf("load MCP gateway server status with diagnostic.read: %v", err)
+	}
+	decisionResponse, err := allowedClient.CheckMCPGatewayDecision(context.Background(), MCPGatewayDecisionRequest{
+		ServerID: "github",
+		ToolName: "search_repositories",
+	})
+	if err != nil {
+		t.Fatalf("check MCP gateway decision with diagnostic.read: %v", err)
+	}
+	if decisionResponse.Decision != "deny" || decisionResponse.DenialCode != DenialCodeMCPGatewayServerNotFound {
+		t.Fatalf("expected typed MCP gateway deny on unknown server with diagnostic.read, got %#v", decisionResponse)
+	}
+	if _, err := allowedClient.ValidateMCPGatewayInvocation(context.Background(), MCPGatewayInvocationRequest{
+		ServerID: "github",
+		ToolName: "search_repositories",
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+		t.Fatalf("expected malformed invocation validation under diagnostic.read, got %v", err)
+	}
+
+	mcpWriteClient := NewClient(client.socketPath)
+	mcpWriteClient.ConfigureSession("test-actor", "mcp-gateway-write-allowed", []string{controlCapabilityMCPGatewayWrite})
+	if _, err := mcpWriteClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure mcp_gateway.write token: %v", err)
+	}
+	if _, err := mcpWriteClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+		ServerID: "github",
+		ToolName: "search_repositories",
+	}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+		t.Fatalf("expected malformed approval preparation request under mcp_gateway.write, got %v", err)
+	}
+	if _, err := mcpWriteClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+		t.Fatalf("expected malformed approval decision request under mcp_gateway.write, got %v", err)
+	}
+	if _, err := mcpWriteClient.ValidateMCPGatewayExecution(context.Background(), MCPGatewayExecutionRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+		t.Fatalf("expected malformed MCP gateway execution validation request under mcp_gateway.write, got %v", err)
+	}
+	if _, err := mcpWriteClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+		t.Fatalf("expected malformed MCP gateway ensure-launched request under mcp_gateway.write, got %v", err)
+	}
+	if _, err := mcpWriteClient.StopMCPGatewayServer(context.Background(), MCPGatewayStopRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+		t.Fatalf("expected malformed MCP gateway stop request under mcp_gateway.write, got %v", err)
+	}
+	if _, err := mcpWriteClient.ExecuteMCPGatewayInvocation(context.Background(), MCPGatewayExecutionRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+		t.Fatalf("expected malformed MCP gateway execute request under mcp_gateway.write, got %v", err)
 	}
 }
 
@@ -354,27 +448,6 @@ func TestHavenModelRoutesRequireScopedCapabilities(t *testing.T) {
 		t.Fatalf("expected model.reply scope denial for haven chat, got %v", err)
 	}
 
-	residentDeniedClient := NewClient(client.socketPath)
-	residentDeniedClient.ConfigureSession("haven", "haven-journal-tick-denied", []string{"fs_write"})
-	if _, err := residentDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied resident tick token: %v", err)
-	}
-	if err := residentDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/resident/journal-tick", residentDeniedClient.capabilityToken, nil, &HavenJournalResidentTickResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected model.reply scope denial for resident tick, got %v", err)
-	}
-
-	residentAllowedClient := NewClient(client.socketPath)
-	residentAllowedClient.ConfigureSession("haven", "haven-journal-tick-allowed", []string{controlCapabilityModelReply})
-	if _, err := residentAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure model.reply token for resident tick: %v", err)
-	}
-	var residentResponse HavenJournalResidentTickResponse
-	if err := residentAllowedClient.doJSON(context.Background(), http.MethodPost, "/v1/resident/journal-tick", residentAllowedClient.capabilityToken, nil, &residentResponse, nil); err != nil {
-		t.Fatalf("resident tick with model.reply: %v", err)
-	}
-	if residentResponse.Status != "skipped" || !strings.Contains(residentResponse.Reason, "fs_write") {
-		t.Fatalf("expected resident tick to continue past scope gate and skip without fs_write, got %#v", residentResponse)
-	}
 }
 
 func TestHavenRoutesRequireTrustedHavenSession(t *testing.T) {
@@ -393,85 +466,10 @@ func TestHavenRoutesRequireTrustedHavenSession(t *testing.T) {
 	if err := untrustedHavenClient.doJSON(context.Background(), http.MethodGet, "/v1/model/settings", untrustedHavenClient.capabilityToken, nil, &HavenModelSettingsResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenInvalid) {
 		t.Fatalf("expected trusted Haven denial for model settings, got %v", err)
 	}
-	if err := untrustedHavenClient.doJSON(context.Background(), http.MethodPost, "/v1/agent/work-item/ensure", untrustedHavenClient.capabilityToken, HavenAgentWorkEnsureRequest{
-		Text: "untrusted haven should not reach helper routes",
-	}, &HavenAgentWorkItemResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenInvalid) {
-		t.Fatalf("expected trusted Haven denial for agent work ensure, got %v", err)
-	}
 	if err := untrustedHavenClient.doJSON(context.Background(), http.MethodPost, "/v1/chat", untrustedHavenClient.capabilityToken, havenChatRequest{
 		Message: "untrusted haven should not reach chat",
 	}, &CapabilityResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenInvalid) {
 		t.Fatalf("expected trusted Haven denial for chat, got %v", err)
-	}
-}
-
-func TestHavenConvenienceRoutesRequireUIWriteScope(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	pinTestProcessAsExpectedClient(t, server)
-	server.resolveUserHomeDir = func() (string, error) { return repoRoot, nil }
-
-	workspaceID := server.deriveWorkspaceIDFromRepoRoot()
-	threadStoreRoot := filepath.Join(repoRoot, ".haven", "threads")
-	store, err := threadstore.NewStore(threadStoreRoot, workspaceID)
-	if err != nil {
-		t.Fatalf("thread store: %v", err)
-	}
-	summary, err := store.NewThread()
-	if err != nil {
-		t.Fatalf("new thread: %v", err)
-	}
-	_ = store.AppendEvent(summary.ThreadID, threadstore.ConversationEvent{
-		Type: threadstore.EventUserMessage,
-		Data: map[string]interface{}{"text": "route scope check"},
-	})
-
-	agentWorkDeniedClient := NewClient(client.socketPath)
-	agentWorkDeniedClient.ConfigureSession("haven", "agent-work-ui-write-denied", []string{"todo.add"})
-	if _, err := agentWorkDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied agent-work token: %v", err)
-	}
-	if err := agentWorkDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/agent/work-item/ensure", agentWorkDeniedClient.capabilityToken, HavenAgentWorkEnsureRequest{
-		Text: "Route scope check",
-	}, &HavenAgentWorkItemResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected ui.write scope denial for haven agent-work ensure, got %v", err)
-	}
-
-	continuityDeniedClient := NewClient(client.socketPath)
-	continuityDeniedClient.SetWorkspaceID(workspaceID)
-	continuityDeniedClient.ConfigureSession("haven", "continuity-ui-write-denied", []string{"memory.write"})
-	if _, err := continuityDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied continuity token: %v", err)
-	}
-	if err := continuityDeniedClient.doJSON(context.Background(), http.MethodPost, "/v1/continuity/inspect-thread", continuityDeniedClient.capabilityToken, HavenContinuityInspectThreadRequest{
-		ThreadID: summary.ThreadID,
-	}, &HavenContinuityInspectThreadResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected ui.write scope denial for haven continuity inspect-thread, got %v", err)
-	}
-
-	agentWorkAllowedClient := NewClient(client.socketPath)
-	agentWorkAllowedClient.ConfigureSession("haven", "agent-work-ui-write-allowed", []string{controlCapabilityUIWrite, "todo.add"})
-	if _, err := agentWorkAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure allowed agent-work token: %v", err)
-	}
-	var ensureResponse HavenAgentWorkItemResponse
-	if err := agentWorkAllowedClient.doJSON(context.Background(), http.MethodPost, "/v1/agent/work-item/ensure", agentWorkAllowedClient.capabilityToken, HavenAgentWorkEnsureRequest{
-		Text: "Route scope allow check",
-	}, &ensureResponse, nil); err != nil {
-		t.Fatalf("haven agent-work ensure with ui.write + todo.add: %v", err)
-	}
-	if strings.TrimSpace(ensureResponse.ItemID) == "" {
-		t.Fatalf("expected agent-work ensure to return item_id, got %#v", ensureResponse)
-	}
-
-	continuityAllowedClient := NewClient(client.socketPath)
-	continuityAllowedClient.SetWorkspaceID(workspaceID)
-	continuityAllowedClient.ConfigureSession("haven", "continuity-ui-write-allowed", []string{controlCapabilityUIWrite, "memory.write"})
-	if _, err := continuityAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure allowed continuity token: %v", err)
-	}
-	if _, err := continuityAllowedClient.SubmitHavenContinuityInspectionForThread(context.Background(), summary.ThreadID); err != nil {
-		t.Fatalf("haven continuity inspect-thread with ui.write + memory.write: %v", err)
 	}
 }
 
@@ -520,154 +518,6 @@ func TestFolderAccessRoutesRequireScopedCapabilities(t *testing.T) {
 	}
 	if _, err := writeAllowedClient.SyncSharedFolder(context.Background()); err != nil {
 		t.Fatalf("sync shared folder with folder_access.write: %v", err)
-	}
-}
-
-func TestTaskStandingGrantRoutesRequireScopedCapabilities(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	deniedClient := NewClient(client.socketPath)
-	deniedClient.ConfigureSession("test-actor", "task-standing-grant-denied", []string{"fs_list"})
-	if _, err := deniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied task standing grant token: %v", err)
-	}
-	if _, err := deniedClient.TaskStandingGrantStatus(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected task_standing_grant.read scope denial, got %v", err)
-	}
-	if _, err := deniedClient.UpdateTaskStandingGrant(context.Background(), TaskStandingGrantUpdateRequest{
-		Class:   TaskExecutionClassLocalDesktopOrganize,
-		Granted: false,
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected task_standing_grant.write scope denial, got %v", err)
-	}
-
-	readAllowedClient := NewClient(client.socketPath)
-	readAllowedClient.ConfigureSession("test-actor", "task-standing-grant-read-allowed", []string{controlCapabilityTaskStandingGrantRead})
-	if _, err := readAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure task_standing_grant.read token: %v", err)
-	}
-	if _, err := readAllowedClient.TaskStandingGrantStatus(context.Background()); err != nil {
-		t.Fatalf("task standing grant status with read scope: %v", err)
-	}
-
-	writeAllowedClient := NewClient(client.socketPath)
-	writeAllowedClient.ConfigureSession("test-actor", "task-standing-grant-write-allowed", []string{controlCapabilityTaskStandingGrantWrite})
-	if _, err := writeAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure task_standing_grant.write token: %v", err)
-	}
-	if _, err := writeAllowedClient.UpdateTaskStandingGrant(context.Background(), TaskStandingGrantUpdateRequest{
-		Class:   TaskExecutionClassLocalDesktopOrganize,
-		Granted: false,
-	}); err != nil {
-		t.Fatalf("update task standing grant with write scope: %v", err)
-	}
-}
-
-func TestTaskRoutesRequireScopedCapabilities(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	addResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
-		RequestID:  "task-route-scope-add",
-		Capability: "todo.add",
-		Arguments: map[string]string{
-			"text": "review security route scopes",
-		},
-	})
-	if err != nil {
-		t.Fatalf("seed todo item: %v", err)
-	}
-	itemID, _ := addResponse.StructuredResult["item_id"].(string)
-	if strings.TrimSpace(itemID) == "" {
-		t.Fatalf("expected todo.add to return item_id, got %#v", addResponse.StructuredResult)
-	}
-
-	deniedClient := NewClient(client.socketPath)
-	deniedClient.ConfigureSession("test-actor", "tasks-denied", []string{"fs_list"})
-	if _, err := deniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied tasks token: %v", err)
-	}
-	if _, err := deniedClient.LoadTasks(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected tasks.read scope denial, got %v", err)
-	}
-	if err := deniedClient.SetExplicitTodoWorkflowStatus(context.Background(), itemID, explicitTodoWorkflowStatusInProgress); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected tasks.write scope denial, got %v", err)
-	}
-
-	readAllowedClient := NewClient(client.socketPath)
-	readAllowedClient.ConfigureSession("test-actor", "tasks-read-allowed", []string{controlCapabilityTasksRead})
-	if _, err := readAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure tasks.read token: %v", err)
-	}
-	if _, err := readAllowedClient.LoadTasks(context.Background()); err != nil {
-		t.Fatalf("load tasks with tasks.read: %v", err)
-	}
-
-	writeAllowedClient := NewClient(client.socketPath)
-	writeAllowedClient.ConfigureSession("test-actor", "tasks-write-allowed", []string{controlCapabilityTasksWrite})
-	if _, err := writeAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure tasks.write token: %v", err)
-	}
-	if err := writeAllowedClient.SetExplicitTodoWorkflowStatus(context.Background(), itemID, explicitTodoWorkflowStatusInProgress); err != nil {
-		t.Fatalf("update task status with tasks.write: %v", err)
-	}
-}
-
-func TestTaskPlanRoutesRequireScopedCapabilities(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	readOnlyClient := NewClient(client.socketPath)
-	readOnlyClient.ConfigureSession("test-actor", "task-plan-read-only", []string{controlCapabilityTaskPlanRead})
-	if _, err := readOnlyClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure task_plan.read token: %v", err)
-	}
-	steps := []TaskPlanStep{
-		{StepIndex: 0, Capability: "echo.generate_summary", Arguments: map[string]string{"input_text": "scope check"}},
-	}
-	submitRequest := SubmitTaskPlanRequest{
-		GoalText:      "task-plan scope check",
-		Steps:         steps,
-		CanonicalHash: computeCanonicalHash("task-plan scope check", steps),
-	}
-	if err := readOnlyClient.doJSONWithHeaders(context.Background(), httpMethodPost, "/v1/task/plan", readOnlyClient.capabilityToken, submitRequest, &SubmitTaskPlanResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected task_plan.write scope denial for submit, got %v", err)
-	}
-	if err := readOnlyClient.doJSONWithHeaders(context.Background(), httpMethodPost, "/v1/task/execute", readOnlyClient.capabilityToken, ExecuteTaskLeaseRequest{
-		LeaseID:     "lease-read-only",
-		MorphlingID: "morphling-read-only",
-	}, &ExecuteTaskLeaseResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected task_plan.write scope denial for execute, got %v", err)
-	}
-
-	writeOnlyClient := NewClient(client.socketPath)
-	writeOnlyClient.ConfigureSession("test-actor", "task-plan-write-only", []string{controlCapabilityTaskPlanWrite})
-	if _, err := writeOnlyClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure task_plan.write token: %v", err)
-	}
-	if err := writeOnlyClient.doJSONWithHeaders(context.Background(), httpMethodPost, "/v1/task/result", writeOnlyClient.capabilityToken, TaskPlanResultRequest{
-		PlanID: "plan-write-only",
-	}, &TaskPlanResultResponse{}, nil); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected task_plan.read scope denial for result, got %v", err)
-	}
-
-	readWriteClient := NewClient(client.socketPath)
-	readWriteClient.ConfigureSession("test-actor", "task-plan-read-write", []string{controlCapabilityTaskPlanRead, controlCapabilityTaskPlanWrite})
-	if _, err := readWriteClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure task_plan read/write token: %v", err)
-	}
-	planResponse := submitTaskPlanForTest(t, readWriteClient, "task-plan allowed")
-	if planResponse.Status != taskPlanStateValidated {
-		t.Fatalf("expected validated plan status, got %#v", planResponse)
-	}
-	resultRequest := TaskPlanResultRequest{PlanID: planResponse.PlanID}
-	var resultResponse TaskPlanResultResponse
-	if err := readWriteClient.doJSONWithHeaders(context.Background(), httpMethodPost, "/v1/task/result", readWriteClient.capabilityToken, resultRequest, &resultResponse, nil); err != nil {
-		t.Fatalf("task/result with task_plan.read: %v", err)
-	}
-	if resultResponse.PlanID != planResponse.PlanID {
-		t.Fatalf("expected task result for %q, got %#v", planResponse.PlanID, resultResponse)
 	}
 }
 
@@ -1288,13 +1138,7 @@ func TestUIOperatorMountWriteGrantRouteRequiresScopeAndFreshApprovalForRenewal(t
 func TestNewServerRejectsSocketPathOutsideAllowedRoots(t *testing.T) {
 	repoRoot := t.TempDir()
 
-	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
-		t.Fatalf("mkdir policy dir: %v", err)
-	}
-	if err := os.WriteFile(policyPath, []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
-		t.Fatalf("write policy: %v", err)
-	}
+	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
 	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	socketPath := filepath.Join(repoRoot, "loopgate.sock")
@@ -1306,13 +1150,7 @@ func TestNewServerRejectsSocketPathOutsideAllowedRoots(t *testing.T) {
 func TestNewServerAllowsSocketPathUnderRepoRuntime(t *testing.T) {
 	repoRoot := t.TempDir()
 
-	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
-		t.Fatalf("mkdir policy dir: %v", err)
-	}
-	if err := os.WriteFile(policyPath, []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
-		t.Fatalf("write policy: %v", err)
-	}
+	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
 	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	socketPath := filepath.Join(repoRoot, "runtime", "memorybench-loopgate.sock")
@@ -1324,13 +1162,7 @@ func TestNewServerAllowsSocketPathUnderRepoRuntime(t *testing.T) {
 func TestServeRejectsDirectorySocketPathWithoutRemovingIt(t *testing.T) {
 	repoRoot := t.TempDir()
 
-	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
-		t.Fatalf("mkdir policy dir: %v", err)
-	}
-	if err := os.WriteFile(policyPath, []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
-		t.Fatalf("write policy: %v", err)
-	}
+	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
 	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	socketPath := filepath.Join(os.TempDir(), "loopgate-dir-target.sock")

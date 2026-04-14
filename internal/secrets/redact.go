@@ -40,7 +40,7 @@ var textRedactionPatterns = []struct {
 		replacement: `${1}[REDACTED]`,
 	},
 	{
-		pattern:     regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b`),
+		pattern:     regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){1,2}\b`),
 		replacement: `[REDACTED]`,
 	},
 }

@@ -153,6 +153,7 @@ func TestRedactText_BasicAuthToken(t *testing.T) {
 
 func TestRedactTextAndStructuredFields(t *testing.T) {
 	rawJWT := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.c2lnbmF0dXJl"
+	truncatedJWT := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0"
 	rawText := "Authorization: Bearer super-secret-token\napi_key=my-key\nurl=https://example.com/callback?token=url-secret\njwt=" + rawJWT + "\nnormal=ok"
 	redactedText := RedactText(rawText)
 	if strings.Contains(redactedText, "super-secret-token") {
@@ -166,6 +167,9 @@ func TestRedactTextAndStructuredFields(t *testing.T) {
 	}
 	if strings.Contains(redactedText, rawJWT) {
 		t.Fatalf("redacted text leaked JWT-like token: %q", redactedText)
+	}
+	if leakedTruncatedJWT := RedactText("jwt_truncated=" + truncatedJWT); strings.Contains(leakedTruncatedJWT, truncatedJWT) {
+		t.Fatalf("redacted text leaked truncated JWT-like token: %q", leakedTruncatedJWT)
 	}
 
 	rawFields := map[string]interface{}{

@@ -75,7 +75,7 @@ func (server *Server) executeConfiguredCapability(ctx context.Context, capabilit
 		request.Header.Set("Authorization", "Bearer "+accessToken)
 	}
 
-	response, err := server.httpClient.Do(request)
+	response, err := server.currentPolicyRuntime().httpClient.Do(request)
 	if err != nil {
 		return "", fmt.Errorf("execute configured capability request: %w", err)
 	}
@@ -210,16 +210,7 @@ func validateConfiguredFieldsMetadata(structuredResult map[string]interface{}, f
 }
 
 func (server *Server) registerConfiguredCapabilities() error {
-	for _, capabilityName := range sortedConfiguredCapabilityNames(server.configuredCapabilities) {
-		configuredCapabilityDefinition := server.configuredCapabilities[capabilityName]
-		if err := server.registry.TryRegister(&configuredCapabilityTool{
-			definition: configuredCapabilityDefinition,
-			executeFn:  server.executeConfiguredCapability,
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
+	return registerConfiguredCapabilitiesOnRegistry(server, server.currentPolicyRuntime().registry, server.currentConfiguredCapabilitiesSnapshot())
 }
 
 func sortedConfiguredCapabilityNames(configuredCapabilities map[string]configuredCapability) []string {

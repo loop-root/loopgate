@@ -161,7 +161,7 @@ v1 shape:
   - deterministic threshold-based submission
 - next hardening:
   - candidate outcome is `auto_approve`, `requires_review`, or `denied`
-  - approved distillates include source refs, policy hash, inspector version,
+  - approved distillates include source refs, policy signature provenance, inspector version,
     and creation timestamp
   - tombstone/purge semantics are explicit and test-covered
   - wake-state loading remains budget-based with a soft item cap

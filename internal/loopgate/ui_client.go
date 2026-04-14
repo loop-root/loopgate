@@ -4,38 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 )
-
-// LoadHavenMemoryInventory returns the UI-safe memory inventory projection.
-// The method name is retained for compatibility with existing local clients.
-func (client *Client) LoadHavenMemoryInventory(ctx context.Context) (HavenMemoryInventoryResponse, error) {
-	token, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return HavenMemoryInventoryResponse{}, err
-	}
-
-	var response HavenMemoryInventoryResponse
-	if err := client.doJSON(ctx, http.MethodGet, "/v1/ui/memory", token, nil, &response, nil); err != nil {
-		return HavenMemoryInventoryResponse{}, err
-	}
-	return response, nil
-}
-
-// ResetHavenMemory performs the auditable fresh-start memory reset path.
-// The method name is retained for compatibility with existing local clients.
-func (client *Client) ResetHavenMemory(ctx context.Context, request HavenMemoryResetRequest) (HavenMemoryResetResponse, error) {
-	token, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return HavenMemoryResetResponse{}, err
-	}
-
-	var response HavenMemoryResetResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/ui/memory/reset", token, request, &response, nil); err != nil {
-		return HavenMemoryResetResponse{}, err
-	}
-	return response, nil
-}
 
 func (client *Client) UIStatus(ctx context.Context) (UIStatusResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
@@ -160,61 +129,6 @@ func (client *Client) UpdateFolderAccess(ctx context.Context, request FolderAcce
 	var response FolderAccessStatusResponse
 	if err := client.doJSON(ctx, http.MethodPut, "/v1/ui/folder-access", token, request, &response, nil); err != nil {
 		return FolderAccessStatusResponse{}, err
-	}
-	return response, nil
-}
-
-func (client *Client) TaskStandingGrantStatus(ctx context.Context) (TaskStandingGrantStatusResponse, error) {
-	token, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return TaskStandingGrantStatusResponse{}, err
-	}
-
-	var response TaskStandingGrantStatusResponse
-	if err := client.doJSON(ctx, http.MethodGet, "/v1/ui/task-standing-grants", token, nil, &response, nil); err != nil {
-		return TaskStandingGrantStatusResponse{}, err
-	}
-	return response, nil
-}
-
-func (client *Client) UpdateTaskStandingGrant(ctx context.Context, request TaskStandingGrantUpdateRequest) (TaskStandingGrantStatusResponse, error) {
-	token, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return TaskStandingGrantStatusResponse{}, err
-	}
-
-	var response TaskStandingGrantStatusResponse
-	if err := client.doJSON(ctx, http.MethodPut, "/v1/ui/task-standing-grants", token, request, &response, nil); err != nil {
-		return TaskStandingGrantStatusResponse{}, err
-	}
-	return response, nil
-}
-
-// HavenAgentWorkItemEnsure creates or dedupes a Task Board item via the signed
-// agent work-item route. The method name is retained for compatibility.
-func (client *Client) HavenAgentWorkItemEnsure(ctx context.Context, request HavenAgentWorkEnsureRequest) (HavenAgentWorkItemResponse, error) {
-	token, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return HavenAgentWorkItemResponse{}, err
-	}
-	var response HavenAgentWorkItemResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/agent/work-item/ensure", token, request, &response, nil); err != nil {
-		return HavenAgentWorkItemResponse{}, err
-	}
-	return response, nil
-}
-
-// HavenAgentWorkItemComplete marks a Task Board item done via the signed
-// agent work-item route. The method name is retained for compatibility.
-func (client *Client) HavenAgentWorkItemComplete(ctx context.Context, itemID string, reason string) (HavenAgentWorkItemResponse, error) {
-	token, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return HavenAgentWorkItemResponse{}, err
-	}
-	body := HavenAgentWorkCompleteRequest{ItemID: strings.TrimSpace(itemID), Reason: strings.TrimSpace(reason)}
-	var response HavenAgentWorkItemResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/agent/work-item/complete", token, body, &response, nil); err != nil {
-		return HavenAgentWorkItemResponse{}, err
 	}
 	return response, nil
 }

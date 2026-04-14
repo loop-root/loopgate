@@ -35,5 +35,26 @@ func (server *Server) handleDiagnosticReport(writer http.ResponseWriter, request
 		})
 		return
 	}
+	report.AuditExport = server.buildDiagnosticAuditExportReport(request.Context(), report.AuditExport)
 	server.writeJSON(writer, http.StatusOK, report)
+}
+
+func (server *Server) handleAuditExportTrustCheck(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	tokenClaims, ok := server.authenticate(writer, request)
+	if !ok {
+		return
+	}
+	if !server.requireControlCapability(writer, tokenClaims, controlCapabilityDiagnosticRead) {
+		return
+	}
+	if _, denialResponse, verified := server.verifySignedRequestWithoutBody(request, tokenClaims.ControlSessionID); !verified {
+		server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
+		return
+	}
+	trustCheckResponse := server.buildAuditExportTrustCheckResponse(request.Context())
+	server.writeJSON(writer, http.StatusOK, trustCheckResponse)
 }

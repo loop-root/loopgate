@@ -8,7 +8,7 @@ Use it when changing:
 - explicit memory persistence
 - wake-state and memory diagnostics
 - capability-specific execution paths
-- **local HTTP client** surfaces (`internal/loopgate/client.go`, legacy `/v1/haven/...` routes where present)
+- **local HTTP client** surfaces (`internal/loopgate/client.go`, neutral `/v1/...` routes)
 - task execution classes and standing approvals
 - mirrored host-folder grants and sync behavior
 - the next permissioned host plan/apply model for real user-folder actions
@@ -47,26 +47,14 @@ For integrators it matters in four ways:
 - `memory_capability.go`
   - authoritative execution for `memory.remember`
   - bridges native tool calls onto the explicit remember-memory API
-- `todo_execution.go`
-  - capability-entry wrappers for `todo.add`, `todo.complete`, `todo.list`, `goal.set`, and `goal.close`
-  - owns result shaping, audit/error surfacing, and UI tool-event emission for task/goal capability execution
 - `todo_contract.go`
-  - shared explicit-todo constants, workflow/status vocabulary, and active-item record shape used across mutation, projection, and continuity paths
-- `todo_request.go`
-  - todo request normalization and workflow/task validation helpers shared by handlers and projections
-- `todo_mutation.go`
-  - continuity-backed todo mutation path and status updates
-- `todo_task_facts.go`
-  - explicit todo task-fact construction and semantic projection helpers for continuity records
-- `goal_mutation.go`
-  - continuity-backed goal open/close mutation path
-- `todo_projection.go`
-  - continuity-backed task board projection, recent completion shaping, and explicit todo state discovery
-- `todo_render.go`
-  - bounded todo success text and prompt/JSON rendering helpers for `todo.list`
+  - legacy explicit-task continuity constants retained only so older persisted continuity records still parse deterministically after task-board retirement
+- `todo_legacy_helpers.go`
+  - legacy read-only task/goal continuity helpers retained for replay and memory-state loading
+  - does not expose a live task-board API, standing-grant control surface, or `todo.*` capability execution path
 - `task_standing_grants.go`
-  - Loopgate-owned standing-approval catalog for safe **actor-scoped** task execution classes (e.g. low-friction paths gated to the `haven` actor)
-  - persists operator-visible “always allowed” class sets and audits changes
+  - reduced to legacy task execution-class metadata helpers needed for continuity replay
+  - no longer exposes a standing-grant API or persisted operator toggle state
 - `server_connection_handlers.go`
   - `/v1/status`
   - current global capability inventory surface
@@ -179,13 +167,10 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `morphling_workers.go`
   - morphling worker IPC, execution updates, and staged artifact handling
 - `server_morphling_handlers.go` / `server_morphling_worker_handlers.go` — morphling lifecycle and workers
+  - legacy delegated-work surface; still coupled to task-plan and approval code, so removal should be staged rather than treated as dead code
 - `server_model_handlers.go` — model connection APIs; **session open** stamps `TenantID` / `UserID` from `config/runtime.yaml` → `tenancy` (see `docs/setup/TENANCY.md`, ADR 0004)
 - `server_config_handlers.go` — configuration
 - `server_connection_handlers.go` — `/v1/status` and connection surface
-- `server_taskplan_contract.go`
-  - task-plan request/response envelopes and audit-unavailable response helpers
-- `server_taskplan_handlers.go`
-  - task-plan submission, lease issuance, execution, completion, and result handlers
 - `server_quarantine_handlers.go` — quarantine flows
 - `server_host_access_handlers.go` — explicit host-access / folder-grant operations beyond simple mirror
 

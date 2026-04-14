@@ -48,6 +48,7 @@ type pendingApproval struct {
 
 const (
 	approvalStatePending   = "pending"
+	approvalStateGranted   = "granted"
 	approvalStateDenied    = "denied"
 	approvalStateExpired   = "expired"
 	approvalStateCancelled = "cancelled"

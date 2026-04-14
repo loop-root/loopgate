@@ -96,7 +96,9 @@ func cleanAbs(path string) (string, error) {
 	return absPath, nil
 }
 
-func normalizeForOS(path string) string {
+// NormalizePathForOSComparison applies the same Unicode and case-folding rules
+// used for path-boundary comparisons on the current platform.
+func NormalizePathForOSComparison(path string) string {
 	// macOS commonly uses a case-insensitive filesystem; comparing in lower-case
 	// blocks trivial case-bypass attempts. APFS stores filenames in NFD form, so
 	// NFC-normalize to prevent combining-character mismatches in isWithin.
@@ -107,8 +109,8 @@ func normalizeForOS(path string) string {
 }
 
 func isWithin(rootAbs, targetAbs string) bool {
-	normalizedRoot := normalizeForOS(filepath.Clean(rootAbs))
-	normalizedTarget := normalizeForOS(filepath.Clean(targetAbs))
+	normalizedRoot := NormalizePathForOSComparison(filepath.Clean(rootAbs))
+	normalizedTarget := NormalizePathForOSComparison(filepath.Clean(targetAbs))
 
 	if normalizedRoot == normalizedTarget {
 		return true

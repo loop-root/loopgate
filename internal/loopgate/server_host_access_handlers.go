@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	policypkg "morph/internal/policy"
 	"morph/internal/sandbox"
 	"morph/internal/secrets"
 )
@@ -590,6 +591,125 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 		"results": toJSONSlice(results),
 	}
 	return server.hostAccessStructuredSuccess(tokenClaims, capabilityRequest, structured, hostAccessApplyClassification())
+}
+
+func (server *Server) autoAllowLowRiskHostPlanApply(controlSessionID string, capabilityRequest CapabilityRequest, current policypkg.CheckResult) (policypkg.CheckResult, bool) {
+	if current.Decision != policypkg.NeedsApproval || strings.TrimSpace(capabilityRequest.Capability) != "host.plan.apply" {
+		return current, false
+	}
+	if !server.isLowRiskHostPlanApply(controlSessionID, capabilityRequest.Arguments["plan_id"]) {
+		return current, false
+	}
+	return policypkg.CheckResult{
+		Decision: policypkg.Allow,
+		Reason:   "bounded move-only host organization plan stays within a granted folder",
+	}, true
+}
+
+func (server *Server) isLowRiskHostPlanApply(controlSessionID string, planID string) bool {
+	planID = strings.TrimSpace(planID)
+	controlSessionID = strings.TrimSpace(controlSessionID)
+	if planID == "" || controlSessionID == "" {
+		return false
+	}
+
+	server.hostAccessPlansMu.Lock()
+	server.pruneExpiredHostAccessPlansLocked()
+	plan, found := server.hostAccessPlans[planID]
+	server.hostAccessPlansMu.Unlock()
+	if !found || plan == nil {
+		return false
+	}
+	if plan.ControlSessionID != controlSessionID {
+		return false
+	}
+	if server.now().UTC().Sub(plan.CreatedAt) > hostAccessPlanTTL {
+		return false
+	}
+
+	presetByID := make(map[string]folderAccessPreset)
+	for _, p := range defaultFolderAccessPresets() {
+		presetByID[p.ID] = p
+	}
+	preset, ok := presetByID[plan.FolderPresetID]
+	if !ok {
+		return false
+	}
+	granted, err := server.hostFolderPresetGranted(preset.ID)
+	if err != nil || !granted {
+		return false
+	}
+	rootPath, err := server.resolveFolderHostPathForAccess(preset)
+	if err != nil {
+		return false
+	}
+
+	for _, op := range plan.Operations {
+		switch strings.ToLower(strings.TrimSpace(op.Kind)) {
+		case "mkdir":
+			if !hostPlanPathIsLowRisk(rootPath, op.Path) {
+				return false
+			}
+		case "move":
+			if !hostPlanMoveIsLowRisk(rootPath, op.From, op.To) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return len(plan.Operations) > 0
+}
+
+func hostPlanMoveIsLowRisk(rootPath string, from string, to string) bool {
+	fromPath, err := pathUnderResolvedHostRoot(rootPath, from)
+	if err != nil || hostPlanContainsHiddenSegment(from) {
+		return false
+	}
+	toPath, err := pathUnderResolvedHostRoot(rootPath, to)
+	if err != nil || hostPlanContainsHiddenSegment(to) {
+		return false
+	}
+	if fromPath == toPath {
+		return false
+	}
+	if info, statErr := os.Stat(toPath); statErr == nil {
+		// Existing destination implies replacement/overwrite risk.
+		if info != nil {
+			return false
+		}
+	} else if !os.IsNotExist(statErr) {
+		return false
+	}
+	if info, statErr := os.Stat(fromPath); statErr == nil {
+		if info.IsDir() {
+			return false
+		}
+	} else if !os.IsNotExist(statErr) {
+		return false
+	}
+	return true
+}
+
+func hostPlanPathIsLowRisk(rootPath string, rel string) bool {
+	if hostPlanContainsHiddenSegment(rel) {
+		return false
+	}
+	_, err := pathUnderResolvedHostRoot(rootPath, rel)
+	return err == nil
+}
+
+func hostPlanContainsHiddenSegment(rel string) bool {
+	trimmed := strings.Trim(strings.TrimSpace(rel), `/\`)
+	if trimmed == "" {
+		return false
+	}
+	for _, segment := range strings.Split(filepath.ToSlash(trimmed), "/") {
+		if strings.HasPrefix(segment, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 // toJSONSlice converts a typed Go slice to []interface{} by JSON round-trip.

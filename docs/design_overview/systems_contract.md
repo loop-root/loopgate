@@ -4,7 +4,7 @@
 
 This document defines what must remain true in the **operator client + Loopgate** split.
 
-**Terminology:** The **operator client** is whatever local process attaches to Loopgate (IDE-hosted agent, CLI, native UI, or TUI shell). This contract uses **operator client** / **client** for the unprivileged runtime. Prefer **HTTP on the Unix socket** for real workflows (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`). **In-tree MCP is deprecated** (`docs/setup/LOOPGATE_MCP.md`, ADR 0010).
+**Terminology:** The **operator client** is whatever local process attaches to Loopgate (IDE-hosted agent, CLI, native UI, or TUI shell). This contract uses **operator client** / **client** for the unprivileged runtime. Prefer **HTTP on the Unix socket** for real workflows (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`). **In-tree MCP is removed** (ADR 0010).
 
 ## 1) Purpose
 
@@ -127,7 +127,7 @@ Target contract:
 - used only alongside a signed control-session request envelope
 
 The normative token transport, replay, and denial rules are defined in [RFC 0001](../rfcs/0001-loopgate-token-policy.md).
-UI-facing rendering and bridge behavior must also follow the [UI Surface Contract](./ui_surface_contract.md).
+Current operator-harness behavior must also follow the [Claude Code Hooks MVP](./claude_code_hooks_mvp.md).
 
 ## 8) Current scope vs planned scope
 

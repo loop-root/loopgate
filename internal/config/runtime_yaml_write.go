@@ -40,6 +40,8 @@ func WriteRuntimeConfigYAML(repoRoot string, runtimeConfig RuntimeConfig) error 
 }
 
 // WritePolicyYAML writes core/policy/policy.yaml atomically after defaults and validation.
+// Callers must write a matching core/policy/policy.yaml.sig before restarting Loopgate;
+// unsigned policy updates fail closed at startup.
 // It removes runtime/state/config/policy.json if present so a stale frozen copy cannot override
 // the repository policy on the next startup.
 func WritePolicyYAML(repoRoot string, policy Policy) error {

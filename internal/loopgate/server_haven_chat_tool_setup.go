@@ -15,12 +15,13 @@ type havenChatToolState struct {
 
 func (server *Server) buildHavenChatToolState(tokenClaims capabilityToken, req havenChatRequest, runtimeConfig modelruntime.Config) havenChatToolState {
 	allowedCapabilitySummaries := filterHavenCapabilitySummaries(server.capabilitySummaries(), tokenClaims.AllowedCapabilities)
+	policyRuntime := server.currentPolicyRuntime()
 	if shellDevEnabled, err := config.IsShellDevModeEnabled(server.repoRoot); err == nil && !shellDevEnabled {
 		allowedCapabilitySummaries = havenFilterOutCapability(allowedCapabilitySummaries, "shell_exec")
 	}
 
 	availableToolDefs := buildHavenToolDefinitions(allowedCapabilitySummaries)
-	nativeToolDefs := modelpkg.BuildNativeToolDefsForAllowedNamesWithOptions(server.registry, capabilityNamesFromSummaries(allowedCapabilitySummaries), modelpkg.NativeToolDefBuildOptions{
+	nativeToolDefs := modelpkg.BuildNativeToolDefsForAllowedNamesWithOptions(policyRuntime.registry, capabilityNamesFromSummaries(allowedCapabilitySummaries), modelpkg.NativeToolDefBuildOptions{
 		HavenUserIntentGuards: true,
 		CompactNativeTools:    useCompactHavenNativeTools,
 	})

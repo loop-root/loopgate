@@ -21,6 +21,9 @@ func OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot strin
 	if len(rememberedFactSeeds) == 0 && len(observedThreadSeeds) == 0 && len(todoSeeds) == 0 {
 		return nil, fmt.Errorf("at least one production-parity control-plane seed is required")
 	}
+	if len(todoSeeds) > 0 {
+		return nil, fmt.Errorf("benchmark todo seeds are retired with the task-board surface")
+	}
 
 	rememberedFactSeedsByScope := make(map[string][]BenchmarkRememberedFactSeed)
 	for _, rememberedFactSeed := range rememberedFactSeeds {
@@ -40,23 +43,11 @@ func OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot strin
 		observedThreadSeedsByScope[benchmarkScope] = append(observedThreadSeedsByScope[benchmarkScope], observedThreadSeed)
 	}
 
-	todoSeedsByScope := make(map[string][]BenchmarkTodoSeed)
-	for _, todoSeed := range todoSeeds {
-		benchmarkScope := strings.TrimSpace(todoSeed.Scope)
-		if benchmarkScope == "" {
-			return nil, fmt.Errorf("benchmark todo seed requires a non-empty scope")
-		}
-		todoSeedsByScope[benchmarkScope] = append(todoSeedsByScope[benchmarkScope], todoSeed)
-	}
-
-	knownScopes := make(map[string]struct{}, len(rememberedFactSeedsByScope)+len(observedThreadSeedsByScope)+len(todoSeedsByScope))
+	knownScopes := make(map[string]struct{}, len(rememberedFactSeedsByScope)+len(observedThreadSeedsByScope))
 	for benchmarkScope := range rememberedFactSeedsByScope {
 		knownScopes[benchmarkScope] = struct{}{}
 	}
 	for benchmarkScope := range observedThreadSeedsByScope {
-		knownScopes[benchmarkScope] = struct{}{}
-	}
-	for benchmarkScope := range todoSeedsByScope {
 		knownScopes[benchmarkScope] = struct{}{}
 	}
 	if len(knownScopes) == 0 {
@@ -73,7 +64,7 @@ func OpenContinuityTCLProductionParityControlPlaneDiscoverBackend(repoRoot strin
 		scenarioStates: make(map[string]benchmarkControlPlaneScenarioState, len(orderedScopes)),
 	}
 	for _, benchmarkScope := range orderedScopes {
-		scenarioState, err := seedBenchmarkScenarioOverControlPlane(repoRoot, benchmarkScope, rememberedFactSeedsByScope[benchmarkScope], observedThreadSeedsByScope[benchmarkScope], todoSeedsByScope[benchmarkScope])
+		scenarioState, err := seedBenchmarkScenarioOverControlPlane(repoRoot, benchmarkScope, rememberedFactSeedsByScope[benchmarkScope], observedThreadSeedsByScope[benchmarkScope], nil)
 		if err != nil {
 			_ = controlPlaneBackend.Close()
 			return nil, err
@@ -166,6 +157,9 @@ func seedBenchmarkScenarioOverControlPlane(repoRoot string, benchmarkScope strin
 	if len(rememberedFactSeeds) == 0 && len(observedThreadSeeds) == 0 && len(todoSeeds) == 0 {
 		return benchmarkControlPlaneScenarioState{}, fmt.Errorf("scenario scope %q produced no control-plane seeds", benchmarkScope)
 	}
+	if len(todoSeeds) > 0 {
+		return benchmarkControlPlaneScenarioState{}, fmt.Errorf("scenario scope %q requested retired benchmark todo seeds", benchmarkScope)
+	}
 
 	isolatedBenchmarkRepoRoot, err := prepareIsolatedBenchmarkServerRepoRoot(repoRoot)
 	if err != nil {
@@ -175,7 +169,7 @@ func seedBenchmarkScenarioOverControlPlane(repoRoot string, benchmarkScope strin
 	benchmarkServer, benchmarkClient, stopBenchmarkServer, err := startBenchmarkControlPlaneServerWithSession(
 		isolatedBenchmarkRepoRoot,
 		"haven",
-		[]string{controlCapabilityUIWrite, controlCapabilityMemoryRead, controlCapabilityMemoryWrite, "todo.add", "todo.complete"},
+		[]string{controlCapabilityUIWrite, controlCapabilityMemoryRead, controlCapabilityMemoryWrite},
 	)
 	if err != nil {
 		_ = os.RemoveAll(isolatedBenchmarkRepoRoot)
@@ -215,98 +209,16 @@ func seedBenchmarkScenarioOverControlPlane(repoRoot string, benchmarkScope strin
 		cleanup()
 		return benchmarkControlPlaneScenarioState{}, err
 	}
-	threadStore, err := threadstore.NewStore(threadStoreRoot, workspaceID)
+	_, err = threadstore.NewStore(threadStoreRoot, workspaceID)
 	if err != nil {
 		cleanup()
 		return benchmarkControlPlaneScenarioState{}, fmt.Errorf("open benchmark thread store: %w", err)
 	}
 	for observedThreadSeedIndex, observedThreadSeed := range observedThreadSeeds {
-		if strings.TrimSpace(observedThreadSeed.Scope) != benchmarkScope {
-			cleanup()
-			return benchmarkControlPlaneScenarioState{}, fmt.Errorf("benchmark observed thread scope %q does not match scenario scope %q", observedThreadSeed.Scope, benchmarkScope)
-		}
-		inspectionSeedTimeUTC := baseSeedTimeUTC.Add(time.Duration(len(rememberedFactSeeds)+observedThreadSeedIndex) * time.Second)
-		threadSummary, err := threadStore.NewThread()
-		if err != nil {
-			cleanup()
-			return benchmarkControlPlaneScenarioState{}, fmt.Errorf("create benchmark thread for scope %q: %w", benchmarkScope, err)
-		}
-		threadID := threadSummary.ThreadID
-		if strings.TrimSpace(observedThreadSeed.ThreadID) != "" {
-			threadID = strings.TrimSpace(observedThreadSeed.ThreadID)
-		}
-		for eventIndex, eventSeed := range observedThreadSeed.Events {
-			eventTimestampUTC := strings.TrimSpace(eventSeed.TimestampUTC)
-			if eventTimestampUTC == "" {
-				eventTimestampUTC = inspectionSeedTimeUTC.Add(time.Duration(eventIndex) * time.Millisecond).Format(time.RFC3339Nano)
-			}
-			if err := threadStore.AppendEvent(threadID, benchmarkThreadstoreEventFromSeed(eventSeed, eventTimestampUTC, observedThreadSeedIndex, eventIndex)); err != nil {
-				cleanup()
-				return benchmarkControlPlaneScenarioState{}, fmt.Errorf("append benchmark thread event for scope %q: %w", benchmarkScope, err)
-			}
-		}
-		benchmarkServer.SetNowForTest(func() time.Time {
-			return inspectionSeedTimeUTC
-		})
-		if _, err := benchmarkClient.SubmitHavenContinuityInspectionForThread(context.Background(), threadID); err != nil {
-			cleanup()
-			return benchmarkControlPlaneScenarioState{}, fmt.Errorf("inspect benchmark thread %q for scope %q: %w", threadID, benchmarkScope, err)
-		}
-	}
-
-	for todoSeedIndex, todoSeed := range todoSeeds {
-		if strings.TrimSpace(todoSeed.Scope) != benchmarkScope {
-			cleanup()
-			return benchmarkControlPlaneScenarioState{}, fmt.Errorf("benchmark todo seed scope %q does not match scenario scope %q", todoSeed.Scope, benchmarkScope)
-		}
-		todoSeedTimeUTC := baseSeedTimeUTC.Add(time.Duration(len(rememberedFactSeeds)+len(observedThreadSeeds)+todoSeedIndex) * time.Second)
-		benchmarkServer.SetNowForTest(func() time.Time {
-			return todoSeedTimeUTC
-		})
-		addResponse, err := benchmarkClient.ExecuteCapability(context.Background(), CapabilityRequest{
-			RequestID:  benchmarkTodoCapabilityRequestID(benchmarkScope, todoSeedIndex, "add"),
-			Capability: "todo.add",
-			Arguments: map[string]string{
-				"text":        strings.TrimSpace(todoSeed.Text),
-				"task_kind":   nonEmptyBenchmarkTodoTaskKind(todoSeed.TaskKind),
-				"source_kind": nonEmptyBenchmarkTodoSourceKind(todoSeed.SourceKind),
-				"next_step":   strings.TrimSpace(todoSeed.NextStep),
-			},
-		})
-		if err != nil {
-			cleanup()
-			return benchmarkControlPlaneScenarioState{}, fmt.Errorf("seed todo item %d for scope %q through control plane: %w", todoSeedIndex, benchmarkScope, err)
-		}
-		if addResponse.Status != ResponseStatusSuccess {
-			cleanup()
-			return benchmarkControlPlaneScenarioState{}, fmt.Errorf("seed todo item %d for scope %q returned status=%q denial_code=%q reason=%q", todoSeedIndex, benchmarkScope, addResponse.Status, addResponse.DenialCode, addResponse.DenialReason)
-		}
-		itemID, _ := addResponse.StructuredResult["item_id"].(string)
-		if strings.TrimSpace(itemID) == "" {
-			cleanup()
-			return benchmarkControlPlaneScenarioState{}, fmt.Errorf("seed todo item %d for scope %q returned no item_id in structured result %#v", todoSeedIndex, benchmarkScope, addResponse.StructuredResult)
-		}
-		switch strings.TrimSpace(todoSeed.FinalStatus) {
-		case "", explicitTodoWorkflowStatusTodo:
-			continue
-		case explicitTodoWorkflowStatusDone:
-			benchmarkServer.SetNowForTest(func() time.Time {
-				return todoSeedTimeUTC.Add(500 * time.Millisecond)
-			})
-			if _, err := benchmarkClient.ExecuteCapability(context.Background(), CapabilityRequest{
-				RequestID:  benchmarkTodoCapabilityRequestID(benchmarkScope, todoSeedIndex, "complete"),
-				Capability: "todo.complete",
-				Arguments: map[string]string{
-					"item_id": itemID,
-				},
-			}); err != nil {
-				cleanup()
-				return benchmarkControlPlaneScenarioState{}, fmt.Errorf("complete seeded todo item %q for scope %q: %w", itemID, benchmarkScope, err)
-			}
-		default:
-			cleanup()
-			return benchmarkControlPlaneScenarioState{}, fmt.Errorf("unsupported benchmark todo final status %q for scope %q", todoSeed.FinalStatus, benchmarkScope)
-		}
+		_ = observedThreadSeedIndex
+		_ = observedThreadSeed
+		cleanup()
+		return benchmarkControlPlaneScenarioState{}, fmt.Errorf("benchmark observed-thread seeds are no longer supported through the retired Haven continuity inspect path (scope %q)", benchmarkScope)
 	}
 
 	return benchmarkControlPlaneScenarioState{

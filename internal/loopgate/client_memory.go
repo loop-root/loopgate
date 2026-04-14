@@ -4,24 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 )
-
-// SubmitHavenContinuityInspectionForThread loads a stored chat thread from Loopgate's threadstore
-// and runs continuity inspection (proposal path). This is the supported client-facing continuity
-// submission path so the client does not ship raw transcript payloads.
-func (client *Client) SubmitHavenContinuityInspectionForThread(ctx context.Context, threadID string) (HavenContinuityInspectThreadResponse, error) {
-	capabilityToken, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return HavenContinuityInspectThreadResponse{}, err
-	}
-	var response HavenContinuityInspectThreadResponse
-	req := HavenContinuityInspectThreadRequest{ThreadID: strings.TrimSpace(threadID)}
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/continuity/inspect-thread", capabilityToken, req, &response, nil); err != nil {
-		return HavenContinuityInspectThreadResponse{}, err
-	}
-	return response, nil
-}
 
 func (client *Client) LoadMemoryWakeState(ctx context.Context) (MemoryWakeStateResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
@@ -33,30 +16,6 @@ func (client *Client) LoadMemoryWakeState(ctx context.Context) (MemoryWakeStateR
 		return MemoryWakeStateResponse{}, err
 	}
 	return response, nil
-}
-
-// LoadTasks returns Task Board items for local operator clients
-// (control session auth; not capability execution).
-func (client *Client) LoadTasks(ctx context.Context) (UITasksResponse, error) {
-	capabilityToken, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return UITasksResponse{}, err
-	}
-	var response UITasksResponse
-	if err := client.doJSON(ctx, http.MethodGet, "/v1/tasks", capabilityToken, nil, &response, nil); err != nil {
-		return UITasksResponse{}, err
-	}
-	return response, nil
-}
-
-// SetExplicitTodoWorkflowStatus sets workflow status for an explicit todo item (todo vs in_progress).
-func (client *Client) SetExplicitTodoWorkflowStatus(ctx context.Context, itemID string, status string) error {
-	capabilityToken, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return err
-	}
-	path := "/v1/tasks/" + itemID + "/status"
-	return client.doJSON(ctx, http.MethodPut, path, capabilityToken, UITasksStatusUpdateRequest{Status: status}, nil, nil)
 }
 
 func (client *Client) LoadMemoryDiagnosticWake(ctx context.Context) (MemoryDiagnosticWakeResponse, error) {

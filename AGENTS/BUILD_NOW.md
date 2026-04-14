@@ -42,7 +42,7 @@ The key registry silently rejects `goal.*` and `work.*` keys. Preference facet c
 
 ### 4. Chat regression fixes
 
-Panic recovery in `handleHavenChat`, audit log coverage for error paths, and UX polish for **legacy HTTP chat** consumers. These block reliable **local demos** that still use `/v1/haven/chat` (handler and route names are historical).
+Panic recovery in `handleHavenChat`, audit log coverage for error paths, and UX polish for the governed HTTP chat path. These block reliable local demos and operator workflows; `handleHavenChat` is an internal handler name, not a separate public surface.
 
 ### 5. Admin console v0
 

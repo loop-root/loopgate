@@ -118,14 +118,14 @@ func TestCapabilityRequestValidate_DeniesUnsafeMetadataAndArgumentNames(t *testi
 
 	t.Run("marshal_json_omits_echoed_provider_fields", func(t *testing.T) {
 		req := CapabilityRequest{
-			RequestID:                  "r1",
-			SessionID:                  "s1",
-			Actor:                      "haven",
-			Capability:                 "fs_list",
-			Arguments:                  map[string]string{},
-			EchoedNativeToolName:       "should_not_appear",
-			EchoedNativeToolNameCamel:  "neither",
-			EchoedNativeToolCallID:     "nor",
+			RequestID:                 "r1",
+			SessionID:                 "s1",
+			Actor:                     "haven",
+			Capability:                "fs_list",
+			Arguments:                 map[string]string{},
+			EchoedNativeToolName:      "should_not_appear",
+			EchoedNativeToolNameCamel: "neither",
+			EchoedNativeToolCallID:    "nor",
 		}
 		out, err := json.Marshal(req)
 		if err != nil {
@@ -160,6 +160,37 @@ func TestApprovalDecisionRequestValidate_DeniesUnsafeNonce(t *testing.T) {
 
 	if err := (ApprovalDecisionRequest{Approved: true, DecisionNonce: "$replay"}).Validate(); err == nil {
 		t.Fatal("expected shell-like decision nonce to be denied")
+	}
+}
+
+func TestMCPGatewayInvocationRequestValidate_DeniesUnsafeArgumentName(t *testing.T) {
+	validInvocationRequest := MCPGatewayInvocationRequest{
+		ServerID: "github",
+		ToolName: "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"query": json.RawMessage(`"loopgate"`),
+		},
+	}
+	if err := validInvocationRequest.Validate(); err != nil {
+		t.Fatalf("expected valid MCP gateway invocation request: %v", err)
+	}
+
+	if err := (MCPGatewayInvocationRequest{
+		ServerID: "github",
+		ToolName: "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"../../query": json.RawMessage(`"loopgate"`),
+		},
+	}).Validate(); err == nil {
+		t.Fatal("expected traversal-like MCP gateway argument name to be denied")
+	}
+
+	if err := (MCPGatewayInvocationRequest{
+		ServerID:  "github",
+		ToolName:  "search_repositories",
+		Arguments: nil,
+	}).Validate(); err == nil {
+		t.Fatal("expected missing MCP gateway arguments object to be denied")
 	}
 }
 

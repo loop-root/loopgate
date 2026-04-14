@@ -17,9 +17,10 @@ type havenChatRuntime struct {
 }
 
 func newHavenChatRuntime(server *Server) havenChatRuntime {
+	policyRuntime := server.currentPolicyRuntime()
 	return havenChatRuntime{
-		policy:                   server.policy,
-		registry:                 server.registry,
+		policy:                   policyRuntime.policy,
+		registry:                 policyRuntime.registry,
 		executeCapabilityRequest: server.executeCapabilityRequest,
 	}
 }
@@ -182,6 +183,9 @@ func (runtime havenChatRuntime) runToolLoop(
 		}
 
 		if handled, outcome := loopState.pendingApprovalOutcome(replyText, toolResults, emitter); handled {
+			return *outcome
+		}
+		if handled, outcome := loopState.completedHostPlanApplyOutcome(toolResults); handled {
 			return *outcome
 		}
 

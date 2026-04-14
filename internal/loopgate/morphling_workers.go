@@ -383,7 +383,8 @@ func (server *Server) completeMorphlingWorker(workerSession morphlingWorkerSessi
 	}
 
 	if completingRecord.RequiresReview {
-		classPolicy, found := server.morphlingClassPolicy.Class(completingRecord.Class)
+		policyRuntime := server.currentPolicyRuntime()
+		classPolicy, found := policyRuntime.morphlingClassPolicy.Class(completingRecord.Class)
 		if !found {
 			_ = server.failMorphlingAfterAdmission(workerSession.ParentControlSessionID, workerSession.MorphlingID, morphlingOutcomeFailed, morphlingReasonStagingFailed)
 			return MorphlingWorkerActionResponse{}, errMorphlingClassInvalid

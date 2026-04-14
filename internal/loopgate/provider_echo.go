@@ -5,6 +5,14 @@ import (
 	"fmt"
 )
 
+// EchoProviderOutput is the deterministic local test/provider envelope returned
+// by the echo capability runtime.
+type EchoProviderOutput struct {
+	Summary     string `json:"summary"`
+	InputLength int    `json:"input_length"`
+	Provider    string `json:"provider"`
+}
+
 // executeEchoGenerateSummary runs the echo.generate_summary capability.
 // This is a local fake provider — no external dependencies, no network calls.
 // Returns canonical JSON bytes (via EchoProviderOutput) so the caller can

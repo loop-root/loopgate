@@ -71,13 +71,7 @@ memory:
 
 func TestNewServer_DiagnosticConfigFollowsYAMLDespiteFrozenRuntimeJSON(t *testing.T) {
 	repoRoot := t.TempDir()
-	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(policyPath, []byte(loopgatePolicyYAML(false)), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
 	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	configDir := filepath.Join(repoRoot, "config")

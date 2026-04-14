@@ -3,7 +3,6 @@ package loopgate
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -42,6 +41,7 @@ type Server struct {
 	repoRoot                   string
 	socketPath                 string
 	auditPath                  string
+	auditExportStatePath       string
 	noncePath                  string
 	quarantineDir              string
 	derivedArtifactDir         string
@@ -50,6 +50,11 @@ type Server struct {
 	morphlingPath              string
 	memoryBasePath             string
 	memoryLegacyPath           string
+	claudeHookSessionsPath     string
+	claudeHookSessionsRoot     string
+	mcpGatewayManifests        map[string]mcpGatewayServerManifest
+	mcpGatewayApprovalRequests map[string]pendingMCPGatewayApprovalRequest
+	mcpGatewayLaunchedServers  map[string]*mcpGatewayLaunchedServer
 	memoryPartitions           map[string]*memoryPartition
 	sandboxPaths               sandbox.Paths
 	policy                     config.Policy
@@ -67,6 +72,7 @@ type Server struct {
 	reportSecurityWarning      func(eventCode string, cause error)
 	resolvePeerIdentity        func(net.Conn) (peerIdentity, error)
 	resolveExePath             func(int) (string, error)
+	processExists              func(int) (bool, error)
 	resolveUserHomeDir         func() (string, error)
 	expectedClientPath         string
 	newModelClientFromConfig   func(modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error)
@@ -77,6 +83,8 @@ type Server struct {
 	auditMu       sync.Mutex
 	auditSequence uint64
 	lastAuditHash string
+
+	auditExportMu sync.Mutex
 
 	promotionMu sync.Mutex
 
@@ -92,6 +100,8 @@ type Server struct {
 	// havenPreferencesMu serializes load/save of runtime/state/haven_preferences.json.
 	havenPreferencesMu sync.Mutex
 
+	claudeHookSessionsMu sync.Mutex
+
 	connectionsMu sync.Mutex
 	connections   map[string]connectionRecord
 
@@ -106,17 +116,6 @@ type Server struct {
 	memoryMu                  sync.Mutex
 	memoryFactWritesBySession map[string][]time.Time
 	memoryFactWritesByUID     map[uint32][]time.Time
-
-	// taskPlansMu protects taskPlans, taskLeases, and taskExecutions.
-	// Lock ordering: server.mu → (release) → taskPlansMu → (release) → auditMu.
-	// Exception: validateAndRecordApprovalDecision holds server.mu while calling logEvent
-	// (which acquires auditMu) so approval state cannot advance until grant/deny audit
-	// append succeeds. Safe because appendAuditEvent does not re-enter server.mu.
-	// server.mu and taskPlansMu are NEVER held simultaneously.
-	taskPlansMu    sync.Mutex
-	taskPlans      map[string]*taskPlanRecord
-	taskLeases     map[string]*taskLeaseRecord
-	taskExecutions map[string]*taskExecutionRecord
 
 	hostAccessPlansMu sync.Mutex
 	hostAccessPlans   map[string]*hostAccessStoredPlan
@@ -135,6 +134,9 @@ type Server struct {
 	configuredConnections  map[string]configuredConnection
 	configuredCapabilities map[string]configuredCapability
 	httpClient             *http.Client
+	policyRuntime          serverPolicyRuntime
+	policyContentSHA256    string
+	policyRuntimeMu        sync.RWMutex
 
 	pkceMu       sync.Mutex
 	pkceSessions map[string]pendingPKCESession
@@ -250,11 +252,11 @@ func normalizeSessionExecutablePinPath(raw string) string {
 }
 
 func NewServer(repoRoot string, socketPath string) (*Server, error) {
-	return NewServerWithOptions(repoRoot, socketPath, false)
+	return NewServerWithOptions(repoRoot, socketPath)
 }
 
 // NewServerWithOptions constructs the Loopgate server for the local Unix-socket control plane.
-func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool) (*Server, error) {
+func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	if err := verifySupportedExecutionPlatform(); err != nil {
 		return nil, err
 	}
@@ -268,31 +270,11 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	// Load policy directly from the repository YAML. Do not use
 	// runtime/state/config/policy.json — a stale frozen copy can silently weaken
 	// mounted-write approval semantics and other security boundaries.
-	policy, err := config.LoadPolicy(repoRoot)
+	policyLoadResult, err := config.LoadPolicyWithHash(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("load policy: %w", err)
 	}
-
-	// Verify policy hash integrity against the repository policy content.
-	policyJSON, hashErr := config.PolicyToJSON(policy)
-	if hashErr != nil {
-		return nil, fmt.Errorf("serialize policy for hash: %w", hashErr)
-	}
-	policyHash := fmt.Sprintf("%x", sha256.Sum256(policyJSON))
-	hashMatch, storedHash, hashErr := config.VerifyPolicyHash(repoRoot, policyHash)
-	if hashErr != nil {
-		return nil, fmt.Errorf("verify policy hash: %w", hashErr)
-	}
-	if !hashMatch {
-		if acceptPolicy {
-			if err := config.AcceptPolicyHash(repoRoot, policyHash); err != nil {
-				return nil, fmt.Errorf("accept policy hash: %w", err)
-			}
-			fmt.Fprintf(os.Stderr, "WARN: policy hash updated (was %s, now %s)\n", storedHash, policyHash)
-		} else {
-			return nil, fmt.Errorf("policy file has changed (stored hash %s, current hash %s); restart with --accept-policy to accept", storedHash, policyHash)
-		}
-	}
+	policy := policyLoadResult.Policy
 
 	// Load runtime config from YAML (and optional diagnostic override). Do not use
 	// runtime/state/config/runtime.json — operators and config PUT edit config/runtime.yaml.
@@ -305,21 +287,6 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	if err != nil {
 		return nil, fmt.Errorf("load goal aliases: %w", err)
 	}
-
-	// Root tool registry in the sandbox home so tool execution happens inside
-	// Morph's virtual filesystem, not the host repo root.
-	sandboxHome := sandbox.PathsForRepo(repoRoot).Home
-	registry, err := toolspkg.NewSandboxRegistry(repoRoot, sandboxHome, policy)
-	if err != nil {
-		return nil, fmt.Errorf("create tool registry: %w", err)
-	}
-
-	// Load morphling class policy: JSON state → YAML seed → fail.
-	morphlingClassPolicy, err := loadMorphlingClassPolicyWithSeed(configStateDir, repoRoot, registry)
-	if err != nil {
-		return nil, fmt.Errorf("load morphling class policy: %w", err)
-	}
-
 	// Load connections: JSON state → YAML seed → empty.
 	configuredConnections, configuredCapabilities, err := loadConfiguredConnectionsWithSeed(configStateDir, repoRoot)
 	if err != nil {
@@ -330,6 +297,7 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		socketPath:                 validatedSocketPath,
 		configStateDir:             configStateDir,
 		auditPath:                  filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
+		auditExportStatePath:       filepath.Join(repoRoot, runtimeConfig.Logging.AuditExport.StatePath),
 		noncePath:                  filepath.Join(repoRoot, "runtime", "state", "nonce_replay.json"),
 		quarantineDir:              filepath.Join(repoRoot, "runtime", "state", "quarantine"),
 		derivedArtifactDir:         filepath.Join(repoRoot, "runtime", "state", "derived_artifacts"),
@@ -338,15 +306,21 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		morphlingPath:              filepath.Join(repoRoot, "runtime", "state", "loopgate_morphlings.json"),
 		morphlingKeyPath:           filepath.Join(repoRoot, "runtime", "state", "morphling_state_key"),
 		memoryBasePath:             filepath.Join(repoRoot, "runtime", "state", "memory"),
+		claudeHookSessionsPath:     filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions.json"),
+		claudeHookSessionsRoot:     filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions"),
+		mcpGatewayManifests:        map[string]mcpGatewayServerManifest{},
+		mcpGatewayApprovalRequests: make(map[string]pendingMCPGatewayApprovalRequest),
+		mcpGatewayLaunchedServers:  make(map[string]*mcpGatewayLaunchedServer),
 		memoryPartitions:           make(map[string]*memoryPartition),
 		memoryLegacyPath:           filepath.Join(repoRoot, "runtime", "state", "loopgate_memory.json"),
 		sandboxPaths:               sandbox.PathsForRepo(repoRoot),
 		policy:                     policy,
+		policyContentSHA256:        policyLoadResult.ContentSHA256,
 		runtimeConfig:              runtimeConfig,
 		goalAliases:                goalAliases,
-		morphlingClassPolicy:       morphlingClassPolicy,
-		registry:                   registry,
-		checker:                    policypkg.NewChecker(policy),
+		morphlingClassPolicy:       morphlingClassPolicy{},
+		registry:                   nil,
+		checker:                    nil,
 		now:                        time.Now,
 		saveMemoryState:            nil,
 		newMemoryEvidenceRetriever: newRuntimeMemoryEvidenceRetriever,
@@ -359,6 +333,7 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		},
 		resolvePeerIdentity:                  peerIdentityFromConn,
 		resolveExePath:                       resolveExecutablePath,
+		processExists:                        processExists,
 		resolveUserHomeDir:                   os.UserHomeDir,
 		providerTokens:                       make(map[string]providerAccessToken),
 		configuredConnections:                configuredConnections,
@@ -387,9 +362,6 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		maxTotalControlSessions:              defaultMaxTotalControlSessions,
 		maxTotalApprovalRecords:              defaultMaxTotalApprovalRecords,
 		maxMorphlingWorkerSessions:           defaultMaxMorphlingWorkerSessions,
-		taskPlans:                            make(map[string]*taskPlanRecord),
-		taskLeases:                           make(map[string]*taskLeaseRecord),
-		taskExecutions:                       make(map[string]*taskExecutionRecord),
 		hostAccessPlans:                      make(map[string]*hostAccessStoredPlan),
 		hostAccessAppliedPlanAt:              make(map[string]time.Time),
 	}
@@ -399,6 +371,11 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	server.saveMemoryState = func(path string, st continuityMemoryState, cfg config.RuntimeConfig) error {
 		return saveContinuityMemoryState(path, st, cfg, server.now().UTC())
 	}
+	initialPolicyRuntime, err := server.buildPolicyRuntime(policyLoadResult, cloneConfiguredCapabilities(configuredCapabilities))
+	if err != nil {
+		return nil, err
+	}
+	server.storePolicyRuntime(initialPolicyRuntime)
 	if err := maybeMigrateMemoryToPartitionedLayout(server.memoryBasePath); err != nil {
 		return nil, fmt.Errorf("migrate memory layout: %w", err)
 	}
@@ -406,12 +383,6 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 		return ledger.AppendWithRotation(path, auditEvent, server.auditLedgerRotationSettings())
 	}
 	server.newModelClientFromConfig = server.newModelClientFromRuntimeConfig
-	if err := registerOperatorMountTools(server); err != nil {
-		return nil, fmt.Errorf("register operator mount tools: %w", err)
-	}
-	if err := server.registerConfiguredCapabilities(); err != nil {
-		return nil, fmt.Errorf("register configured capabilities: %w", err)
-	}
 	if err := server.sandboxPaths.Ensure(); err != nil {
 		return nil, fmt.Errorf("ensure sandbox paths: %w", err)
 	}
@@ -450,6 +421,9 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	if err := server.loadAuditChainState(); err != nil {
 		return nil, fmt.Errorf("load audit chain state: %w", err)
 	}
+	if err := server.loadOrInitAuditExportState(); err != nil {
+		return nil, fmt.Errorf("load audit export state: %w", err)
+	}
 	if err := server.recoverMorphlings(); err != nil {
 		return nil, fmt.Errorf("recover morphlings: %w", err)
 	}
@@ -471,50 +445,29 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	mux.HandleFunc("/v1/ui/approvals/", server.handleUIApprovalDecision)
 	mux.HandleFunc("/v1/ui/folder-access", server.handleFolderAccess)
 	mux.HandleFunc("/v1/ui/folder-access/sync", server.handleFolderAccessSync)
-	mux.HandleFunc("/v1/ui/task-standing-grants", server.handleTaskStandingGrants)
 	mux.HandleFunc("/v1/ui/shared-folder", server.handleSharedFolderStatus)
 	mux.HandleFunc("/v1/ui/shared-folder/sync", server.handleSharedFolderSync)
-	mux.HandleFunc("/v1/ui/desk-notes/dismiss", server.handleHavenDeskNotesDismiss)
-	mux.HandleFunc("/v1/ui/desk-notes", server.handleHavenDeskNotes)
-	mux.HandleFunc("/v1/ui/journal/entries", server.handleHavenJournalEntries)
-	mux.HandleFunc("/v1/ui/journal/entry", server.handleHavenJournalEntry)
-	mux.HandleFunc("/v1/ui/paint/gallery", server.handleHavenPaintGallery)
-	mux.HandleFunc("/v1/ui/working-notes/save", server.handleHavenWorkingNotesSave)
-	mux.HandleFunc("/v1/ui/working-notes/entry", server.handleHavenWorkingNotesEntry)
-	mux.HandleFunc("/v1/ui/working-notes", server.handleHavenWorkingNotes)
-	mux.HandleFunc("/v1/ui/workspace/list", server.handleHavenWorkspaceList)
-	mux.HandleFunc("/v1/ui/workspace/host-layout", server.handleHavenWorkspaceHostLayout)
-	mux.HandleFunc("/v1/ui/workspace/preview", server.handleHavenWorkspacePreview)
-	mux.HandleFunc("/v1/ui/memory/reset", server.handleHavenMemoryReset)
-	mux.HandleFunc("/v1/ui/memory", server.handleHavenMemoryInventory)
-	mux.HandleFunc("/v1/ui/morph-sleep", server.handleHavenMorphSleep)
-	mux.HandleFunc("/v1/ui/presence", server.handleHavenPresence)
 	mux.HandleFunc("/v1/diagnostic/report", server.handleDiagnosticReport)
+	mux.HandleFunc("/v1/mcp-gateway/inventory", server.handleMCPGatewayInventory)
+	mux.HandleFunc("/v1/mcp-gateway/server/status", server.handleMCPGatewayServerStatus)
+	mux.HandleFunc("/v1/mcp-gateway/decision", server.handleMCPGatewayDecision)
+	mux.HandleFunc("/v1/mcp-gateway/server/ensure-launched", server.handleMCPGatewayEnsureLaunched)
+	mux.HandleFunc("/v1/mcp-gateway/server/stop", server.handleMCPGatewayServerStop)
+	mux.HandleFunc("/v1/mcp-gateway/invocation/validate", server.handleMCPGatewayInvocationValidate)
+	mux.HandleFunc("/v1/mcp-gateway/invocation/request-approval", server.handleMCPGatewayInvocationRequestApproval)
+	mux.HandleFunc("/v1/mcp-gateway/invocation/decide-approval", server.handleMCPGatewayInvocationDecideApproval)
+	mux.HandleFunc("/v1/mcp-gateway/invocation/validate-execution", server.handleMCPGatewayInvocationValidateExecution)
+	mux.HandleFunc("/v1/mcp-gateway/invocation/execute", server.handleMCPGatewayInvocationExecute)
+	mux.HandleFunc("/v1/audit/export/flush", server.handleAuditExportFlush)
+	mux.HandleFunc("/v1/audit/export/trust-check", server.handleAuditExportTrustCheck)
 	mux.HandleFunc("/v1/session/open", server.handleSessionOpen)
+	mux.HandleFunc("/v1/session/close", server.handleSessionClose)
 	mux.HandleFunc("/v1/session/mac-keys", server.handleSessionMACKeys)
 	mux.HandleFunc("/v1/model/reply", server.handleModelReply)
 	mux.HandleFunc("/v1/model/validate", server.handleModelValidate)
 	mux.HandleFunc("/v1/model/ollama/tags", server.handleOllamaTags)
 	mux.HandleFunc("/v1/model/openai/models", server.handleOpenAICompatibleModels)
 	mux.HandleFunc("/v1/model/connections/store", server.handleModelConnectionStore)
-	mux.HandleFunc("/v1/chat", server.handleHavenChat)
-	mux.HandleFunc("/v1/settings/shell-dev", server.handleHavenSettingsShellDev)
-	mux.HandleFunc("/v1/settings/idle", server.handleHavenSettingsIdle)
-	mux.HandleFunc("/v1/model/settings", server.handleHavenModelSettings)
-	mux.HandleFunc("/v1/resident/journal-tick", server.handleHavenJournalResidentTick)
-	mux.HandleFunc("/v1/agent/work-item/ensure", server.handleHavenAgentWorkItemEnsure)
-	mux.HandleFunc("/v1/agent/work-item/complete", server.handleHavenAgentWorkItemComplete)
-	mux.HandleFunc("/v1/continuity/inspect-thread", server.handleHavenContinuityInspectThread)
-	// Deprecated compatibility aliases. Keep these until all local HTTP clients
-	// have migrated off the historical /v1/haven/... prefix.
-	mux.HandleFunc("/v1/haven/chat", server.handleHavenChat)
-	mux.HandleFunc("/v1/haven/settings/shell-dev", server.handleHavenSettingsShellDev)
-	mux.HandleFunc("/v1/haven/settings/idle", server.handleHavenSettingsIdle)
-	mux.HandleFunc("/v1/haven/model-settings", server.handleHavenModelSettings)
-	mux.HandleFunc("/v1/haven/resident/journal-tick", server.handleHavenJournalResidentTick)
-	mux.HandleFunc("/v1/haven/agent/work-item/ensure", server.handleHavenAgentWorkItemEnsure)
-	mux.HandleFunc("/v1/haven/agent/work-item/complete", server.handleHavenAgentWorkItemComplete)
-	mux.HandleFunc("/v1/haven/continuity/inspect-thread", server.handleHavenContinuityInspectThread)
 	mux.HandleFunc("/v1/capabilities/execute", server.handleCapabilityExecute)
 	mux.HandleFunc("/v1/connections/status", server.handleConnectionsStatus)
 	mux.HandleFunc("/v1/connections/validate", server.handleConnectionValidate)
@@ -528,8 +481,6 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	mux.HandleFunc("/v1/sandbox/export", server.handleSandboxExport)
 	mux.HandleFunc("/v1/sandbox/list", server.handleSandboxList)
 	mux.HandleFunc("/v1/memory/wake-state", server.handleMemoryWakeState)
-	mux.HandleFunc("/v1/tasks", server.handleTasksCollection)
-	mux.HandleFunc("/v1/tasks/", server.handleTasksSubpaths)
 	mux.HandleFunc("/v1/memory/diagnostic-wake", server.handleMemoryDiagnosticWake)
 	mux.HandleFunc("/v1/memory/discover", server.handleMemoryDiscover)
 	mux.HandleFunc("/v1/memory/artifacts/lookup", server.handleMemoryArtifactLookup)
@@ -549,11 +500,6 @@ func NewServerWithOptions(repoRoot string, socketPath string, acceptPolicy bool)
 	mux.HandleFunc("/v1/quarantine/metadata", server.handleQuarantineMetadata)
 	mux.HandleFunc("/v1/quarantine/view", server.handleQuarantineView)
 	mux.HandleFunc("/v1/quarantine/prune", server.handleQuarantinePrune)
-	mux.HandleFunc("/v1/task/plan", server.handleTaskPlanSubmit)
-	mux.HandleFunc("/v1/task/lease", server.handleTaskLeaseRequest)
-	mux.HandleFunc("/v1/task/execute", server.handleTaskLeaseExecute)
-	mux.HandleFunc("/v1/task/complete", server.handleTaskLeaseComplete)
-	mux.HandleFunc("/v1/task/result", server.handleTaskPlanResult)
 	mux.HandleFunc("/v1/config/", server.handleConfig)
 	mux.HandleFunc("/v1/approvals/", server.handleApprovalDecision)
 	mux.HandleFunc("/v1/hook/pre-validate", server.handleHookPreValidate)
@@ -709,7 +655,8 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		}
 	}
 
-	tool := server.registry.Get(capabilityRequest.Capability)
+	policyRuntime := server.currentPolicyRuntime()
+	tool := policyRuntime.registry.Get(capabilityRequest.Capability)
 	if server.capabilityProhibitsRawSecretExport(tool, capabilityRequest.Capability) {
 		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 			"request_id":           capabilityRequest.RequestID,
@@ -802,8 +749,18 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		return errorResponse
 	}
 
-	policyDecision := server.checker.Check(tool)
+	policyDecision := policyRuntime.checker.Check(tool)
+	if argumentValidator, ok := tool.(toolspkg.PolicyArgumentValidator); ok && policyDecision.Decision != policypkg.Deny {
+		if err := argumentValidator.ValidatePolicyArguments(capabilityRequest.Arguments); err != nil {
+			policyDecision = policypkg.CheckResult{
+				Decision: policypkg.Deny,
+				Reason:   err.Error(),
+			}
+		}
+	}
 	originalPolicyDecision := policyDecision
+	trustedSandboxAutoAllowed := false
+	lowRiskHostPlanAutoAllowed := false
 	if operatorMountGrant, granted, grantErr := operatorMountWriteGrantForRequest(server, tokenClaims.ControlSessionID, capabilityRequest); grantErr == nil && granted {
 		policyDecision = policypkg.CheckResult{
 			Decision: policypkg.Allow,
@@ -815,11 +772,27 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			Decision: policypkg.Allow,
 			Reason:   "trusted Haven-native sandbox capability",
 		}
+		trustedSandboxAutoAllowed = true
+	}
+	if adjustedDecision, adjusted := server.autoAllowLowRiskHostPlanApply(tokenClaims.ControlSessionID, capabilityRequest, policyDecision); adjusted {
+		policyDecision = adjustedDecision
+		lowRiskHostPlanAutoAllowed = true
 	}
 	// Distinct audit when policy would have required approval but Haven trusted-sandbox auto-allow applied.
 	// Operators grep this event to verify the bypass path; failure to persist is fail-closed like other capability audits.
-	if originalPolicyDecision.Decision == policypkg.NeedsApproval && policyDecision.Decision == policypkg.Allow {
+	if originalPolicyDecision.Decision == policypkg.NeedsApproval && policyDecision.Decision == policypkg.Allow && trustedSandboxAutoAllowed {
 		if err := server.logEvent("capability.haven_trusted_sandbox_auto_allow", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+		}
+	}
+	if originalPolicyDecision.Decision == policypkg.NeedsApproval && policyDecision.Decision == policypkg.Allow && lowRiskHostPlanAutoAllowed {
+		if err := server.logEvent("capability.low_risk_host_plan_auto_allow", tokenClaims.ControlSessionID, map[string]interface{}{
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
 			"actor_label":          tokenClaims.ActorLabel,
@@ -1093,21 +1066,6 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 	if capabilityRequest.Capability == "memory.remember" {
 		return server.executeMemoryRememberCapability(effectiveTokenClaims, capabilityRequest)
 	}
-	if capabilityRequest.Capability == "todo.add" {
-		return server.executeTodoAddCapability(effectiveTokenClaims, capabilityRequest)
-	}
-	if capabilityRequest.Capability == "todo.complete" {
-		return server.executeTodoCompleteCapability(effectiveTokenClaims, capabilityRequest)
-	}
-	if capabilityRequest.Capability == "todo.list" {
-		return server.executeTodoListCapability(effectiveTokenClaims, capabilityRequest)
-	}
-	if capabilityRequest.Capability == "goal.set" {
-		return server.executeGoalSetCapability(effectiveTokenClaims, capabilityRequest)
-	}
-	if capabilityRequest.Capability == "goal.close" {
-		return server.executeGoalCloseCapability(effectiveTokenClaims, capabilityRequest)
-	}
 	if capabilityRequest.Capability == "host.folder.list" {
 		return server.executeHostFolderListCapability(effectiveTokenClaims, capabilityRequest)
 	}
@@ -1280,7 +1238,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 }
 
 func (server *Server) capabilitySummaries() []CapabilitySummary {
-	registeredTools := server.registry.All()
+	registeredTools := server.currentPolicyRuntime().registry.All()
 	capabilities := make([]CapabilitySummary, 0, len(registeredTools))
 	for _, registeredTool := range registeredTools {
 		capabilities = append(capabilities, CapabilitySummary{

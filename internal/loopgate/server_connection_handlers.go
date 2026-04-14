@@ -63,7 +63,7 @@ func (server *Server) handleStatus(writer http.ResponseWriter, request *http.Req
 
 	response := StatusResponse{
 		Version: statusVersion,
-		Policy:  server.policy,
+		Policy:  server.currentPolicyRuntime().policy,
 		// Keep control-plane route scopes separate from executable tool capabilities.
 		// Mixing them together makes session bootstrap and operator inspection harder to reason about.
 		Capabilities:        server.capabilitySummaries(),

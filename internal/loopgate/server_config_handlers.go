@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"morph/internal/config"
-	policypkg "morph/internal/policy"
-	toolspkg "morph/internal/tools"
 )
 
 var validConfigSections = map[string]struct{}{
@@ -51,7 +49,7 @@ func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			server.writeJSON(w, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 			return
 		}
-		server.handleConfigPut(w, section, requestBodyBytes)
+		server.handleConfigPut(w, section, requestBodyBytes, tokenClaims)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -59,14 +57,13 @@ func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 
 func (server *Server) handleConfigGet(w http.ResponseWriter, section string) {
 	var result any
+	policyRuntime := server.currentPolicyRuntime()
 
 	switch section {
 	case "policy":
-		result = server.policy
+		result = policyRuntime.policy
 	case "morphling_classes":
-		server.mu.Lock()
-		mcp := server.morphlingClassPolicy
-		server.mu.Unlock()
+		mcp := policyRuntime.morphlingClassPolicy
 		// Convert to the file representation for API consumers.
 		classList := make([]morphlingClassYAMLDef, 0, len(mcp.Classes))
 		for _, cls := range mcp.Classes {
@@ -91,10 +88,10 @@ func (server *Server) handleConfigGet(w http.ResponseWriter, section string) {
 	_ = enc.Encode(result)
 }
 
-func (server *Server) handleConfigPut(w http.ResponseWriter, section string, body []byte) {
+func (server *Server) handleConfigPut(w http.ResponseWriter, section string, body []byte, tokenClaims capabilityToken) {
 	switch section {
 	case "policy":
-		server.handleConfigPutPolicy(w, body)
+		server.handleConfigPutPolicy(w, tokenClaims, body)
 	case "morphling_classes":
 		server.handleConfigPutMorphlingClasses(w, body)
 	case "runtime":
@@ -137,45 +134,42 @@ func (server *Server) requireScopedCapability(writer http.ResponseWriter, tokenC
 	return false
 }
 
-func (server *Server) handleConfigPutPolicy(w http.ResponseWriter, body []byte) {
-	pol, err := config.LoadPolicyFromJSON(body)
+func (server *Server) handleConfigPutPolicy(w http.ResponseWriter, tokenClaims capabilityToken, body []byte) {
+	_ = body
+	currentPolicyRuntime := server.currentPolicyRuntime()
+	reloadedPolicyRuntime, err := server.reloadPolicyRuntimeFromDisk()
 	if err != nil {
-		http.Error(w, "invalid policy: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := config.WritePolicyYAML(server.repoRoot, pol); err != nil {
-		http.Error(w, "save policy: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	reloaded, err := config.LoadPolicy(server.repoRoot)
-	if err != nil {
-		http.Error(w, "reload policy: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "reload signed policy: "+err.Error(), http.StatusConflict)
 		return
 	}
 
-	// Hot-reload: update policy, recreate checker and registry.
-	registry, err := toolspkg.NewDefaultRegistry(server.repoRoot, reloaded)
-	if err != nil {
-		http.Error(w, "recreate registry: "+err.Error(), http.StatusInternalServerError)
+	policyChanged := currentPolicyRuntime.policyContentSHA256 != reloadedPolicyRuntime.policyContentSHA256
+	if err := server.logEvent("config.policy.reloaded", tokenClaims.ControlSessionID, map[string]interface{}{
+		"control_session_id":     tokenClaims.ControlSessionID,
+		"actor_label":            tokenClaims.ActorLabel,
+		"client_session_label":   tokenClaims.ClientSessionLabel,
+		"previous_policy_sha256": currentPolicyRuntime.policyContentSHA256,
+		"reloaded_policy_sha256": reloadedPolicyRuntime.policyContentSHA256,
+		"policy_changed":         policyChanged,
+	}); err != nil {
+		server.writeJSON(w, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
 		return
 	}
 
-	server.mu.Lock()
-	server.policy = reloaded
-	server.checker = policypkg.NewChecker(reloaded)
-	server.registry = registry
-	server.mu.Unlock()
+	server.storePolicyRuntime(reloadedPolicyRuntime)
 
-	w.Header().Set("Content-Type", contentTypeApplicationJSON)
-	fmt.Fprintln(w, `{"status":"ok"}`)
+	server.writeJSON(w, http.StatusOK, ConfigPolicyReloadResponse{
+		Status:               "ok",
+		PreviousPolicySHA256: currentPolicyRuntime.policyContentSHA256,
+		PolicySHA256:         reloadedPolicyRuntime.policyContentSHA256,
+		PolicyChanged:        policyChanged,
+	})
 }
 
 func (server *Server) handleConfigPutMorphlingClasses(w http.ResponseWriter, body []byte) {
-	server.mu.Lock()
-	registry := server.registry
-	server.mu.Unlock()
+	policyRuntime := server.currentPolicyRuntime()
 
-	mcp, err := loadMorphlingClassPolicyFromJSON(body, registry)
+	mcp, err := loadMorphlingClassPolicyFromJSON(body, policyRuntime.registry)
 	if err != nil {
 		http.Error(w, "invalid morphling classes: "+err.Error(), http.StatusBadRequest)
 		return
@@ -191,9 +185,8 @@ func (server *Server) handleConfigPutMorphlingClasses(w http.ResponseWriter, bod
 		return
 	}
 
-	server.mu.Lock()
-	server.morphlingClassPolicy = mcp
-	server.mu.Unlock()
+	policyRuntime.morphlingClassPolicy = mcp
+	server.storePolicyRuntime(policyRuntime)
 
 	w.Header().Set("Content-Type", contentTypeApplicationJSON)
 	fmt.Fprintln(w, `{"status":"ok"}`)

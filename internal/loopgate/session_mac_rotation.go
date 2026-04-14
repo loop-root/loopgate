@@ -7,21 +7,25 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
 	sessionMACEpochDuration = 12 * time.Hour
 
-	sessionMACRotationMasterFile    = "loopgate_session_mac_rotation_master"
+	sessionMACRotationMasterFile      = "loopgate_session_mac_rotation_master"
 	sessionMACRotationMasterByteCount = 32
 
 	sessionMACDerivedKeySchemaV1 = "loopgate-session-mac-v1"
-	sessionMACKeysWireSchemaV1     = "loopgate.session_mac_keys.v1"
+	sessionMACKeysWireSchemaV1   = "loopgate.session_mac_keys.v1"
 
 	sessionMACEpochDomainV1 = "loopgate-session-mac-epoch-v1\x00"
 )
@@ -82,7 +86,7 @@ func (server *Server) loadOrCreateSessionMACRotationMaster() error {
 		return fmt.Errorf("mkdir runtime state: %w", err)
 	}
 	path := filepath.Join(stateDir, sessionMACRotationMasterFile)
-	existing, err := os.ReadFile(path)
+	existing, err := readPrivateStateFileNoFollow(path)
 	if err == nil {
 		if len(existing) != sessionMACRotationMasterByteCount {
 			return fmt.Errorf("session mac rotation master file %q has wrong size (want %d bytes)", path, sessionMACRotationMasterByteCount)
@@ -97,10 +101,85 @@ func (server *Server) loadOrCreateSessionMACRotationMaster() error {
 	if _, err := rand.Read(material); err != nil {
 		return fmt.Errorf("generate session mac rotation master: %w", err)
 	}
-	if err := os.WriteFile(path, material, 0o600); err != nil {
+	if err := createPrivateStateFileExclusive(path, material); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			existing, readErr := readPrivateStateFileNoFollow(path)
+			if readErr != nil {
+				return fmt.Errorf("read raced session mac rotation master: %w", readErr)
+			}
+			if len(existing) != sessionMACRotationMasterByteCount {
+				return fmt.Errorf("session mac rotation master file %q has wrong size (want %d bytes)", path, sessionMACRotationMasterByteCount)
+			}
+			server.sessionMACRotationMaster = append([]byte(nil), existing...)
+			return nil
+		}
 		return fmt.Errorf("write session mac rotation master: %w", err)
 	}
 	server.sessionMACRotationMaster = material
+	return nil
+}
+
+func readPrivateStateFileNoFollow(path string) ([]byte, error) {
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		switch err {
+		case unix.ENOENT:
+			return nil, os.ErrNotExist
+		case unix.ELOOP:
+			return nil, fmt.Errorf("state file %q must not be a symlink", path)
+		default:
+			return nil, fmt.Errorf("open state file: %w", err)
+		}
+	}
+	file := os.NewFile(uintptr(fd), path)
+	if file == nil {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("wrap state file descriptor")
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat state file: %w", err)
+	}
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("state file %q must not be a symlink", path)
+	}
+	return io.ReadAll(file)
+}
+
+func createPrivateStateFileExclusive(path string, contents []byte) error {
+	fd, err := unix.Open(path, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		switch err {
+		case unix.EEXIST:
+			return os.ErrExist
+		case unix.ELOOP:
+			return fmt.Errorf("state file %q must not be a symlink", path)
+		default:
+			return fmt.Errorf("open private state file: %w", err)
+		}
+	}
+	file := os.NewFile(uintptr(fd), path)
+	if file == nil {
+		_ = unix.Close(fd)
+		return fmt.Errorf("wrap private state file descriptor")
+	}
+	if _, err := file.Write(contents); err != nil {
+		file.Close()
+		return fmt.Errorf("write private state file: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return fmt.Errorf("sync private state file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close private state file: %w", err)
+	}
+	if stateDir, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = stateDir.Sync()
+		_ = stateDir.Close()
+	}
 	return nil
 }
 
@@ -122,14 +201,14 @@ func (server *Server) buildSessionMACKeysResponse(controlSessionID string) Sessi
 	}
 
 	return SessionMACKeysResponse{
-		SchemaVersion:          sessionMACKeysWireSchemaV1,
-		RotationPeriodSeconds:  int64(sessionMACEpochDuration / time.Second),
-		DerivedKeySchema:       sessionMACDerivedKeySchemaV1,
-		ControlSessionID:       controlSessionID,
-		CurrentEpochIndex:      cur,
-		Previous:               buildSlot("previous", prevIdx),
-		Current:                buildSlot("current", cur),
-		Next:                   buildSlot("next", nextIdx),
+		SchemaVersion:         sessionMACKeysWireSchemaV1,
+		RotationPeriodSeconds: int64(sessionMACEpochDuration / time.Second),
+		DerivedKeySchema:      sessionMACDerivedKeySchemaV1,
+		ControlSessionID:      controlSessionID,
+		CurrentEpochIndex:     cur,
+		Previous:              buildSlot("previous", prevIdx),
+		Current:               buildSlot("current", cur),
+		Next:                  buildSlot("next", nextIdx),
 	}
 }
 

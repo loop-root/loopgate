@@ -55,7 +55,6 @@ type ContinuityInspectResponse struct {
 }
 
 // HavenContinuityInspectThreadRequest is the JSON body for POST /v1/continuity/inspect-thread.
-// The legacy /v1/haven/continuity/inspect-thread alias uses the same payload.
 // Loopgate loads the thread from its threadstore and proposes continuity for
 // inspection; the client does not supply raw events.
 type HavenContinuityInspectThreadRequest struct {
@@ -63,7 +62,6 @@ type HavenContinuityInspectThreadRequest struct {
 }
 
 // HavenContinuityInspectThreadResponse is returned by POST /v1/continuity/inspect-thread.
-// The legacy /v1/haven/continuity/inspect-thread alias returns the same shape.
 // SubmitStatus is "submitted" when an inspection ran, or "skipped_no_continuity_events" when
 // the thread had no user_message / assistant_response / tool_executed mappable rows.
 type HavenContinuityInspectThreadResponse struct {

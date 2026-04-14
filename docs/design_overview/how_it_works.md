@@ -2,7 +2,7 @@
 
 # How it works (operator client and Loopgate)
 
-**Primary operator experience:** developer tools and the Haven shell via **HTTP on the local Unix socket**. **In-tree MCP is deprecated and removed** (see `docs/setup/LOOPGATE_MCP.md`, ADR 0010); use native HTTP clients or **out-of-tree** forwarders.
+**Primary operator experience:** developer tools and the Haven shell via **HTTP on the local Unix socket**. **In-tree MCP is removed** (ADR 0010); use native HTTP clients or **out-of-tree** forwarders.
 
 There is **no separate product CLI** in the supported path for new integrations. Privileged work goes through **Loopgate** on a local Unix socket.
 
@@ -75,8 +75,13 @@ Filesystem capabilities use hardened path logic; enforcement is **Loopgate**. Pr
 **Loopgate** control-plane event stream:
 
 - `runtime/state/loopgate_events.jsonl`
+- optional local-first export cursor: `runtime/state/audit_export_state.json`
 
 Separation is intentional: the client ledger is operator-facing session history; Loopgate events are **authoritative** for control-plane actions, morphlings, and promotions.
+
+When export is enabled, Loopgate still appends locally first and only then ships
+events outward to an admin node or external sink. The export cursor is mutable
+shipping state, not a second source of truth.
 
 ## 6) Shutdown
 

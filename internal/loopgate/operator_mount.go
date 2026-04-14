@@ -369,16 +369,5 @@ func (t operatorMountFSMkdir) Execute(ctx context.Context, args map[string]strin
 }
 
 func registerOperatorMountTools(server *Server) error {
-	tools := []toolspkg.Tool{
-		operatorMountFSRead{server: server},
-		operatorMountFSList{server: server},
-		operatorMountFSWrite{server: server},
-		operatorMountFSMkdir{server: server},
-	}
-	for _, t := range tools {
-		if err := server.registry.TryRegister(t); err != nil {
-			return fmt.Errorf("register %s: %w", t.Name(), err)
-		}
-	}
-	return nil
+	return registerOperatorMountToolsOnRegistry(server, server.currentPolicyRuntime().registry)
 }
