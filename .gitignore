@@ -29,6 +29,7 @@ cmd/haven/frontend/dist/
 .external/
 
 # Local caches
+.cache/
 .cache/go-build/
 .gocache/
 .tmp-loopgate-tests/
@@ -51,4 +52,5 @@ core/memory/keys/
 core/memory/keys_old/
 
 # Local built binaries
+/loopgate/
 /loopgate/loopgate
