@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-13
+**Last updated:** 2026-04-14
 
 # Loopgate Operator Guide
 
@@ -31,13 +31,26 @@ Expected local socket:
 runtime/state/loopgate.sock
 ```
 
-### 2. Make sure Claude hooks point at the repo
+### 2. Install Claude hooks
 
-The current hook harness lives under:
-- `.claude/settings.json`
-- `.claude/hooks/`
+```bash
+go run ./cmd/loopgate install-hooks
+```
 
-If Claude says a hook script is missing, check the hook command path first before disabling anything.
+Optional:
+
+```bash
+go run ./cmd/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
+```
+
+This updates:
+- `~/.claude/settings.json`
+- `~/.claude/hooks/`
+
+If this repo also has local Claude settings under `./.claude/`, `remove-hooks`
+will sweep those repo-local Loopgate entries too.
+
+If Claude says a hook script is missing, reinstall first before disabling anything.
 
 ### 3. Validate and sign policy
 
@@ -101,12 +114,25 @@ These help answer:
 ### Claude says a hook script is missing
 
 Likely causes:
-- broken path in `.claude/settings.json`
-- hook file exists but the command expands to the wrong directory
+- broken path in `~/.claude/settings.json`
+- hook files were never installed or were overwritten
+- hook file exists but the command points at the wrong Claude config directory
 
 Check:
-- the script file exists under `.claude/hooks/`
-- the hook command resolves relative to the repo when `CLAUDE_PROJECT_DIR` is missing
+- rerun `go run ./cmd/loopgate install-hooks`
+- the script file exists under `~/.claude/hooks/`
+- the hook command points at the same `~/.claude/hooks/` directory you expect
+
+### Remove Loopgate hooks temporarily
+
+If you need to disable the Loopgate harness without deleting the scripts:
+
+```bash
+go run ./cmd/loopgate remove-hooks
+```
+
+This removes only the Loopgate-managed hook entries from the Claude settings
+files Loopgate manages and leaves the copied Python scripts in place.
 
 ### Policy changes do not seem to take effect
 
@@ -138,7 +164,7 @@ Do not widen write roots unless you actually want that authority.
 ## Current known limitations
 
 - The repo still contains legacy and forward-looking code and docs.
-- Multi-tenant/admin-node material exists in tree but is not the current product story.
+- Future deployment/admin material exists in tree but is not the current product story.
 - Some operator/troubleshooting flows are still documented better in architecture docs than they should be.
 - Ledger replacement / wholesale state rollback hardening is not fully solved yet.
 

@@ -38,20 +38,8 @@ cmd/haven/frontend/dist/
 tmp/
 output/
 
-# Sandbox import copy (nested git checkout; canonical AMP is docs/AMP)
-runtime/sandbox/root/home/imports/amp/
-
-# Operator-generated runtime (logs, sockets, ledger, quarantine, memory, benchmarks)
-runtime/logs/
-runtime/state/
-runtime/memorybench/
-runtime/sandbox/root/home/instructions/
-runtime/sandbox/root/home/scratch/
-runtime/sandbox/root/home/workspace/
-runtime/sandbox/root/home/logs/
-runtime/sandbox/root/home/tmp/
-runtime/sandbox/root/home/outputs/
-runtime/sandbox/root/home/raw/
+# Operator-generated runtime (logs, sockets, ledger, sandbox state, imports, local fixtures)
+runtime/
 
 # Runtime / memory artifacts (see internal/config/gitignore_test.go)
 runtime/.morph.lock

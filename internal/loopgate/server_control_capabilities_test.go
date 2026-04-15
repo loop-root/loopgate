@@ -251,7 +251,7 @@ func TestModelRoutesRequireScopedCapabilities(t *testing.T) {
 	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	modelRequest := modelpkg.Request{
-		Persona:     config.Persona{Name: "Morph"},
+		Persona:     config.Persona{Name: "Loopgate"},
 		Policy:      status.Policy,
 		SessionID:   "model-scope-session",
 		TurnCount:   1,

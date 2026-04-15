@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	defaultSharedFolderName        = "Shared with Morph"
+	defaultSharedFolderName        = "Shared with Loopgate"
 	defaultSharedFolderSandboxName = "shared"
 )
 

@@ -189,7 +189,7 @@ func TestExtractStructuredCalls_AnthropicStyleDottedNamesAsUnderscores(t *testin
 	reg := tools.NewRegistry()
 	reg.Register(&tools.HostFolderList{})
 	blocks := []model.ToolUseBlock{
-		{ID: "tu1", Name: "host_folder_list", Input: map[string]string{}},
+		{ID: "tu1", Name: "host_folder_list", Input: map[string]string{"folder_name": "downloads"}},
 	}
 	calls, errs := ExtractStructuredCalls(blocks, reg)
 	if len(errs) != 0 {
@@ -251,7 +251,7 @@ func TestExtractStructuredCalls_ReservedMorphCommand_Rejected(t *testing.T) {
 	blocks := []model.ToolUseBlock{
 		{
 			ID:    "toolu_cmd",
-			Name:  "goal",
+			Name:  "model",
 			Input: map[string]string{"action": "add"},
 		},
 	}
@@ -263,8 +263,8 @@ func TestExtractStructuredCalls_ReservedMorphCommand_Rejected(t *testing.T) {
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error, got %d", len(errs))
 	}
-	if !contains(errs[0].Error(), "local Morph command") {
-		t.Errorf("expected 'local Morph command' error, got %q", errs[0].Error())
+	if !contains(errs[0].Error(), "reserved local command") {
+		t.Errorf("expected 'reserved local command' error, got %q", errs[0].Error())
 	}
 }
 

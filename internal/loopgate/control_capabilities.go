@@ -90,13 +90,13 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Name:        controlCapabilityModelSettingsRead,
 		Category:    "model",
 		Operation:   "read",
-		Description: "Read Haven-facing model settings through the local control plane.",
+		Description: "Read operator-facing model settings through the local control plane.",
 	},
 	controlCapabilityModelSettingsWrite: {
 		Name:        controlCapabilityModelSettingsWrite,
 		Category:    "model",
 		Operation:   "write",
-		Description: "Update Haven-facing model settings through the local control plane.",
+		Description: "Update operator-facing model settings through the local control plane.",
 	},
 	controlCapabilityModelValidate: {
 		Name:        controlCapabilityModelValidate,
@@ -138,13 +138,13 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Name:        controlCapabilityUIRead,
 		Category:    "ui",
 		Operation:   "read",
-		Description: "Read display-safe Loopgate and Haven UI projections through the local control plane.",
+		Description: "Read display-safe Loopgate UI projections through the local control plane.",
 	},
 	controlCapabilityUIWrite: {
 		Name:        controlCapabilityUIWrite,
 		Category:    "ui",
 		Operation:   "write",
-		Description: "Update non-authoritative Loopgate and Haven UI state projections through the local control plane.",
+		Description: "Update non-authoritative Loopgate UI state projections through the local control plane.",
 	},
 }
 

@@ -29,7 +29,7 @@ func (e ToolCallValidationError) Error() string {
 //
 // Each tool-use block is validated against:
 //   - The tool name must exist in the provided registry (fail closed on unknown)
-//   - The tool name must not be a reserved Morph command
+//   - The tool name must not be a reserved local command
 //   - Required arguments must be present
 //   - Argument values must pass the tool's schema validation
 //
@@ -73,7 +73,7 @@ func validateStructuredBlock(block model.ToolUseBlock, registry *tools.Registry)
 
 	name = canonicalStructuredToolName(name, registry)
 
-	// Reject reserved Morph command names — same check as the XML parser.
+	// Reject reserved local command names — same check as the XML parser.
 	if err := validateToolCallName(name); err != nil {
 		return ToolCall{}, fmt.Errorf("structured tool-use block rejected: %w", err)
 	}

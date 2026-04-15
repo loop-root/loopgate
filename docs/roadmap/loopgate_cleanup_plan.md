@@ -43,7 +43,7 @@ This slice includes:
 
 ## Phase 2: Archive or de-emphasize stale docs
 
-Status: pending
+Status: in progress
 
 Goals:
 - remove multi-tenant/admin-node language from active docs unless clearly marked future or archived
@@ -55,6 +55,7 @@ Targets:
 - roadmap and design overview docs
 - product RFCs and legacy folders
 - trust-rotation and tenancy docs that are currently too prominent
+- stale historical docs moved into the separate `ARCHIVED` repo under `docs/`
 
 ## Phase 3: Runtime/code slimming
 
@@ -93,9 +94,7 @@ Completed in this phase so far:
 - removed `/goal` and `/todo` from the active shell command/catalog/man-page surface
 - removed the external `goal_aliases` config path so continuity classification
   no longer depends on checked-in Loopgate tuning files
-
-Related plan:
-- [Continuity extraction plan](./continuity_extraction_plan.md)
+- moved stale `docs/superpowers/` planning material into the separate `ARCHIVED` repo
 
 ## Phase 4: Repo hygiene and sanitization
 
@@ -114,6 +113,8 @@ Known current issues:
 Completed in this phase so far:
 - removed tracked legacy memory ledger history from `core/memory/ledger/`
 - tightened ignore coverage for memory ledger/distillate backup artifacts
+- moved tracked runtime sandbox/state artifacts out of source control and made `runtime/` fully gitignored
+- sanitized remaining hardcoded local paths in active docs and tests
 
 ## Phase 5: Security hardening pass on the local-first core
 

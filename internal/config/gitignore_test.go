@@ -18,7 +18,7 @@ func TestGitignore_ContainsRuntimeAndBuildArtifactRules(t *testing.T) {
 	gitignoreText := string(rawBytes)
 
 	requiredPatterns := []string{
-		"runtime/.morph.lock",
+		"runtime/",
 		"core/memory/ledger/*.jsonl",
 		"core/memory/distillates/*.jsonl",
 		"core/memory/keys/",

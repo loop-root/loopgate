@@ -17,6 +17,11 @@ Use it when changing:
 - `main.go`
   - constructs socket path `runtime/state/loopgate.sock` under cwd-as-repo-root
   - starts `loopgate.NewServerWithOptions` and runs until signal
+  - also provides operator subcommands:
+    - `install-hooks`
+    - `remove-hooks`
+  - `install-hooks` copies Loopgate Claude hook scripts into the target Claude config dir and wires the supported hook events into `settings.json`
+  - `remove-hooks` removes only the Loopgate-managed hook entries and leaves copied scripts in place
 
 ## `cmd/loopgate-policy-sign/`
 

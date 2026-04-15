@@ -206,7 +206,7 @@ func TestHandleCommand_ModelShowsRuntimeSummary(t *testing.T) {
 	commandResult := HandleCommand(CommandContext{
 		RepoRoot: repoRoot,
 		Persona: config.Persona{
-			Name:    "Morph",
+			Name:    "Loopgate",
 			Version: "0.2.0",
 		},
 		Policy: policy,
@@ -252,7 +252,7 @@ func TestHandleCommand_PersonaShowsTrustSummary(t *testing.T) {
 	repoRoot := t.TempDir()
 	policy := config.Policy{}
 	persona := config.Persona{}
-	persona.Name = "Morph"
+	persona.Name = "Loopgate"
 	persona.Version = "0.2.0"
 	persona.Communication.Tone = "calm"
 	persona.Personality.Helpfulness = "high"

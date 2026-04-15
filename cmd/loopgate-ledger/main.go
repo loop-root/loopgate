@@ -4,15 +4,21 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
+	"loopgate/internal/loopgate"
+	"loopgate/internal/troubleshoot"
 )
 
 func main() {
@@ -28,6 +34,8 @@ func main() {
 		runSummary(os.Args[2:])
 	case "tail":
 		runTail(os.Args[2:])
+	case "demo-reset":
+		runDemoReset(os.Args[2:])
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -41,7 +49,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `Usage:
   loopgate-ledger verify  [-repo DIR]   Verify hash chain (active JSONL + manifest / sealed segments per config)
   loopgate-ledger summary [-repo DIR]   Count events by type on the active JSONL only (no chain verification)
-  loopgate-ledger tail    [-repo DIR] [-n N]  Print last N events from active JSONL as key=value lines (no verification)
+  loopgate-ledger tail    [-repo DIR] [-n N] [-verbose]  Print last N events from active JSONL (no verification)
+  loopgate-ledger demo-reset [-repo DIR] [-socket PATH] [-yes]  Remove local demo ledger/log state after confirming Loopgate is not running
 
 -repo defaults to the current working directory.
 `)
@@ -162,22 +171,43 @@ func runTail(args []string) {
 	fs := flag.NewFlagSet("tail", flag.ExitOnError)
 	repoFlag := fs.String("repo", "", "repository root (default: current directory)")
 	nFlag := fs.Int("n", 20, "number of trailing events to print")
+	verboseFlag := fs.Bool("verbose", false, "render recent events in a human-readable demo-friendly format")
 	_ = fs.Parse(args)
 	repoRoot := resolveRepoRoot(*repoFlag)
 	n := *nFlag
 	if n < 1 {
 		n = 1
 	}
+	verbose := *verboseFlag
+	if exitCode := runTailWithIO(repoRoot, n, verbose, os.Stdout, os.Stderr); exitCode != 0 {
+		os.Exit(exitCode)
+	}
+}
+
+func runDemoReset(args []string) {
+	fs := flag.NewFlagSet("demo-reset", flag.ExitOnError)
+	repoFlag := fs.String("repo", "", "repository root (default: current directory)")
+	socketFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
+	yesFlag := fs.Bool("yes", false, "confirm destructive local demo reset")
+	_ = fs.Parse(args)
+	repoRoot := resolveRepoRoot(*repoFlag)
+	socketPath := resolveSocketPath(repoRoot, *socketFlag)
+	if exitCode := runDemoResetWithIO(repoRoot, socketPath, *yesFlag, os.Stdout, os.Stderr); exitCode != 0 {
+		os.Exit(exitCode)
+	}
+}
+
+func runTailWithIO(repoRoot string, n int, verbose bool, stdout io.Writer, stderr io.Writer) int {
 	path := activeAuditPath(repoRoot)
 	ring := make([]string, 0, n)
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("(no active ledger file)")
-			return
+			fmt.Fprintln(stdout, "(no active ledger file)")
+			return 0
 		}
-		fmt.Fprintln(os.Stderr, "ERROR: open ledger:", err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, "ERROR: open ledger:", err)
+		return 1
 	}
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
@@ -192,13 +222,17 @@ func runTail(args []string) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, "ERROR: read ledger:", err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, "ERROR: read ledger:", err)
+		return 1
 	}
 	for _, raw := range ring {
 		ev, ok := ledger.ParseEvent([]byte(raw))
 		if !ok {
-			fmt.Println("malformed:", raw)
+			fmt.Fprintln(stdout, "malformed:", raw)
+			continue
+		}
+		if verbose {
+			fmt.Fprintln(stdout, formatVerboseTailEvent(ev))
 			continue
 		}
 		seq := ""
@@ -211,6 +245,147 @@ func runTail(args []string) {
 				hashP = hashPrefix(h)
 			}
 		}
-		fmt.Printf("ts=%s type=%s session=%s audit_sequence=%s event_hash_prefix=%s\n", ev.TS, ev.Type, ev.Session, seq, hashP)
+		fmt.Fprintf(stdout, "ts=%s type=%s session=%s audit_sequence=%s event_hash_prefix=%s\n", ev.TS, ev.Type, ev.Session, seq, hashP)
+	}
+	return 0
+}
+
+func runDemoResetWithIO(repoRoot string, socketPath string, confirmed bool, stdout io.Writer, stderr io.Writer) int {
+	if !confirmed {
+		fmt.Fprintln(stderr, "ERROR: demo-reset is destructive; rerun with -yes")
+		return 2
+	}
+	if err := ensureLoopgateStopped(socketPath); err != nil {
+		fmt.Fprintln(stderr, "ERROR:", err)
+		return 1
+	}
+	runtimeConfig, err := config.LoadRuntimeConfig(repoRoot)
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR: load runtime config:", err)
+		return 1
+	}
+	resetReport, err := troubleshoot.ResetDemoState(repoRoot, runtimeConfig, socketPath)
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR: demo reset:", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "demo reset complete")
+	for _, removedPath := range resetReport.Removed {
+		fmt.Fprintf(stdout, "removed %s\n", removedPath)
+	}
+	if len(resetReport.Removed) == 0 {
+		fmt.Fprintln(stdout, "removed nothing; demo state was already clean")
+	}
+	return 0
+}
+
+func formatVerboseTailEvent(ev ledger.Event) string {
+	status := strings.ToUpper(strings.TrimSpace(tailEventDataString(ev.Data, "decision")))
+	if status == "" {
+		status = verboseTailStatusFallback(ev)
+	}
+	summary := verboseTailSummary(ev)
+	return fmt.Sprintf("ts=%s  %-7s  %s", strings.TrimSpace(ev.TS), status, summary)
+}
+
+func resolveSocketPath(repoRoot string, socketPathFlag string) string {
+	if trimmedSocketPath := strings.TrimSpace(socketPathFlag); trimmedSocketPath != "" {
+		return filepath.Clean(trimmedSocketPath)
+	}
+	if socketPathFromEnv := strings.TrimSpace(os.Getenv("LOOPGATE_SOCKET")); socketPathFromEnv != "" {
+		return filepath.Clean(socketPathFromEnv)
+	}
+	return filepath.Join(repoRoot, "runtime", "state", "loopgate.sock")
+}
+
+func ensureLoopgateStopped(socketPath string) error {
+	if strings.TrimSpace(socketPath) == "" {
+		return nil
+	}
+	socketPath = filepath.Clean(socketPath)
+	if _, err := os.Stat(socketPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("stat loopgate socket: %w", err)
+	}
+	healthClient := loopgate.NewClient(socketPath)
+	healthContext, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if _, err := healthClient.Health(healthContext); err == nil {
+		return fmt.Errorf("refusing demo reset while Loopgate is running at %s", socketPath)
+	}
+	return nil
+}
+
+func verboseTailStatusFallback(ev ledger.Event) string {
+	if status := strings.ToUpper(strings.TrimSpace(tailEventDataString(ev.Data, "status"))); status != "" {
+		return status
+	}
+	switch ev.Type {
+	case "capability.denied", "approval.denied":
+		return "DENIED"
+	case "capability.executed":
+		return "SUCCESS"
+	case "capability.error":
+		return "ERROR"
+	case "approval.created":
+		return "PENDING"
+	case "approval.granted":
+		return "GRANTED"
+	default:
+		return "INFO"
+	}
+}
+
+func verboseTailSummary(ev ledger.Event) string {
+	toolName := strings.TrimSpace(tailEventDataString(ev.Data, "tool_name"))
+	commandPreview := strings.TrimSpace(tailEventDataString(ev.Data, "command_redacted_preview"))
+	reason := strings.TrimSpace(tailEventDataString(ev.Data, "reason"))
+	if toolName != "" && commandPreview != "" {
+		if reason != "" {
+			return fmt.Sprintf("%s: %s — %s", toolName, commandPreview, reason)
+		}
+		return fmt.Sprintf("%s: %s", toolName, commandPreview)
+	}
+	if toolName != "" {
+		if reason != "" {
+			return fmt.Sprintf("%s — %s", toolName, reason)
+		}
+		return toolName
+	}
+	if capability := strings.TrimSpace(tailEventDataString(ev.Data, "capability")); capability != "" {
+		if reason != "" {
+			return fmt.Sprintf("%s — %s", capability, reason)
+		}
+		return capability
+	}
+	if reason != "" {
+		return fmt.Sprintf("%s — %s", ev.Type, reason)
+	}
+	return ev.Type
+}
+
+func tailEventDataString(data map[string]interface{}, key string) string {
+	if data == nil {
+		return ""
+	}
+	rawValue, ok := data[key]
+	if !ok || rawValue == nil {
+		return ""
+	}
+	switch typedValue := rawValue.(type) {
+	case string:
+		return typedValue
+	case bool:
+		return strconv.FormatBool(typedValue)
+	case float64:
+		return strconv.FormatInt(int64(typedValue), 10)
+	case int:
+		return strconv.Itoa(typedValue)
+	case int64:
+		return strconv.FormatInt(typedValue, 10)
+	default:
+		return ""
 	}
 }

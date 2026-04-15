@@ -8,9 +8,9 @@ This file maps **`docs/`** — design intent, setup, RFCs, and benchmarks. Use w
 
 Timestamped decisions (context, tradeoff, escape hatch). **Index:** `docs/adr/README.md`.
 
-## Security reports (`docs/reports/`)
+## Historical archive
 
-Actionable hardening plans and architecture reviews (e.g. `security-hardening-plan-2026-04.md`, `loopgate-security-architecture-review-2026-04-06.md`).
+Historical reports, legacy product RFCs, AMP/TCL material, and extracted continuity design docs have been moved to the separate `ARCHIVED` repository.
 
 ## Implementation sprints (repo root `sprints/`)
 
@@ -18,9 +18,9 @@ Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/2
 
 ## Architecture (`docs/design_overview/`)
 
-- `architecture.md`, `loopgate.md`, `systems_contract.md` — system shape
+- `architecture.md`, `loopgate.md` — current system shape
 - `claude_code_hooks_mvp.md` — current operator-harness decision
-- `operator_planning_model.md` — neutral client planning model
+- older client planning and subsystem design notes have been moved to `ARCHIVED`
 
 ## CI (`.github/workflows/`)
 
@@ -33,7 +33,6 @@ Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/2
 - `LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — HTTP over Unix socket for integrators
 - `POLICY_SIGNING.md` — detached policy signature workflow and signer CLI
 - `POLICY_SIGNING_ROTATION.md` — operator runbook for signer restore, trust-anchor rotation, and emergency replacement
-- `TENANCY.md`, `ADMIN_CONSOLE.md` — future-facing or archived direction; not part of the current local-first product story
 
 ## Roadmap and threat model
 
@@ -42,18 +41,17 @@ Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/2
 
 ## RFCs
 
-- `docs/rfcs/` — numbered design RFCs
-- `docs/product-rfcs/` — legacy `RFC-MORPH-*` material retained for historical context; not the active source of truth for the current product
-- `docs/TCL-RFCs/` — Thought Compression Language
+- `docs/rfcs/` — current Loopgate RFCs (`0001`, `0016`)
+- older or extracted RFCs have been moved to `ARCHIVED` or `continuity`
 
 ## Benchmarks and extracted subsystems
 
-- `docs/memorybench_*.md` — historical continuity benchmark material
-- `docs/roadmap/continuity_extraction_plan.md` — note on the continuity split and repo handoff
+Historical benchmark and extracted-subsystem notes now live in the separate `ARCHIVED` repository.
 
-## Superpowers / agent planning (`docs/superpowers/`)
+## Archived planning and sprint notes
 
-Specs and plans for structured agent work (often gitignored in published clones).
+Historical agent plans, sprint notes, and extracted subsystem reports now live
+in the separate `ARCHIVED` repository under `ARCHIVED/docs/`.
 
 ## Other
 
@@ -67,4 +65,4 @@ Specs and plans for structured agent work (often gitignored in published clones)
 ## Important watchouts
 
 - Do not document secrets or machine-specific paths that should stay local.
-- Haven, Morph, morphling-heavy, continuity-heavy, multi-tenant, and admin-console docs are not the active repo direction; keep current docs centered on Loopgate, Claude Code governance, local policy, local audit, and MCP governance.
+- Historical product notes, extracted continuity material, and future deployment docs are not the active repo direction; keep current docs centered on Loopgate, Claude Code governance, local policy, local audit, and MCP governance.

@@ -324,7 +324,7 @@ func IntentIndicator(command string) string {
 func WelcomeMessage() string {
 	lines := []string{
 		blankLine(),
-		"  Welcome to Morph! Let's connect you to an AI model.",
+		"  Welcome to Loopgate. Let's connect you to an AI model.",
 		"  This only takes a minute. You can re-run /setup any time.",
 		blankLine(),
 	}

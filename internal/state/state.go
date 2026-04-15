@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// RuntimeState holds Morph's persistent runtime state.
+// RuntimeState holds Loopgate's persistent runtime state.
 // This should stay small and stable; detailed history belongs in the ledger.
 type RuntimeState struct {
 	SessionID         string `json:"session_id"`
@@ -41,7 +41,7 @@ func LoadOrInit(path string) (RuntimeState, error) {
 		_ = os.Rename(path, corruptPath)
 
 		fresh := New()
-		// Best effort: persist a usable state so Morph can start.
+		// Best effort: persist a usable state so Loopgate can start.
 		if saveErr := Save(path, fresh); saveErr != nil {
 			return RuntimeState{}, saveErr
 		}

@@ -57,7 +57,7 @@ func defaultFolderAccessPresets() []folderAccessPreset {
 		{
 			ID:              folderAccessSharedID,
 			Name:            defaultSharedFolderName,
-			Description:     "A low-friction tray for files you intentionally share with Morph.",
+			Description:     "A low-friction tray for files you intentionally share with Loopgate-governed tools.",
 			SandboxName:     defaultSharedFolderSandboxName,
 			AlwaysGranted:   true,
 			Recommended:     true,
@@ -66,8 +66,8 @@ func defaultFolderAccessPresets() []folderAccessPreset {
 		{
 			ID:              folderAccessDownloadsID,
 			Name:            "Downloads",
-			Description:     "Let Morph act directly on your Downloads folder on your Mac.",
-			Warning:         "Morph reads and organizes files in place on your real Mac filesystem. Higher-risk writes still require Loopgate approval.",
+			Description:     "Let Loopgate-governed actions operate directly on your Downloads folder on this Mac.",
+			Warning:         "Loopgate-governed actions read and organize files in place on your real Mac filesystem. Higher-risk writes still require Loopgate approval.",
 			HomeRelativeDir: "Downloads",
 			Recommended:     true,
 			HostAccessOnly:  true,
@@ -75,7 +75,7 @@ func defaultFolderAccessPresets() []folderAccessPreset {
 		{
 			ID:              folderAccessDesktopID,
 			Name:            "Desktop",
-			Description:     "Let Morph act directly on your Desktop on your Mac.",
+			Description:     "Let Loopgate-governed actions operate directly on your Desktop on this Mac.",
 			Warning:         "Desktop often contains transient or personal items. Higher-risk writes still require Loopgate approval.",
 			HomeRelativeDir: "Desktop",
 			HostAccessOnly:  true,
@@ -83,7 +83,7 @@ func defaultFolderAccessPresets() []folderAccessPreset {
 		{
 			ID:              folderAccessDocumentsID,
 			Name:            "Documents",
-			Description:     "Let Morph act directly on your Documents folder on your Mac.",
+			Description:     "Let Loopgate-governed actions operate directly on your Documents folder on this Mac.",
 			Warning:         "Documents can contain sensitive material. Higher-risk writes still require Loopgate approval.",
 			HomeRelativeDir: "Documents",
 			HostAccessOnly:  true,

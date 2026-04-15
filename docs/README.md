@@ -14,10 +14,9 @@ The current active story is:
 - local audit
 - governed local MCP/runtime work
 
-The docs still contain older material about Haven, Morph, morphlings,
-continuity, and future enterprise directions. Those are being trimmed or
-archived. Use the documents below as the current source of truth for the active
-product.
+The docs still contain older architectural notes, extracted continuity material,
+and future-facing deployment ideas. Those are being trimmed or archived. Use
+the documents below as the current source of truth for the active product.
 
 ## Start here
 
@@ -28,7 +27,6 @@ product.
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./loopgate-threat-model.md)
 - [Loopgate cleanup plan](./roadmap/loopgate_cleanup_plan.md)
-- [Continuity split note](./roadmap/continuity_extraction_plan.md)
 
 ## Current product docs
 
@@ -36,7 +34,6 @@ product.
 - [Claude Code authority surfaces threat model](./design_overview/claude_code_authority_surfaces_threat_model.md)
 - [Loopgate design overview](./design_overview/loopgate.md)
 - [Architecture](./design_overview/architecture.md)
-- [How It Works](./design_overview/how_it_works.md)
 - [RFC 0001: Loopgate Token and Request Integrity Policy](./rfcs/0001-loopgate-token-policy.md)
 - [RFC 0016: Claude tool policy surface and governed MCP gateway](./rfcs/0016-claude-tool-policy-and-mcp-gateway.md)
 
@@ -49,14 +46,14 @@ product.
 
 ## Cleanup / archive note
 
-Not all docs under `docs/` reflect the current product boundary.
+Historical material has been moved into the separate `ARCHIVED` repository.
+Not all remaining docs under `docs/` reflect the current product boundary.
 
 Known categories under cleanup:
-- Haven / Morph compatibility language
-- morphling-specific design and product RFCs
-- continuity and memory design work that is now being moved to the separate `continuity` repo
+- legacy product and worker/runtime language
+- remaining continuity and memory references that still need cleanup in active docs
 - distributed-deployment forward-looking material
 - docs containing hardcoded local filesystem paths
 
-Those materials are not deleted in this slice. They are being tracked in:
+That cleanup is being tracked in:
 - [Loopgate cleanup plan](./roadmap/loopgate_cleanup_plan.md)

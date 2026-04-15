@@ -78,8 +78,8 @@ func (client *Client) SetWorkspaceID(workspaceID string) {
 	client.workspaceID = workspaceID
 }
 
-// SetOperatorMountPaths includes Haven-approved host directories on the next control-session
-// open request. Loopgate only honors these bindings when the server pins the expected Haven
+// SetOperatorMountPaths includes operator-approved host directories on the next control-session
+// open request. Loopgate only honors these bindings when the server pins the expected operator
 // executable at session open; export still requires a separate write grant for the matched root.
 func (client *Client) SetOperatorMountPaths(operatorMountPaths []string, primaryOperatorMountPath string) {
 	client.mu.Lock()

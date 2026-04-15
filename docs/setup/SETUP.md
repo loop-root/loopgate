@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-13
+**Last updated:** 2026-04-14
 
 # Loopgate Setup
 
@@ -69,10 +69,34 @@ go run ./cmd/loopgate-policy-admin apply -verify-setup
 
 The active harness is Claude Code project hooks.
 
-Relevant files:
-- `.claude/settings.json`
-- `.claude/hooks/loopgate_pretool.py`
-- `.claude/hooks/loopgate_posttool.py`
+Install the Loopgate hook bundle into Claude's config directory:
+
+```bash
+go run ./cmd/loopgate install-hooks
+```
+
+Useful flags:
+
+```bash
+go run ./cmd/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
+go run ./cmd/loopgate remove-hooks
+```
+
+This command:
+- creates `~/.claude/hooks/` if needed
+- copies the Loopgate Python hook scripts there
+- updates `~/.claude/settings.json`
+- wires the 7 supported hook events without duplicating entries on rerun
+
+Relevant files after install:
+- `~/.claude/settings.json`
+- `~/.claude/hooks/loopgate_pretool.py`
+- `~/.claude/hooks/loopgate_posttool.py`
+- `~/.claude/hooks/loopgate_posttoolfailure.py`
+- `~/.claude/hooks/loopgate_sessionstart.py`
+- `~/.claude/hooks/loopgate_sessionend.py`
+- `~/.claude/hooks/loopgate_userpromptsubmit.py`
+- `~/.claude/hooks/loopgate_permissionrequest.py`
 
 Design and behavior notes:
 - [Claude Code hooks MVP](../design_overview/claude_code_hooks_mvp.md)
@@ -89,12 +113,14 @@ Start here:
 - Signed policy: `core/policy/policy.yaml` and `core/policy/policy.yaml.sig`
 
 Important current note:
-- older runtime and policy fields that mention Haven, morphlings, tenancy, or future enterprise behavior may still exist in the repo as compatibility or cleanup debt
+- some compatibility-oriented names and future-facing fields still exist in the repo as cleanup debt
 - those are not the current product center
 
 ## Current operator commands
 
 ```bash
+go run ./cmd/loopgate install-hooks
+go run ./cmd/loopgate remove-hooks
 go run ./cmd/loopgate-policy-admin help
 go run ./cmd/loopgate-doctor trust-check
 ```
@@ -116,4 +142,3 @@ go run ./cmd/loopgate-doctor trust-check
 
 - `LOOPGATE_SOCKET` — override local socket path
 - `LOOPGATE_ALLOW_NON_DARWIN=1` — allow development on non-macOS
-- `MORPH_REPO_ROOT` — legacy compatibility env var; avoid for new operator setup

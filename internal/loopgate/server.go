@@ -168,8 +168,8 @@ type controlSession struct {
 	ActorLabel         string
 	ClientSessionLabel string
 	WorkspaceID        string
-	// OperatorMountPaths are absolute host directories bound from a pinned Haven client at
-	// session open. They scope operator_mount.fs_* tools — never from model text or a
+	// OperatorMountPaths are absolute host directories bound from a pinned operator client
+	// at session open. They scope operator_mount.fs_* tools — never from model text or a
 	// generic unpinned local client.
 	OperatorMountPaths       []string
 	PrimaryOperatorMountPath string

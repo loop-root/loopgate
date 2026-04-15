@@ -44,7 +44,7 @@ Practical approaches:
 
 **`$PATH` does not apply** to Unix socket locations. Use an explicit **`LOOPGATE_SOCKET`** (or app-specific equivalent, e.g. `MORPH_LOOPGATE_SOCKET`) passed by the launcher, plist `LSEnvironment`, or Xcode scheme environment for debug builds.
 
-**Connecting, not just path resolution:** Even with the correct absolute path, a **sandboxed** GUI app may still fail `connect()` to a socket under an arbitrary `~/Dev/…` checkout because the sandbox treats that as access to a file **outside the container**. `com.apple.security.network.client` does **not** grant that. For local development, use a **Debug** build **without** App Sandbox, or ship an **unsandboxed helper** / agreed socket location both processes can access. Wrong-path fixes alone will not unblock sandboxed `connect()`.
+**Connecting, not just path resolution:** Even with the correct absolute path, a **sandboxed** GUI app may still fail `connect()` to a socket under an arbitrary checkout such as `~/src/loopgate/...` because the sandbox treats that as access to a file **outside the container**. `com.apple.security.network.client` does **not** grant that. For local development, use a **Debug** build **without** App Sandbox, or ship an **unsandboxed helper** / agreed socket location both processes can access. Wrong-path fixes alone will not unblock sandboxed `connect()`.
 
 ---
 
@@ -448,17 +448,17 @@ generic `internal/modelruntime` package:
 
 ---
 
-## 9. Delegated sessions (advanced)
+## 9. Delegated sessions (legacy helper note)
 
-If a component needs to keep using an already-opened Loopgate session without calling
-`/v1/session/open` again, follow [RFC 0002: Delegated Session Refresh and Pipe Contract](../rfcs/0002-delegated-session-refresh.md). The Go helper is `NewClientFromDelegatedSession`.
+There is still legacy helper code for delegated-session continuation in the Go
+client, but it is **not** part of the current recommended Loopgate operator
+path.
 
 Important current constraint:
 
 - the generic delegated-session helper does **not** relax Unix peer binding
 - a distinct OS subprocess reusing another process's capability token will still be denied
-- today this helper is only appropriate for same-peer / same-process continuation
-- real cross-process worker execution should use a dedicated process-specific session path rather than reusing the main operator session
+- the supported integration path is still a fresh session opened by the real local client process
 
 ---
 

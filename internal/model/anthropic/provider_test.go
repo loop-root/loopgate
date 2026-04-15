@@ -60,7 +60,7 @@ func TestProvider_GenerateUsesSecretStoreAndAnthropicProtocol(t *testing.T) {
 	}
 
 	persona := config.Persona{}
-	persona.Name = "Morph"
+	persona.Name = "Loopgate"
 	persona.Description = "A helpful assistant."
 	persona.Values = []string{"honesty", "security"}
 	persona.Personality.Helpfulness = "high"
@@ -176,7 +176,7 @@ func TestProvider_GenerateRetriesOn429(t *testing.T) {
 		t.Fatalf("new provider: %v", err)
 	}
 
-	persona := config.Persona{Name: "Morph", Description: "test"}
+	persona := config.Persona{Name: "Loopgate", Description: "test"}
 	response, err := provider.Generate(context.Background(), model.Request{
 		Persona:     persona,
 		SessionID:   "s-retry",

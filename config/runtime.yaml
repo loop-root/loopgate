@@ -5,8 +5,8 @@ version: "1"
 control_plane:
   expected_session_client_executable: ""
 
-# Single-node deployment identity (optional). Applied when a control session opens — not read from client JSON.
-# Leave empty for personal/desktop mode. Enterprise: set from node provisioning / operator config (future: IDP).
+# Reserved deployment identity fields. Leave empty for the current local-first
+# open-source build; they are not part of the active setup flow.
 tenancy:
   deployment_tenant_id: ""
   deployment_user_id: ""
@@ -80,7 +80,8 @@ logging:
     min_flush_interval_seconds: 5
   # Optional text logs under directory (slog). Not authoritative; loopgate_events.jsonl is.
   # Levels: error, warn, info, debug, trace (per-channel keys: audit, server, client, socket, ledger, model).
-  # Haven Settings can write runtime/state/loopgate_diagnostic_logging.override.json (merged on load; restart Loopgate).
+  # A local settings surface may write runtime/state/loopgate_diagnostic_logging.override.json
+  # (merged on load; restart Loopgate).
   diagnostic:
     enabled: true
     default_level: debug

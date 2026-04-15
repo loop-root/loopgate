@@ -127,11 +127,11 @@ func TestParser_MissingName(t *testing.T) {
 	}
 }
 
-func TestParser_RejectsLocalMorphCommandToolCall(t *testing.T) {
+func TestParser_RejectsReservedLocalCommandToolCall(t *testing.T) {
 	p := NewParser()
 
 	input := `<tool_call>
-{"name": "goal", "args": {"action": "add", "textOrId": "Create a new blog post"}}
+{"name": "/model", "args": {"action": "add", "textOrId": "Create a new blog post"}}
 </tool_call>`
 
 	result := p.Parse(input)
@@ -142,7 +142,7 @@ func TestParser_RejectsLocalMorphCommandToolCall(t *testing.T) {
 	if len(result.ParseErrs) != 1 {
 		t.Fatalf("expected 1 parse error, got %d", len(result.ParseErrs))
 	}
-	if got := result.ParseErrs[0].Error(); !contains(got, `local Morph command "goal"`) {
+	if got := result.ParseErrs[0].Error(); !contains(got, `reserved local command "/model"`) {
 		t.Fatalf("expected local command parse error, got %q", got)
 	}
 }

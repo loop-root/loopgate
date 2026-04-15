@@ -25,7 +25,7 @@ func withOperatorMountControlSession(ctx context.Context, controlSessionID strin
 	return context.WithValue(ctx, operatorMountCtxKey{}, strings.TrimSpace(controlSessionID))
 }
 
-// isDangerousOperatorMountPath mirrors Haven's havenpath host deny list: system roots
+// isDangerousOperatorMountPath mirrors the historical host deny list: system roots
 // that must not be granted as operator read roots.
 func isDangerousOperatorMountPath(abs string) bool {
 	clean := filepath.Clean(abs)
@@ -162,7 +162,7 @@ func operatorMountToolRoots(server *Server, ctx context.Context) (repoRoot strin
 		return "", nil, err
 	}
 	if len(binding.paths) == 0 {
-		return "", nil, fmt.Errorf("no operator directory grants for this session; allow read in Haven or use /adir")
+		return "", nil, fmt.Errorf("no operator directory grants for this session; allow a directory read grant first or use /adir")
 	}
 	repoRoot = strings.TrimSpace(binding.primary)
 	if repoRoot == "" {

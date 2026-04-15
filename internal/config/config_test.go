@@ -850,13 +850,13 @@ logging:
 
 func TestLoadRuntimeConfig_UsesExpectedSessionClientExecutableEnvWhenUnset(t *testing.T) {
 	repoRoot := t.TempDir()
-	t.Setenv(expectedSessionClientExecutableEnv, "/Applications/Haven.app/Contents/MacOS/Haven")
+	t.Setenv(expectedSessionClientExecutableEnv, "/Applications/Loopgate.app/Contents/MacOS/Loopgate")
 
 	runtimeConfig, err := LoadRuntimeConfig(repoRoot)
 	if err != nil {
 		t.Fatalf("load runtime config: %v", err)
 	}
-	if got := runtimeConfig.ControlPlane.ExpectedSessionClientExecutable; got != "/Applications/Haven.app/Contents/MacOS/Haven" {
+	if got := runtimeConfig.ControlPlane.ExpectedSessionClientExecutable; got != "/Applications/Loopgate.app/Contents/MacOS/Loopgate" {
 		t.Fatalf("unexpected expected session client executable: %q", got)
 	}
 }
@@ -879,7 +879,7 @@ func TestLoadRuntimeConfig_DoesNotOverrideExplicitSessionExecutableWithEnv(t *te
 	t.Setenv(expectedSessionClientExecutableEnv, "/Applications/Other.app/Contents/MacOS/Other")
 
 	cfg := DefaultRuntimeConfig()
-	cfg.ControlPlane.ExpectedSessionClientExecutable = "/Applications/Haven.app/Contents/MacOS/Haven"
+	cfg.ControlPlane.ExpectedSessionClientExecutable = "/Applications/Loopgate.app/Contents/MacOS/Loopgate"
 	if err := WriteRuntimeConfigYAML(repoRoot, cfg); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
@@ -888,7 +888,7 @@ func TestLoadRuntimeConfig_DoesNotOverrideExplicitSessionExecutableWithEnv(t *te
 	if err != nil {
 		t.Fatalf("load runtime config: %v", err)
 	}
-	if got := runtimeConfig.ControlPlane.ExpectedSessionClientExecutable; got != "/Applications/Haven.app/Contents/MacOS/Haven" {
+	if got := runtimeConfig.ControlPlane.ExpectedSessionClientExecutable; got != "/Applications/Loopgate.app/Contents/MacOS/Loopgate" {
 		t.Fatalf("expected explicit config value to win, got %q", got)
 	}
 }

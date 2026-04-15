@@ -5,7 +5,7 @@ This file maps `internal/config/`, the Go types and loaders for **checked-in YAM
 Use it when changing:
 
 - policy struct shape vs `core/policy/policy.yaml`
-- morphling class loading vs `core/policy/morphling_classes.yaml`
+- legacy class-policy compatibility loading vs `core/policy/morphling_classes.yaml`
 - persona loading vs `persona/default.yaml`
 - atomic JSON read/write helpers for `runtime/state/*.json`
 
@@ -16,7 +16,7 @@ Use it when changing:
 ## Key Files
 
 - `policy.go`
-  - `Policy` struct, YAML loading for `core/policy/policy.yaml` and morphling classes path
+  - `Policy` struct, YAML loading for `core/policy/policy.yaml` and the legacy class-policy compatibility path
   - hashing / change detection where used for policy acceptance flows
 
 - `persona.go`

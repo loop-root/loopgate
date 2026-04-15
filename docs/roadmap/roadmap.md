@@ -1,387 +1,70 @@
-**Last updated:** 2026-04-10
+**Last updated:** 2026-04-14
 
 # Loopgate roadmap
 
-## Current product note
+This is the current near-term roadmap for **Loopgate** as a single product.
 
-This roadmap still contains older implementation detail and forward-looking material that no longer matches the near-term product center.
-
-The active product direction is:
-- Loopgate
-- local-first
-- Claude Code hooks
+Loopgate's active product scope is:
+- local-first governance
 - signed policy
-- approvals
-- local audit
-- governed local MCP/runtime work
+- explicit approvals
+- append-only local audit
+- Claude Code hook governance
+- governed local MCP broker work
 
-Not the current product center:
-- Haven as the main product
-- Morph as a separate product
-- morphlings as a near-term core story
-- multi-tenant deployment
-- admin-node deployment
+This is not the active roadmap for:
+- Haven as a product
+- Morph as a separate assistant product
+- morphlings
+- in-tree continuity or memory
+- multi-tenant or admin-node deployment
 
-Use this file as historical implementation context, not as the cleanest statement of current scope.
-For current cleanup direction, see [loopgate_cleanup_plan.md](./loopgate_cleanup_plan.md).
+Historical roadmap material has been moved to the separate `ARCHIVED`
+repository. Continuity-specific planning now belongs in the separate
+`continuity` repository.
 
-## Current baseline
+## Current priorities
 
-**Snapshot from:** 2026-03-12 (feature list). **Doc reviewed:** 2026-03-24.
+### 1. Open-source readiness
 
-The repo ships the **Loopgate** control plane with a real security boundary.
-**Primary integration targets** are **Claude Code hooks** and **HTTP-on-UDS local clients**. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR; **out-of-tree** MCP→HTTP bridges remain an operator choice. Haven / Morph UI work is no longer the active MVP direction in this repository.
+- remove tracked runtime and sandbox artifacts
+- archive stale internal planning and old subsystem docs
+- sanitize hardcoded local paths from active docs and tests
+- trim remaining legacy naming that no longer matches the product boundary
 
-Implemented:
+### 2. Operator usability
 
-- **Reference Wails shell** (`cmd/haven/`) handles model interaction, continuity stream, and session runtime on the unprivileged client side for parity testing — **not** a ship target
-- Loopgate runs as a local Unix-socket control plane and remains the authority boundary
-- capability and approval tokens are bound to the authenticated local session
-- privileged Loopgate requests use a server-issued session MAC key, signed requests, and replay protection
-- approval decisions require single-use decision nonces and explicit approval state transitions
-- Loopgate and unprivileged clients that use the client-ledger path each maintain append-only hash-linked audit/ledger chains where that path is active
-- sandbox crossing is mediated through the mini-filesystem rooted at `/morph/home`
-- quarantine metadata, blob view, and prune lifecycle are implemented with append-only audit
-- model/provider connections and secret refs are handled through Loopgate with secure-backend resolution
-- Loopgate exposes typed display-safe UI status, event, and approval endpoints
-- connection-backed `public_read`, client-credentials, and PKCE flows exist in Loopgate
-- morphling class policy is authoritative from `core/policy/morphling_classes.yaml`
-- morphlings now use a Loopgate-owned lifecycle record plus explicit state machine:
-  - `requested`
-  - `authorizing`
-  - `pending_spawn_approval`
-  - `spawned`
-  - `running`
-  - `completing`
-  - `pending_review`
-  - `terminating`
-  - `terminated`
-- morphling request-level denials remain distinct from instantiated morphling lifecycle termination
-- morphling audit no longer stores raw goal text; it records a session-bound `goal_hmac`
-- restart recovery resolves persisted nonterminal morphling records before new work is accepted
-- socket-bound morphling worker launch/session flow is implemented on the local Unix socket
-- worker updates are bounded to projected `status_text`, bounded `memory_strings`, and staged artifact refs
-- morphling completions now move through real worker-driven `running`, `completing`, and `pending_review` transitions
-- staged morphling completions are finalized under Loopgate control and resolved by explicit operator review
-- The operator client maintains an explicit three-thread continuity model:
-  - `current`
-  - `next`
-  - `previous`
-- sealed `previous` threads are submitted to Loopgate for idempotent inspection once thresholds are crossed
-- Loopgate now owns durable continuity artifacts:
-  - distillates
-  - resonate keys
-  - wake-state projection
-  - governed discovery and recall
-- inspection-root review and lineage governance is now authoritative for continuity-derived memory eligibility
-- startup prompt continuity is now the combination of Loopgate durable wake state plus client-local thread projection
-- memory scoring weights now live in `config/runtime.yaml` and continuity classification remains internal to the memory subsystem
-- Loopgate memory now writes split derived artifacts under `runtime/state/memory/` instead of a single flat snapshot file
-- end-to-end integration tests now cover:
-  - local socket replay rejection
-  - denied writes that never land on disk
-  - audit-chain/redaction round trips
-  - quarantine lifecycle
-  - sandbox symlink escape denial
-  - morphling lifecycle invariants
-  - morphling worker lifecycle and review races
-  - task plan golden path: plan → validation → lease → mediated execution → staged result → completion
-  - task plan boundary denials: unknown capability, hash mismatch, plan-not-found, already-leased, wrong morphling ID, double execute, double complete
-  - morphling runner golden path: separate-process runner consuming a lease through Loopgate mediation
-  - morphling runner subprocess build: binary builds, parses JSON config, produces structured JSON output
-  - morphling runner lease expiry: expired leases rejected at execute time
-  - morphling runner duplicate completion: second complete rejected
-  - morphling runner crash recovery: crash after /execute leaves plan in executing state, recovery /complete succeeds
-  - morphling runner concurrent execution: two runners on same lease, exactly one succeeds
+- keep setup and operator docs current
+- make hook install/remove flows straightforward
+- improve readable audit and ledger views for demos and troubleshooting
+- document common failure and recovery paths clearly
 
-Validation status:
+### 3. Governance hardening
 
-- `go test ./...` was passing as of 2026-03-14 — re-run locally before release; this file is not a CI badge.
+- keep signed policy as the only accepted policy authority
+- preserve fail-closed hook behavior
+- keep the governed MCP path request-driven and auditable
+- tighten the append-only audit story, especially around tamper and replacement gaps
 
-## TCL memory integration status (2026-03-23)
+### 4. Core simplification
 
-Phase 1 of TCL integration is now implemented for explicit memory writes.
+- continue removing retired Haven/Morph-era seams from active code and docs
+- keep Loopgate focused on governance, not assistant behavior or memory
+- reduce unnecessary dependencies and local-only baggage
 
-Implemented:
+## Definition of "clean enough"
 
-- explicit `RememberMemoryFact` requests are normalized into a shared `tcl.MemoryCandidate`
-- Loopgate evaluates explicit memory writes through TCL before any inspection, distillate, or resonate-key artifacts are persisted
-- explicit-memory governance now has stable denial codes for dangerous, invalid, dropped, review-required, and quarantine-required outcomes
-- Loopgate audit events now store audit-safe TCL summaries for explicit-memory keep and deny paths
-- deterministic-memory runtime facts and shell `/memory remember` output now use safe denial text instead of reflecting raw denied payloads (reference client path)
-- contradiction handling now uses persisted TCL conflict anchor tuples (`version + canonical_key`) so memories only compete when they target the same semantic slot
-- continuity-derived provider facts now reuse the same TCL analysis service for conservative anchor derivation and semantic signature persistence
-- new distillate facts now persist an internal semantic projection with anchor tuple, exact signature, family signature, and risk motifs when analysis succeeds
-- new memory facts now treat that semantic projection as the canonical internal anchor/signature carrier; legacy `conflict_key*` fields are accepted only at the decode/storage compatibility boundary and normalized away in the runtime model
-- explicit todo/task metadata facts now route through that same analysis service and persist task-shaped semantic projections instead of bypassing TCL entirely
-- goal and unresolved-item workflow transitions now also persist internal semantic projections, so durable continuity records no longer split between classified facts and unclassified workflow ops
-- generic `preference.stated_preference` memories only supersede when a stable attribute anchor can be derived; otherwise they coexist
-- wake-state contradiction resolution now uses persisted anchor tuples rather than Loopgate-local semantic key synthesis
-- legacy anchorless records remain anchorless during replay and coexist rather than triggering read-time anchor reconstruction
-- superseded lineages now keep replacement pointers and remain tombstoned for a built-in 30-day retention window before purge is allowed
+The repository is in the right shape when:
 
-Phase 1 boundary:
+- a new reader sees one product, not several
+- the active docs match the active code paths
+- local runtime state is no longer tracked in git
+- current operator flows are documented and testable
+- old continuity and product-experiment material is archived elsewhere
 
-- generic client thread events do not yet flow into TCL
-- continuity distillation is only partially informed by TCL; conservative provider-fact candidates may carry persisted semantic projections, but TCL does not replace distillation
-- durable memory candidacy is not widened to raw assistant prose
-- resonate keys do not reconstruct arbitrary text; they remain bounded recall handles
+## Next useful slices
 
-Next lift:
-
-- broader candidate ingestion from non-workflow memory-like artifacts
-- richer signature-registry coverage across wording variants and operator-readable risk tiers
-- backend-owned memory authority consolidation plan:
-  `docs/roadmap/2026-04-08-backend-owned-memory-redesign-plan.md`
-  Current state: live remember/inspect/discover/recall/review/tombstone/purge
-  now cross the backend seam; explicit remember candidate prep is backend-owned
-  in the live path, the dead per-artifact store hooks were removed, and
-  continuity inspect now rejects cross-session/thread/scope packet smuggling
-  plus duplicate or non-monotonic event metadata. Continuity-derived fact
-  persistence is also now bounded to scalar values that survive TCL analysis
-  instead of blindly storing arbitrary payload shapes. Stable profile-slot
-  discover is now exact-anchor-first for current `name`, `preferred_name`,
-  `timezone`, and `locale` values so anchored state no longer depends on
-  lexical tag overlap alone. Continuity-derived fact persistence now also
-  routes through a backend-owned typed candidate helper instead of hand-building
-  persisted facts directly from inline TCL analysis results. New continuity
-  writes persist a Loopgate-owned canonical `observed_packet` in continuity
-  JSONL instead of the raw inspect request body, and distillation derives from
-  that typed packet rather than the caller payload bundle. The raw
-  `/v1/continuity/inspect` route has now been removed, and the supported
-  server-loaded `/v1/continuity/inspect-thread` path hands the backend a
-  Loopgate-owned observed packet directly instead of fabricating a raw
-  continuity request.
-  Haven-backed observed packets now also stamp the authoritative control
-  session id and carry the stable threadstore event hash on each source ref,
-  so supported continuity provenance is stronger than a bare `thread:index`
-  pointer. The explicit remember TCL candidate-builder seam has also moved
-  behind the continuity backend, so the live memory-analysis path no longer
-  depends on a `Server` test hook. Wake-state and recall facts now carry an
-  explicit `state_class` (`authoritative_state` vs `derived_context`) so hard
-  and soft memory no longer need to be inferred from precedence heuristics.
-  The removed raw continuity-inspect route used to drop caller-supplied
-  `source_refs` outright; continuity proposal provenance now only enters
-  through the supported server-loaded path. The continuity memory benchmark’s
-  `production_write_parity`
-  seeding path now uses real authenticated `memory.remember` HTTP-over-UDS
-  writes, real `/v1/continuity/inspect-thread` continuity proposals, and real
-  `todo` workflow capability execution inside isolated Loopgate runtimes
-  instead of direct in-process calls into `rememberMemoryFact(...)`. Supported
-  production-parity retrieval now runs through `/v1/memory/discover` and
-  `/v1/memory/recall`, and the current checked-in `70`-fixture scored set no
-  longer needs projected-node fallback.
-  The current honest continuity rerun is `70/70` overall with `14/14` on
-  poisoning, `34/34` on contradiction, `13/13` on task resumption, and `9/9`
-  on safety precision.
-  That gain came from product changes behind the real control-plane path,
-  not from restoring projected-node benchmark shortcuts.
-  The final step from `57/61` to `61/61` came from fixing benchmark candidate
-  governance so continuity-style poisoning fixtures are evaluated through the
-  real TCL policy lane instead of falling into an explicit-write validator
-  mismatch.
-  The checked-in benchmark matrix has since expanded to `70` fixtures
-  (`14` poisoning, `34` contradiction, `13` task, `9` safety precision) and
-  now tracks poisoning subfamilies explicitly. The preserved `61`-fixture
-  honest rerun remains useful as the pre-expansion baseline, but the current
-  scoreboard is the `2026-04-10` `70`-fixture rerun. See
-  `docs/roadmap/2026-04-10-memorybench-matrix-and-relational-hints.md` for the
-  executable matrix buckets. The first targeted `RAG should win` evidence
-  bucket now exists as `extended_fixtures` plus `rag_evidence_matrix`, with a
-  shared `benchmark:evidence_working_set` scope so broad retrieval competes
-  over one corpus instead of isolated per-scenario mini-corpora. The current
-  read is still cautious but broader now: stronger RAG is `4/6`, while
-  continuity product path, continuity synthetic, and baseline RAG are `3/6`.
-  That is enough to prove multiple honest broad-evidence cases where stronger
-  RAG beats continuity, but it is still not broad enough to count as a
-  promoted headline bucket. The first
-  targeted `hybrid should win` bucket now also exists as `hybrid_recall_matrix`
-  inside `extended_fixtures`. That bucket now covers `7` targeted
-  state-plus-evidence fixtures. The current read there is much stronger:
-  continuity control is `0/7`, baseline RAG is `0/7`, stronger RAG is `0/7`,
-  and the runtime `hybrid` path is `7/7` after moving to a shared
-  relation-hint scorer plus a bounded wider evidence candidate pool. That is a
-  real targeted proof that the product hybrid architecture can beat both pure
-  controls on the current state-plus-evidence slice. It should still remain
-  targeted rather than promoted until there is a broader long-horizon evidence
-  bucket and more negative-space cases.
-  The `hybrid` backend is now also a real runtime backend behind the same
-  Loopgate-owned memory seam. It keeps continuity authoritative for writes,
-  wake state, and recall, and adds only bounded RAG evidence sidecars on
-  discover. The new `long_horizon_matrix` over-time slice is the strongest
-  current proof point for the product story: continuity and hybrid both score
-  `8/8`, while both governed RAG-only comparators score `2/8`. That is strong
-  evidence for long-horizon state continuity, not yet for long-horizon evidence
-  retrieval or a fully productized hybrid prompt assembly policy.
-  The read-side contract is now also clearer: wake state stays compact and
-  current-state focused, while stored continuity artifacts can be reached
-  through explicit lookup/get routes instead of pre-expanding more memory into
-  every prompt. That keeps goals, tasks, deadlines, and stable profile facts in
-  the injected state while making broader stored context a deliberate second
-  read. The prompt policy is now explicit as well:
-  wake state is default,
-  artifact lookup is the second read for stored continuity context,
-  and hybrid evidence is advisory discover-time context only when a current
-  state anchor already exists.
-  Backend-owned observed packets now also allowlist source-ref kinds, so
-  first-class provenance refs only survive on supported server-loaded paths,
-  and new provenance sources have to be added intentionally rather than
-  arriving as arbitrary strings in observed continuity state.
-  Remaining gaps are
-  test-only compatibility seams, stronger authoritative provenance for
-  continuity sources, broader TCL-informed continuity derivation, and a live
-  product policy for when bounded hybrid evidence should be pulled into prompt
-  assembly.
-- TCL-informed continuity and bounded semantic compression for distillates and resonate keys
-- replace the current conservative attribute-anchor heuristics with richer TCL-derived conflict anchors for more preference and intent families
-- simplify the memory/TCL implementation before widening it further; a dated
-  engineering sketch is archived for maintainers at
-  maintainer documentation checkout: `roadmap-drafts/2026-03-25-tcl-memory-simplification-plan.md` (outside this repository)
-- define a swappable memory backend boundary and benchmark harness so
-  `continuity_tcl` can be compared fairly against a `rag_baseline`; see
-  `docs/rfcs/0011-swappable-memory-backends-and-benchmark-harness.md`
-- keep benchmark comparator labels benchmark-only until they exist as real
-  runtime backends behind the same Loopgate-owned seam
-- define the authoritative storage/query shape for the `continuity_tcl`
-  backend so it can evolve past JSON snapshots while keeping Loopgate in
-  control; see `docs/rfcs/0013-continuity-tcl-storage-and-query-backend.md`
-- freeze canonical TCL conformance and conservative anchor expansion rules
-  before widening memory semantics further; see
-  `docs/rfcs/0014-tcl-conformance-and-anchor-freeze.md`
-- define an operator-client-owned scheduler/background execution model so the operator client can carry
-  multi-step work forward without moving authority out of Loopgate; see
-  `docs/rfcs/0012-scheduler-and-background-agent-execution.md`
-
-## Current architecture
-
-### Reference operator shell (`cmd/haven/`)
-
-- **In-repo reference:** Wails/React under `cmd/haven/` (not a ship target)
-- persona and prompt compilation (via Loopgate-backed model paths where used)
-- local session state and approval rendering
-- local ledger and continuity thread projection on the client side
-
-### Loopgate
-
-- control-plane authority for capabilities and lifecycle transitions
-- policy evaluation
-- capability orchestration
-- approval creation and enforcement
-- capability/approval token minting and request integrity
-- secret resolution and connection handling
-- quarantine and sandbox mediation
-- morphling lifecycle ownership
-- append-only control-plane audit
-
-## What is still missing
-
-The control plane is real, but **multi-tenancy** and broader enterprise deployment are still landing.
-
-Not yet implemented (non-exhaustive):
-
-- **`tenant_id` namespace** across remaining resources (memory partitions and core audit paths are in progress; grants and other state may still be global per instance)
-- **Enterprise identity layer:** customer **IdP** via **OIDC/OAuth** (and SAML where required) for admin and/or node identity — RFC-first; config-sourced tenancy until then (`docs/setup/TENANCY.md`)
-- **Enterprise secrets layer:** pluggable backends for **Vault**, **cloud KMS**, **HSM**-backed stores, **TPM**/platform identity for bootstrap — RFC-first; see `docs/setup/SECRETS.md` § *Enterprise integration layer*
-- Loopgate-side memory inspector / distillate review pipeline
-- explicit capability draft -> validate -> provision flow for developer DX
-- additional secure secret-storage backends beyond macOS Keychain (covered by enterprise secrets layer above)
-- broader typed integrations and skills beyond the current narrow adapter set
-- full **remote / multi-node** deployment profile (mTLS admin path, policy sync)
-- packaging and first-run onboarding polish
-
-Deliberately not implemented yet:
-
-- a public Loopgate network API
-- a public morphling API
-- generic unrestricted browsing or extraction
-- remote deployment before the local governed workflow story is stronger
-
-## Next phases
-
-## Phase 1: Memory inspector and continuity hardening
-
-- move toward Loopgate-authored distillates with explicit provenance
-- keep v1 distillation field-first and deterministic
-- add a narrow review queue for memory candidates requiring operator review
-- extend the current global tag index toward explicit thread/task-scoped discovery
-- keep remembered state distinct from freshly checked state
-
-Lift: medium-large
-
-## Phase 2: Capability provisioning DX
-
-- first-run setup path that drafts config instead of exposing raw schema
-- `/capability draft ...` style workflow in operator clients
-- Loopgate validation/provision/reject cycle with explicit audit
-- draft files remain reviewable and diffable
-- no natural-language authority; model output remains draft content only
-
-Lift: medium-large
-
-## Phase 3: Typed capability and workflow expansion
-
-- add only the narrow adapters needed for real operator workflows
-- improve capability selection and denial explanation quality
-- improve multi-step aggregation over safe structured results
-- keep raw remote bodies quarantined and out of prompt/memory by default
-- avoid widening extraction contracts without a concrete workflow need
-
-Lift: medium-large
-
-## Phase 4: Operational hardening
-
-- CLI packaging / `loopgate` or legacy `morph` entrypoints (naming as shipped)
-- packaging/install path
-- Loopgate supervised launch
-- richer secret rotation workflows
-- CI/static analysis expansion
-- more restart/crash invariant coverage
-
-Lift: medium-large
-
-## Phase 5: Enterprise / remote profile (RFC-first, in progress)
-
-- `tenant_id` isolation and admin-node governance (mTLS)
-- define remote transport profiles that preserve the Loopgate authority model
-- replace local peer binding with deployment identity where required
-- **Integration layers (sequenced after core enterprise slice):** customer **IdP (OIDC/OAuth)** and **enterprise secret backends (Vault / KMS / HSM / TPM-related bootstrap)** as explicit plugin surfaces — see `sprints/2026-04-01-loopgate-enterprise-phased-plan.md` § *Future enterprise integration layers*
-- keep normative details RFC-first where the spec is still moving
-
-Lift: large
-
-## Overall lift assessment
-
-This is no longer a pure architecture sketch. The local control plane, sandbox,
-append-only audit, and morphling lifecycle substrate are real.
-
-Why it is tractable:
-
-- the local prompt/model boundary already exists
-- the local continuity ledger and Loopgate memory boundary now both exist
-- the control-plane split is implemented and tested
-- the sandbox and morphling lifecycle contracts are now explicit in code
-
-Why it is still large:
-
-- continuity governance now has explicit review, tombstone, and purge state, but client-side projection/UX is still narrow
-- auth, secrets, and restart safety remain cross-cutting concerns
-- developer UX must improve without weakening authority boundaries
-- integrations need typed contracts and quarantine discipline
-
-## Immediate next slice
-
-The next engineering slice should stay on continuity hardening and memory
-governance, not more spawn schema churn and not broader public API surface.
-
-Immediate focus:
-
-- extend operator-facing projection for continuity review and lineage-governance status without moving authority into the client
-- extend restart tests around sealed-but-uninspected and inspected-but-not-yet-acknowledged threads
-- keep wake-state recall bounded and provenance-rich
-- keep host writes, export, and durable-memory mutation behind existing approval and promotion boundaries
-
-Do not:
-
-- expose morphlings as a public network API
-- widen extraction or browsing surface without a workflow need
-- weaken append-only audit or state-machine ownership for convenience
+1. finish the open-source sanitization sweep on active files and defaults
+2. prune or rename remaining active code comments and tests that still say `Haven`, `Morph`, or `morphling`
+3. do a focused dependency trim after the code/doc cleanup settles
+4. harden the local audit integrity story further

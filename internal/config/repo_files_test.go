@@ -20,10 +20,14 @@ func TestRepositoryPolicyFile_LoadsWithStrictSchema(t *testing.T) {
 	if policy.Version == "" {
 		t.Fatal("expected policy version to be set")
 	}
-	if len(policy.Tools.Filesystem.AllowedRoots) == 0 {
-		t.Fatal("expected at least one allowed root")
+	readPolicy, ok := policy.Tools.ClaudeCode.ToolPolicies["Read"]
+	if !ok {
+		t.Fatal("expected Read tool policy in repository policy")
 	}
-	for _, root := range policy.Tools.Filesystem.AllowedRoots {
+	if len(readPolicy.AllowedRoots) == 0 {
+		t.Fatal("expected at least one Read allowed root")
+	}
+	for _, root := range readPolicy.AllowedRoots {
 		if strings.HasPrefix(root, "~/") || root == "~" {
 			t.Fatalf("allowed root was not normalized: %q", root)
 		}
@@ -89,11 +93,12 @@ func TestRepositoryPolicyFile_AllowsRepoDocsButDeniesSensitiveRoots(t *testing.T
 	if err != nil {
 		t.Fatalf("load repository policy: %v", err)
 	}
+	readPolicy := policy.Tools.ClaudeCode.ToolPolicies["Read"]
 
 	allowedPath, err := safety.SafePath(
 		repoRoot,
-		policy.Tools.Filesystem.AllowedRoots,
-		policy.Tools.Filesystem.DeniedPaths,
+		readPolicy.AllowedRoots,
+		readPolicy.DeniedPaths,
 		"docs/setup/SETUP.md",
 	)
 	if err != nil {
@@ -105,9 +110,9 @@ func TestRepositoryPolicyFile_AllowsRepoDocsButDeniesSensitiveRoots(t *testing.T
 
 	_, err = safety.SafePath(
 		repoRoot,
-		policy.Tools.Filesystem.AllowedRoots,
-		policy.Tools.Filesystem.DeniedPaths,
-		"core/memory/ledger/ledger.jsonl",
+		readPolicy.AllowedRoots,
+		readPolicy.DeniedPaths,
+		"runtime/state/loopgate_events.jsonl",
 	)
 	if err == nil {
 		t.Fatal("expected repository policy to deny ledger path")
@@ -115,8 +120,8 @@ func TestRepositoryPolicyFile_AllowsRepoDocsButDeniesSensitiveRoots(t *testing.T
 
 	_, err = safety.SafePath(
 		repoRoot,
-		policy.Tools.Filesystem.AllowedRoots,
-		policy.Tools.Filesystem.DeniedPaths,
+		readPolicy.AllowedRoots,
+		readPolicy.DeniedPaths,
 		"core/policy/policy.yaml",
 	)
 	if err == nil {

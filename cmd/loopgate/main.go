@@ -15,6 +15,9 @@ import (
 var exitProcess = os.Exit
 
 func main() {
+	if handleLoopgateSubcommand(os.Args[1:]) {
+		return
+	}
 	if len(os.Args) > 1 {
 		fmt.Fprintln(os.Stderr, "ERROR: startup flags are no longer supported; policy changes require a valid detached signature, not --accept-policy")
 		exitProcess(2)

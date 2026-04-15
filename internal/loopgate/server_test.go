@@ -1974,7 +1974,7 @@ func TestNewModelClientFromRuntimeConfig_AnthropicModelConnectionUsesSecretStore
 	}
 
 	response, err := modelClient.Reply(context.Background(), modelpkg.Request{
-		Persona:     config.Persona{Name: "Morph"},
+		Persona:     config.Persona{Name: "Loopgate"},
 		SessionID:   "s-test",
 		TurnCount:   1,
 		UserMessage: "hello",
@@ -2659,7 +2659,7 @@ func TestConfiguredHTMLMetaCapability_ExtractsDisplayOnlyTaintedMetadata(t *test
 			_, _ = io.WriteString(writer, `{"access_token":"provider-access-token","token_type":"Bearer","expires_in":300}`)
 		case "/api/page.html":
 			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = io.WriteString(writer, "<html><head><title>Release Notes</title><meta name=\"description\" content=\"Tainted summary text\"><meta property=\"og:site_name\" content=\"Morph Docs\"></head><body><p>ignored</p></body></html>")
+			_, _ = io.WriteString(writer, "<html><head><title>Release Notes</title><meta name=\"description\" content=\"Tainted summary text\"><meta property=\"og:site_name\" content=\"Loopgate Docs\"></head><body><p>ignored</p></body></html>")
 		default:
 			http.NotFound(writer, request)
 		}
@@ -2703,7 +2703,7 @@ func TestConfiguredHTMLMetaCapability_ExtractsDisplayOnlyTaintedMetadata(t *test
 	if response.StructuredResult["description"] != "Tainted summary text" {
 		t.Fatalf("unexpected html meta extraction: %#v", response.StructuredResult)
 	}
-	if response.StructuredResult["site_name"] != "Morph Docs" {
+	if response.StructuredResult["site_name"] != "Loopgate Docs" {
 		t.Fatalf("unexpected html property extraction: %#v", response.StructuredResult)
 	}
 	if response.Metadata["content_class"] != contentClassHTMLConfig {
@@ -3012,7 +3012,7 @@ func TestConfiguredHTMLMetaCapability_DeniesDuplicateMetaName(t *testing.T) {
 			_, _ = io.WriteString(writer, `{"access_token":"provider-access-token","token_type":"Bearer","expires_in":300}`)
 		case "/api/page.html":
 			writer.Header().Set("Content-Type", "text/html")
-			_, _ = io.WriteString(writer, "<html><head><title>Release Notes</title><meta name=\"description\" content=\"first\"><meta name=\"description\" content=\"second\"><meta property=\"og:site_name\" content=\"Morph Docs\"></head><body></body></html>")
+			_, _ = io.WriteString(writer, "<html><head><title>Release Notes</title><meta name=\"description\" content=\"first\"><meta name=\"description\" content=\"second\"><meta property=\"og:site_name\" content=\"Loopgate Docs\"></head><body></body></html>")
 		default:
 			http.NotFound(writer, request)
 		}
@@ -3590,7 +3590,7 @@ func TestModelReply_UsesLoopgateRuntime(t *testing.T) {
 	}
 
 	modelResponse, err := client.ModelReply(context.Background(), modelpkg.Request{
-		Persona:     config.Persona{Name: "Morph"},
+		Persona:     config.Persona{Name: "Loopgate"},
 		Policy:      status.Policy,
 		SessionID:   "session-model",
 		TurnCount:   1,
@@ -3637,7 +3637,7 @@ func TestModelReply_UsesDedicatedModelTimeoutInsteadOfDefaultControlPlaneTimeout
 	}
 
 	modelResponse, err := client.ModelReply(context.Background(), modelpkg.Request{
-		Persona:     config.Persona{Name: "Morph"},
+		Persona:     config.Persona{Name: "Loopgate"},
 		Policy:      status.Policy,
 		SessionID:   "session-model",
 		TurnCount:   1,
@@ -3664,7 +3664,7 @@ func TestModelReply_FailsClosedWhenAuditUnavailable(t *testing.T) {
 	}
 
 	_, err := client.ModelReply(context.Background(), modelpkg.Request{
-		Persona:     config.Persona{Name: "Morph"},
+		Persona:     config.Persona{Name: "Loopgate"},
 		Policy:      status.Policy,
 		SessionID:   "session-model",
 		TurnCount:   1,
@@ -3697,7 +3697,7 @@ func TestModelReply_LogsTimingOnModelError(t *testing.T) {
 	}
 
 	_, err := client.ModelReply(context.Background(), modelpkg.Request{
-		Persona:     config.Persona{Name: "Morph"},
+		Persona:     config.Persona{Name: "Loopgate"},
 		Policy:      status.Policy,
 		SessionID:   "session-model",
 		TurnCount:   1,
@@ -4484,7 +4484,7 @@ func TestOpenSessionRejectsOperatorMountBindingWithoutExpectedClientPin(t *testi
 func TestOpenSessionRejectsPinnedClientWhenExecutableResolverUnavailable(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServerWithRuntime(t, repoRoot, loopgatePolicyYAML(false), nil, false)
-	server.expectedClientPath = "/Applications/Haven.app/Contents/MacOS/Haven"
+	server.expectedClientPath = "/Applications/Loopgate.app/Contents/MacOS/Loopgate"
 	server.resolveExePath = nil
 
 	client.ConfigureSession("safe-actor", "safe-session", []string{"fs_list"})

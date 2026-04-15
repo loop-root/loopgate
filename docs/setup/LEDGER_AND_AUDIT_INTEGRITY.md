@@ -34,7 +34,7 @@ So:
 
 When `logging.audit_ledger.hmac_checkpoint` is **enabled** in `config/runtime.yaml`, Loopgate appends `audit.ledger.hmac_checkpoint` after every **N** ordinary audit events. Each line carries **HMAC-SHA256** over a canonical v1 message that includes the **through** `audit_sequence`, **through** prior `event_hash`, and a **checkpoint timestamp**; the **signing key** is loaded via **`secret_ref`** (for example macOS Keychain), not embedded in the JSONL.
 
-Checkpoint lines still participate in the same **append-only hash chain** as other events. Verification helpers live in **`internal/ledger`** (`VerifyAuditLedgerHMACCheckpointEvent`). This improves **detectability of tampering** for parties that hold the key; it is **not** a substitute for **out-of-band** retention (append-only export, central aggregation) where the operator needs evidence off the workstation. See `docs/reports/security-hardening-plan-2026-04.md` for follow-on work.
+Checkpoint lines still participate in the same **append-only hash chain** as other events. Verification helpers live in **`internal/ledger`** (`VerifyAuditLedgerHMACCheckpointEvent`). This improves **detectability of tampering** for parties that hold the key; it is **not** a substitute for **out-of-band** retention (append-only export, central aggregation) where the operator needs evidence off the workstation.
 
 ## Recommended topology
 
@@ -142,4 +142,4 @@ This preserves one authoritative forensic timeline while still allowing downstre
 
 - Threat model row **TM-05** — [loopgate-threat-model.md](../loopgate-threat-model.md)
 - Implementation — [internal/ledger/ledger.go](../../internal/ledger/ledger.go), [internal/ledger/hmac_checkpoint.go](../../internal/ledger/hmac_checkpoint.go)
-- Hardening backlog — [security-hardening-plan-2026-04.md](../reports/security-hardening-plan-2026-04.md)
+- Hardening backlog — tracked in the active Loopgate cleanup and security work

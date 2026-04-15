@@ -193,7 +193,7 @@ func summarizeConfigPaths(commandContext CommandContext) string {
 	lines = append(lines, fmt.Sprintf("sandbox_root: %s (%s)", sandboxPaths.Root, existenceStatus(sandboxPaths.Root)))
 	lines = append(lines, fmt.Sprintf("sandbox_home: %s (%s)", sandboxPaths.Home, existenceStatus(sandboxPaths.Home)))
 	lines = append(lines, "control_plane_socket: loopgate")
-	lines = append(lines, "model_provider_secret_storage: Loopgate-owned model connections are preferred; Morph stores only non-secret model runtime metadata locally")
+	lines = append(lines, "model_provider_secret_storage: Loopgate-owned model connections are preferred; only non-secret model runtime metadata is stored locally")
 	lines = append(lines, "integration_secret_storage: loopgate-owned refs and backend validation implemented; macOS Keychain backend is active")
 	lines = append(lines, fmt.Sprintf("loopgate_socket: %s", filepath.Join(commandContext.RepoRoot, "runtime", "state", "loopgate.sock")))
 	return strings.Join(lines, "\n")

@@ -17,10 +17,10 @@ func shellDevOverridePath(repoRoot string) string {
 	return filepath.Join(repoRoot, "runtime", "state", shellDevOverrideFileName)
 }
 
-// IsShellDevModeEnabled reports whether shell_exec is enabled for Haven sessions.
+// IsShellDevModeEnabled reports whether shell_exec is enabled for operator sessions.
 // Defaults to false (hidden from the model) when the override file is absent.
-// The tool remains registered in the capability registry — only Haven's access
-// to it is gated here, via filtering at request time in the Haven chat handler.
+// The tool remains registered in the capability registry — only the operator
+// path's access to it is gated here.
 func IsShellDevModeEnabled(repoRoot string) (bool, error) {
 	raw, err := os.ReadFile(shellDevOverridePath(repoRoot))
 	if err != nil {
@@ -37,7 +37,7 @@ func IsShellDevModeEnabled(repoRoot string) (bool, error) {
 }
 
 // SaveShellDevOverride writes the override file. Takes effect immediately for
-// new Haven chat requests (no Loopgate restart required).
+// new operator requests (no Loopgate restart required).
 func SaveShellDevOverride(repoRoot string, enabled bool) error {
 	stateDir := filepath.Join(repoRoot, "runtime", "state")
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {

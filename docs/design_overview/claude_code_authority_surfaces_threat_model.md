@@ -16,9 +16,9 @@ only harness or observability events?
 In scope:
 
 - Claude Code `PreToolUse` hook handling via `POST /v1/hook/pre-validate`
-- Claude built-in tools currently mapped in [internal/loopgate/server_hook_handlers.go](/Users/adalaide/Dev/loopgate/internal/loopgate/server_hook_handlers.go)
-- tool-specific policy in [internal/config/policy.go](/Users/adalaide/Dev/loopgate/internal/config/policy.go)
-- current hook enforcement in [internal/loopgate/claude_code_hook_policy.go](/Users/adalaide/Dev/loopgate/internal/loopgate/claude_code_hook_policy.go)
+- Claude built-in tools currently mapped in [`internal/loopgate/server_hook_handlers.go`](../../internal/loopgate/server_hook_handlers.go)
+- tool-specific policy in [`internal/config/policy.go`](../../internal/config/policy.go)
+- current hook enforcement in [`internal/loopgate/claude_code_hook_policy.go`](../../internal/loopgate/claude_code_hook_policy.go)
 - future `Claude -> one Loopgate MCP gateway -> governed MCP servers` path from [RFC 0016](../rfcs/0016-claude-tool-policy-and-mcp-gateway.md)
 
 Out of scope:
@@ -157,8 +157,8 @@ Impact:
 
 Current control:
 
-- unknown tools are denied by default in [internal/loopgate/server_hook_handlers.go](/Users/adalaide/Dev/loopgate/internal/loopgate/server_hook_handlers.go)
-- `tools.claude_code.deny_unknown_tools` defaults true in [internal/config/policy.go](/Users/adalaide/Dev/loopgate/internal/config/policy.go)
+- unknown tools are denied by default in [`internal/loopgate/server_hook_handlers.go`](../../internal/loopgate/server_hook_handlers.go)
+- `tools.claude_code.deny_unknown_tools` defaults true in [`internal/config/policy.go`](../../internal/config/policy.go)
 - hook audit now records `hook_surface_class` and whether the event was handled
   as `enforced` or `audit_only`
 
@@ -181,7 +181,7 @@ Impact:
 
 Current control:
 
-- the project hook script is fail-closed by default in [\.claude/hooks/loopgate_pretool.py](/Users/adalaide/Dev/loopgate/.claude/hooks/loopgate_pretool.py)
+- the project hook script is fail-closed by default in [`.claude/hooks/loopgate_pretool.py`](../../.claude/hooks/loopgate_pretool.py)
 
 Residual risk:
 
@@ -287,7 +287,7 @@ Impact:
 
 Current control:
 
-- constrained tools deny on missing required fields in [internal/loopgate/claude_code_hook_policy.go](/Users/adalaide/Dev/loopgate/internal/loopgate/claude_code_hook_policy.go)
+- constrained tools deny on missing required fields in [`internal/loopgate/claude_code_hook_policy.go`](../../internal/loopgate/claude_code_hook_policy.go)
 
 Residual risk:
 

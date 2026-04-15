@@ -379,7 +379,7 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 			return
 		}
 		// NOTE: This runs the full capability (e.g. host.plan.apply) before the HTTP response returns.
-		// Haven and other UIs should show a long-running indicator on Approve — large plans can take many seconds.
+		// UI clients should show a long-running indicator on Approve — large plans can take many seconds.
 		response := server.executeCapabilityRequest(request.Context(), capabilityToken{
 			TokenID:             "approved:" + approvalID,
 			ControlSessionID:    pendingApproval.ExecutionContext.ControlSessionID,
@@ -563,7 +563,7 @@ func (server *Server) currentApprovalDecisionState(approvalID string) (nonce, ma
 func (server *Server) loadPersonaDisplaySummary() (string, string) {
 	persona, err := config.LoadPersona(server.repoRoot)
 	if err != nil {
-		return "Morph", "unknown"
+		return "Loopgate", "unknown"
 	}
 	return persona.Name, persona.Version
 }

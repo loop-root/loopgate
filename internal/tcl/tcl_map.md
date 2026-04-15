@@ -74,7 +74,7 @@ Conflict anchors let the system detect supersession and conflicts for the same l
 - Model output must still pass through validation; TCL types are not trust by themselves.
 - Keep analysis input and validated write contracts distinct. `MemoryCandidateInput` is untrusted pipeline input; `ValidatedMemoryCandidate` is the later trust boundary.
 - Keep canonical keys stable when changing normalization—migration implications for stored facts.
-- Do not widen the explicit-memory registry casually; see `docs/adr/0006-explicit-memory-key-registry-compiled-until-signed-admin-distribution.md`.
-- Do not broaden fallback preference anchoring casually; see `docs/adr/0007-preference-anchor-fallback-stays-secondary.md`.
+- Do not widen the explicit-memory registry casually; see the continuity repo ADR `docs/adr/0006-explicit-memory-key-registry-compiled-until-signed-admin-distribution.md`.
+- Do not broaden fallback preference anchoring casually; see the continuity repo ADR `docs/adr/0007-preference-anchor-fallback-stays-secondary.md`.
 - Do not widen validated write sources casually; the contract is intentionally narrower than the analysis pipeline until persistence semantics are updated to consume it directly.
 - Grow conformance fixtures when RFC semantics change; do not let code silently drift from the TCL RFCs.

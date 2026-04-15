@@ -128,7 +128,7 @@ func (server *Server) hostPlanApplyApprovalOperatorFields(planID string) map[str
 		detailJoined = fmt.Sprintf("run %d planned operation(s)", len(plan.Operations))
 	}
 	out["operator_intent_line"] = fmt.Sprintf(
-		"Morph will %s in your granted “%s” folder on this Mac. Files are not moved until you approve.",
+		"Loopgate-governed actions will %s in your granted “%s” folder on this Mac. Files are not moved until you approve.",
 		detailJoined,
 		folderLabel,
 	)
@@ -336,11 +336,11 @@ func (server *Server) executeHostFolderListCapability(tokenClaims capabilityToke
 	}
 
 	structured := map[string]interface{}{
-		"folder_id":    preset.ID,
-		"folder_name":  preset.Name,
-		"path":         relDisplay,
-		"total_count":  totalCount,
-		"entries":      toJSONSlice(out),
+		"folder_id":   preset.ID,
+		"folder_name": preset.Name,
+		"path":        relDisplay,
+		"total_count": totalCount,
+		"entries":     toJSONSlice(out),
 	}
 	if omittedCount > 0 {
 		structured["omitted_count"] = omittedCount
@@ -784,9 +784,9 @@ func (server *Server) hostAccessStructuredSuccess(tokenClaims capabilityToken, c
 	resultMetadata := map[string]interface{}{
 		"prompt_eligible": classification.PromptEligible(),
 		"memory_eligible": classification.MemoryEligible(),
-		"display_only":     classification.DisplayOnly(),
-		"audit_only":       classification.AuditOnly(),
-		"quarantined":      classification.Quarantined(),
+		"display_only":    classification.DisplayOnly(),
+		"audit_only":      classification.AuditOnly(),
+		"quarantined":     classification.Quarantined(),
 	}
 	if err := server.logEvent("capability.executed", tokenClaims.ControlSessionID, map[string]interface{}{
 		"request_id":            capabilityRequest.RequestID,
@@ -825,13 +825,13 @@ func hostAccessApplyPartialFailure(server *Server, tokenClaims capabilityToken, 
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "internal result metadata error", DenialCodeExecutionFailed)
 	}
 	if auditErr := server.logEvent("capability.error", tokenClaims.ControlSessionID, map[string]interface{}{
-		"request_id":             capabilityRequest.RequestID,
-		"capability":             capabilityRequest.Capability,
-		"error":                  "host plan apply stopped after partial execution",
-		"operator_error_class":   "host_access_partial_execution",
-		"actor_label":            tokenClaims.ActorLabel,
-		"client_session_label":   tokenClaims.ClientSessionLabel,
-		"control_session_id":     tokenClaims.ControlSessionID,
+		"request_id":           capabilityRequest.RequestID,
+		"capability":           capabilityRequest.Capability,
+		"error":                "host plan apply stopped after partial execution",
+		"operator_error_class": "host_access_partial_execution",
+		"actor_label":          tokenClaims.ActorLabel,
+		"client_session_label": tokenClaims.ClientSessionLabel,
+		"control_session_id":   tokenClaims.ControlSessionID,
 	}); auditErr != nil {
 		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 	}

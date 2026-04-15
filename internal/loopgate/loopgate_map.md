@@ -78,7 +78,7 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 - `server_sandbox_handlers.go` — sandbox import/export/list/stage; `redactSandboxError` returns stable sentinel strings only (no wrapped host paths in client-visible errors)
 - `server_sandbox_handlers_test.go` — `TestRedactSandboxError_DoesNotExposeAbsolutePaths`
 - `server_capability_handlers.go` — capability execution
-- `server_model_handlers.go` — model connection APIs; **session open** stamps `TenantID` / `UserID` from `config/runtime.yaml` → `tenancy` (see `docs/setup/TENANCY.md`, ADR 0004)
+- `server_model_handlers.go` — model connection APIs; **session open** stamps `TenantID` / `UserID` from `config/runtime.yaml` → `tenancy` (reserved deployment fields in the current local-first build; see ADR 0004)
 - `server_config_handlers.go` — configuration
 - `server_connection_handlers.go` — `/v1/status` and connection surface
 - `server_quarantine_handlers.go` — quarantine flows

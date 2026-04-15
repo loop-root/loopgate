@@ -167,12 +167,12 @@ func TestCompiler_IncludesRuntimeContractAndCommands(t *testing.T) {
 		TurnCount:   2,
 		UserMessage: "What can you do?",
 		AvailableCommands: []CommandDefinition{
-			{Name: "/goal", Args: "add <text> | close [text-or-id] | list", Description: "record or inspect explicit active-goal transitions"},
-			{Name: "/morphling", Args: "[spawn|status] ...", Description: "manage the local pool of sandbox-scoped morphlings"},
+			{Name: "/model", Args: "[setup|validate]", Description: "show model status or run setup"},
+			{Name: "/sandbox", Args: "[import|stage|metadata|export] ...", Description: "import into, stage inside, review, or export from the sandbox"},
 		},
 		RuntimeFacts: []string{
-			"Goals are part of the local product surface.",
-			"Morphlings are part of the local product surface. spawn_enabled=true; max_active=5",
+			"MCP launch, stop, and status are part of the governed local product surface.",
+			"Sandbox import and export remain approval-gated through the Loopgate control plane.",
 		},
 	})
 	if err != nil {
@@ -181,7 +181,7 @@ func TestCompiler_IncludesRuntimeContractAndCommands(t *testing.T) {
 	if !strings.Contains(compiledPrompt.SystemInstruction, "RUNTIME CONTRACT:") {
 		t.Fatalf("compiled prompt missing runtime contract: %s", compiledPrompt.SystemInstruction)
 	}
-	if !strings.Contains(compiledPrompt.SystemInstruction, "/goal add <text> | close [text-or-id] | list: record or inspect explicit active-goal transitions") {
+	if !strings.Contains(compiledPrompt.SystemInstruction, "/model [setup|validate]: show model status or run setup") {
 		t.Fatalf("compiled prompt missing available commands section: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Do not deny built-in product features") {
@@ -230,7 +230,7 @@ func TestCompiler_NativeToolsUseGenericSelfDescriptionRules(t *testing.T) {
 		t.Fatalf("compiled prompt missing broader native tool guidance: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "VOICE (USER-FACING):") {
-		t.Fatalf("compiled prompt missing Haven voice section: %s", compiledPrompt.SystemInstruction)
+		t.Fatalf("compiled prompt missing user-facing voice section: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Warmth does not relax trust rules") {
 		t.Fatalf("compiled prompt missing voice trust reminder: %s", compiledPrompt.SystemInstruction)

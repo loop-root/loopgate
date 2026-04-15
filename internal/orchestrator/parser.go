@@ -181,10 +181,10 @@ func validateToolCallName(rawName string) error {
 		return fmt.Errorf("tool call missing 'name' field")
 	}
 	if strings.HasPrefix(normalizedName, "/") {
-		return fmt.Errorf("local Morph command %q is not a Loopgate tool call", rawName)
+		return fmt.Errorf("reserved local command %q is not a Loopgate tool call", rawName)
 	}
 	if _, reserved := reservedMorphCommandNames[normalizedName]; reserved {
-		return fmt.Errorf("local Morph command %q is not a Loopgate tool call", rawName)
+		return fmt.Errorf("reserved local command %q is not a Loopgate tool call", rawName)
 	}
 	return nil
 }

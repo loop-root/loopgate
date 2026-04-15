@@ -7,13 +7,13 @@ Loopgate is the policy-governed control plane and enforcement runtime in this re
 It is not just a reverse proxy.
 It is the enforcement point for capabilities, approvals, integration auth, and outbound execution.
 
-**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — Claude Code hook helpers, IDE bridges, tests, and custom integrators attach this way. (An in-tree stdio MCP server was **removed**; see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`.) **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md`, `docs/loopgate-threat-model.md`, and `docs/product-rfcs/RFC-MORPH-0009`.
+**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — Claude Code hook helpers, IDE bridges, tests, and custom integrators attach this way. (An in-tree stdio MCP server was **removed**; see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`.) **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`.
 
 **Primary integrators:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list). MCP-shaped hosts should use an **external forwarder**. In-tree MCP remains removed; ADR 0010 is the historical record and constraint on any future reintroduction.
 
 **Security posture (honest v1 vs future work):** [Threat model](../loopgate-threat-model.md) and [RFC 0001](../rfcs/0001-loopgate-token-policy.md) — same-user threat scope, **`GET /v1/health`** as the only unauthenticated inventory-free probe, signed **`GET /v1/status`** / **`GET /v1/connections/status`**, peer binding, and v2 backlog (codesign / XPC).
 
-Older Haven route and tool surfaces are being retired. Treat the active
+Older legacy route and tool surfaces are being retired. Treat the active
 Loopgate product as the governance kernel for Claude hooks, approvals, audit,
 policy, sandbox mediation, and the MCP gateway path.
 
@@ -109,7 +109,6 @@ Current authenticated request shape for privileged POSTs:
 - `X-Loopgate-Request-Signature`
 
 The normative token and request-integrity rules are defined in [RFC 0001](../rfcs/0001-loopgate-token-policy.md).
-The delegated bridge/bootstrap refresh contract is defined in [RFC 0002](../rfcs/0002-delegated-session-refresh.md).
 The current harness boundary note is [Claude Code Hooks MVP](./claude_code_hooks_mvp.md).
 
 These are local socket endpoints, not a public network API. Operator clients

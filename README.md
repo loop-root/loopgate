@@ -49,7 +49,7 @@ What is active now:
 What is not the active product story right now:
 - a new desktop UI surface
 - a separate assistant product
-- morphlings as a near-term core feature
+- legacy worker/runtime experiments
 - distributed enterprise deployment
 - automatic memory or continuity inside Loopgate
 
@@ -108,7 +108,7 @@ internal/loopgate/         Loopgate control plane and governed runtime
 core/policy/               signed policy files
 config/                    runtime configuration
 docs/                      setup, operator docs, architecture, cleanup plan
-runtime/                   local state and logs (gitignored where appropriate)
+runtime/                   local state and logs (fully gitignored)
 ```
 
 ## Continuity split
@@ -128,6 +128,8 @@ That work is being re-homed into a separate sibling repository named
 
 If older docs mention in-tree memory, wake-state, distillates, or memorybench,
 read them as historical material unless they have been explicitly rewritten.
+Historical docs that were no longer current have been moved to the separate
+`ARCHIVED` repository.
 
 ## Cleanup direction
 
@@ -137,11 +139,11 @@ Tracked cleanup plan:
 - [Loopgate cleanup plan](./docs/roadmap/loopgate_cleanup_plan.md)
 
 Current cleanup priorities:
-- remove stale multi-product framing
+- remove stale historical framing from active docs and defaults
 - add real operator docs and troubleshooting docs
-- trim or archive morphling / Haven / Morph leftovers
+- archive or trim legacy worker/runtime and old UI references
 - finish rewriting or archiving docs that still describe extracted continuity work as part of Loopgate
-- sweep tracked docs and artifacts for hardcoded local paths and stale runtime data
+- sweep tracked docs and defaults for hardcoded local paths and stale runtime data
 - harden the local audit story further, including ledger replacement/tamper gaps
 
 ## Status

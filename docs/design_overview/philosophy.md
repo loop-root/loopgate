@@ -32,4 +32,4 @@ v1 is **single-user, local transport** (operator clients talk to Loopgate over *
 
 ## Why `RFC-MORPH-*` IDs are stable
 
-Specs under `docs/product-rfcs/` describe **Loopgate** (primary), **operator clients**, sandbox, continuity, and **morphlings** (bounded workers). The **`RFC-MORPH-*`** prefix is a **legacy stable ID** for links, not the public product name. See [`docs/product-rfcs/README.md`](../product-rfcs/README.md) for the index (0001 = operator client architecture, 0009 = Loopgate kernel).
+Older product RFCs, worker/runtime specs, and historical continuity material have been moved to the separate `ARCHIVED` repository. Treat the active Loopgate design docs in this repo as the current source of truth.

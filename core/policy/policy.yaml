@@ -26,7 +26,8 @@ tools:
           - "wc "
           - "sort "
           - "git status"
-          - "git diff"
+          - "git diff" 
+          - "echo "                   
         denied_command_prefixes:
           - "rm "
           - "curl "
@@ -34,7 +35,6 @@ tools:
         enabled: true
         allowed_roots:
           - "."
-          - "/Users/adalaide/Dev"
         denied_paths:
           - "runtime/state"
           - "core/policy"
@@ -42,7 +42,6 @@ tools:
         enabled: true
         allowed_roots:
           - "."
-          - "/Users/adalaide/Dev"
         denied_paths:
           - "runtime/state"
           - "core/policy"
@@ -50,7 +49,6 @@ tools:
         enabled: true
         allowed_roots:
           - "."
-          - "/Users/adalaide/Dev"
         denied_paths:
           - "runtime/state"
           - "core/policy"
@@ -78,68 +76,3 @@ tools:
           - "github.com"
       WebSearch:
         enabled: false
-
-  filesystem:
-    # Allow the working tree by default so Loopgate can operate on the repo it owns.
-    # Sensitive internal state and policy roots are denied explicitly below.
-    allowed_roots:
-      - "."
-    # Optional explicit deny list (even if inside allowed_roots)
-    denied_paths:
-      - ".morph/memory"
-      - "core/memory/ledger"
-      - "core/memory/distillates"
-      - "core/policy"
-      - "persona"
-      - "runtime/state/memory"
-    read_enabled: true
-    write_enabled: true
-    write_requires_approval: true
-
-  http:
-    enabled: true
-    allowed_domains: []
-    requires_approval: true
-    timeout_seconds: 10
-
-  shell:
-    enabled: true
-    allowed_commands:
-      - "git"
-      - "go"
-      - "gofmt"
-      - "rg"
-      - "ls"
-      - "cat"
-      - "pwd"
-      - "printf"
-      - "mkdir"
-      - "cp"
-      - "mv"
-      - "sed"
-      - "grep"
-      - "find"
-      - "head"
-      - "tail"
-      - "wc"
-      - "sort"
-      - "uniq"
-      - "tr"
-      - "xargs"
-      - "make"
-      - "npm"
-      - "pnpm"
-      - "node"
-      - "python3"
-      - "uv"
-      - "swift"
-      - "xcodebuild"
-    requires_approval: true
-
-logging:
-  log_commands: true
-  log_tool_calls: true
-
-safety:
-  allow_persona_modification: false
-  allow_policy_modification: false
