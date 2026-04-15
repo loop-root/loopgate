@@ -103,6 +103,8 @@ Start here:
 - [Policy signing](./docs/setup/POLICY_SIGNING.md)
 - [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./docs/loopgate-threat-model.md)
+- [Support](./SUPPORT.md)
+- [Security reporting](./SECURITY.md)
 
 ## Repository layout
 
@@ -145,3 +147,10 @@ For current behavior, prefer the operator-facing docs in [docs/](/Users/adalaide
 Loopgate is licensed under the Apache License, Version 2.0. See
 [LICENSE](/Users/adalaide/Dev/loopgate/LICENSE) and
 [NOTICE](/Users/adalaide/Dev/loopgate/NOTICE).
+
+## Support
+
+For setup questions, non-sensitive bug reports, and operator workflow issues,
+see [SUPPORT.md](/Users/adalaide/Dev/loopgate/SUPPORT.md). For vulnerability
+reports or trust-boundary issues, use the private path described in
+[SECURITY.md](/Users/adalaide/Dev/loopgate/SECURITY.md).

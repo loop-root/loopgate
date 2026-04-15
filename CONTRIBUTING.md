@@ -48,6 +48,12 @@ Be ready to explain:
 2. For concurrency-sensitive changes, also run `go test -race ./...`
 3. Update docs when changing trust boundaries, policy behavior, setup, or operator-visible commands
 
+## Support routing
+
+- use [SUPPORT.md](./SUPPORT.md) for non-sensitive setup questions, bug reports,
+  and operator workflow issues
+- use [SECURITY.md](./SECURITY.md) for vulnerability and trust-boundary reports
+
 ## Scope and professionalism
 
 - keep the active repo centered on the current Loopgate product only

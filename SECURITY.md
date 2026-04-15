@@ -15,7 +15,12 @@ Please avoid opening a public issue with full exploit details for:
 - audit/log tampering
 - token/session forgery
 
-Instead, open a private report through the repository security advisory flow if available, or contact the maintainers through the channel listed by the project owner.
+Instead, use the repository security advisory flow if it is enabled. If that
+private reporting path is not available yet, contact the maintainers through
+their designated private security channel rather than opening a public issue.
+
+For non-security setup questions, bug reports, and operator workflow support,
+use the normal support path described in [SUPPORT.md](./SUPPORT.md).
 
 ## Scope priorities
 
