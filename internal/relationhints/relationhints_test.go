@@ -44,7 +44,7 @@ func TestRerankCandidates_PrefersPhraseSpecificSiblingNotes(t *testing.T) {
 			MatchCount: 4,
 		},
 	}, "Find the design thread about why write access only advances during an explicit operator refresh instead of a self-updating dashboard card.", []string{
-		"Current blocker: Haven renew flow still lets projected status cards look renewed even when memory.write is missing.",
+		"Current blocker: renewal flow still lets projected status cards look renewed even when memory.write is missing.",
 		"Next step: thread the explicit renew action through the governed memory.write check and keep projected status cards visibly non-authoritative.",
 	}, 2)
 
@@ -60,7 +60,7 @@ func TestRerankCandidates_PrefersComplementaryFilesystemEvidence(t *testing.T) {
 	rerankedCandidates := RerankCandidates([]Candidate{
 		{
 			StableID:   "wrong_workspace_visibility",
-			Text:       "Demo workspace note: keep the friendly workspace path visible in Haven so operators are not staring at private runtime directories.",
+			Text:       "Demo workspace note: keep the friendly workspace path visible in operator surfaces so people are not staring at private runtime directories.",
 			MatchCount: 5,
 		},
 		{
@@ -75,7 +75,7 @@ func TestRerankCandidates_PrefersComplementaryFilesystemEvidence(t *testing.T) {
 		},
 	}, "Find the path-handling discussion about why we validate the resolved target but still render virtual paths in operator surfaces.", []string{
 		"Current follow-up: keep operator-visible sandbox paths virtual while denying any write that resolves outside the allowed root.",
-		"Next step: thread final-target resolution through the Haven file preview path before expanding more workspace shortcuts.",
+		"Next step: thread final-target resolution through the local file preview path before expanding more workspace shortcuts.",
 	}, 2)
 
 	if len(rerankedCandidates) != 2 {

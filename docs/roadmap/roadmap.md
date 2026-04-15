@@ -65,6 +65,6 @@ The repository is in the right shape when:
 ## Next useful slices
 
 1. finish the open-source sanitization sweep on active files and defaults
-2. prune or rename remaining active code comments and tests that still say `Haven`, `Morph`, or `morphling`
-3. do a focused dependency trim after the code/doc cleanup settles
-4. harden the local audit integrity story further
+2. remove the last unnecessary historical naming from active comments, tests, and maps
+3. harden the local audit integrity story further
+4. keep the operator setup and demo workflows tight and readable

@@ -24,17 +24,17 @@ Product surfaces:
 
 This repository centers on **Loopgate** as the governance engine.
 
-Note: older continuity, task-board, and morphling references may still appear
-deeper in this local map while cleanup continues. Treat those as historical or
-extraction notes, not the active Loopgate product surface.
+Historical continuity, Haven, Morph, and morphling material now lives in the
+separate `continuity` or `ARCHIVED` repos. This file should describe the active
+Loopgate repo only.
 
 ## Current Product Shape
 
 - `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, Claude hook governance, and the MCP broker path.
 - The **current product surface** is a direct local client model: **Claude Code hooks** over the local control plane, plus optional **HTTP-native** clients and **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
 - **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile).
-- Continuity and memory are being moved to a separate sibling repo named `continuity`.
-- Retired Haven, Morph, morphling, and task-board surfaces are cleanup debt, not the active product surface.
+- Continuity and memory live outside this repo in the separate sibling repo named `continuity`.
+- Retired Haven, Morph, morphling, and task-board surfaces are not part of the active product surface.
 
 Useful mental model:
 
@@ -87,19 +87,18 @@ Notes:
 ## Top-Level Map
 
 ```text
-/Users/adalaide/Dev/loopgate
+/path/to/loopgate
 ├── AGENTS/                Local agent guidance (ignored by git in normal workflows)
 ├── cmd/                   Executable entrypoints
-├── config/                Checked-in runtime and alias config
-├── core/                  Checked-in policy and some historical memory artifacts
+├── config/                Checked-in runtime config
+├── core/                  Checked-in policy and signing material
 ├── docs/                  Architecture, setup, RFCs, threat model
 ├── internal/              Real implementation packages
 ├── persona/               Default operator persona (`default.yaml`) and values
 ├── runtime/               Local runtime state, socket, logs, sandbox, caches
 ├── README.md              Top-level project summary
 ├── go.mod / go.sum        Go module definition
-├── morph                  Local build output binary
-└── loopgate-admin         Stale leftover binary from a removed admin-UI path; should not be present
+└── .claude/               Local hook integration files for this repo
 ```
 
 Important interpretation:
@@ -107,8 +106,7 @@ Important interpretation:
 - `cmd/` and `internal/` are the main source trees.
 - `docs/` is authoritative for design intent and product shape.
 - `runtime/` is local machine state, not source.
-- top-level binaries like `morph` are local build outputs and usually not meaningful source artifacts.
-- `loopgate-admin` comes from a removed admin-UI path and should be treated as stale local output if it appears at all.
+- local build outputs or stray binaries should be treated as untracked machine state, not part of the product.
 
 ## Where the Agent Files Live
 
@@ -223,11 +221,11 @@ Important here:
 - redaction helpers
 - audit-safe secret summaries
 
-### `internal/memory/`
+### Continuity note
 
-Memory and continuity primitives.
-
-This is lower-level memory logic shared by unprivileged clients and Loopgate.
+The in-tree memory/continuity subsystem has been extracted from active
+Loopgate. Continuity-specific implementation and docs should go to the sibling
+`continuity` repo, not back into this one.
 
 ### `internal/threadstore/`
 
@@ -325,7 +323,7 @@ These `*_map.md` files (gitignored like this file) are the **navigation layer**:
 - `internal/ledger/ledger_map.md` — append-only hash-chained ledger
 - `internal/loopgate/loopgate_map.md` — control plane (main package)
 - `internal/loopgateresult/loopgateresult_map.md` — Loopgate result formatting for display/prompts
-- `internal/memory/memory_map.md` — continuity/memory primitives
+- continuity-specific maps now live in the sibling `continuity` repo
 - `internal/model/model_map.md` — provider adapters and tool schema
 - `internal/modelruntime/modelruntime_map.md` — `model.Client` construction from repo/env
 - `internal/orchestrator/orchestrator_map.md` — tool orchestration and structured parsing
@@ -385,12 +383,13 @@ The repo currently contains memory-related files under `core/memory/`. Many of t
 
 ## If You Are Changing X, Start Here
 
-### Messenger / chat behavior (HTTP API + threadstore)
+### Governance HTTP behavior
 
 Start in:
 
-- `internal/threadstore/` (append-only thread/event storage)
-- `internal/loopgate/server_haven_chat.go` and related handlers (neutral `/v1/...` routes; internal Haven naming remains)
+- `internal/loopgate/server.go`
+- `internal/loopgate/server_*_handlers.go`
+- `internal/threadstore/` where request-driven thread/event storage is involved
 
 ### Sandbox / file import / export / shared-space behavior
 
@@ -410,9 +409,6 @@ Start in:
 - `internal/loopgate/loopgate_map.md`
 - `internal/loopgate/server_*_handlers.go`
 - `internal/loopgate/types.go`
-- `internal/loopgate/types_memory.go`
-- `internal/loopgate/types_haven_ui.go`
-- `internal/loopgate/types_morphling.go`
 - `internal/loopgate/configured_capability_runtime.go`
 - `internal/loopgate/configured_capability_extract.go`
 - `internal/loopgate/ui_client.go`
@@ -434,27 +430,10 @@ Start in:
 - `internal/loopgate/model_connections.go`
 - `internal/modelruntime/`
 
-### Morphlings
+### Continuity / memory work
 
-Start in:
-
-- `internal/loopgate/morphling_state.go`
-- retired worker/class-policy paths have been removed from the active Loopgate repo
-
-### Continuity / memory / wake-state
-
-Start in:
-
-- `internal/memory/`
-- `internal/loopgate/continuity_memory.go`
-- `internal/loopgate/server_memory_handlers.go`
-- `internal/loopgate/client.go`
-
-Important note:
-
-- explicit "remember this" requests should eventually use Loopgate's explicit remember path rather than relying only on thread distillation
-- if memory feels broken, inspect threshold behavior, remembered-fact normalization, wake-state projection, and client-side prompt claims before inventing a new algorithm
-- explicit remember lane exists through `memory.remember`; next work is diagnostics, resident continuity, and clearer operator-facing language
+This repo is no longer the right starting point. Continuity and memory work now
+belongs in the sibling `continuity` repo.
 
 ## Useful Commands
 
@@ -467,42 +446,29 @@ go run ./cmd/loopgate
 
 ## Current Direction
 
-Loopgate is pivoting from a personal AI workstation backend to an enterprise AI governance engine.
-
-The enforcement runtime, policy evaluation, audit system, memory continuity, and morphling lifecycle are solid — that work is done. The current mission is adding the integration surface and proxy path that make Loopgate viable as enterprise infrastructure.
+Loopgate is a local-first governance kernel for AI-assisted engineering work.
+The current mission is to keep the repo narrow, publishable, and trustworthy:
+policy, approvals, audit, Claude hook governance, sandbox mediation, and the
+governed MCP broker path.
 
 **Primary work right now:**
 
-1. **HTTP control plane (v1)** — Integrations use **HTTP on the Unix socket** (session open, signed requests). **In-tree MCP removed** (ADR 0010); **out-of-tree** forwarders or a **future ADR** may add a thin MCP layer without a weaker trust boundary.
-2. **Multi-tenancy foundation** — `tenant_id` isolation across all resources. Prerequisite for everything multi-tenant.
-3. **Memory system fixes** — key registry expansion (`goal.*`, `work.*`), preference facet coverage. Silent data-loss bugs that must be fixed before memory is relied on.
-4. **Chat path hardening** — panic recovery, audit log coverage, typing indicator for the governed HTTP chat handlers (`handleHavenChat` and related; `haven` prefix is an internal handler name, not a product boundary).
-5. **Proxy v0** — automatic memory injection/capture path with strict auditability and bounded latency.
+1. **HTTP control plane (v1)** — local integrations use **HTTP on the Unix socket** with signed requests and explicit approvals.
+2. **Operator usability** — keep setup, hook, and audit/ledger workflows clear enough for demos and real local use.
+3. **Audit hardening** — tighten tamper / replacement / recovery behavior without weakening append-only semantics.
+4. **Repo truth** — keep active docs and code aligned with the narrow Loopgate-only product boundary.
 
-**Engineering invariants that don't change:** HTTP on local Unix socket for local client transport. mTLS over TCP for admin node. XPC optional post-launch. Policy-aligned routes over ad-hoc sprawl.
+**Engineering invariants that don't change:** HTTP on local Unix socket for local client transport. Policy-aligned routes over ad-hoc sprawl. Signed policy remains authoritative. Audit stays append-only.
 
 ## Active Product Gaps
 
 These are the known gaps to fix before the next milestone. See `docs/reviews/memory_reviewGaps.md` for detailed analysis.
 
-**Blocking enterprise readiness:**
+**Current active gaps:**
 
-- No proxy v0. The seamless default developer experience does not exist yet.
-- No `tenant_id` on resources. Multi-tenancy is not implementable without this foundation.
-- Threadstore coupling still needs Loopgate-agnostic cleanup; the historical `/v1/haven/...` route aliases are removed.
-
-**Memory system (silent data-loss bugs):**
-
-- `goal.*` and `work.*` key prefixes are not in the registry — `memory.remember` fails silently for these keys.
-- Preference facet coverage is too narrow — repeated preferences on the same topic accumulate as separate distillates instead of superseding.
-- 4 benchmark fixtures fail: same-entity preview-label confusion in timezone/locale contradiction cases.
-- Slot-only contradiction: RAG baseline (10/12) beats continuity (8/12) — hints are the load-bearing retrieval mechanism, not anchors alone.
-
-**Legacy HTTP chat / reference client (blocking some workflows):**
-
-- Chat regression: Anthropic provider returns "I can't reach home base" for tool-heavy requests. Likely panic in the governed HTTP chat handler (`handleHavenChat`) that closes the connection before a response is written.
-- Chat regression: local model hangs silently for 120s with no typing indicator.
-- Attachments may crash the reference client (nil dereference or JSON decode failure in message handler).
+- the local audit trail is still not as tamper-resistant or demo-friendly as it should be
+- a few active docs and tests still carry historical naming that no longer matches the product
+- the repo still needs final open-source sanitization passes on comments, maps, and defaults
 
 **Lower priority:**
 

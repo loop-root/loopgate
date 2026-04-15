@@ -27,7 +27,7 @@ func TestSandboxImportRejectsHostDirectoryWithSymlinkOverRealSocket(t *testing.T
 	})
 	status := harness.waitForStatus(t)
 	hostDirectory := filepath.Join(t.TempDir(), "import-dir")
-	client := harness.newClient("haven", "integration-sandbox-import", capabilityNames(status.Capabilities))
+	client := harness.newClient("operator", "integration-sandbox-import", capabilityNames(status.Capabilities))
 	client.SetOperatorMountPaths([]string{hostDirectory}, hostDirectory)
 
 	outsidePath := filepath.Join(t.TempDir(), "outside.txt")

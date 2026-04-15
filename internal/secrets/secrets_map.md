@@ -37,7 +37,7 @@ Use it when changing:
 
 - Model runtime loading keys: `internal/modelruntime/runtime.go`
 - Loopgate model connections: `internal/loopgate/model_connections.go`
-- Reference Wails setup: `cmd/haven/setup.go`
+- Local client setup should resolve secrets through Loopgate-managed refs rather than client-owned secret files.
 
 ## Important Watchouts
 

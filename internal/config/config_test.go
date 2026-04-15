@@ -863,7 +863,7 @@ func TestLoadRuntimeConfig_UsesExpectedSessionClientExecutableEnvWhenUnset(t *te
 
 func TestLoadRuntimeConfig_RejectsRelativeSessionExecutableEnv(t *testing.T) {
 	repoRoot := t.TempDir()
-	t.Setenv(expectedSessionClientExecutableEnv, "relative/haven")
+	t.Setenv(expectedSessionClientExecutableEnv, "relative/operator")
 
 	_, err := LoadRuntimeConfig(repoRoot)
 	if err == nil {

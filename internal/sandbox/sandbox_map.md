@@ -28,7 +28,7 @@ It is not the control plane: policy and approvals live in Loopgate; this package
 ## Relationship Notes
 
 - Host-visible granted folders and compare-before-sync logic: `internal/loopgate/folder_access.go`
-- Reference workspace UI: `cmd/haven/workspace.go`
+- Local client workspace-facing integrations should stay on the unprivileged side of the Loopgate boundary.
 - Default policy roots: `core/policy/policy.yaml`
 
 ## Important Watchouts

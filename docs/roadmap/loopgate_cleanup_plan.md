@@ -28,7 +28,7 @@ Not the current product story:
 
 ## Phase 1: Repo-facing truth and operator docs
 
-Status: **in progress**
+Status: **completed**
 
 Goals:
 - make top-level docs describe one product
@@ -43,7 +43,7 @@ This slice includes:
 
 ## Phase 2: Archive or de-emphasize stale docs
 
-Status: in progress
+Status: **mostly completed**
 
 Goals:
 - remove multi-tenant/admin-node language from active docs unless clearly marked future or archived
@@ -59,21 +59,20 @@ Targets:
 
 ## Phase 3: Runtime/code slimming
 
-Status: in progress
+Status: **mostly completed**
 
 Goals:
-- remove or isolate stale product code paths
+- remove stale product code paths
 - keep Loopgate core thinner, more legible, and easier to audit
-- prepare memory/continuity for extraction behind a narrower interface and
-  eventual standalone repo boundary
+- keep continuity out of the active Loopgate repo boundary
 
 Mapped buckets:
 - Safe now:
   - tracked Finder/editor junk and empty legacy directories
   - stale repo-facing references that still make legacy surfaces look active
-- Coupled, needs a replacement or extraction plan first:
-  - memory backend and continuity subsystems that are no longer part of Claude v1 but still exist as first-class server code
-  - Haven-specific route and UI projection leftovers still wired into server/runtime types
+- Coupled, needed staged extraction:
+  - continuity and memory code that is now being moved into the sibling `continuity` repo
+  - legacy actor and UI naming that still needed cleanup inside active helpers and tests
 - Likely archive before delete:
   - legacy design docs, product RFCs, and benchmark/report material with old product framing
 
@@ -95,10 +94,14 @@ Completed in this phase so far:
 - removed the external `goal_aliases` config path so continuity classification
   no longer depends on checked-in Loopgate tuning files
 - moved stale `docs/superpowers/` planning material into the separate `ARCHIVED` repo
+- extracted the in-tree memory/continuity subsystem from the active Loopgate runtime
+- rehomed continuity-owned docs into the sibling `continuity` repo
+- switched the active operator actor label to `operator` while keeping `haven` as a narrow compatibility alias
+- dropped the unused sqlite dependency stack after the continuity extraction
 
 ## Phase 4: Repo hygiene and sanitization
 
-Status: in progress
+Status: **in progress**
 
 Goals:
 - remove tracked runtime artifacts and stale local state
@@ -106,9 +109,9 @@ Goals:
 - verify no secrets or sensitive data are committed
 
 Known current issues:
-- hardcoded local paths in active docs
-- tracked legacy memory artifacts under `core/memory/`
-- local absolute paths in benchmark/report docs
+- some active maps and comments still carry historical naming
+- historical docs outside the active set still contain old product framing
+- final publishability review is still needed for sensitive or stale tracked artifacts
 
 Completed in this phase so far:
 - removed tracked legacy memory ledger history from `core/memory/ledger/`
@@ -118,7 +121,7 @@ Completed in this phase so far:
 
 ## Phase 5: Security hardening pass on the local-first core
 
-Status: pending
+Status: **in progress**
 
 Goals:
 - focus on real remaining local-first security gaps after cleanup reduces noise
@@ -126,16 +129,16 @@ Goals:
 Known hardening items:
 - ledger replacement / rollback / tamper gap
 - clearer operator recovery docs when policy, hook, or audit paths break
-- final review of fail-closed behavior after stale code removal
+- final review of fail-closed behavior after repo slimming
 
 ## Tracking notes
 
 Cleanup should stay incremental:
 - one truthful slice at a time
-- docs first where they currently mislead
-- code removal only after stable replacement boundaries exist
+- active docs should describe the current product, not the migration history
+- code removal should preserve the Loopgate authority and audit invariants
 
-The immediate next cleanup slices after Phase 1 should be:
-1. de-emphasize multi-tenant/admin-node docs
-2. identify and quarantine tracked runtime artifacts and hardcoded path leaks
-3. start mapping morphling/Haven/Morph deletion candidates
+The immediate next cleanup slices are:
+1. finish the active-doc and map sanitization pass
+2. remove remaining historical naming from active tests/comments where it no longer helps
+3. keep hardening the local audit and demo surfaces without widening authority
