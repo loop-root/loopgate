@@ -2,11 +2,9 @@ package troubleshoot
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -37,7 +35,7 @@ func ReadRecentAuditLog(repoRoot string, runtimeConfig config.RuntimeConfig, lim
 		return nil, fmt.Errorf("verify audit ledger: %w", err)
 	}
 
-	auditPaths, err := orderedAuditLogPaths(activeAuditPath, rotationSettings.ManifestPath, rotationSettings.SegmentDir)
+	auditPaths, err := ledger.OrderedSegmentedPaths(activeAuditPath, rotationSettings)
 	if err != nil {
 		return nil, err
 	}
@@ -72,49 +70,6 @@ func WriteAuditLog(writer io.Writer, auditLogLines []AuditLogLine) error {
 		}
 	}
 	return nil
-}
-
-func orderedAuditLogPaths(activeAuditPath string, manifestPath string, segmentDir string) ([]string, error) {
-	manifestEntries, err := readAuditManifestEntries(manifestPath)
-	if err != nil {
-		return nil, err
-	}
-	orderedPaths := make([]string, 0, len(manifestEntries)+1)
-	for _, manifestEntry := range manifestEntries {
-		orderedPaths = append(orderedPaths, filepath.Join(segmentDir, manifestEntry.SegmentFilename))
-	}
-	if _, err := os.Stat(activeAuditPath); err == nil {
-		orderedPaths = append(orderedPaths, activeAuditPath)
-	} else if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("stat active audit file: %w", err)
-	}
-	return orderedPaths, nil
-}
-
-func readAuditManifestEntries(manifestPath string) ([]ledger.SegmentManifestEntry, error) {
-	manifestHandle, err := os.Open(manifestPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("open audit manifest: %w", err)
-	}
-	defer manifestHandle.Close()
-
-	manifestScanner := bufio.NewScanner(manifestHandle)
-	manifestScanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
-	manifestEntries := make([]ledger.SegmentManifestEntry, 0)
-	for manifestScanner.Scan() {
-		var manifestEntry ledger.SegmentManifestEntry
-		if err := json.Unmarshal(manifestScanner.Bytes(), &manifestEntry); err != nil {
-			return nil, fmt.Errorf("decode audit manifest entry: %w", err)
-		}
-		manifestEntries = append(manifestEntries, manifestEntry)
-	}
-	if err := manifestScanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan audit manifest: %w", err)
-	}
-	return manifestEntries, nil
 }
 
 func appendAuditLogLinesFromFile(lineRing *auditLogRing, auditPath string) error {

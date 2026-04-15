@@ -9,6 +9,7 @@ Current product scope:
 - require approval for higher-risk actions
 - record a durable local audit trail of what happened
 - provide a local control plane for hook-based harnesses and governed tool execution
+- verify local audit integrity with hash-chain and optional HMAC checkpoint tooling
 
 **Current MVP harness:** **Claude Code + project hooks + Loopgate**
 

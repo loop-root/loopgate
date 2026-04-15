@@ -25,10 +25,11 @@ type Report struct {
 	RepoRoot           string `json:"repo_root"`
 	RuntimeVersion     string `json:"runtime_config_version"`
 	LedgerVerify       struct {
-		OK                  bool   `json:"ok"`
-		Error               string `json:"error,omitempty"`
-		LastAuditSequence   int64  `json:"last_audit_sequence,omitempty"`
-		LastEventHashPrefix string `json:"last_event_hash_prefix,omitempty"`
+		OK                  bool                        `json:"ok"`
+		Error               string                      `json:"error,omitempty"`
+		LastAuditSequence   int64                       `json:"last_audit_sequence,omitempty"`
+		LastEventHashPrefix string                      `json:"last_event_hash_prefix,omitempty"`
+		HMACCheckpoints     AuditLedgerCheckpointReport `json:"hmac_checkpoints"`
 	} `json:"ledger_verify"`
 	LedgerActive struct {
 		ActiveFile   string      `json:"active_file"`
@@ -166,6 +167,12 @@ func BuildReport(repoRoot string, rc config.RuntimeConfig) (Report, error) {
 		rep.LedgerVerify.OK = true
 		rep.LedgerVerify.LastAuditSequence = lastSeq
 		rep.LedgerVerify.LastEventHashPrefix = hashPrefix(lastHash)
+	}
+	checkpointReport, checkpointErr := VerifyAuditLedgerCheckpoints(repoRoot, rc)
+	rep.LedgerVerify.HMACCheckpoints = checkpointReport
+	if checkpointErr != nil && rep.LedgerVerify.Error == "" {
+		rep.LedgerVerify.OK = false
+		rep.LedgerVerify.Error = checkpointErr.Error()
 	}
 
 	lineCount, topTypes, sumErr := summarizeActiveLedger(activePath)

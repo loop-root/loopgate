@@ -72,9 +72,10 @@ type Server struct {
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
 	diagnostic *loopdiag.Manager
 
-	auditMu       sync.Mutex
-	auditSequence uint64
-	lastAuditHash string
+	auditMu                    sync.Mutex
+	auditSequence              uint64
+	lastAuditHash              string
+	auditEventsSinceCheckpoint int
 
 	auditExportMu sync.Mutex
 

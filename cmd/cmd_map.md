@@ -49,10 +49,19 @@ Use it when changing:
   - builds offline derived operator reports from local repo state
   - writes diagnostic bundles without touching authoritative audit history
   - can query a running local Loopgate instance for the read-only audit export trust preflight via `trust-check`
+  - `report` now includes `ledger_verify.hmac_checkpoints` when audit HMAC checkpoints are configured
 
 ## Relationship Notes
 
 - Control plane implementation: `internal/loopgate/loopgate_map.md`
+
+## `cmd/loopgate-ledger/`
+
+- `main.go`
+  - verifies the authoritative local audit chain over the active JSONL plus any sealed segments
+  - verifies audit HMAC checkpoints too when configured
+  - provides readable `tail -verbose` output for operator/demo review
+  - provides `demo-reset` as an explicit local demo-only destructive reset path
 
 ## Important Watchouts
 

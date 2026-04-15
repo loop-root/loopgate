@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 
 	"loopgate/internal/audit"
 	"loopgate/internal/ledger"
+	"loopgate/internal/secrets"
 )
 
 func (server *Server) loadAuditChainState() error {
@@ -20,6 +22,26 @@ func (server *Server) loadAuditChainState() error {
 	}
 	server.auditSequence = uint64(lastAuditSequence)
 	server.lastAuditHash = lastAuditHash
+	server.auditEventsSinceCheckpoint = 0
+	if !server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint.Enabled {
+		return nil
+	}
+
+	orderedPaths, err := ledger.OrderedSegmentedPaths(server.auditPath, server.auditLedgerRotationSettings())
+	if err != nil {
+		return fmt.Errorf("ordered audit ledger paths: %w", err)
+	}
+	rawSecretBytes, err := server.loadAuditLedgerCheckpointSecret(context.Background())
+	if err != nil {
+		return err
+	}
+	defer zeroSecretBytes(rawSecretBytes)
+
+	checkpointInspection, err := ledger.InspectAuditHMACCheckpoints(orderedPaths, rawSecretBytes)
+	if err != nil {
+		return fmt.Errorf("inspect audit hmac checkpoints: %w", err)
+	}
+	server.auditEventsSinceCheckpoint = checkpointInspection.OrdinaryEventsSinceLastCheckpoint
 	return nil
 }
 
@@ -122,8 +144,105 @@ func (server *Server) logEvent(eventType string, sessionID string, data map[stri
 	}
 	server.auditSequence = nextSequence
 	server.lastAuditHash = eventHash
+	server.auditEventsSinceCheckpoint++
 	server.diagnosticTextAfterAuditEvent(auditEvent)
+	if err := server.appendAuditHMACCheckpointIfDueLocked(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (server *Server) appendAuditHMACCheckpointIfDueLocked() error {
+	hmacCheckpointConfig := server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint
+	if !hmacCheckpointConfig.Enabled || hmacCheckpointConfig.IntervalEvents <= 0 {
+		return nil
+	}
+	if server.auditEventsSinceCheckpoint < hmacCheckpointConfig.IntervalEvents {
+		return nil
+	}
+
+	rawSecretBytes, err := server.loadAuditLedgerCheckpointSecret(context.Background())
+	if err != nil {
+		return err
+	}
+	defer zeroSecretBytes(rawSecretBytes)
+
+	checkpointTimestampUTC := server.now().UTC().Format(time.RFC3339Nano)
+	checkpointMAC := ledger.ComputeAuditLedgerCheckpointHMAC(
+		rawSecretBytes,
+		ledger.BuildAuditLedgerCheckpointHMACMessageV1(
+			int64(server.auditSequence),
+			server.lastAuditHash,
+			checkpointTimestampUTC,
+		),
+	)
+	checkpointData := map[string]interface{}{
+		"checkpoint_schema_version": int64(ledger.AuditLedgerCheckpointSchemaVersion),
+		"through_audit_sequence":    int64(server.auditSequence),
+		"through_event_hash":        server.lastAuditHash,
+		"checkpoint_timestamp_utc":  checkpointTimestampUTC,
+		"checkpoint_hmac_sha256":    hex.EncodeToString(checkpointMAC),
+	}
+
+	nextSequence := server.auditSequence + 1
+	checkpointData["audit_sequence"] = nextSequence
+	checkpointData["ledger_sequence"] = nextSequence
+	checkpointData["previous_event_hash"] = server.lastAuditHash
+	canonicalData, err := canonicalizeAuditData(checkpointData)
+	if err != nil {
+		return fmt.Errorf("canonicalize audit checkpoint data: %w", err)
+	}
+	checkpointData = canonicalData
+
+	checkpointEvent := ledger.Event{
+		TS:      checkpointTimestampUTC,
+		Type:    ledger.AuditLedgerHMACCheckpointEventType,
+		Session: "",
+		Data:    checkpointData,
+	}
+	checkpointHash, err := hashAuditEvent(checkpointEvent)
+	if err != nil {
+		return fmt.Errorf("hash audit checkpoint event: %w", err)
+	}
+	checkpointEvent.Data["event_hash"] = checkpointHash
+
+	if err := audit.NewLedgerWriter(server.appendAuditEvent, nil).Record(server.auditPath, audit.ClassMustPersist, checkpointEvent); err != nil {
+		return err
+	}
+	server.auditSequence = nextSequence
+	server.lastAuditHash = checkpointHash
+	server.auditEventsSinceCheckpoint = 0
+	server.diagnosticTextAfterAuditEvent(checkpointEvent)
+	return nil
+}
+
+func (server *Server) loadAuditLedgerCheckpointSecret(ctx context.Context) ([]byte, error) {
+	hmacSecretRef := server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint.SecretRef
+	if hmacSecretRef == nil {
+		return nil, fmt.Errorf("%w: audit ledger hmac checkpoint secret ref is missing", secrets.ErrSecretValidation)
+	}
+
+	validatedSecretRef := secrets.SecretRef{
+		ID:          strings.TrimSpace(hmacSecretRef.ID),
+		Backend:     strings.TrimSpace(hmacSecretRef.Backend),
+		AccountName: strings.TrimSpace(hmacSecretRef.AccountName),
+		Scope:       strings.TrimSpace(hmacSecretRef.Scope),
+	}
+	if err := validatedSecretRef.Validate(); err != nil {
+		return nil, fmt.Errorf("validate audit ledger hmac checkpoint secret ref: %w", err)
+	}
+	secretStore, err := server.secretStoreForRef(validatedSecretRef)
+	if err != nil {
+		return nil, fmt.Errorf("resolve audit ledger hmac checkpoint secret store: %w", err)
+	}
+	rawSecretBytes, _, err := secretStore.Get(ctx, validatedSecretRef)
+	if err != nil {
+		return nil, fmt.Errorf("load audit ledger hmac checkpoint secret: %w", err)
+	}
+	if len(rawSecretBytes) == 0 {
+		return nil, fmt.Errorf("%w: audit ledger hmac checkpoint secret is empty", secrets.ErrSecretValidation)
+	}
+	return rawSecretBytes, nil
 }
 
 func (server *Server) diagnosticTextAfterAuditEvent(auditEvent ledger.Event) {

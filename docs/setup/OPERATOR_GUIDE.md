@@ -109,6 +109,20 @@ These help answer:
 - which server is currently launched
 - whether a launched server was pruned after process death
 
+### Verify the local audit ledger
+
+Use the built-in verifier when you want to trust the local audit history after
+an incident, a demo reset, or suspicious local behavior:
+
+```bash
+go run ./cmd/loopgate-ledger verify
+go run ./cmd/loopgate-doctor report
+```
+
+`loopgate-ledger verify` checks the append-only chain across the active audit
+file and any sealed segments. If audit HMAC checkpoints are configured, it also
+verifies those checkpoints with the configured secret backend.
+
 ## Troubleshooting
 
 ### Claude says a hook script is missing
@@ -163,10 +177,12 @@ Do not widen write roots unless you actually want that authority.
 
 ## Current known limitations
 
-- The repo still contains legacy and forward-looking code and docs.
-- Future deployment/admin material exists in tree but is not the current product story.
-- Some operator/troubleshooting flows are still documented better in architecture docs than they should be.
-- Ledger replacement / wholesale state rollback hardening is not fully solved yet.
+- Local hash chains and HMAC checkpoints improve tamper evidence, but they are
+  still local-machine evidence rather than remote notarization.
+- The audit export path exists, but the product is still centered on local
+  authoritative audit rather than remote aggregation.
+- There is no stable compatibility promise yet for external clients beyond the
+  current documented local-first operator surface.
 
 Tracked cleanup:
 - [Loopgate cleanup plan](../roadmap/loopgate_cleanup_plan.md)

@@ -1,6 +1,6 @@
 # Ledger and audit log integrity (operator guide)
 
-**Last updated:** 2026-04-07  
+**Last updated:** 2026-04-14  
 **Scope:** **macOS**, **single Loopgate instance** per machine (see `docs/adr/0009-macos-scope-and-approval-hardening.md`). This page explains what append-only JSONL logs **do and do not** prove so operators set expectations for forensics and compliance.
 
 ## What these files are
@@ -34,7 +34,22 @@ So:
 
 When `logging.audit_ledger.hmac_checkpoint` is **enabled** in `config/runtime.yaml`, Loopgate appends `audit.ledger.hmac_checkpoint` after every **N** ordinary audit events. Each line carries **HMAC-SHA256** over a canonical v1 message that includes the **through** `audit_sequence`, **through** prior `event_hash`, and a **checkpoint timestamp**; the **signing key** is loaded via **`secret_ref`** (for example macOS Keychain), not embedded in the JSONL.
 
-Checkpoint lines still participate in the same **append-only hash chain** as other events. Verification helpers live in **`internal/ledger`** (`VerifyAuditLedgerHMACCheckpointEvent`). This improves **detectability of tampering** for parties that hold the key; it is **not** a substitute for **out-of-band** retention (append-only export, central aggregation) where the operator needs evidence off the workstation.
+Checkpoint lines still participate in the same **append-only hash chain** as
+other events. Verification helpers live in **`internal/ledger`**
+(`VerifyAuditLedgerHMACCheckpointEvent`). This improves **detectability of
+tampering** for parties that hold the key; it is **not** a substitute for
+**out-of-band** retention (append-only export, central aggregation) where the
+operator needs evidence off the workstation.
+
+Current operator verification path:
+
+- `go run ./cmd/loopgate-ledger verify`
+  - verifies the append-only chain across the active JSONL plus sealed segments
+  - verifies HMAC checkpoints too when `logging.audit_ledger.hmac_checkpoint`
+    is enabled and the configured `secret_ref` resolves successfully
+- `go run ./cmd/loopgate-doctor report`
+  - includes a derived `ledger_verify.hmac_checkpoints` status block so
+    operators can see whether checkpoints are disabled, verified, or failing
 
 ## Recommended topology
 
@@ -135,7 +150,7 @@ This preserves one authoritative forensic timeline while still allowing downstre
 
 - **Backups:** Copy JSONL and segment manifests together; restoring a **partial** set can break sequence expectations.
 - **Do not edit lines in place:** Append-only is an invariant; in-place edits break the chain and may cause append failures until operators repair or rotate logs per runbook.
-- **Diagnostics:** `GET /v1/diagnostic/report` (authenticated, signed) can summarize ledger verification; it does not change the trust model above.
+- **Diagnostics:** `GET /v1/diagnostic/report` (authenticated, signed) can summarize ledger verification, including HMAC checkpoint status when configured; it does not change the trust model above.
   If you are intentionally testing the optional downstream export path, also see [AUDIT_EXPORT_TRUST_ROTATION.md](./AUDIT_EXPORT_TRUST_ROTATION.md).
 
 ## See also

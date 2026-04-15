@@ -47,7 +47,7 @@ func main() {
 
 func printUsage() {
 	fmt.Fprintf(os.Stderr, `Usage:
-  loopgate-ledger verify  [-repo DIR]   Verify hash chain (active JSONL + manifest / sealed segments per config)
+  loopgate-ledger verify  [-repo DIR]   Verify hash chain and, when configured, HMAC checkpoints
   loopgate-ledger summary [-repo DIR]   Count events by type on the active JSONL only (no chain verification)
   loopgate-ledger tail    [-repo DIR] [-n N] [-verbose]  Print last N events from active JSONL (no verification)
   loopgate-ledger demo-reset [-repo DIR] [-socket PATH] [-yes]  Remove local demo ledger/log state after confirming Loopgate is not running
@@ -105,12 +105,32 @@ func runVerify(args []string) {
 	repoRoot := resolveRepoRoot(*repoFlag)
 	rotation := loadRotationSettings(repoRoot)
 	path := activeAuditPath(repoRoot)
+	runtimeConfig, err := config.LoadRuntimeConfig(repoRoot)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "ERROR: load runtime config:", err)
+		os.Exit(1)
+	}
 	lastSeq, lastHash, err := ledger.ReadSegmentedChainState(path, "audit_sequence", rotation)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR: verify chain:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("verify ok  last_audit_sequence=%d  last_event_hash_prefix=%s\n", lastSeq, hashPrefix(lastHash))
+	checkpointReport, err := troubleshoot.VerifyAuditLedgerCheckpoints(repoRoot, runtimeConfig)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "ERROR: verify checkpoints:", err)
+		os.Exit(1)
+	}
+	fmt.Println(formatVerifySummary(lastSeq, lastHash, checkpointReport.Status, checkpointReport.CheckpointCount))
+}
+
+func formatVerifySummary(lastAuditSequence int64, lastEventHash string, checkpointStatus string, checkpointCount int) string {
+	return fmt.Sprintf(
+		"verify ok  last_audit_sequence=%d  last_event_hash_prefix=%s  hmac_checkpoints=%s  checkpoint_count=%d",
+		lastAuditSequence,
+		hashPrefix(lastEventHash),
+		checkpointStatus,
+		checkpointCount,
+	)
 }
 
 func runSummary(args []string) {

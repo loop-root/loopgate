@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"loopgate/internal/config"
 	"loopgate/internal/ledger"
 )
 
@@ -73,6 +75,66 @@ func TestRunTailWithIO_VerbosePrintsReadableLines(t *testing.T) {
 	}
 	if strings.Contains(output, "type=") {
 		t.Fatalf("expected verbose output to avoid raw key=value fallback, got %q", output)
+	}
+}
+
+func TestFormatVerifySummary_IncludesCheckpointStatus(t *testing.T) {
+	repoRoot := t.TempDir()
+	activeLedgerPath := activeAuditPath(repoRoot)
+	if err := os.MkdirAll(filepath.Dir(activeLedgerPath), 0o755); err != nil {
+		t.Fatalf("mkdir runtime state: %v", err)
+	}
+
+	runtimeConfig := config.DefaultRuntimeConfig()
+	runtimeConfig.Logging.AuditLedger.HMACCheckpoint.Enabled = true
+	runtimeConfig.Logging.AuditLedger.HMACCheckpoint.IntervalEvents = 2
+	runtimeConfig.Logging.AuditLedger.HMACCheckpoint.SecretRef = &config.AuditLedgerHMACSecretRef{
+		ID:          "audit_ledger_hmac",
+		Backend:     "env",
+		AccountName: "LOOPGATE_AUDIT_LEDGER_HMAC",
+		Scope:       "test",
+	}
+	if err := config.WriteRuntimeConfigYAML(repoRoot, runtimeConfig); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+	t.Setenv("LOOPGATE_AUDIT_LEDGER_HMAC", "test-audit-hmac-key")
+
+	if err := ledger.Append(activeLedgerPath, ledger.NewEvent("2026-04-15T00:00:01Z", "capability.requested", "session-1", map[string]interface{}{
+		"audit_sequence": 1,
+		"capability":     "fs_read",
+	})); err != nil {
+		t.Fatalf("append audit event: %v", err)
+	}
+	lastAuditSequence, lastEventHash, err := ledger.ReadSegmentedChainState(activeLedgerPath, "audit_sequence", loadRotationSettings(repoRoot))
+	if err != nil {
+		t.Fatalf("read chain state: %v", err)
+	}
+	checkpointMAC := ledger.ComputeAuditLedgerCheckpointHMAC(
+		[]byte("test-audit-hmac-key"),
+		ledger.BuildAuditLedgerCheckpointHMACMessageV1(lastAuditSequence, lastEventHash, "2026-04-15T00:00:02Z"),
+	)
+	if err := ledger.Append(activeLedgerPath, ledger.NewEvent("2026-04-15T00:00:02Z", ledger.AuditLedgerHMACCheckpointEventType, "", map[string]interface{}{
+		"audit_sequence":            2,
+		"checkpoint_schema_version": int64(ledger.AuditLedgerCheckpointSchemaVersion),
+		"through_audit_sequence":    lastAuditSequence,
+		"through_event_hash":        lastEventHash,
+		"checkpoint_timestamp_utc":  "2026-04-15T00:00:02Z",
+		"checkpoint_hmac_sha256":    fmt.Sprintf("%x", checkpointMAC),
+	})); err != nil {
+		t.Fatalf("append checkpoint event: %v", err)
+	}
+
+	formatted := formatVerifySummary(lastAuditSequence, lastEventHash, "verified", 1)
+	expectedFragments := []string{
+		"verify ok",
+		"last_audit_sequence=1",
+		"hmac_checkpoints=verified",
+		"checkpoint_count=1",
+	}
+	for _, expectedFragment := range expectedFragments {
+		if !strings.Contains(formatted, expectedFragment) {
+			t.Fatalf("expected formatted summary %q to contain %q", formatted, expectedFragment)
+		}
 	}
 }
 
