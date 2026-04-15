@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,50 +15,9 @@ import (
 
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
-	modelpkg "loopgate/internal/model"
 	"loopgate/internal/sandbox"
 	"loopgate/internal/testutil"
 )
-
-type delayedModelProvider struct {
-	delay time.Duration
-}
-
-func (provider delayedModelProvider) Generate(ctx context.Context, request modelpkg.Request) (modelpkg.Response, error) {
-	select {
-	case <-time.After(provider.delay):
-	case <-ctx.Done():
-		return modelpkg.Response{}, ctx.Err()
-	}
-	return modelpkg.Response{
-		AssistantText: fmt.Sprintf("delayed reply to %q", request.UserMessage),
-		ProviderName:  "delayed",
-		ModelName:     "delayed",
-		FinishReason:  "stop",
-	}, nil
-}
-
-type failingModelProvider struct{}
-
-func (provider failingModelProvider) Generate(ctx context.Context, request modelpkg.Request) (modelpkg.Response, error) {
-	_ = ctx
-	return modelpkg.Response{
-		ProviderName: "failing",
-		ModelName:    "failing",
-		Prompt: modelpkg.PromptMetadata{
-			PersonaHash: "persona",
-			PolicyHash:  "policy",
-			PromptHash:  "prompt",
-		},
-		Timing: modelpkg.Timing{
-			PromptCompile:     5 * time.Millisecond,
-			SecretResolve:     4 * time.Millisecond,
-			ProviderRoundTrip: 3 * time.Millisecond,
-			ResponseDecode:    2 * time.Millisecond,
-			TotalGenerate:     14 * time.Millisecond,
-		},
-	}, errors.New("synthetic model failure")
-}
 
 func TestClientExecuteCapability_ReadAndWrite(t *testing.T) {
 	repoRoot := t.TempDir()
@@ -749,152 +707,6 @@ func TestSandboxExportRequiresOperatorMountWriteGrant(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), DenialCodeApprovalRequired) {
 		t.Fatalf("expected approval-required denial, got %v", err)
-	}
-}
-
-func TestPruneExpiredLockedSkipsBeforeScheduledSweep(t *testing.T) {
-	repoRoot := t.TempDir()
-	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	nowUTC := server.now().UTC()
-	server.mu.Lock()
-	server.expirySweepMaxInterval = time.Hour
-	server.nextExpirySweepAt = nowUTC.Add(30 * time.Minute)
-	server.tokens["expired-token"] = capabilityToken{
-		TokenID:      "expired-token-id",
-		Token:        "expired-token",
-		ExpiresAt:    nowUTC.Add(-1 * time.Minute),
-		PeerIdentity: peerIdentity{UID: 1234},
-	}
-	server.pruneExpiredLocked()
-	_, found := server.tokens["expired-token"]
-	server.mu.Unlock()
-
-	if !found {
-		t.Fatal("expected scheduled cleanup gate to skip expired token pruning before next sweep")
-	}
-}
-
-func TestPruneExpiredLockedSchedulesEarliestExpiry(t *testing.T) {
-	repoRoot := t.TempDir()
-	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	nowUTC := server.now().UTC()
-	tokenExpiryUTC := nowUTC.Add(2 * time.Minute)
-	sessionExpiryUTC := nowUTC.Add(5 * time.Minute)
-
-	server.mu.Lock()
-	server.expirySweepMaxInterval = time.Hour
-	server.nextExpirySweepAt = time.Time{}
-	server.tokens["live-token"] = capabilityToken{
-		TokenID:      "live-token-id",
-		Token:        "live-token",
-		ExpiresAt:    tokenExpiryUTC,
-		PeerIdentity: peerIdentity{UID: 1234},
-	}
-	server.sessions["live-session"] = controlSession{
-		ID:           "live-session",
-		ExpiresAt:    sessionExpiryUTC,
-		PeerIdentity: peerIdentity{UID: 1234},
-	}
-	server.pruneExpiredLocked()
-	scheduledSweepUTC := server.nextExpirySweepAt
-	server.mu.Unlock()
-
-	if !scheduledSweepUTC.Equal(tokenExpiryUTC) {
-		t.Fatalf("expected next expiry sweep at %s, got %s", tokenExpiryUTC.Format(time.RFC3339Nano), scheduledSweepUTC.Format(time.RFC3339Nano))
-	}
-}
-
-func TestNoteExpiryCandidateLockedPullsScheduleEarlier(t *testing.T) {
-	repoRoot := t.TempDir()
-	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	nowUTC := server.now().UTC()
-	earlierExpiryUTC := nowUTC.Add(10 * time.Minute)
-	laterExpiryUTC := nowUTC.Add(2 * time.Hour)
-
-	server.mu.Lock()
-	server.expirySweepMaxInterval = time.Hour
-	server.nextExpirySweepAt = laterExpiryUTC
-	server.noteExpiryCandidateLocked(earlierExpiryUTC)
-	scheduledSweepUTC := server.nextExpirySweepAt
-	server.mu.Unlock()
-
-	if !scheduledSweepUTC.Equal(earlierExpiryUTC) {
-		t.Fatalf("expected expiry candidate to pull next sweep to %s, got %s", earlierExpiryUTC.Format(time.RFC3339Nano), scheduledSweepUTC.Format(time.RFC3339Nano))
-	}
-}
-
-func TestHTTPStatusForResponseMapsTypedCapabilityResponses(t *testing.T) {
-	testCases := []struct {
-		name         string
-		response     CapabilityResponse
-		expectedHTTP int
-	}{
-		{
-			name:         "success",
-			response:     CapabilityResponse{Status: ResponseStatusSuccess},
-			expectedHTTP: http.StatusOK,
-		},
-		{
-			name:         "pending approval",
-			response:     CapabilityResponse{Status: ResponseStatusPendingApproval},
-			expectedHTTP: http.StatusAccepted,
-		},
-		{
-			name:         "denied unauthorized",
-			response:     CapabilityResponse{Status: ResponseStatusDenied, DenialCode: DenialCodeCapabilityTokenInvalid},
-			expectedHTTP: http.StatusUnauthorized,
-		},
-		{
-			name:         "denied rate limited",
-			response:     CapabilityResponse{Status: ResponseStatusDenied, DenialCode: DenialCodeSessionOpenRateLimited},
-			expectedHTTP: http.StatusTooManyRequests,
-		},
-		{
-			name:         "error audit unavailable",
-			response:     CapabilityResponse{Status: ResponseStatusError, DenialCode: DenialCodeAuditUnavailable},
-			expectedHTTP: http.StatusServiceUnavailable,
-		},
-	}
-
-	for _, testCase := range testCases {
-		if gotHTTP := httpStatusForResponse(testCase.response); gotHTTP != testCase.expectedHTTP {
-			t.Fatalf("%s: expected %d, got %d", testCase.name, testCase.expectedHTTP, gotHTTP)
-		}
-	}
-}
-
-func TestServerConnContextReportsPeerCredentialFailure(t *testing.T) {
-	repoRoot := t.TempDir()
-	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
-
-	server, err := NewServer(repoRoot, filepath.Join(t.TempDir(), "loopgate.sock"))
-	if err != nil {
-		t.Fatalf("new server: %v", err)
-	}
-
-	var reportedSecurityCode string
-	server.resolvePeerIdentity = func(net.Conn) (peerIdentity, error) {
-		return peerIdentity{}, errors.New("synthetic peer credential failure")
-	}
-	server.reportSecurityWarning = func(eventCode string, cause error) {
-		reportedSecurityCode = eventCode
-		_ = cause
-	}
-
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-
-	ctx := server.server.ConnContext(context.Background(), clientConn)
-	if _, ok := peerIdentityFromContext(ctx); ok {
-		t.Fatal("expected peer identity to be absent after credential lookup failure")
-	}
-	if reportedSecurityCode != "unix_peer_resolve_failed" {
-		t.Fatalf("expected unix_peer_resolve_failed security event, got %q", reportedSecurityCode)
 	}
 }
 

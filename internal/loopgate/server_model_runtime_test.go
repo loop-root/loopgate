@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,46 @@ import (
 	modelpkg "loopgate/internal/model"
 	modelruntime "loopgate/internal/modelruntime"
 )
+
+type delayedModelProvider struct {
+	delay time.Duration
+}
+
+func (provider delayedModelProvider) Generate(ctx context.Context, request modelpkg.Request) (modelpkg.Response, error) {
+	select {
+	case <-time.After(provider.delay):
+	case <-ctx.Done():
+		return modelpkg.Response{}, ctx.Err()
+	}
+	return modelpkg.Response{
+		AssistantText: fmt.Sprintf("delayed reply to %q", request.UserMessage),
+		ProviderName:  "delayed",
+		ModelName:     "delayed",
+		FinishReason:  "stop",
+	}, nil
+}
+
+type failingModelProvider struct{}
+
+func (provider failingModelProvider) Generate(ctx context.Context, request modelpkg.Request) (modelpkg.Response, error) {
+	_ = ctx
+	return modelpkg.Response{
+		ProviderName: "failing",
+		ModelName:    "failing",
+		Prompt: modelpkg.PromptMetadata{
+			PersonaHash: "persona",
+			PolicyHash:  "policy",
+			PromptHash:  "prompt",
+		},
+		Timing: modelpkg.Timing{
+			PromptCompile:     5 * time.Millisecond,
+			SecretResolve:     4 * time.Millisecond,
+			ProviderRoundTrip: 3 * time.Millisecond,
+			ResponseDecode:    2 * time.Millisecond,
+			TotalGenerate:     14 * time.Millisecond,
+		},
+	}, errors.New("synthetic model failure")
+}
 
 func TestModelReply_UsesLoopgateRuntime(t *testing.T) {
 	repoRoot := t.TempDir()
