@@ -4,11 +4,11 @@
 
 This file is **tracked** so clones know what ships in the repository versus what maintainers keep **locally** (gitignored).
 
-## Intentional local copies (not on GitHub yet)
+## Intentional local copies
 
 | Path | Role |
 |------|------|
-| Root `AGENTS.md` | Cursor/Codex agent rules (optional local copy; tracked norms also in `docs/loopgate-threat-model.md`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/design_overview/loopgate.md`) |
+| Root `AGENTS.md` | Agent and contributor guidance for local workflows; tracked public-facing norms also appear in `docs/loopgate-threat-model.md`, `SECURITY.md`, `CONTRIBUTING.md`, and `docs/design_overview/loopgate.md` |
 | Historical archive repo | Historical security/code review snapshots and extracted design material |
 | `context_map.md`, `*_map.md` | Repo navigation maps (often gitignored) |
 

@@ -1,479 +1,182 @@
 # Loopgate Context Map
 
-This file is the **master index** for the repository: a quick orientation guide for agents and contributors, and the **table of contents** for every `*_map.md` navigation file (those files are gitignored like this one so they stay out of review noise but remain on disk for local use).
+This file is a fast orientation guide for contributors and agents working in
+the active Loopgate repository.
 
-Its goals:
+If this file disagrees with code, the code wins. If it disagrees with
+`AGENTS.md`, the security and authority rules in `AGENTS.md` win.
 
-- explain what the project is now
-- show where the important code lives **without pasting large trees into prompts** — follow the map for the area you are changing
-- call out the non-negotiable invariants
-- separate real source from generated, runtime, local-only, or legacy paths
+## Project in one paragraph
 
-If this file disagrees with code, the code wins. If this file disagrees with
-the security constitution in `AGENTS.md`, the agent guidance wins on safety and
-authority rules.
+Loopgate is a local-first governance layer for AI-assisted engineering work.
+This repository is intentionally narrow: policy, approvals, audit, sandbox
+mediation, Claude Code hook governance, and governed MCP broker flows.
 
-## Project in One Paragraph
+Continuity and memory work belongs in the separate `continuity` repo. Older
+planning and historical product material belongs in `ARCHIVED`.
 
-Loopgate is a policy-governed AI governance engine.
+## Current product shape
 
-This repo implements the enforcement runtime (`cmd/loopgate`, `internal/loopgate`) and shared backend libraries. It is the authority boundary for AI capability execution on the local machine.
+- local HTTP control plane on a Unix domain socket
+- signed policy and request integrity
+- approval and denial workflows
+- append-only local audit ledger
+- Claude Code hook governance
+- request-driven governed MCP broker execution
 
-Product surfaces:
+This is not the place to add:
 
-- **Primary integration surface:** **HTTP-on-UDS** control plane for native local clients and **out-of-tree** bridges. **In-tree MCP is deprecated and removed** (ADR 0010 — reduced attack surface); **reserved** for a possible future thin forwarder via new ADR.
-- **Current operator MVP:** **Claude Code + project hooks + Loopgate**.
+- in-tree continuity or memory features
+- retired Haven or morphling surfaces
+- speculative desktop UI product work
+- remote or enterprise deployment assumptions in the local control path
 
-This repository centers on **Loopgate** as the governance engine.
-
-Historical continuity, Haven, Morph, and morphling material now lives in the
-separate `continuity` or `ARCHIVED` repos. This file should describe the active
-Loopgate repo only.
-
-## Current Product Shape
-
-- `Loopgate` is the enforcement and governance kernel: policy evaluation, approvals, secrets, sandboxing, audit, Claude hook governance, and the MCP broker path.
-- The **current product surface** is a direct local client model: **Claude Code hooks** over the local control plane, plus optional **HTTP-native** clients and **out-of-tree** MCP→HTTP forwarders where operators want MCP-shaped hosts.
-- **Transport:** local clients connect via HTTP over Unix domain socket (signed requests, same authority model as RFC 0001 / AMP local profile).
-- Continuity and memory live outside this repo in the separate sibling repo named `continuity`.
-- Retired Haven, Morph, morphling, and task-board surfaces are not part of the active product surface.
-
-Useful mental model:
-
-```text
-Developer IDE or local HTTP client
-  -> Loopgate **HTTP on UDS**
-  -> Policy evaluation, audit, approvals
-  -> governed execution or denial
-```
-
-## Non-Negotiable Invariants
-
-**Recent control-plane hardening (2026-04):** Pending capability approvals store a deep-copied `CapabilityRequest`; post-approval execution verifies the body hash against `ExecutionBodySHA256` when present. Secret-export blocking consults the tool registry (optional interfaces) plus the legacy name heuristic. In-memory caps bound pending approvals per session and replay tables (fail closed when saturated). See `docs/adr/0009-macos-scope-and-approval-hardening.md` and `docs/reports/security-hardening-plan-2026-04.md`.
-
-These are the rules to keep in your head before editing anything:
-
-- Loopgate is the authority boundary.
-- Natural language never creates authority.
-- Model output is untrusted input.
-- Unprivileged clients (IDE, MCP host, CLI, TUI, or other local client) are not privileged just because they initiated a request.
-- Local privileged transport stays local-only by default.
-- The sandbox boundary matters. Governed workspace lives under `/morph/home`, not arbitrary host paths.
-- Host access must stay explicit, mediated, and reviewable.
-- Audit history is append-only and security-relevant actions must remain observable.
-- User-visible summaries are derived views, not source-of-truth state.
-- Secrets must stay out of logs, ledgers, plain config, and UI surfaces.
-- Fail closed is preferred over fail open.
-
-For the full safety constitution, read `AGENTS.md` at the repo root (and `AGENTS/AGENTS.md` if you maintain a local `AGENTS/` directory).
-
-## Read This First
+## Read this first
 
 If you are new to the repo, read in this order:
 
 1. `README.md`
-2. `AGENTS.md` (repo root; tracked) — security constitution and system model
-3. `docs/design_overview/architecture.md` — product architecture and component boundaries
-4. `internal/loopgate/server.go` — central authority runtime: server construction, serve loop, and capability execution core
-5. `internal/loopgate/loopgate_map.md` — current module map for the split Loopgate package
-6. `docs/setup/OPERATOR_GUIDE.md` — active local operator workflow
+2. `AGENTS.md`
+3. `docs/design_overview/architecture.md`
+4. `docs/design_overview/loopgate.md`
+5. `docs/setup/OPERATOR_GUIDE.md`
+6. `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`
 
-Notes:
-
-- `AGENTS.md` at the repo root is the tracked security constitution.
-- The current direction is **Claude Code hooks**, **HTTP-native integrations**, and a thinner local-first governance kernel.
-
-## Top-Level Map
+## Top-level layout
 
 ```text
 /path/to/loopgate
-├── AGENTS/                Local agent guidance (ignored by git in normal workflows)
-├── cmd/                   Executable entrypoints
-├── config/                Checked-in runtime config
-├── core/                  Checked-in policy and signing material
-├── docs/                  Architecture, setup, RFCs, threat model
-├── internal/              Real implementation packages
-├── persona/               Default operator persona (`default.yaml`) and values
-├── runtime/               Local runtime state, socket, logs, sandbox, caches
-├── README.md              Top-level project summary
-├── go.mod / go.sum        Go module definition
-└── .claude/               Local hook integration files for this repo
+├── cmd/             Executable entrypoints
+├── config/          Checked-in runtime configuration
+├── core/            Checked-in policy and signing material
+├── docs/            Active product, setup, ADR, RFC, and threat-model docs
+├── internal/        Control-plane and support packages
+├── scripts/         Local helper scripts
+├── README.md        Public top-level project summary
+├── SECURITY.md      Vulnerability reporting policy
+├── SUPPORT.md       Normal support and bug-report routing
+└── CONTRIBUTING.md  Contributor expectations
 ```
 
-Important interpretation:
+Treat `runtime/`, `tmp/`, `output/`, `.claude/`, and other local state paths as
+machine-local artifacts, not source of truth.
 
-- `cmd/` and `internal/` are the main source trees.
-- `docs/` is authoritative for design intent and product shape.
-- `runtime/` is local machine state, not source.
-- local build outputs or stray binaries should be treated as untracked machine state, not part of the product.
+## Code map
 
-## Agent Guidance
+### `cmd/`
 
-The tracked contributor and agent guidance for this repo lives in:
-
-- `AGENTS.md` (repo root)
-
-Historical planning or local-only working notes should not be treated as active
-product docs.
-
-## Entrypoints
-
-### Primary: HTTP control plane / IDE bridges
-
-- **Docs:** `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (normative); `docs/setup/POLICY_SIGNING.md` (detached policy signature workflow).
-
-### `cmd/loopgate/`
-
-The local control-plane server.
-
-- `main.go`: starts Loopgate on the repo-local Unix socket under `runtime/state/loopgate.sock`
-
-## Internal Package Map
+- `cmd/loopgate/` — main Loopgate server and hook-management subcommands
+- `cmd/loopgate-ledger/` — local ledger inspection, verify, tail, and demo reset
+- `cmd/loopgate-policy-sign/` — detached policy signing
+- `cmd/loopgate-policy-admin/` — validate, diff, explain, and apply signed policy
+- `cmd/loopgate-doctor/` — local diagnostics and report helpers
 
 ### `internal/loopgate/`
 
-The most important backend package in the repo.
+The authority core:
 
-What lives here:
+- session open and signed request validation
+- policy/approval enforcement
+- capability execution mediation
+- sandbox import/export and host-path mediation
+- governed MCP launch/execute/stop/status
+- authoritative audit persistence hooks
 
-- control-plane server and handlers
-- session and token integrity
-- approval workflows
-- sandbox import / export / stage / list / metadata
-- model connection storage and validation
-- site trust and outbound integration hooks
-- UI status queries used by unprivileged clients (e.g. IDE integrations)
-- shared-folder mediation
-- folder-grant mirroring and compare-before-sync refresh
-- governed MCP lifecycle and execution helpers
+If a change touches trust, approvals, request integrity, or capability
+execution, start here.
 
-Key files:
+### `internal/ledger/` and `internal/audit/`
 
-- `server.go`: central authority runtime, session/token state, serve loop, and capability execution core
-- `server_audit_runtime.go`, `server_response_runtime.go`, `capability_result_runtime.go`, `capability_execution_runtime.go`, `request_body_runtime.go`: split runtime helpers peeled out of the authority core
-- `server_*_handlers.go`: split handlers by concern
-- `ui_client.go` and `ui_types.go`: display-safe control-plane queries for local clients
-- `client.go`: Go HTTP client public wrapper surface for Loopgate (**HTTP on Unix domain socket** for v1; used by tests and tooling — see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`; optional future XPC adapter TBD — see `docs/rfcs/0001-loopgate-token-policy.md`)
-- `client_session.go`: session bootstrap, delegated-session state, capability execution, and approval decision client logic
-- `client_transport.go`: signed transport, retries, and request-signature implementation
-- `shared_folder.go`: default shared-space mediation
-- `folder_access.go`: explicit host-folder grant storage and compare-before-sync mirror logic
-- `mcp_gateway_runtime.go`, `mcp_gateway_execution.go`, `mcp_gateway_approval.go`: governed MCP lifecycle, approval, and execution helpers
+Append-only persistence and inspection helpers.
 
-Important note:
+If a change affects:
 
-- The old standalone Loopgate HTTP admin UI and its embedded frontend tree have been **removed** from the active server path. Do not hunt for `internal/loopgate/web/admin/` — it is gone. Future **admin console** work is the enterprise admin-mode surface, not that path.
+- audit integrity
+- ordering
+- tamper evidence
+- readable operator audit output
 
-### `internal/sandbox/`
+read these packages first.
 
-Sandbox path and copy primitives.
+### `internal/policy/`, `core/policy/`, and `config/`
 
-This package matters whenever host files move into or out of the governed sandbox.
+Policy/runtime configuration loading and checked-in defaults.
 
-Responsibilities:
+- `core/policy/policy.yaml` is the checked-in signed policy source
+- `config/runtime.yaml` is checked-in runtime config
+- policy changes must preserve deny-by-default behavior and signed-policy rules
 
-- path normalization
-- root enforcement
-- symlink rejection
-- atomic copy / mirror
-- virtual path mapping helpers
+### `internal/sandbox/` and filesystem mediation paths in `internal/loopgate/`
 
-### `internal/tools/`
+Use these when working on:
 
-Typed tool registry and core tool implementations.
-
-Important distinction:
-
-- `NewDefaultRegistry(...)` is repo-root oriented and used by Loopgate and non-sandbox runtime paths
-- `NewSandboxRegistry(...)` is sandbox-home oriented and used for sandbox-scoped actors in Loopgate and related runtimes
-
-Current core tools:
-
-- `fs_list`
-- `fs_read`
-- `fs_write`
-- `shell_exec`
-- `path_open`
-- The active tool registry is intentionally narrow and governance-oriented.
-- Retired Haven-only and memory/task-oriented tools are no longer part of the active Loopgate surface.
-
-### `internal/policy/`
-
-Policy checker and policy decision types.
-
-The checked-in YAML policy lives under `core/policy/`, but this package enforces it.
+- host-folder access
+- sandbox import/export
+- canonical path checks
+- symlink and traversal safety
 
 ### `internal/secrets/`
 
-Secret storage and redaction.
-
-Important here:
-
-- macOS Keychain support
-- secure-store selection
-- redaction helpers
-- audit-safe secret summaries
-
-### Continuity note
-
-The in-tree memory/continuity subsystem has been extracted from active
-Loopgate. Continuity-specific implementation and docs should go to the sibling
-`continuity` repo, not back into this one.
-
-### `internal/threadstore/`
-
-Append-only thread/event storage (`internal/threadstore`).
-
-Use this when working on Messenger persistence or rebuilding UI state from thread history.
-
-### `internal/model/` and `internal/modelruntime/`
-
-Model-provider adapters and runtime configuration.
-
-Current provider work includes:
-
-- Anthropic
-- OpenAI-compatible endpoints
-
-### `internal/orchestrator/`
-
-Task planning / structured orchestration helpers used by the runtime.
-
-### `internal/audit/` and `internal/ledger/`
-
-Append-only event persistence and related file-state helpers.
-
-If your change affects auditability, denial paths, or write ordering, read these packages.
-
-## Config and Policy
-
-### `core/policy/policy.yaml`
-
-Checked-in default policy:
-
-- filesystem roots and denials
-- read/write enablement
-- shell / HTTP policy
-- memory thresholds
-- safety toggles
-
-### `persona/default.yaml`
-
-Default operator persona for unprivileged clients.
-
-### `config/runtime.yaml`
-
-Runtime model/provider configuration.
-
-### `config/goal_aliases.yaml`
-
-Goal alias mapping used by the system.
-
-## Docs Map
-
-For a **folder-by-folder overview** of `docs/`, see `docs/docs_map.md`. Agent phase reports for the master implementation plan live under `docs/superpowers/reports/` (see `docs_map.md`).
-
-**Execution roadmap:** active repo direction lives in `docs/roadmap/roadmap.md`.
-
-**Architecture Decision Records:** `docs/adr/` — short, dated decisions (tradeoffs + escape hatches); index in `docs/adr/README.md`.
-
-### Architecture and security docs
-
-- `docs/design_overview/architecture.md`
-- `docs/design_overview/loopgate.md`
-- `docs/design_overview/systems_contract.md`
-- `docs/loopgate-threat-model.md`
-- `docs/roadmap/roadmap.md`
-
-### Setup docs
-
-- `docs/setup/SETUP.md`
-- `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — Unix-socket HTTP, signing, routes
-- `docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md` — append-only JSONL hash-chain semantics (macOS operator expectations)
-- ADR 0010 — historical record for removed in-tree MCP and any future thin-forwarder constraint
-- `docs/setup/SECRETS.md`
-- `docs/setup/TOOL_USAGE.md`
-
-### Repository map index (master TOC)
-
-These `*_map.md` files (gitignored like this file) are the **navigation layer**: open the map for the directory you are working in, then open only the source files that map lists.
-
-**Entrypoints and top-level trees**
-
-- `cmd/cmd_map.md` — `cmd/loopgate/` and other local operator binaries
-- `core/core_map.md` — checked-in policy YAML and `core/memory/` interpretation
-- `config/config_map.md` — tracked `config/*.yaml` (not the Go package)
-- `persona/persona_map.md` — `default.yaml` and values
-- `docs/docs_map.md` — documentation tree overview
-
-**`internal/` — every package has a map**
-
-- `internal/audit/audit_map.md` — audit severity over ledger append
-- `internal/config/config_map.md` — Go loaders for policy, persona, JSON state (`Policy` struct, store helpers)
-- `internal/threadstore/threadstore_map.md` — thread JSONL persistence
-- `internal/identifiers/identifiers_map.md` — safe identifier validation
-- `internal/integration/integration_map.md` — Loopgate integration tests (`*_test.go` only)
-- `internal/ledger/ledger_map.md` — append-only hash-chained ledger
-- `internal/loopgate/loopgate_map.md` — control plane (main package)
-- `internal/loopgateresult/loopgateresult_map.md` — Loopgate result formatting for display/prompts
-- continuity-specific maps now live in the sibling `continuity` repo
-- `internal/model/model_map.md` — provider adapters and tool schema
-- `internal/modelruntime/modelruntime_map.md` — `model.Client` construction from repo/env
-- `internal/orchestrator/orchestrator_map.md` — tool orchestration and structured parsing
-- `internal/policy/policy_map.md` — tool policy checker
-- `internal/prompt/prompt_map.md` — system prompt compilation
-- `internal/safety/safety_map.md` — strict path resolution (`resolvePathStrict`)
-- `internal/sandbox/sandbox_map.md` — sandbox paths and safe copy
-- `internal/secrets/secrets_map.md` — secret refs, backends, redaction
-- `internal/setup/setup_map.md` — interactive model setup wizard
-- `internal/shell/shell_map.md` — slash-commands and terminal integration
-- `internal/signal/signal_map.md` — SIGINT/SIGTERM handling
-- `internal/state/state_map.md` — compact client runtime state file
-- `internal/tcl/tcl_map.md` — typed continuity language (normalize, anchors, validation)
-- `internal/tools/tools_map.md` — typed tool registry and implementations
-- `internal/ui/ui_map.md` — terminal UI primitives
-
-**When to update maps**
-
-- Loopgate and its client/integration surfaces: control-plane surfaces, HTTP-on-UDS transport (v1), future XPC TBD — see `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`
-- Tools, prompt, model, modelruntime: capability or prompt/model/runtime contracts
-- Sandbox, policy, secrets, safety, memory, TCL, audit, ledger, threadstore: boundaries or persistence semantics
-- Config (Go), core/policy, checked-in `config/`: governance YAML or loader shape
-- `docs/docs_map.md`: new major doc folders or renamed doc entrypoints
-- Any map: when you add or rename primary files in that directory so the map stays a reliable shortcut
-
-**Convention**
-
-- One `_map.md` per logical parent directory; this file links them all
-- Maps summarize roles and boundaries — they are not a substitute for reading AGENTS invariants before security-sensitive edits
-
-## Runtime, Generated, and Local-Only Paths
-
-These paths are easy to misread if you are new to the repo.
-
-### Treat as local runtime state
-
-- `runtime/`
-- `output/`
-- `tmp/`
-- `.claude/`
-
-### Treat as local build outputs
-
-- `morph`
-- `loopgate-admin`
-
-### Treat carefully
-
-- `core/memory/`
-
-The repo currently contains memory-related files under `core/memory/`. Many of those paths are also ignored by `.gitignore` for normal runtime output. Do not assume everything under `core/memory/` is stable source code; some of it is historical or runtime-like data.
-
-### Treat as local scratch unless a user says otherwise
-
-- `HelloWorld.py`
-- `body/`
-
-## If You Are Changing X, Start Here
-
-### Governance HTTP behavior
-
-Start in:
-
-- `internal/loopgate/server.go`
-- `internal/loopgate/server_*_handlers.go`
-- `internal/threadstore/` where request-driven thread/event storage is involved
-
-### Sandbox / file import / export / shared-space behavior
-
-Start in:
-
-- `internal/sandbox/`
-- `internal/loopgate/server_sandbox_handlers.go`
-- `internal/loopgate/shared_folder.go`
-- `internal/loopgate/folder_access.go`
-
-### New native tool or capability
-
-Start in:
-
-- `internal/tools/`
-- `internal/loopgate/server.go`
-- `internal/loopgate/loopgate_map.md`
-- `internal/loopgate/server_*_handlers.go`
-- `internal/loopgate/types.go`
-- `internal/loopgate/configured_capability_runtime.go`
-- `internal/loopgate/configured_capability_extract.go`
-- `internal/loopgate/ui_client.go`
-- tests in the same package
-
-### Policy semantics
-
-Start in:
-
-- `core/policy/policy.yaml`
-- `internal/policy/`
-- `internal/loopgate/`
-
-### Secrets or model-provider setup
-
-Start in:
-
-- `internal/secrets/`
-- `internal/loopgate/model_connections.go`
-- `internal/modelruntime/`
-
-### Continuity / memory work
-
-This repo is no longer the right starting point. Continuity and memory work now
-belongs in the sibling `continuity` repo.
-
-## Useful Commands
-
-Primary flows:
-
-```bash
-go test ./...
-go run ./cmd/loopgate
-```
-
-## Current Direction
-
-Loopgate is a local-first governance kernel for AI-assisted engineering work.
-The current mission is to keep the repo narrow, publishable, and trustworthy:
-policy, approvals, audit, Claude hook governance, sandbox mediation, and the
-governed MCP broker path.
-
-**Primary work right now:**
-
-1. **HTTP control plane (v1)** — local integrations use **HTTP on the Unix socket** with signed requests and explicit approvals.
-2. **Operator usability** — keep setup, hook, and audit/ledger workflows clear enough for demos and real local use.
-3. **Audit hardening** — tighten tamper / replacement / recovery behavior without weakening append-only semantics.
-4. **Repo truth** — keep active docs and code aligned with the narrow Loopgate-only product boundary.
-
-**Engineering invariants that don't change:** HTTP on local Unix socket for local client transport. Policy-aligned routes over ad-hoc sprawl. Signed policy remains authoritative. Audit stays append-only.
-
-## Active Product Gaps
-
-These are the known gaps to fix before the next milestone. See `docs/reviews/memory_reviewGaps.md` for detailed analysis.
-
-**Current active gaps:**
-
-- the local audit trail is still not as tamper-resistant or demo-friendly as it should be
-- a few active docs and tests still carry historical naming that no longer matches the product
-- the repo still needs final open-source sanitization passes on comments, maps, and defaults
-
-**Lower priority:**
-
-- Capability hint references key patterns that don't pass canonicalization (`goal.*`, `work.*`).
-- Continuity inspection threshold is opaque — not surfaced in settings or benchmark.
-- Graduated policy rules (`DispositionReview`, `DispositionDrop`) not implemented — current policy is one motif, two outcomes.
-
-## Useful Working Assumptions
-
-- The underlying thread store and audit history should remain durable even if a given client UI is ephemeral.
-- "Feels alive" should come from causality, continuity, and visible traces of work, not fake rituals or unexplained automation.
-- Sandbox-local tools should map to clear operator workflows; if a capability has no obvious surface, the product model may not be ready.
-- Explicit remember requests should be treated as a deterministic contract (`memory.remember`), not best-effort inference.
-
-If you are unsure whether a change fits, check whether it moves the repo toward that product shape without weakening the Loopgate boundary.
+Secret storage, lookup, and redaction. Changes here must preserve the project’s
+secret-handling invariants.
+
+### `internal/model/`, `internal/modelruntime/`, `internal/tools/`, `internal/prompt/`
+
+These packages define:
+
+- provider adapters
+- runtime model configuration
+- typed tool schemas and registry behavior
+- prompt compilation for the current governed runtime
+
+## Docs map
+
+Use active docs in `docs/` as the public-facing source of truth:
+
+- `docs/README.md` — entry points
+- `docs/design_overview/architecture.md` — current architecture
+- `docs/design_overview/loopgate.md` — product and control-plane overview
+- `docs/setup/OPERATOR_GUIDE.md` — operator workflow
+- `docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md` — audit and ledger model
+- `docs/loopgate-threat-model.md` — current threat model
+
+Historical material should stay out of this repo’s active story.
+
+## Current invariants to preserve
+
+- Loopgate is the authority boundary.
+- Natural language is never authority.
+- Model output is untrusted input.
+- Security-relevant actions stay auditable.
+- Policy remains signed and authoritative.
+- Sandbox and host filesystem boundaries remain explicit.
+- Secrets do not leak into logs, audit, or checked-in files.
+- Operator-facing views are derived, not authoritative state.
+
+## If you are changing X, start here
+
+- approvals or execution flow:
+  `internal/loopgate/`
+- audit or ledger behavior:
+  `internal/ledger/`, `internal/audit/`, `cmd/loopgate-ledger/`
+- policy semantics:
+  `core/policy/`, `internal/policy/`, `cmd/loopgate-policy-admin/`
+- hook setup or operator flow:
+  `cmd/loopgate/`, `docs/setup/`
+- sandbox or filesystem mediation:
+  `internal/sandbox/`, `internal/loopgate/`
+
+## Current direction
+
+Keep this repository narrow, publishable, and trustworthy:
+
+- policy
+- approvals
+- audit
+- Claude hook governance
+- sandbox mediation
+- governed MCP broker flows
+
+If a change pulls Loopgate back toward continuity, a legacy assistant surface,
+or a speculative new authority path, it is probably going in the wrong
+direction.

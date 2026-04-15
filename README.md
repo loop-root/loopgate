@@ -140,17 +140,17 @@ repository.
 
 Experimental and under active hardening.
 
-For current behavior, prefer the operator-facing docs in [docs/](/Users/adalaide/Dev/loopgate/docs), the running code, and the signed policy files under [core/policy/](/Users/adalaide/Dev/loopgate/core/policy). Historical material lives in the `ARCHIVED` and `continuity` sibling repos.
+For current behavior, prefer the operator-facing docs in [docs/](./docs), the
+running code, and the signed policy files under [core/policy/](./core/policy).
+Historical material lives in the `ARCHIVED` and `continuity` sibling repos.
 
 ## License
 
 Loopgate is licensed under the Apache License, Version 2.0. See
-[LICENSE](/Users/adalaide/Dev/loopgate/LICENSE) and
-[NOTICE](/Users/adalaide/Dev/loopgate/NOTICE).
+[LICENSE](./LICENSE) and [NOTICE](./NOTICE).
 
 ## Support
 
 For setup questions, non-sensitive bug reports, and operator workflow issues,
-see [SUPPORT.md](/Users/adalaide/Dev/loopgate/SUPPORT.md). For vulnerability
-reports or trust-boundary issues, use the private path described in
-[SECURITY.md](/Users/adalaide/Dev/loopgate/SECURITY.md).
+see [SUPPORT.md](./SUPPORT.md). For vulnerability reports or trust-boundary
+issues, use the private path described in [SECURITY.md](./SECURITY.md).
