@@ -46,8 +46,9 @@ type Request struct {
 	AvailableCommands []CommandDefinition
 	RuntimeFacts      []string
 	HasNativeTools    bool // When true, suppress XML tool call protocol in favor of native structured tool use
-	// HavenConstrainedToolUse is a legacy narrow-tool-use branch that should continue shrinking rather than define the generic Loopgate prompt path.
-	HavenConstrainedToolUse bool
+	// ConstrainedToolUse is a legacy narrow-tool-use branch that should continue
+	// shrinking rather than define the generic Loopgate prompt path.
+	ConstrainedToolUse bool
 }
 
 type CompiledPrompt struct {
@@ -78,13 +79,13 @@ func (compiler *Compiler) Compile(request Request) (CompiledPrompt, error) {
 		return CompiledPrompt{}, fmt.Errorf("hash policy: %w", err)
 	}
 	promptHash, err := hashStableJSON(map[string]interface{}{
-		"system_instruction":         systemInstruction,
-		"conversation":               request.Conversation,
-		"user_message":               request.UserMessage,
-		"tool_names":                 sortedToolNames(request.AvailableTools),
-		"command_names":              sortedCommandNames(request.AvailableCommands),
-		"runtime_facts":              request.RuntimeFacts,
-		"haven_constrained_tool_use": request.HavenConstrainedToolUse,
+		"system_instruction":   systemInstruction,
+		"conversation":         request.Conversation,
+		"user_message":         request.UserMessage,
+		"tool_names":           sortedToolNames(request.AvailableTools),
+		"command_names":        sortedCommandNames(request.AvailableCommands),
+		"runtime_facts":        request.RuntimeFacts,
+		"constrained_tool_use": request.ConstrainedToolUse,
 	})
 	if err != nil {
 		return CompiledPrompt{}, fmt.Errorf("hash compiled prompt: %w", err)
@@ -223,7 +224,7 @@ func buildSystemInstruction(request Request) (string, error) {
 	}
 
 	if request.HasNativeTools {
-		if request.HavenConstrainedToolUse {
+		if request.ConstrainedToolUse {
 			writeSection(&builder, "TOOL USE", []string{
 				"Your tools are available via the native tool-use API. Use them directly — do not emit XML tool call tags.",
 				"The structured tool definitions attached to this request are authoritative for each tool's name, parameters, and when to use it.",

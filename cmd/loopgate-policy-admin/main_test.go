@@ -428,14 +428,7 @@ func startPolicyAdminTestServer(t *testing.T, repoRoot string, socketPath string
 
 func writeTestMorphlingClassPolicyFixture(t *testing.T, repoRoot string) {
 	t.Helper()
-
-	classPolicyPath := filepath.Join(repoRoot, "core", "policy", "morphling_classes.yaml")
-	if err := os.MkdirAll(filepath.Dir(classPolicyPath), 0o755); err != nil {
-		t.Fatalf("mkdir morphling class policy dir: %v", err)
-	}
-	if err := os.WriteFile(classPolicyPath, []byte(defaultTestMorphlingClassPolicyYAML()), 0o600); err != nil {
-		t.Fatalf("write morphling class policy: %v", err)
-	}
+	_ = repoRoot
 }
 
 func newTempSocketPath(t *testing.T) string {

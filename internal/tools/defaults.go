@@ -3,7 +3,7 @@ package tools
 import "loopgate/internal/config"
 
 // NewDefaultRegistry creates a registry with the standard filesystem tools
-// rooted at repoRoot. Used by the Haven client and the Loopgate server.
+// rooted at repoRoot. Used by local operator clients and the Loopgate server.
 func NewDefaultRegistry(repoRoot string, policy config.Policy) (*Registry, error) {
 	fsCfg := policy.Tools.Filesystem
 	return newRegistryWithRoot(repoRoot, fsCfg.AllowedRoots, fsCfg.DeniedPaths, policy)

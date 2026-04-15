@@ -9,18 +9,18 @@ import (
 
 // NativeToolDefBuildOptions adjusts how provider-facing tool definitions are built.
 type NativeToolDefBuildOptions struct {
-	// HavenUserIntentGuards appends a short constraint to descriptions of sensitive
-	// Haven capabilities so models do not call them for self-directed planning.
-	HavenUserIntentGuards bool
+	// UserIntentGuards appends a short constraint to descriptions of sensitive
+	// capabilities so models do not call them for self-directed planning.
+	UserIntentGuards bool
 	// CompactNativeTools sends a single invoke_capability native tool definition whose
 	// arguments_json dispatches to real capabilities, shrinking provider tool-schema TPM.
 	// Loopgate still authorizes the resolved capability name at execution time.
 	CompactNativeTools bool
 }
 
-const havenUserIntentGuardSuffix = " Only call when the user explicitly asked for this outcome or it is strictly required to fulfill their current request; do not use for your own planning."
+const userIntentGuardSuffix = " Only call when the user explicitly asked for this outcome or it is strictly required to fulfill their current request; do not use for your own planning."
 
-var havenNativeToolUserIntentGuards = map[string]bool{}
+var nativeToolUserIntentGuards = map[string]bool{}
 
 // nativeToolAllowlist defines which tools are eligible for the native
 // structured tool-use API. Only tools in this list will be sent as
@@ -96,11 +96,11 @@ func BuildNativeToolDefsForAllowedNamesWithOptions(registry *tools.Registry, all
 		schema := tool.Schema()
 		inputSchema := buildJSONSchema(schema)
 		description := strings.TrimSpace(schema.Description)
-		if opts.HavenUserIntentGuards && havenNativeToolUserIntentGuards[name] {
+		if opts.UserIntentGuards && nativeToolUserIntentGuards[name] {
 			if description == "" {
-				description = strings.TrimSpace(havenUserIntentGuardSuffix)
+				description = strings.TrimSpace(userIntentGuardSuffix)
 			} else {
-				description = description + havenUserIntentGuardSuffix
+				description = description + userIntentGuardSuffix
 			}
 		}
 		defs = append(defs, NativeToolDef{

@@ -118,7 +118,7 @@ trust boundary.
 Current MVP note:
 
 - the active transport is the local Unix-socket control plane for Claude hooks, operator clients, and out-of-tree bridges
-- retired Haven and morphling surfaces are no longer part of the active product boundary
+- retired legacy helper and worker surfaces are no longer part of the active product boundary
 - the retired in-tree memory and continuity layers are no longer part of the active operator contract
 
 Not yet implemented:

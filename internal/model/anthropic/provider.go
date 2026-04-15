@@ -20,7 +20,7 @@ const anthropicVersion = "2023-06-01"
 
 // maxAnthropicRateLimitRetries is how many times we retry after HTTP 429 from Anthropic.
 // Keep this at 1 so a rate-limited call fails within one backoff cycle (~30s max) rather
-// than burning through the haven chat tool-loop context window with multiple long waits.
+// than burning through the constrained tool-loop context window with multiple long waits.
 const maxAnthropicRateLimitRetries = 1
 
 func anthropicRateLimitWait(header http.Header, attemptZeroBased int) time.Duration {
@@ -125,20 +125,20 @@ func (provider *Provider) Generate(ctx context.Context, request model.Request) (
 
 	promptCompileStart := time.Now()
 	constrainedNativeTools := model.ConstrainedNativeToolsFromRuntimeFacts(request.RuntimeFacts)
-	promptRuntimeFacts := model.StripHavenInternalRuntimeFacts(request.RuntimeFacts)
+	promptRuntimeFacts := model.StripInternalRuntimeFacts(request.RuntimeFacts)
 	compiledPrompt, err := provider.compiler.Compile(prompt.Request{
-		Persona:                 request.Persona,
-		Policy:                  request.Policy,
-		SessionID:               request.SessionID,
-		TurnCount:               request.TurnCount,
-		WakeState:               request.WakeState,
-		Conversation:            model.ToPromptConversationTurns(request.Conversation),
-		UserMessage:             request.UserMessage,
-		AvailableTools:          model.ToPromptTools(request.AvailableTools),
-		AvailableCommands:       model.ToPromptCommands(request.AvailableCommands),
-		RuntimeFacts:            promptRuntimeFacts,
-		HasNativeTools:          len(request.NativeToolDefs) > 0,
-		HavenConstrainedToolUse: constrainedNativeTools,
+		Persona:            request.Persona,
+		Policy:             request.Policy,
+		SessionID:          request.SessionID,
+		TurnCount:          request.TurnCount,
+		WakeState:          request.WakeState,
+		Conversation:       model.ToPromptConversationTurns(request.Conversation),
+		UserMessage:        request.UserMessage,
+		AvailableTools:     model.ToPromptTools(request.AvailableTools),
+		AvailableCommands:  model.ToPromptCommands(request.AvailableCommands),
+		RuntimeFacts:       promptRuntimeFacts,
+		HasNativeTools:     len(request.NativeToolDefs) > 0,
+		ConstrainedToolUse: constrainedNativeTools,
 	})
 	if err != nil {
 		return model.Response{}, fmt.Errorf("compile prompt: %w", err)

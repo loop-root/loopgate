@@ -51,7 +51,7 @@ For integrators it matters in four ways:
 - `capability_result_runtime.go`
   - result classification, structured result shaping, and per-field metadata derivation for capability execution and configured remote capabilities
 - `capability_execution_runtime.go`
-  - capability-risk classification, trusted-Haven session helpers, execution-token derivation, capability request normalization, and capability-set helpers
+  - capability-risk classification, actor-scoped session helpers, execution-token derivation, capability request normalization, and capability-set helpers
 - `request_body_runtime.go`
   - strict JSON body decode and signed-body verification helpers shared across HTTP handlers
 - `types.go`
@@ -65,10 +65,10 @@ For integrators it matters in four ways:
 - `types_sandbox.go`
   - sandbox import/export/list/metadata wire contracts plus request validation helpers
 
-### Retired Haven surface
+### Retired legacy surface
 
-The old Haven chat, UI projection, and helper-route implementation files have
-been removed from the active package. Remaining Haven-named internals in
+The old chat, UI projection, and helper-route implementation files have
+been removed from the active package. Remaining legacy-named internals in
 Loopgate are cleanup debt, not part of the current product surface.
 
 ### Request handlers (split from `server.go`)
@@ -125,7 +125,7 @@ These files matter because:
 
 - **Clients** must not depend on vague product claims; Loopgate exposes the governance surfaces that actually exist
 - the capability inventory should stay authoritative even if a **UI** renders friendlier names
-  - actor-scoped low-friction execution (including the current `haven` compatibility actor) must stay inside Loopgate policy, not leak into generic evaluation for other actors
+  - actor-scoped low-friction execution (including the current compatibility actor) must stay inside Loopgate policy, not leak into generic evaluation for other actors
 - host-folder mirroring should stay explicit, audited, and compare-before-sync instead of becoming a noisy or implicit watcher path
 - the next host-help slice should build as a plan/apply system on top of Loopgate, not as raw writable host filesystem authority
 

@@ -23,20 +23,20 @@ func (provider *StubProvider) Generate(ctx context.Context, request Request) (Re
 
 	promptCompileStart := time.Now()
 	constrainedNativeTools := ConstrainedNativeToolsFromRuntimeFacts(request.RuntimeFacts)
-	promptRuntimeFacts := StripHavenInternalRuntimeFacts(request.RuntimeFacts)
+	promptRuntimeFacts := StripInternalRuntimeFacts(request.RuntimeFacts)
 	compiledPrompt, err := provider.compiler.Compile(prompt.Request{
-		Persona:                 request.Persona,
-		Policy:                  request.Policy,
-		SessionID:               request.SessionID,
-		TurnCount:               request.TurnCount,
-		WakeState:               request.WakeState,
-		Conversation:            ToPromptConversationTurns(request.Conversation),
-		UserMessage:             request.UserMessage,
-		AvailableTools:          ToPromptTools(request.AvailableTools),
-		AvailableCommands:       ToPromptCommands(request.AvailableCommands),
-		RuntimeFacts:            promptRuntimeFacts,
-		HasNativeTools:          len(request.NativeToolDefs) > 0,
-		HavenConstrainedToolUse: constrainedNativeTools,
+		Persona:            request.Persona,
+		Policy:             request.Policy,
+		SessionID:          request.SessionID,
+		TurnCount:          request.TurnCount,
+		WakeState:          request.WakeState,
+		Conversation:       ToPromptConversationTurns(request.Conversation),
+		UserMessage:        request.UserMessage,
+		AvailableTools:     ToPromptTools(request.AvailableTools),
+		AvailableCommands:  ToPromptCommands(request.AvailableCommands),
+		RuntimeFacts:       promptRuntimeFacts,
+		HasNativeTools:     len(request.NativeToolDefs) > 0,
+		ConstrainedToolUse: constrainedNativeTools,
 	})
 	if err != nil {
 		return Response{}, err

@@ -190,7 +190,7 @@ func TestBuildNativeToolDefsForAllowedNamesWithOptions_UserIntentGuardsDoNotAffe
 	reg.Register(&tools.FSRead{RepoRoot: "/tmp"})
 
 	defs := BuildNativeToolDefsForAllowedNamesWithOptions(reg, []string{"fs_read"}, NativeToolDefBuildOptions{
-		HavenUserIntentGuards: true,
+		UserIntentGuards: true,
 	})
 	if len(defs) != 1 {
 		t.Fatalf("expected 1 def, got %d", len(defs))

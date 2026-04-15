@@ -12,12 +12,12 @@ import (
 type InvokeCapability struct{}
 
 func (t *InvokeCapability) Name() string      { return "invoke_capability" }
-func (t *InvokeCapability) Category() string  { return "haven" }
+func (t *InvokeCapability) Category() string  { return "dispatch" }
 func (t *InvokeCapability) Operation() string { return OpRead }
 
 func (t *InvokeCapability) Schema() Schema {
 	return Schema{
-		Description: "Dispatch exactly one Haven capability. Set capability to the registry id (must match an id you were given). Set arguments_json to a string containing one JSON object whose keys are that tool's parameters. Examples: fs_read → arguments_json '{\"path\":\"workspace/README.md\"}'. host.folder.list → '{\"folder_name\":\"downloads\",\"path\":\".\"}'. host.organize.plan → '{\"folder_name\":\"downloads\",\"plan_json\":[{\"kind\":\"mkdir\",\"path\":\"a\"}],\"summary\":\"…\"}' — plan_json may be a JSON array inside that object or a string holding the same array text. host.plan.apply → '{\"plan_id\":\"…\"}'. Omitting arguments_json or passing non-JSON text fails validation.",
+		Description: "Dispatch exactly one Loopgate capability. Set capability to the registry id (must match an id you were given). Set arguments_json to a string containing one JSON object whose keys are that tool's parameters. Examples: fs_read -> arguments_json '{\"path\":\"workspace/README.md\"}'. host.folder.list -> '{\"folder_name\":\"downloads\",\"path\":\".\"}'. host.organize.plan -> '{\"folder_name\":\"downloads\",\"plan_json\":[{\"kind\":\"mkdir\",\"path\":\"a\"}],\"summary\":\"...\"}' -- plan_json may be a JSON array inside that object or a string holding the same array text. host.plan.apply -> '{\"plan_id\":\"...\"}'. Omitting arguments_json or passing non-JSON text fails validation.",
 		Args: []ArgDef{
 			{
 				Name:        "capability",

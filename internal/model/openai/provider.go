@@ -122,20 +122,20 @@ func (provider *Provider) Generate(ctx context.Context, request model.Request) (
 
 	promptCompileStart := time.Now()
 	constrainedNativeTools := model.ConstrainedNativeToolsFromRuntimeFacts(request.RuntimeFacts)
-	promptRuntimeFacts := model.StripHavenInternalRuntimeFacts(request.RuntimeFacts)
+	promptRuntimeFacts := model.StripInternalRuntimeFacts(request.RuntimeFacts)
 	compiledPrompt, err := provider.compiler.Compile(prompt.Request{
-		Persona:                 request.Persona,
-		Policy:                  request.Policy,
-		SessionID:               request.SessionID,
-		TurnCount:               request.TurnCount,
-		WakeState:               request.WakeState,
-		Conversation:            model.ToPromptConversationTurns(request.Conversation),
-		UserMessage:             request.UserMessage,
-		AvailableTools:          model.ToPromptTools(request.AvailableTools),
-		AvailableCommands:       model.ToPromptCommands(request.AvailableCommands),
-		RuntimeFacts:            promptRuntimeFacts,
-		HasNativeTools:          len(request.NativeToolDefs) > 0,
-		HavenConstrainedToolUse: constrainedNativeTools,
+		Persona:            request.Persona,
+		Policy:             request.Policy,
+		SessionID:          request.SessionID,
+		TurnCount:          request.TurnCount,
+		WakeState:          request.WakeState,
+		Conversation:       model.ToPromptConversationTurns(request.Conversation),
+		UserMessage:        request.UserMessage,
+		AvailableTools:     model.ToPromptTools(request.AvailableTools),
+		AvailableCommands:  model.ToPromptCommands(request.AvailableCommands),
+		RuntimeFacts:       promptRuntimeFacts,
+		HasNativeTools:     len(request.NativeToolDefs) > 0,
+		ConstrainedToolUse: constrainedNativeTools,
 	})
 	if err != nil {
 		return model.Response{}, fmt.Errorf("compile prompt: %w", err)

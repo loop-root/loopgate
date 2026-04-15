@@ -72,7 +72,7 @@ The current working set in this directory is:
 - capability dispatch helpers
 
 The next capability pass should keep this directory narrow and aligned with the
-active Loopgate product surface rather than reintroducing retired Haven or
+active Loopgate product surface rather than reintroducing retired legacy or
 task-board tools.
 
 ## Important Watchouts

@@ -263,13 +263,8 @@ Checked-in default policy:
 - filesystem roots and denials
 - read/write enablement
 - shell / HTTP policy
-- morphling spawn defaults
 - memory thresholds
 - safety toggles
-
-### `core/policy/morphling_classes.yaml`
-
-Morphling class definitions and resource envelopes.
 
 ### `persona/default.yaml`
 
@@ -428,7 +423,6 @@ Start in:
 Start in:
 
 - `core/policy/policy.yaml`
-- `core/policy/morphling_classes.yaml`
 - `internal/policy/`
 - `internal/loopgate/`
 
@@ -445,12 +439,7 @@ Start in:
 Start in:
 
 - `internal/loopgate/morphling_state.go`
-- `internal/loopgate/morphling_spawn.go`
-- `internal/loopgate/morphling_status.go`
-- `internal/loopgate/morphling_transition.go`
-- `internal/loopgate/morphling_termination.go`
-- `internal/loopgate/morphling_workers.go`
-- `internal/loopgate/morphling_classes.go`
+- retired worker/class-policy paths have been removed from the active Loopgate repo
 
 ### Continuity / memory / wake-state
 

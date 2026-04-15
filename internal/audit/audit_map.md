@@ -26,7 +26,7 @@ This supports the project invariant that **security-relevant audit failures must
 
 - Append-only storage: `internal/ledger/ledger.go`
 - Loopgate audit paths: various `server_*` handlers in `internal/loopgate/`
-  - Example: `capability.haven_trusted_sandbox_auto_allow` (must-persist) fires when Haven **trusted-sandbox auto-allow** upgrades `NeedsApproval` → `Allow` so operators can grep the ledger for that bypass path.
+  - Example: approval, capability execution, and MCP lifecycle events stay must-persist where the control plane treats audit append failure as a hard stop.
 
 ## Important Watchouts
 

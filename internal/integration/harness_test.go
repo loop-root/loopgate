@@ -116,18 +116,7 @@ func newLoopgateHarnessWithSetup(t *testing.T, policyYAML string, setupRepo func
 
 func writeTestMorphlingClassPolicy(t *testing.T, repoRoot string) {
 	t.Helper()
-
-	classPolicyPath := filepath.Join(repoRoot, "core", "policy", "morphling_classes.yaml")
-	if err := os.MkdirAll(filepath.Dir(classPolicyPath), 0o700); err != nil {
-		t.Fatalf("mkdir morphling class policy dir: %v", err)
-	}
-	classPolicyBytes, err := os.ReadFile(filepath.Join("..", "..", "core", "policy", "morphling_classes.yaml"))
-	if err != nil {
-		t.Fatalf("read default morphling class policy: %v", err)
-	}
-	if err := os.WriteFile(classPolicyPath, classPolicyBytes, 0o600); err != nil {
-		t.Fatalf("write morphling class policy: %v", err)
-	}
+	_ = repoRoot
 }
 
 func (harness *loopgateHarness) newClient(actor string, sessionID string, requestedCapabilities []string) *loopgate.Client {
