@@ -19,11 +19,10 @@ Near-term product scope:
 - governed local MCP/runtime work
 
 Not the current product story:
-- Morph as a separate product
-- Haven as the main user-facing product
-- morphlings as a near-term core feature
-- multi-tenant deployment
-- admin-node deployment
+- alternate operator UIs as the main harness
+- assistant-persona product layers inside this repo
+- worker subsystems as a near-term core feature
+- remote or multi-node deployment as the default
 - automatic memory as part of Claude v1
 
 ## Phase 1: Repo-facing truth and operator docs
@@ -47,7 +46,7 @@ Status: **mostly completed**
 
 Goals:
 - remove multi-tenant/admin-node language from active docs unless clearly marked future or archived
-- archive Haven/Morph/morphling-heavy docs that are no longer central
+- archive legacy product and subsystem docs that are no longer central
 - reduce doc clutter so new readers can find the real product path quickly
 
 Targets:

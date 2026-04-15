@@ -2,13 +2,10 @@
 
 # Claude Code Hooks MVP
 
-This document defines the current MVP direction for the repository.
+This document defines the current Loopgate MVP direction.
 
 The active operator harness is **Claude Code**.
 Loopgate remains the authority boundary.
-
-We are explicitly **not** building a new desktop, browser, or avatar product in
-this repository as the MVP.
 
 ## 1. Product decision
 
@@ -19,9 +16,8 @@ That means:
 - Claude Code is the operator-facing shell
 - Loopgate is the sole authority for governance decisions
 - project-local `.claude/` configuration is part of the active product surface
-- old Haven / Morph UI directions are historical and archived out of the repo
-
-This is a strategic narrowing, not a temporary wording change.
+- Loopgate owns the governed path for hook validation, approvals, policy, and
+  audit
 
 ## 2. Why this is the conservative path
 
@@ -55,8 +51,8 @@ Minimum repo-owned pieces:
 - repo docs that explain the trust model and expected workflow
 
 The hook path is intentionally narrow.
-It should begin with **tool pre-validation**, not with a sprawling background
-automation system.
+It begins with **tool pre-validation**, not a sprawling background automation
+system.
 
 ## 4. Hook design constraints
 
@@ -154,13 +150,8 @@ Local memory lifecycle in the current Claude Code MVP is:
    correlation, but does not add memory recall
 3. `SessionEnd` records the session boundary and exit reason for audit and
    attempts a safe local continuity-thread rollover
-4. durable memory, if used later, still comes from Loopgate's governed memory
-   write and continuity inspection paths rather than hook text alone
-
-This is intentionally not a transcript-retention system.
-Wake state and recall should keep only durable, high-signal continuity such as
-stable profile facts, project context, work preferences, locale/timezone, and
-deadlines. Full session transcripts remain outside the continuity contract.
+4. durable state, if introduced later, should still come from explicit
+   governed write paths rather than hook text alone
 
 Local approval lifecycle in the current Claude Code MVP is:
 
@@ -207,28 +198,20 @@ The realistic bridge for interactive Claude Code is:
 Important limitation:
 interactive Claude Code does not provide a clean "pause and wait forever on an
 external window" primitive. The non-interactive `defer` path is SDK-oriented.
-So a Loopgate approval window is possible, but it must be designed around the
-actual hook contract rather than assumed as a transparent replacement for the
-inline Claude prompt.
+So any stronger approval surface has to be designed around the actual hook
+contract rather than assumed as a transparent replacement for the inline Claude
+prompt.
 
 ## 5. Out of scope for this MVP
 
 Out of scope:
 
-- new Haven UI work
-- Morph avatar / resident-presence product work
-- trying to be a general agent harness competitor
-- treating historical Haven-native helper routes as the main product story
-
-Those paths can be revisited later if they become justified again.
-They are not the current build target.
+- building a second primary operator UI inside this repo
+- turning Loopgate into a general-purpose agent harness
+- background automation systems that bypass explicit governed requests
+- governance behavior that depends on prompt-time memory injection
 
 ## 6. Naming note
 
-Some runtime identifiers still use historical names such as `morphling`.
-
-Those names remain in code for now to avoid high-churn refactors during the
-pivot.
-
-The product direction has changed before the implementation vocabulary has been
-fully cleaned up.
+Some runtime identifiers still carry historical names. Treat them as cleanup
+debt, not as product surface.

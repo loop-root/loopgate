@@ -13,11 +13,10 @@ Loopgate's active product scope is:
 - governed local MCP broker work
 
 This is not the active roadmap for:
-- Haven as a product
-- Morph as a separate assistant product
-- morphlings
+- alternate operator UIs
+- assistant-persona products
 - in-tree continuity or memory
-- multi-tenant or admin-node deployment
+- remote or multi-node deployment
 
 Historical roadmap material has been moved to the separate `ARCHIVED`
 repository. Continuity-specific planning now belongs in the separate
@@ -48,7 +47,7 @@ repository. Continuity-specific planning now belongs in the separate
 
 ### 4. Core simplification
 
-- continue removing retired Haven/Morph-era seams from active code and docs
+- continue removing retired legacy seams from active code and docs
 - keep Loopgate focused on governance, not assistant behavior or memory
 - reduce unnecessary dependencies and local-only baggage
 
