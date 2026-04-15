@@ -91,7 +91,7 @@ func TestCapabilityRequestValidate_DeniesUnsafeMetadataAndArgumentNames(t *testi
 	}
 
 	t.Run("decode_accepts_echoed_tool_name_then_normalize_strips", func(t *testing.T) {
-		raw := []byte(`{"request_id":"req_123","session_id":"control_123","actor":"haven","capability":"fs_list","arguments":{},"ToolName":"wrong.tool","tool_name":"also_wrong","toolName":"camel","tool_use_id":"u1","ToolUseID":"u2","tool_call_id":"c1","ToolCallID":"c2"}`)
+		raw := []byte(`{"request_id":"req_123","session_id":"control_123","actor":"operator","capability":"fs_list","arguments":{},"ToolName":"wrong.tool","tool_name":"also_wrong","toolName":"camel","tool_use_id":"u1","ToolUseID":"u2","tool_call_id":"c1","ToolCallID":"c2"}`)
 		var decoded CapabilityRequest
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.DisallowUnknownFields()
@@ -120,7 +120,7 @@ func TestCapabilityRequestValidate_DeniesUnsafeMetadataAndArgumentNames(t *testi
 		req := CapabilityRequest{
 			RequestID:                 "r1",
 			SessionID:                 "s1",
-			Actor:                     "haven",
+			Actor:                     "operator",
 			Capability:                "fs_list",
 			Arguments:                 map[string]string{},
 			EchoedNativeToolName:      "should_not_appear",

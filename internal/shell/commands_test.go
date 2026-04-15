@@ -627,7 +627,7 @@ func startTestLoopgate(t *testing.T, repoRoot string, policyYAML string) (*loopg
 
 func configureHavenSandboxSession(client *loopgate.Client, status loopgate.StatusResponse, sessionID string, hostRootPath string) {
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
-	client.ConfigureSession("haven", sessionID, capabilityNamesFromStatus(status))
+	client.ConfigureSession("operator", sessionID, capabilityNamesFromStatus(status))
 }
 
 func capabilityNamesFromStatus(status loopgate.StatusResponse) []string {

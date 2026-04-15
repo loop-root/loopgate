@@ -6,16 +6,16 @@ import (
 	"testing"
 )
 
-func TestNormalizeOperatorMountPathsForSession_rejectsNonHavenActor(t *testing.T) {
+func TestNormalizeOperatorMountPathsForSession_rejectsNonOperatorActor(t *testing.T) {
 	_, err := normalizeOperatorMountPathsForSession("other", []string{"/tmp"})
 	if err == nil {
-		t.Fatal("expected error for non-haven actor")
+		t.Fatal("expected error for non-operator actor")
 	}
 }
 
-func TestNormalizeOperatorMountPathsForSession_acceptsHaven(t *testing.T) {
+func TestNormalizeOperatorMountPathsForSession_acceptsOperator(t *testing.T) {
 	dir := t.TempDir()
-	out, err := normalizeOperatorMountPathsForSession("haven", []string{dir})
+	out, err := normalizeOperatorMountPathsForSession("operator", []string{dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,13 +31,20 @@ func TestNormalizeOperatorMountPathsForSession_acceptsHaven(t *testing.T) {
 	}
 }
 
+func TestNormalizeOperatorMountPathsForSession_acceptsLegacyHavenAlias(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := normalizeOperatorMountPathsForSession("haven", []string{dir}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestNormalizePrimaryOperatorMountPathForSession_acceptsMatchingMount(t *testing.T) {
 	dir := t.TempDir()
-	mounts, err := normalizeOperatorMountPathsForSession("haven", []string{dir})
+	mounts, err := normalizeOperatorMountPathsForSession("operator", []string{dir})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := normalizePrimaryOperatorMountPathForSession("haven", dir, mounts)
+	got, err := normalizePrimaryOperatorMountPathForSession("operator", dir, mounts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,11 +56,11 @@ func TestNormalizePrimaryOperatorMountPathForSession_acceptsMatchingMount(t *tes
 func TestNormalizePrimaryOperatorMountPathForSession_rejectsPathOutsideMounts(t *testing.T) {
 	dirA := t.TempDir()
 	dirB := t.TempDir()
-	mounts, err := normalizeOperatorMountPathsForSession("haven", []string{dirA})
+	mounts, err := normalizeOperatorMountPathsForSession("operator", []string{dirA})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := normalizePrimaryOperatorMountPathForSession("haven", dirB, mounts); err == nil {
+	if _, err := normalizePrimaryOperatorMountPathForSession("operator", dirB, mounts); err == nil {
 		t.Fatal("expected error for primary mount outside granted mounts")
 	}
 }

@@ -39,7 +39,7 @@ func TestSyncDefaultSharedFolderCreatesHostFolderAndMirrorsIntoSandbox(t *testin
 
 	response, err := server.syncDefaultSharedFolder(capabilityToken{
 		ControlSessionID:   "cs-test",
-		ActorLabel:         "haven",
+		ActorLabel:         "operator",
 		ClientSessionLabel: "session-test",
 	})
 	if err != nil {
@@ -154,7 +154,7 @@ func TestSyncDefaultSharedFolderRestoresPreviousMirrorWhenAuditFails(t *testing.
 
 	_, err := server.syncDefaultSharedFolder(capabilityToken{
 		ControlSessionID:   "cs-test",
-		ActorLabel:         "haven",
+		ActorLabel:         "operator",
 		ClientSessionLabel: "session-test",
 	})
 	if err == nil {
@@ -202,7 +202,7 @@ func TestUpdateFolderAccessPersistsGrantedPresetsAndHostDownloadsAccess(t *testi
 
 	statusResponse, err := server.updateFolderAccess(capabilityToken{
 		ControlSessionID:   "cs-test",
-		ActorLabel:         "haven",
+		ActorLabel:         "operator",
 		ClientSessionLabel: "session-test",
 	}, FolderAccessUpdateRequest{GrantedIDs: []string{"downloads"}})
 	if err != nil {
@@ -271,7 +271,7 @@ func TestSyncGrantedFolderAccessSkipsAuditUntilSourceChanges(t *testing.T) {
 	}
 	if _, err := server.updateFolderAccess(capabilityToken{
 		ControlSessionID:   "cs-test",
-		ActorLabel:         "haven",
+		ActorLabel:         "operator",
 		ClientSessionLabel: "session-test",
 	}, FolderAccessUpdateRequest{GrantedIDs: []string{"downloads"}}); err != nil {
 		t.Fatalf("seed folder access config: %v", err)
@@ -280,7 +280,7 @@ func TestSyncGrantedFolderAccessSkipsAuditUntilSourceChanges(t *testing.T) {
 	initialAuditCount := auditedEventCount
 	firstSync, err := server.syncGrantedFolderAccess(capabilityToken{
 		ControlSessionID:   "cs-test",
-		ActorLabel:         "haven",
+		ActorLabel:         "operator",
 		ClientSessionLabel: "session-test",
 	})
 	if err != nil {
@@ -299,7 +299,7 @@ func TestSyncGrantedFolderAccessSkipsAuditUntilSourceChanges(t *testing.T) {
 
 	secondSync, err := server.syncGrantedFolderAccess(capabilityToken{
 		ControlSessionID:   "cs-test",
-		ActorLabel:         "haven",
+		ActorLabel:         "operator",
 		ClientSessionLabel: "session-test",
 	})
 	if err != nil {

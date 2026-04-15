@@ -51,7 +51,7 @@ func TestExecuteHostPlanApply_UnknownPlanIDExplainsRecovery(t *testing.T) {
 		auditPath:               filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
 	}
 
-	tok := capabilityToken{ControlSessionID: "cs-1", ActorLabel: "haven", ClientSessionLabel: "cli-1"}
+	tok := capabilityToken{ControlSessionID: "cs-1", ActorLabel: "operator", ClientSessionLabel: "cli-1"}
 	req := CapabilityRequest{
 		RequestID:  "r1",
 		Capability: "host.plan.apply",
@@ -84,7 +84,7 @@ func TestExecuteHostPlanApply_DuplicateApplyAfterSuccessHintsAlreadyUsed(t *test
 		auditPath:               filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
 	}
 
-	tok := capabilityToken{ControlSessionID: "cs-1", ActorLabel: "haven", ClientSessionLabel: "cli-1"}
+	tok := capabilityToken{ControlSessionID: "cs-1", ActorLabel: "operator", ClientSessionLabel: "cli-1"}
 	req := CapabilityRequest{
 		RequestID:  "r2",
 		Capability: "host.plan.apply",
@@ -135,8 +135,8 @@ func TestExecuteCapabilityRequest_HostPlanApplyMoveOnlyWithinGrantedDownloadsByp
 		capabilityToken{
 			TokenID:             "tok-downloads-allow",
 			ControlSessionID:    "cs-downloads",
-			ActorLabel:          "haven",
-			ClientSessionLabel:  "haven-session",
+			ActorLabel:          "operator",
+			ClientSessionLabel:  "operator-session",
 			AllowedCapabilities: capabilitySet([]string{"host.plan.apply"}),
 			ExpiresAt:           server.now().UTC().Add(time.Hour),
 		},
@@ -196,8 +196,8 @@ func TestExecuteCapabilityRequest_HostPlanApplyOverwriteRiskStillRequiresApprova
 		capabilityToken{
 			TokenID:             "tok-downloads-approval",
 			ControlSessionID:    "cs-downloads",
-			ActorLabel:          "haven",
-			ClientSessionLabel:  "haven-session",
+			ActorLabel:          "operator",
+			ClientSessionLabel:  "operator-session",
 			AllowedCapabilities: capabilitySet([]string{"host.plan.apply"}),
 			ExpiresAt:           server.now().UTC().Add(time.Hour),
 		},
@@ -228,24 +228,24 @@ func newHostPlanApplyPolicyTestServer(t *testing.T, repoRoot string, homeDir str
 	policy.Tools.Filesystem.AllowedRoots = []string{"."}
 
 	server := &Server{
-		sandboxPaths:            sandbox.PathsForRepo(repoRoot),
-		hostAccessPlans:         make(map[string]*hostAccessStoredPlan),
-		hostAccessAppliedPlanAt: make(map[string]time.Time),
-		sessions:                make(map[string]controlSession),
-		tokens:                  make(map[string]capabilityToken),
-		approvals:               make(map[string]pendingApproval),
-		seenRequests:            make(map[string]seenRequest),
-		seenAuthNonces:          make(map[string]seenRequest),
-		usedTokens:              make(map[string]usedToken),
-		approvalTokenIndex:      make(map[string]string),
-		now:                     func() time.Time { return now },
-		appendAuditEvent:        func(string, ledger.Event) error { return nil },
-		auditPath:               filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
-		configStateDir:          filepath.Join(repoRoot, "runtime", "state"),
-		resolveUserHomeDir:      func() (string, error) { return homeDir, nil },
-		checker:                 policypkg.NewChecker(policy),
-		configuredCapabilities:  map[string]configuredCapability{},
-		maxTotalApprovalRecords: 128,
+		sandboxPaths:                         sandbox.PathsForRepo(repoRoot),
+		hostAccessPlans:                      make(map[string]*hostAccessStoredPlan),
+		hostAccessAppliedPlanAt:              make(map[string]time.Time),
+		sessions:                             make(map[string]controlSession),
+		tokens:                               make(map[string]capabilityToken),
+		approvals:                            make(map[string]pendingApproval),
+		seenRequests:                         make(map[string]seenRequest),
+		seenAuthNonces:                       make(map[string]seenRequest),
+		usedTokens:                           make(map[string]usedToken),
+		approvalTokenIndex:                   make(map[string]string),
+		now:                                  func() time.Time { return now },
+		appendAuditEvent:                     func(string, ledger.Event) error { return nil },
+		auditPath:                            filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
+		configStateDir:                       filepath.Join(repoRoot, "runtime", "state"),
+		resolveUserHomeDir:                   func() (string, error) { return homeDir, nil },
+		checker:                              policypkg.NewChecker(policy),
+		configuredCapabilities:               map[string]configuredCapability{},
+		maxTotalApprovalRecords:              128,
 		maxPendingApprovalsPerControlSession: 64,
 		maxSeenRequestReplayEntries:          defaultMaxSeenRequestReplayEntries,
 		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,

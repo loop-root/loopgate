@@ -25,6 +25,15 @@ func withOperatorMountControlSession(ctx context.Context, controlSessionID strin
 	return context.WithValue(ctx, operatorMountCtxKey{}, strings.TrimSpace(controlSessionID))
 }
 
+func isOperatorMountActor(actor string) bool {
+	switch defaultLabel(actor, "client") {
+	case "operator", "haven":
+		return true
+	default:
+		return false
+	}
+}
+
 // isDangerousOperatorMountPath mirrors the historical host deny list: system roots
 // that must not be granted as operator read roots.
 func isDangerousOperatorMountPath(abs string) bool {
@@ -74,15 +83,18 @@ func canonicalizeOperatorMountPath(raw string) (string, error) {
 	return filepath.Clean(resolved), nil
 }
 
-// normalizeOperatorMountPathsForSession validates and deduplicates paths for actor "haven" only.
+// normalizeOperatorMountPathsForSession validates and deduplicates paths for
+// operator-scoped sessions only. The legacy actor label "haven" remains
+// accepted as a compatibility alias while the current product surface prefers
+// the neutral label "operator".
 // Session-open still requires a server-side expected-client executable pin before these
 // mounts are accepted into authoritative control-session state.
 func normalizeOperatorMountPathsForSession(actor string, rawPaths []string) ([]string, error) {
 	if len(rawPaths) == 0 {
 		return nil, nil
 	}
-	if defaultLabel(actor, "client") != "haven" {
-		return nil, fmt.Errorf("operator_mount_paths is only accepted for actor haven")
+	if !isOperatorMountActor(actor) {
+		return nil, fmt.Errorf("operator_mount_paths is only accepted for actor operator")
 	}
 	if len(rawPaths) > maxOperatorMountPathsPerSession {
 		return nil, fmt.Errorf("operator_mount_paths: at most %d entries", maxOperatorMountPathsPerSession)
@@ -108,8 +120,8 @@ func normalizePrimaryOperatorMountPathForSession(actor string, rawPrimary string
 	if rawPrimary == "" {
 		return "", nil
 	}
-	if defaultLabel(actor, "client") != "haven" {
-		return "", fmt.Errorf("primary_operator_mount_path is only accepted for actor haven")
+	if !isOperatorMountActor(actor) {
+		return "", fmt.Errorf("primary_operator_mount_path is only accepted for actor operator")
 	}
 	if len(normalizedMounts) == 0 {
 		return "", fmt.Errorf("primary_operator_mount_path requires operator_mount_paths")

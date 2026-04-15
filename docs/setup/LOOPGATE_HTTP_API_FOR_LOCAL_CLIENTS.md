@@ -11,9 +11,13 @@ This document explains how a **local process** (Claude Code hook helper, native 
 **Normative details:** [RFC 0001: Loopgate Token and Request Integrity Policy](../rfcs/0001-loopgate-token-policy.md).  
 **Reference implementation:** `internal/loopgate/client.go` (Go) — match its wire behavior byte-for-byte when in doubt.
 
-### Neutral routes and the `haven` actor
+### Neutral routes and the `operator` actor
 
-The historical **`/v1/haven/...`** compatibility aliases are removed. The session **actor label `haven`** still appears in some repo types and docs as cleanup debt, but it is not part of the current Loopgate product boundary.
+The historical **`/v1/haven/...`** compatibility aliases are removed. The
+current Loopgate operator/session label is **`operator`**. The older actor
+label **`haven`** remains a compatibility alias in a few runtime paths, but it
+is not part of the current product boundary and should not be used by new
+clients.
 
 ---
 
@@ -98,9 +102,9 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 
 **Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch, or inability to resolve the connecting executable, returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable. Operator-mount bindings are rejected unless this pin is configured.
 
-**Legacy compatibility note:** some runtime and policy internals still use `haven`
-as a historical label. Treat that as cleanup debt, not as an active product
-surface or a route namespace.
+**Legacy compatibility note:** some runtime internals still accept `haven` as a
+compatibility actor label. Treat that as migration debt, not as an active
+product surface or route namespace.
 
 ---
 

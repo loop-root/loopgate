@@ -493,7 +493,7 @@ func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 
 	importDeniedClient := NewClient(client.socketPath)
 	importDeniedClient.SetOperatorMountPaths([]string{filepath.Dir(hostImportPath)}, filepath.Dir(hostImportPath))
-	importDeniedClient.ConfigureSession("haven", "sandbox-import-denied", []string{"fs_read"})
+	importDeniedClient.ConfigureSession("operator", "sandbox-import-denied", []string{"fs_read"})
 	if _, err := importDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied fs_write token: %v", err)
 	}
@@ -506,7 +506,7 @@ func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 
 	importAllowedClient := NewClient(client.socketPath)
 	importAllowedClient.SetOperatorMountPaths([]string{filepath.Dir(hostImportPath)}, filepath.Dir(hostImportPath))
-	importAllowedClient.ConfigureSession("haven", "sandbox-import-allowed", []string{"fs_write"})
+	importAllowedClient.ConfigureSession("operator", "sandbox-import-allowed", []string{"fs_write"})
 	if _, err := importAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure fs_write token: %v", err)
 	}

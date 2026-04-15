@@ -41,9 +41,12 @@ being moved to a separate `continuity` repo.
 
 ### Primary components
 
-- **Operator client** (IDE, HTTP local client, or in-repo **Wails reference** under `cmd/haven/`):
-  - handles prompt/model interaction, local state, and operator UX on the unprivileged side.
-  - Evidence (reference path): [main.go](../cmd/haven/main.go), [chat.go](../cmd/haven/chat.go), [commands.go](../internal/shell/commands.go).
+- **Operator client** (IDE, Claude hooks, HTTP local client, or a thin local
+  reference shell):
+  - handles prompt/model interaction, local state, and operator UX on the
+    unprivileged side.
+  - Evidence (reference path): [commands.go](../internal/shell/commands.go),
+    [client.go](../internal/loopgate/client.go).
 - **Loopgate** local control plane:
   - owns policy evaluation, approvals, capability execution, connection auth, provider token exchange, and UI-safe status/event APIs.
   - Evidence: [server.go](../internal/loopgate/server.go), [ui_server.go](../internal/loopgate/ui_server.go), [connections.go](../internal/loopgate/connections.go).
@@ -52,11 +55,14 @@ being moved to a separate `continuity` repo.
 ### Data flows and trust boundaries
 
 - Local operator input → operator client
-  - Data: natural-language prompts, slash commands, file paths, content, approval decisions.
-  - Channel: local UI or IDE; shell-backed commands run in-process on the reference Wails backend where used.
+  - Data: natural-language prompts, slash commands, file paths, content,
+    approval decisions.
+  - Channel: local UI or IDE; command helpers run in-process on the
+    unprivileged client side.
   - Security guarantees: local session ownership only; no intrinsic authentication beyond OS session.
   - Validation/normalization: shell parsing, typed Loopgate request construction, secret redaction before local audit.
-  - Evidence: [commands.go](../internal/shell/commands.go), [chat.go](../cmd/haven/chat.go), [main.go](../cmd/haven/main.go).
+  - Evidence: [commands.go](../internal/shell/commands.go),
+    [client.go](../internal/loopgate/client.go).
 - Operator client → Loopgate
   - Data: session-open requests, capability executions, approval decisions, UI status/event polling, PKCE start/complete, connection validation.
   - Channel: HTTP over Unix socket.
@@ -229,5 +235,7 @@ surfaces versus observability-only hook events, see
 
 - Loopgate session, capability, approval, connection, and UI endpoints covered.
 - Trust boundaries include local user/process → operator client → Loopgate → filesystem/providers/persistence → emerging bridge.
-- Any remaining Wails surface under `cmd/haven/` is reference-only and not part of the current product center; HTTP-on-socket clients and Claude Code hooks are the primary integration direction.
+- Any remaining local reference-shell work is secondary and not part of the
+  current product center; HTTP-on-socket clients and Claude Code hooks are the
+  primary integration direction.
 - Enterprise integration surfaces flagged for future threat-model expansion as implemented.

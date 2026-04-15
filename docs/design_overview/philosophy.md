@@ -10,9 +10,7 @@
 
 1. **Operator (human)** — intent, review, and explicit approval.
 2. **Client (IDE, CLI, native UI, or TUI shell)** — conversation, planning, rendering, and **unprivileged** session state.
-3. **Loopgate** — policy, tokens, secrets, sandbox mediation, morphling lifecycle, and **authoritative** audit for those actions.
-
-Morphlings are **not** a fourth public tier; they are **Loopgate-governed** workers with derived envelopes.
+3. **Loopgate** — policy, tokens, secrets, sandbox mediation, governed MCP mediation, and **authoritative** audit for those actions.
 
 ## Untrusted content by default
 
@@ -24,7 +22,9 @@ If a path, capability, or promotion is not explicitly allowed, it is denied. Fai
 
 ## Observable and bounded
 
-Security-relevant transitions should be **explainable**: typed denials, append-only history, separation between **operator-visible** ledgers and **internal** telemetry. Memory and recall stay **bounded** (sleep/wake, inspection, TCL governance)—not an unbounded transcript dump.
+Security-relevant transitions should be **explainable**: typed denials,
+append-only history, separation between **operator-visible** ledgers and
+**internal** telemetry.
 
 ## Local-first v1
 

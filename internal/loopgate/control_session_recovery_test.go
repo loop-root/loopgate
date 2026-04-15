@@ -86,12 +86,12 @@ func TestOpenSessionRetiresDeadPeerOrphanBeforeActiveLimit(t *testing.T) {
 	firstPeerIdentity := peerIdentity{UID: 501, PID: 4101, EPID: 4101}
 	secondPeerIdentity := peerIdentity{UID: 501, PID: 4102, EPID: 4102}
 
-	firstSession := openSessionWithPeer(t, server, firstPeerIdentity, "haven", "haven-launch-a")
+	firstSession := openSessionWithPeer(t, server, firstPeerIdentity, "operator", "operator-launch-a")
 	server.processExists = func(pid int) (bool, error) {
 		return pid != firstPeerIdentity.PID, nil
 	}
 
-	secondSession := openSessionWithPeer(t, server, secondPeerIdentity, "haven", "haven-launch-b")
+	secondSession := openSessionWithPeer(t, server, secondPeerIdentity, "operator", "operator-launch-b")
 
 	server.mu.Lock()
 	defer server.mu.Unlock()
@@ -115,7 +115,7 @@ func TestOpenSessionCancelsPendingApprovalsForDeadPeerOrphan(t *testing.T) {
 	firstPeerIdentity := peerIdentity{UID: 501, PID: 4201, EPID: 4201}
 	secondPeerIdentity := peerIdentity{UID: 501, PID: 4202, EPID: 4202}
 
-	firstSession := openSessionWithPeer(t, server, firstPeerIdentity, "haven", "haven-launch-a")
+	firstSession := openSessionWithPeer(t, server, firstPeerIdentity, "operator", "operator-launch-a")
 	server.mu.Lock()
 	server.approvals["approval-orphan"] = pendingApproval{
 		ID:               "approval-orphan",
@@ -129,8 +129,8 @@ func TestOpenSessionCancelsPendingApprovalsForDeadPeerOrphan(t *testing.T) {
 		},
 		ExecutionContext: approvalExecutionContext{
 			ControlSessionID:   firstSession.ControlSessionID,
-			ActorLabel:         "haven",
-			ClientSessionLabel: "haven-launch-a",
+			ActorLabel:         "operator",
+			ClientSessionLabel: "operator-launch-a",
 		},
 	}
 	server.mu.Unlock()
@@ -138,7 +138,7 @@ func TestOpenSessionCancelsPendingApprovalsForDeadPeerOrphan(t *testing.T) {
 	server.processExists = func(pid int) (bool, error) {
 		return pid != firstPeerIdentity.PID, nil
 	}
-	openSessionWithPeer(t, server, secondPeerIdentity, "haven", "haven-launch-b")
+	openSessionWithPeer(t, server, secondPeerIdentity, "operator", "operator-launch-b")
 
 	server.mu.Lock()
 	approvalRecord, found := server.approvals["approval-orphan"]
@@ -162,7 +162,7 @@ func TestOpenSessionOrphanRecoveryFailsClosedOnAuditFailure(t *testing.T) {
 	firstPeerIdentity := peerIdentity{UID: 501, PID: 4401, EPID: 4401}
 	secondPeerIdentity := peerIdentity{UID: 501, PID: 4402, EPID: 4402}
 
-	firstSession := openSessionWithPeer(t, server, firstPeerIdentity, "haven", "haven-launch-a")
+	firstSession := openSessionWithPeer(t, server, firstPeerIdentity, "operator", "operator-launch-a")
 	server.processExists = func(pid int) (bool, error) {
 		return pid != firstPeerIdentity.PID, nil
 	}
@@ -175,7 +175,7 @@ func TestOpenSessionOrphanRecoveryFailsClosedOnAuditFailure(t *testing.T) {
 		return originalAppendAuditEvent(ledgerPath, auditEvent)
 	}
 
-	recorder := doSessionOpenWithPeer(t, server, secondPeerIdentity, "haven", "haven-launch-b")
+	recorder := doSessionOpenWithPeer(t, server, secondPeerIdentity, "operator", "operator-launch-b")
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected orphan recovery failure to fail closed with 503, got %d body=%s", recorder.Code, recorder.Body.String())
 	}

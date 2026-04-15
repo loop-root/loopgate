@@ -1432,7 +1432,7 @@ func TestClientExecuteCapability_RequiresApproval(t *testing.T) {
 	}
 }
 
-func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForHaven(t *testing.T) {
+func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForOperator(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 	resolvedRepoRoot, err := filepath.EvalSymlinks(repoRoot)
@@ -1444,8 +1444,8 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForHaven(t *
 	server.mu.Lock()
 	server.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
-		ActorLabel:               "haven",
-		ClientSessionLabel:       "haven-session",
+		ActorLabel:               "operator",
+		ClientSessionLabel:       "operator-session",
 		OperatorMountPaths:       []string{resolvedRepoRoot},
 		PrimaryOperatorMountPath: resolvedRepoRoot,
 		RequestedCapabilities:    capabilitySet([]string{"operator_mount.fs_write"}),
@@ -1459,8 +1459,8 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForHaven(t *
 		capabilityToken{
 			TokenID:             "tok-operator-mount-write",
 			ControlSessionID:    controlSessionID,
-			ActorLabel:          "haven",
-			ClientSessionLabel:  "haven-session",
+			ActorLabel:          "operator",
+			ClientSessionLabel:  "operator-session",
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           time.Now().UTC().Add(time.Hour),
 		},
@@ -1519,8 +1519,8 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 	server.mu.Lock()
 	server.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
-		ActorLabel:               "haven",
-		ClientSessionLabel:       "haven-session",
+		ActorLabel:               "operator",
+		ClientSessionLabel:       "operator-session",
 		OperatorMountPaths:       []string{repoRoot},
 		PrimaryOperatorMountPath: repoRoot,
 		RequestedCapabilities:    capabilitySet([]string{"operator_mount.fs_write"}),
@@ -1534,8 +1534,8 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 		capabilityToken{
 			TokenID:             "tok-operator-mount-write",
 			ControlSessionID:    controlSessionID,
-			ActorLabel:          "haven",
-			ClientSessionLabel:  "haven-session",
+			ActorLabel:          "operator",
+			ClientSessionLabel:  "operator-session",
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           nowUTC.Add(time.Hour),
 		},
@@ -1577,8 +1577,8 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 		capabilityToken{
 			TokenID:             "tok-operator-mount-write-2",
 			ControlSessionID:    controlSessionID,
-			ActorLabel:          "haven",
-			ClientSessionLabel:  "haven-session",
+			ActorLabel:          "operator",
+			ClientSessionLabel:  "operator-session",
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           nowUTC.Add(time.Hour),
 		},
@@ -1615,8 +1615,8 @@ func TestExecuteCapabilityRequest_ExpiredOperatorMountWriteGrantRequiresApproval
 	server.mu.Lock()
 	server.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
-		ActorLabel:               "haven",
-		ClientSessionLabel:       "haven-session",
+		ActorLabel:               "operator",
+		ClientSessionLabel:       "operator-session",
 		OperatorMountPaths:       []string{repoRoot},
 		PrimaryOperatorMountPath: repoRoot,
 		OperatorMountWriteGrants: map[string]time.Time{
@@ -1633,8 +1633,8 @@ func TestExecuteCapabilityRequest_ExpiredOperatorMountWriteGrantRequiresApproval
 		capabilityToken{
 			TokenID:             "tok-operator-mount-expired",
 			ControlSessionID:    controlSessionID,
-			ActorLabel:          "haven",
-			ClientSessionLabel:  "haven-session",
+			ActorLabel:          "operator",
+			ClientSessionLabel:  "operator-session",
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           nowUTC.Add(time.Hour),
 		},
@@ -1691,8 +1691,8 @@ func TestNewServer_IgnoresStalePolicyJSONForOperatorMountWriteApproval(t *testin
 	server.mu.Lock()
 	server.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
-		ActorLabel:               "haven",
-		ClientSessionLabel:       "haven-session",
+		ActorLabel:               "operator",
+		ClientSessionLabel:       "operator-session",
 		OperatorMountPaths:       []string{repoRoot},
 		PrimaryOperatorMountPath: repoRoot,
 		RequestedCapabilities:    capabilitySet([]string{"operator_mount.fs_write"}),
@@ -1706,8 +1706,8 @@ func TestNewServer_IgnoresStalePolicyJSONForOperatorMountWriteApproval(t *testin
 		capabilityToken{
 			TokenID:             "tok-stale-policy-json",
 			ControlSessionID:    controlSessionID,
-			ActorLabel:          "haven",
-			ClientSessionLabel:  "haven-session",
+			ActorLabel:          "operator",
+			ClientSessionLabel:  "operator-session",
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           nowUTC.Add(time.Hour),
 		},
@@ -1736,9 +1736,9 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 	}
 	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
-	client.ConfigureSession("haven", "haven-sandbox-flow", advertisedSessionCapabilityNames(status))
+	client.ConfigureSession("operator", "operator-sandbox-flow", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure haven sandbox token: %v", err)
+		t.Fatalf("ensure operator sandbox token: %v", err)
 	}
 
 	hostSourcePath := filepath.Join(hostRootPath, "example.txt")
@@ -1846,9 +1846,9 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 func TestSandboxImportRequiresBoundOperatorMountPath(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	client.ConfigureSession("haven", "haven-sandbox-import-unbound", advertisedSessionCapabilityNames(status))
+	client.ConfigureSession("operator", "operator-sandbox-import-unbound", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure haven sandbox token: %v", err)
+		t.Fatalf("ensure operator sandbox token: %v", err)
 	}
 
 	hostSourcePath := filepath.Join(t.TempDir(), "example.txt")
@@ -1874,9 +1874,9 @@ func TestSandboxExportRequiresOperatorMountWriteGrant(t *testing.T) {
 	hostRootPath := t.TempDir()
 	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
-	client.ConfigureSession("haven", "haven-sandbox-export-needs-grant", advertisedSessionCapabilityNames(status))
+	client.ConfigureSession("operator", "operator-sandbox-export-needs-grant", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure haven sandbox token: %v", err)
+		t.Fatalf("ensure operator sandbox token: %v", err)
 	}
 
 	hostSourcePath := filepath.Join(hostRootPath, "example.txt")
@@ -2036,9 +2036,9 @@ func TestSandboxExportDeniesNonOutputsPath(t *testing.T) {
 	hostRootPath := t.TempDir()
 	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
-	client.ConfigureSession("haven", "haven-sandbox-export-non-outputs", advertisedSessionCapabilityNames(status))
+	client.ConfigureSession("operator", "operator-sandbox-export-non-outputs", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure haven sandbox token: %v", err)
+		t.Fatalf("ensure operator sandbox token: %v", err)
 	}
 
 	hostSourcePath := filepath.Join(hostRootPath, "example.txt")
@@ -2070,9 +2070,9 @@ func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 	hostRootPath := t.TempDir()
 	pinTestProcessAsExpectedClient(t, server)
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
-	client.ConfigureSession("haven", "haven-sandbox-export-orphan", advertisedSessionCapabilityNames(status))
+	client.ConfigureSession("operator", "operator-sandbox-export-orphan", advertisedSessionCapabilityNames(status))
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure haven sandbox token: %v", err)
+		t.Fatalf("ensure operator sandbox token: %v", err)
 	}
 	orphanPath := filepath.Join(server.sandboxPaths.Home, "outputs", "orphan.txt")
 	if err := os.MkdirAll(filepath.Dir(orphanPath), 0o700); err != nil {
@@ -4475,7 +4475,7 @@ func TestOpenSessionRejectsOperatorMountBindingWithoutExpectedClientPin(t *testi
 	hostRootPath := t.TempDir()
 
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
-	client.ConfigureSession("haven", "haven-operator-mount-unpinned", []string{"fs_list"})
+	client.ConfigureSession("operator", "operator-mount-unpinned", []string{"fs_list"})
 	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeControlSessionBindingInvalid) {
 		t.Fatalf("expected operator mount binding denial without expected client pin, got %v", err)
 	}
