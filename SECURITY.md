@@ -1,8 +1,8 @@
 # Security Policy
 
-Loopgate is an experimental, security-sensitive project.
-
-Use it at your own risk. The software is provided on an "as is" basis under the project license, and the architecture is still being hardened.
+Loopgate is an experimental, security-sensitive project. The software is
+licensed under Apache License 2.0 and is provided on an "as is" basis. The
+architecture is still being hardened.
 
 ## Reporting a vulnerability
 
@@ -29,4 +29,5 @@ The highest-priority security issues are:
 
 ## Supported versions
 
-There is no formal stable release line yet. Assume only the current main branch is supported.
+There is no formal stable release line yet. Assume only the current `main`
+branch is supported.

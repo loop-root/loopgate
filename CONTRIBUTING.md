@@ -4,6 +4,9 @@ Loopgate is a security-sensitive project.
 
 Contributions are welcome, but correctness, security, determinism, and auditability matter more than convenience.
 
+By submitting a contribution, you agree that it may be distributed under the
+Apache License, Version 2.0 used by this repository.
+
 ## Before opening a PR
 
 - read [README.md](./README.md)
@@ -44,6 +47,12 @@ Be ready to explain:
 1. Run `go test ./...`
 2. For concurrency-sensitive changes, also run `go test -race ./...`
 3. Update docs when changing trust boundaries, policy behavior, setup, or operator-visible commands
+
+## Scope and professionalism
+
+- keep the active repo centered on the current Loopgate product only
+- move stale planning, generated reports, and historical product material into `ARCHIVED` or `continuity`
+- prefer clear public-facing documentation over internal shorthand or migration notes
 
 ## Repo hygiene
 

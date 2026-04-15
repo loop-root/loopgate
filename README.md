@@ -14,6 +14,13 @@ Current product scope:
 
 This repository documents and ships a single product: **Loopgate**.
 
+## Project status
+
+- security-sensitive and experimental
+- local-first
+- governance-focused
+- not yet a stable compatibility target
+
 ## What Loopgate does
 
 Most AI harnesses give the model broad ambient authority and rely on prompt discipline to keep it safe.
@@ -131,3 +138,9 @@ repository.
 Experimental and under active hardening.
 
 For current behavior, prefer the operator-facing docs in [docs/](/Users/adalaide/Dev/loopgate/docs), the running code, and the signed policy files under [core/policy/](/Users/adalaide/Dev/loopgate/core/policy). Historical material lives in the `ARCHIVED` and `continuity` sibling repos.
+
+## License
+
+Loopgate is licensed under the Apache License, Version 2.0. See
+[LICENSE](/Users/adalaide/Dev/loopgate/LICENSE) and
+[NOTICE](/Users/adalaide/Dev/loopgate/NOTICE).
