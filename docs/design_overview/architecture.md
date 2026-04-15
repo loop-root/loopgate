@@ -15,9 +15,9 @@ The active product is deliberately narrow:
 - sandbox mediation
 - request-driven governed MCP broker flows
 
-The in-tree continuity and memory subsystem is no longer part of Loopgate's
-active architecture. It is being re-homed into a separate sibling repository
-named `continuity`.
+The in-tree continuity and memory subsystem is not part of Loopgate's active
+architecture. That work lives in the separate sibling repository named
+`continuity`.
 
 ## 1) Current system classification
 
@@ -30,8 +30,8 @@ As of **2026-04-14**, the implemented and supported shape is:
 - append-only audit
 - request-driven authority
 
-This document intentionally describes the current shipped direction, not older
-Haven/Morph framing and not speculative distributed deployment.
+This document describes the current shipped direction, not retired product
+experiments and not speculative deployment profiles.
 
 ## 2) High-level execution model
 
@@ -77,9 +77,8 @@ Loopgate owns:
 
 ### Continuity
 
-Continuity is no longer part of the active Loopgate kernel. Historical
-continuity/memory references in older docs should be read as extraction history,
-not current architecture.
+Continuity is outside the active Loopgate kernel. Any continuity-specific design
+work belongs in the separate `continuity` repo rather than this one.
 
 ## 4) Trust boundaries
 

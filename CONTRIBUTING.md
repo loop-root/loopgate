@@ -25,7 +25,7 @@ Contributions are welcome, but correctness, security, determinism, and auditabil
 
 - use idiomatic Go MixedCaps for in-process identifiers (`tenantID`, `ControlSessionID`, `ApprovalRequestID`)
 - use explicit snake_case for JSON and YAML boundary fields (`tenant_id`, `control_session_id`, `approval_request_id`)
-- prefer project-native nouns like `capability`, `approval`, `control session`, `quarantine`, `promotion`, `morphling`, and `audit`
+- prefer project-native nouns like `capability`, `approval`, `control session`, `quarantine`, `promotion`, `sandbox`, and `audit`
 - name derived views like derived views; do not name projections or summaries as if they were authoritative state
 - if a function verifies, signs, redacts, quarantines, or promotes, say that in the name
 

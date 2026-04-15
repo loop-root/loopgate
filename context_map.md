@@ -9,7 +9,9 @@ Its goals:
 - call out the non-negotiable invariants
 - separate real source from generated, runtime, local-only, or legacy paths
 
-If this file disagrees with code, the code wins. If this file disagrees with the security constitution in `AGENTS.md` (repo root) or `AGENTS/AGENTS.md` (local-only), the agent guidance wins on safety and authority rules.
+If this file disagrees with code, the code wins. If this file disagrees with
+the security constitution in `AGENTS.md`, the agent guidance wins on safety and
+authority rules.
 
 ## Project in One Paragraph
 
@@ -71,18 +73,15 @@ If you are new to the repo, read in this order:
 
 1. `README.md`
 2. `AGENTS.md` (repo root; tracked) — security constitution and system model
-3. `AGENTS/AGENTS.md` (optional local copy under ignored `AGENTS/`)
-4. `AGENTS/ARCHITECTURE.md` — enterprise architecture, deployment models, component boundaries
-5. `AGENTS/BUILD_NOW.md` — current implementation slice and priorities
-6. `internal/loopgate/server.go` — central authority runtime: server construction, serve loop, and capability execution core
-7. `internal/loopgate/loopgate_map.md` — current module map for the split Loopgate package
-8. `docs/setup/OPERATOR_GUIDE.md` — active local operator workflow
-9. `docs/plans/` — session handoff docs (if present)
+3. `docs/design_overview/architecture.md` — product architecture and component boundaries
+4. `internal/loopgate/server.go` — central authority runtime: server construction, serve loop, and capability execution core
+5. `internal/loopgate/loopgate_map.md` — current module map for the split Loopgate package
+6. `docs/setup/OPERATOR_GUIDE.md` — active local operator workflow
 
 Notes:
 
-- `AGENTS.md` at the repo root is the tracked security constitution; `AGENTS/` is a local-only directory (gitignored). It may not exist on every clone.
-- The current direction is **Claude Code hooks**, **HTTP-native integrations**, and a thinner local-first governance kernel; **proxy mode is dropped** and **in-tree MCP remains deprecated**.
+- `AGENTS.md` at the repo root is the tracked security constitution.
+- The current direction is **Claude Code hooks**, **HTTP-native integrations**, and a thinner local-first governance kernel.
 
 ## Top-Level Map
 
@@ -108,20 +107,14 @@ Important interpretation:
 - `runtime/` is local machine state, not source.
 - local build outputs or stray binaries should be treated as untracked machine state, not part of the product.
 
-## Where the Agent Files Live
+## Agent Guidance
 
-Local agent guidance may live in:
+The tracked contributor and agent guidance for this repo lives in:
 
 - `AGENTS.md` (repo root)
-- `AGENTS/AGENTS.md`, `AGENTS/ARCHITECTURE.md`, `AGENTS/BUILD_NOW.md` (when `AGENTS/` exists locally)
 
-These are useful because they capture:
-
-- the security constitution
-- enterprise architecture notes (when present)
-- the current implementation slice
-
-They are local/ignored rather than core product docs, so do not assume every clone or CI environment has them.
+Historical planning or local-only working notes should not be treated as active
+product docs.
 
 ## Entrypoints
 
@@ -280,7 +273,7 @@ Goal alias mapping used by the system.
 
 For a **folder-by-folder overview** of `docs/`, see `docs/docs_map.md`. Agent phase reports for the master implementation plan live under `docs/superpowers/reports/` (see `docs_map.md`).
 
-**Execution roadmap:** `sprints/` (repo root) — timestamped phased plans with exit criteria; start with `sprints/README.md`.
+**Execution roadmap:** active repo direction lives in `docs/roadmap/roadmap.md`.
 
 **Architecture Decision Records:** `docs/adr/` — short, dated decisions (tradeoffs + escape hatches); index in `docs/adr/README.md`.
 

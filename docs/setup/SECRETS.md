@@ -181,9 +181,14 @@ Loopgate needs the same **pluggability** for organizational secret systems as fo
 
 **Intended shape:** extend the existing **`SecretStore`** / `SecretRef.Backend` model (`internal/secrets/types.go`) with explicit backends or adapters, operator runbooks (paths, IAM, least privilege, rotation), and ADRs for ordering (e.g. Vault before niche HSM profiles). Resolution stays **inside Loopgate**; IDEs and other clients do not receive raw long-lived secrets.
 
-**Sequencing:** documented in `sprints/2026-04-01-loopgate-enterprise-phased-plan.md` § *Future enterprise integration layers*. Single-org local nodes can keep OS keyrings; **tenant-scoped secret keys** become necessary when multiple orgs share one runtime (e.g. hosted multi-tenant).
+**Sequencing:** for the current local-first product, OS keyrings remain the
+right default. If Loopgate later grows a hosted or multi-org deployment
+profile, tenant-scoped secret keys and stronger backend separation become
+mandatory rather than optional.
 
-**Identity counterpart:** organizational **IdP via OIDC/OAuth** (admin / node bootstrap) is the parallel track — see the same sprint section and `AGENTS/BUILD_NOW.md` (*Explicitly out of scope* lists IdP until the tenancy/session model is stable).
+**Identity counterpart:** organizational **IdP via OIDC/OAuth** for any future
+admin or node-bootstrap flow should be designed alongside that broader
+deployment model. It is not part of the current local-first Loopgate surface.
 
 ## 3) Ledger-safe secret audit path
 

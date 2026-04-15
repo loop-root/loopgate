@@ -12,8 +12,7 @@ Current product scope:
 
 **Current MVP harness:** **Claude Code + project hooks + Loopgate**
 
-This repository is being trimmed toward a single product: **Loopgate**.
-It is **not** currently presenting retired product lines or distributed deployment as the active product story.
+This repository documents and ships a single product: **Loopgate**.
 
 ## What Loopgate does
 
@@ -111,13 +110,10 @@ docs/                      setup, operator docs, architecture, cleanup plan
 runtime/                   local state and logs (fully gitignored)
 ```
 
-## Continuity split
+## Related repositories
 
-Loopgate no longer carries the memory and continuity subsystem as part of its
-active product surface.
-
-That work is being re-homed into a separate sibling repository named
-`continuity`, so Loopgate can stay focused on:
+Loopgate’s memory and continuity work now lives in the separate sibling
+repository named `continuity`, so this repo can stay focused on:
 
 - policy
 - approvals
@@ -126,28 +122,12 @@ That work is being re-homed into a separate sibling repository named
 - sandbox mediation
 - governed MCP broker flows
 
-If older docs mention in-tree memory, wake-state, distillates, or memorybench,
-read them as historical material unless they have been explicitly rewritten.
-Historical docs that were no longer current have been moved to the separate
-`ARCHIVED` repository.
-
-## Cleanup direction
-
-The repository is actively being simplified toward a thinner, easier-to-audit Loopgate core.
-
-Tracked cleanup plan:
-- [Loopgate cleanup plan](./docs/roadmap/loopgate_cleanup_plan.md)
-
-Current cleanup priorities:
-- remove stale historical framing from active docs and defaults
-- add real operator docs and troubleshooting docs
-- archive or trim legacy worker/runtime and old UI references
-- finish rewriting or archiving docs that still describe extracted continuity work as part of Loopgate
-- sweep tracked docs and defaults for hardcoded local paths and stale runtime data
-- harden the local audit story further, including ledger replacement/tamper gaps
+Historical design notes and older product planning that no longer describe the
+current Loopgate product have been moved to the separate `ARCHIVED`
+repository.
 
 ## Status
 
-Experimental and under active cleanup/hardening.
+Experimental and under active hardening.
 
-The repo currently contains legacy and forward-looking material that is being trimmed back. When docs disagree, prefer the current operator-facing docs and the running code, then file follow-up cleanup work.
+For current behavior, prefer the operator-facing docs in [docs/](/Users/adalaide/Dev/loopgate/docs), the running code, and the signed policy files under [core/policy/](/Users/adalaide/Dev/loopgate/core/policy). Historical material lives in the `ARCHIVED` and `continuity` sibling repos.

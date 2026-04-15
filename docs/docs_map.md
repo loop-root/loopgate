@@ -12,9 +12,10 @@ Timestamped decisions (context, tradeoff, escape hatch). **Index:** `docs/adr/RE
 
 Historical reports, legacy product RFCs, AMP/TCL material, and extracted continuity design docs have been moved to the separate `ARCHIVED` repository.
 
-## Implementation sprints (repo root `sprints/`)
+## Archived planning
 
-Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/20*-*.md` file.
+Historical sprint plans and phased execution notes have been moved to the
+separate `ARCHIVED` repository.
 
 ## Architecture (`docs/design_overview/`)
 
@@ -48,7 +49,7 @@ Phased execution plans. **Start:** `sprints/README.md` and the latest `sprints/2
 
 Historical benchmark and extracted-subsystem notes now live in the separate `ARCHIVED` repository.
 
-## Archived planning and sprint notes
+## Archived planning and reports
 
 Historical agent plans, sprint notes, and extracted subsystem reports now live
 in the separate `ARCHIVED` repository under `ARCHIVED/docs/`.

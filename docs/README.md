@@ -2,7 +2,7 @@
 
 # Docs Index
 
-This repository is being normalized around a single product:
+This repository documents a single product:
 
 **Loopgate** — a local-first governance layer that tracks and constrains what your AI is doing on your machine.
 
@@ -14,9 +14,9 @@ The current active story is:
 - local audit
 - governed local MCP/runtime work
 
-The docs still contain older architectural notes, extracted continuity material,
-and future-facing deployment ideas. Those are being trimmed or archived. Use
-the documents below as the current source of truth for the active product.
+Use the documents below as the current source of truth for the active product.
+Historical material has been moved to the `ARCHIVED` or `continuity` sibling
+repositories.
 
 ## Start here
 
@@ -44,16 +44,8 @@ the documents below as the current source of truth for the active product.
 - [Secrets](./setup/SECRETS.md)
 - [Tool usage](./setup/TOOL_USAGE.md)
 
-## Cleanup / archive note
+## Historical material
 
-Historical material has been moved into the separate `ARCHIVED` repository.
-Not all remaining docs under `docs/` reflect the current product boundary.
-
-Known categories under cleanup:
-- legacy product and worker/runtime language
-- remaining continuity and memory references that still need cleanup in active docs
-- distributed-deployment forward-looking material
-- docs containing hardcoded local filesystem paths
-
-That cleanup is being tracked in:
-- [Loopgate cleanup plan](./roadmap/loopgate_cleanup_plan.md)
+Older product notes, extracted continuity design docs, sprint plans, and review
+artifacts live in the separate `ARCHIVED` and `continuity` sibling
+repositories.
