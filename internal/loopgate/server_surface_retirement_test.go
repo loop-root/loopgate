@@ -14,8 +14,6 @@ func TestNewServerWithOptions_InitializesWithoutAdminSurface(t *testing.T) {
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
-
 	socketFile, err := os.CreateTemp("", "loopgate-*.sock")
 	if err != nil {
 		t.Fatalf("create temp socket file: %v", err)

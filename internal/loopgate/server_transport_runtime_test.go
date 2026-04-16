@@ -52,8 +52,6 @@ func TestHTTPStatusForResponseMapsTypedCapabilityResponses(t *testing.T) {
 func TestServerConnContextReportsPeerCredentialFailure(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
-
 	server, err := NewServer(repoRoot, filepath.Join(t.TempDir(), "loopgate.sock"))
 	if err != nil {
 		t.Fatalf("new server: %v", err)

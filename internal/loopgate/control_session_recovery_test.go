@@ -19,8 +19,6 @@ func newControlSessionRecoveryTestServer(t *testing.T, repoRoot string) *Server 
 	t.Helper()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
-
 	server, err := NewServer(repoRoot, filepath.Join(t.TempDir(), "loopgate.sock"))
 	if err != nil {
 		t.Fatalf("new server: %v", err)

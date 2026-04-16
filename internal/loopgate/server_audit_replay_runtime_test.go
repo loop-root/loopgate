@@ -382,7 +382,6 @@ func TestLogEventWritesVerifiableAuditChain(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -422,7 +421,6 @@ func TestHookPreValidateWritesAuditSequenceMetadata(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)

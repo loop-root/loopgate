@@ -35,8 +35,6 @@ func TestRunTrustCheck_UsesRunningLoopgateServer(t *testing.T) {
 	if err := policySigner.WriteSignedPolicyYAML(repoRoot, "version: \"1\"\n"); err != nil {
 		t.Fatalf("write signed policy yaml: %v", err)
 	}
-	writeTestMorphlingClassPolicy(t, repoRoot)
-
 	runtimeConfig := config.DefaultRuntimeConfig()
 	runtimeConfig.Logging.AuditExport.Enabled = true
 	runtimeConfig.Logging.AuditExport.DestinationKind = "admin_node"
@@ -191,61 +189,4 @@ func generateAuditExportTestCertificates(t *testing.T) auditExportTestCertificat
 		ClientCertificatePEM: clientCertificatePEM,
 		ClientPrivateKeyPEM:  clientPrivateKeyPEM,
 	}
-}
-
-func writeTestMorphlingClassPolicy(t *testing.T, repoRoot string) {
-	t.Helper()
-	_ = repoRoot
-}
-
-func defaultTestMorphlingClassPolicyYAML() string {
-	return "version: \"1\"\n\n" +
-		"classes:\n" +
-		"  - name: reviewer\n" +
-		"    description: \"Read-only analysis\"\n" +
-		"    capabilities:\n" +
-		"      allowed:\n" +
-		"        - fs_list\n" +
-		"        - fs_read\n" +
-		"    sandbox:\n" +
-		"      allowed_zones:\n" +
-		"        - imports\n" +
-		"        - scratch\n" +
-		"        - workspace\n" +
-		"    resource_limits:\n" +
-		"      max_time_seconds: 300\n" +
-		"      max_tokens: 50000\n" +
-		"      max_disk_bytes: 52428800\n" +
-		"    ttl:\n" +
-		"      spawn_approval_ttl_seconds: 300\n" +
-		"      capability_token_ttl_seconds: 360\n" +
-		"      review_ttl_seconds: 86400\n" +
-		"    spawn_requires_approval: false\n" +
-		"    completion_requires_review: true\n" +
-		"    max_concurrent: 3\n" +
-		"  - name: editor\n" +
-		"    description: \"Read and write files\"\n" +
-		"    capabilities:\n" +
-		"      allowed:\n" +
-		"        - fs_list\n" +
-		"        - fs_read\n" +
-		"        - fs_write\n" +
-		"    sandbox:\n" +
-		"      allowed_zones:\n" +
-		"        - agents\n" +
-		"        - imports\n" +
-		"        - outputs\n" +
-		"        - scratch\n" +
-		"        - workspace\n" +
-		"    resource_limits:\n" +
-		"      max_time_seconds: 600\n" +
-		"      max_tokens: 100000\n" +
-		"      max_disk_bytes: 104857600\n" +
-		"    ttl:\n" +
-		"      spawn_approval_ttl_seconds: 300\n" +
-		"      capability_token_ttl_seconds: 660\n" +
-		"      review_ttl_seconds: 86400\n" +
-		"    spawn_requires_approval: true\n" +
-		"    completion_requires_review: true\n" +
-		"    max_concurrent: 2\n"
 }

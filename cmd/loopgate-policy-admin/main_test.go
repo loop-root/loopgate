@@ -236,7 +236,6 @@ func TestRunApply_HotReloadsSignedPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
 	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
-	writeTestMorphlingClassPolicyFixture(t, repoRoot)
 	initialPolicy, err := loadPolicyDocument(repoRoot, "", "")
 	if err != nil {
 		t.Fatalf("load initial policy: %v", err)
@@ -294,7 +293,6 @@ func TestRunApply_WithVerifySetup_HotReloadsSignedPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
 	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
-	writeTestMorphlingClassPolicyFixture(t, repoRoot)
 	initialPolicy, err := loadPolicyDocument(repoRoot, "", "")
 	if err != nil {
 		t.Fatalf("load initial policy: %v", err)
@@ -344,12 +342,8 @@ func TestRunApply_FailsWhenServerReloadsDifferentPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
 	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
-	writeTestMorphlingClassPolicyFixture(t, repoRoot)
-
 	serverRepoRoot := t.TempDir()
 	signerFixture.writeSignedPolicy(t, serverRepoRoot, strictMVPPresetTemplate)
-	writeTestMorphlingClassPolicyFixture(t, serverRepoRoot)
-
 	socketPath := newTempSocketPath(t)
 	startPolicyAdminTestServer(t, serverRepoRoot, socketPath)
 
@@ -426,11 +420,6 @@ func startPolicyAdminTestServer(t *testing.T, repoRoot string, socketPath string
 	t.Fatal("timed out waiting for loopgate test server health")
 }
 
-func writeTestMorphlingClassPolicyFixture(t *testing.T, repoRoot string) {
-	t.Helper()
-	_ = repoRoot
-}
-
 func newTempSocketPath(t *testing.T) string {
 	t.Helper()
 
@@ -459,31 +448,4 @@ func writePEMEncodedEd25519PrivateKey(t *testing.T, path string, privateKey ed25
 	if err := os.WriteFile(path, privateKeyPEM, permissions); err != nil {
 		t.Fatalf("write private key: %v", err)
 	}
-}
-
-func defaultTestMorphlingClassPolicyYAML() string {
-	return "version: \"1\"\n\n" +
-		"classes:\n" +
-		"  - name: reviewer\n" +
-		"    description: \"Read-only analysis\"\n" +
-		"    capabilities:\n" +
-		"      allowed:\n" +
-		"        - fs_list\n" +
-		"        - fs_read\n" +
-		"    sandbox:\n" +
-		"      allowed_zones:\n" +
-		"        - imports\n" +
-		"        - scratch\n" +
-		"        - workspace\n" +
-		"    resource_limits:\n" +
-		"      max_time_seconds: 300\n" +
-		"      max_tokens: 50000\n" +
-		"      max_disk_bytes: 52428800\n" +
-		"    ttl:\n" +
-		"      spawn_approval_ttl_seconds: 300\n" +
-		"      capability_token_ttl_seconds: 360\n" +
-		"      review_ttl_seconds: 86400\n" +
-		"    spawn_requires_approval: false\n" +
-		"    completion_requires_review: true\n" +
-		"    max_concurrent: 3\n"
 }

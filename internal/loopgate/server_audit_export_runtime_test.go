@@ -27,7 +27,6 @@ func TestNewServerWithOptions_SeedsAuditExportStateWhenEnabled(t *testing.T) {
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -82,7 +81,6 @@ func TestPrepareNextAuditExportBatch_ReadsAcrossSegmentsAndActiveLedger(t *testi
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -163,7 +161,6 @@ func TestPrepareNextAuditExportBatch_AdvancesAfterMarkedSuccess(t *testing.T) {
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -239,7 +236,6 @@ func TestBuildAdminNodeAuditIngestRequest_IncludesSourceAndBatchMetadata(t *test
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -352,7 +348,6 @@ func TestFlushAuditExportToConfiguredDestination_PostsBatchAndAdvancesCursor(t *
 	defer adminIngestServer.Close()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -436,7 +431,6 @@ func TestFlushAuditExportToConfiguredDestination_FailedPostLeavesCursorUnadvance
 	defer adminIngestServer.Close()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -506,7 +500,6 @@ func TestFlushAuditExportToConfiguredDestination_MissingAuthorizationSecretLeave
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -615,7 +608,6 @@ func TestFlushAuditExportToConfiguredDestination_AdminNodeMTLSSucceedsAndAdvance
 	defer adminIngestServer.Close()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -732,7 +724,6 @@ func TestFlushAuditExportToConfiguredDestination_AdminNodeMTLSPinMismatchLeavesC
 	defer adminIngestServer.Close()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)
@@ -821,7 +812,6 @@ func TestFlushAuditExportToConfiguredDestination_ClientCertificateExpiringSoonLe
 
 	testCertificates := generateAuditExportTestCertificates(t)
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
 	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
 		t.Fatalf("mkdir runtime config dir: %v", err)

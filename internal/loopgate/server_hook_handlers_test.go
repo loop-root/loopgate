@@ -50,7 +50,6 @@ func TestHookPreValidate_DeniesUnknownToolByDefault(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -87,7 +86,6 @@ func TestHookPreValidate_DeniesToolDisabledByClaudeCodePolicy(t *testing.T) {
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Read:\n        enabled: false\n", 1)
 	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -121,7 +119,6 @@ func TestHookPreValidate_DeniesBashCommandDeniedPrefix(t *testing.T) {
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        denied_command_prefixes:\n          - \"rm -rf\"\n", 1)
 	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -154,7 +151,6 @@ func TestHookPreValidate_DeniesReadOutsideAllowedRoots(t *testing.T) {
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Read:\n        enabled: true\n        allowed_roots:\n          - \"docs\"\n", 1)
 	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -187,7 +183,6 @@ func TestHookPreValidate_NeedsApprovalReturnsAskAndPersistsLocalHookApproval(t *
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        requires_approval: true\n", 1)
 	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -257,7 +252,6 @@ func TestHookPreValidate_PermissionRequestMatchesPendingClaudeApproval(t *testin
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        requires_approval: true\n", 1)
 	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -312,7 +306,6 @@ func TestHookPreValidate_AuditIncludesHookSurfaceClassification(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -356,7 +349,6 @@ func TestHookPreValidate_AllowsObservabilityHookEventAuditOnly(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -396,7 +388,6 @@ func TestHookPreValidate_BlocksSecondaryGovernanceHookEventUntilImplemented(t *t
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -440,7 +431,6 @@ func TestHookPreValidate_PostToolUseResolvesPendingLocalHookApproval(t *testing.
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        requires_approval: true\n", 1)
 	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -503,7 +493,6 @@ func TestHookPreValidate_ReadAuditIncludesResolvedTargetPath(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -537,7 +526,6 @@ func TestHookPreValidate_MinimalHookAuditProjectionOmitsCommandPreview(t *testin
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "logging:\n", "logging:\n  audit_detail:\n    hook_projection_level: minimal\n", 1)
 	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -692,7 +680,6 @@ func TestHookPreValidate_SessionEndRecordsLifecycleReason(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -747,7 +734,6 @@ func TestHookPreValidate_SessionEndAbandonsPendingLocalHookApprovals(t *testing.
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        requires_approval: true\n", 1)
 	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)

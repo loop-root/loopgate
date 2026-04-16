@@ -58,7 +58,6 @@ func newLoopgateHarnessWithSetup(t *testing.T, policyYAML string, setupRepo func
 	if err := policySigner.WriteSignedPolicyYAML(repoRoot, policyYAML); err != nil {
 		t.Fatalf("write signed policy: %v", err)
 	}
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	if setupRepo != nil {
 		if err := setupRepo(repoRoot); err != nil {
 			t.Fatalf("setup repo fixture: %v", err)
@@ -112,11 +111,6 @@ func newLoopgateHarnessWithSetup(t *testing.T, policyYAML string, setupRepo func
 	}
 	harness.waitForHealth(t)
 	return harness
-}
-
-func writeTestMorphlingClassPolicy(t *testing.T, repoRoot string) {
-	t.Helper()
-	_ = repoRoot
 }
 
 func (harness *loopgateHarness) newClient(actor string, sessionID string, requestedCapabilities []string) *loopgate.Client {

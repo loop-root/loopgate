@@ -35,8 +35,6 @@ logging:
 func TestNewServer_DiagnosticConfigFollowsYAMLDespiteFrozenRuntimeJSON(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
-
 	configDir := filepath.Join(repoRoot, "config")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatal(err)

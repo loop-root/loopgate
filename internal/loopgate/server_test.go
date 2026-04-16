@@ -469,7 +469,6 @@ func TestNewServer_IgnoresStalePolicyJSONForOperatorMountWriteApproval(t *testin
 }`), 0o600); err != nil {
 		t.Fatalf("write stale policy json: %v", err)
 	}
-	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	server, err := NewServer(repoRoot, filepath.Join(t.TempDir(), "loopgate.sock"))
 	if err != nil {

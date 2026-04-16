@@ -17,7 +17,6 @@ func TestNewServerLoadsLegacyHookAuditTailWithoutAuditSequence(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -81,7 +80,6 @@ logging:
 	if err := os.WriteFile(filepath.Join(repoRoot, "config", "runtime.yaml"), []byte(runtimeConfigYAML), 0o600); err != nil {
 		t.Fatalf("write runtime config: %v", err)
 	}
-	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	server, err := NewServer(repoRoot, socketPath)
 	if err != nil {
@@ -132,7 +130,6 @@ logging:
 func TestNewServerFailsClosedOnTamperedAuditChain(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	server, err := NewServer(repoRoot, socketPath)
@@ -173,7 +170,6 @@ func TestNewServerFailsClosedOnTamperedAuditChain(t *testing.T) {
 		t.Fatalf("write tampered audit log: %v", err)
 	}
 
-	writeTestMorphlingClassPolicy(t, repoRoot)
 	_, err = NewServer(repoRoot, filepath.Join(t.TempDir(), "loopgate-restart.sock"))
 	if !errors.Is(err, ledger.ErrLedgerIntegrity) {
 		t.Fatalf("expected ErrLedgerIntegrity, got %v", err)

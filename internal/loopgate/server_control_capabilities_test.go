@@ -580,7 +580,6 @@ func TestNewServerRejectsSocketPathOutsideAllowedRoots(t *testing.T) {
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	socketPath := filepath.Join(repoRoot, "loopgate.sock")
 	if _, err := NewServer(repoRoot, socketPath); err == nil || !strings.Contains(err.Error(), "outside allowed runtime roots") {
@@ -592,7 +591,6 @@ func TestNewServerAllowsSocketPathUnderRepoRuntime(t *testing.T) {
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	socketPath := filepath.Join(repoRoot, "runtime", "memorybench-loopgate.sock")
 	if _, err := NewServer(repoRoot, socketPath); err != nil {
@@ -604,7 +602,6 @@ func TestServeRejectsDirectorySocketPathWithoutRemovingIt(t *testing.T) {
 	repoRoot := t.TempDir()
 
 	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
-	writeTestMorphlingClassPolicy(t, repoRoot)
 
 	socketPath := filepath.Join(os.TempDir(), "loopgate-dir-target.sock")
 	if err := os.RemoveAll(socketPath); err != nil {
