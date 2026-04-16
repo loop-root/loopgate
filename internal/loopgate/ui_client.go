@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 func (client *Client) UIStatus(ctx context.Context) (UIStatusResponse, error) {
@@ -48,6 +49,10 @@ func (client *Client) UIApprovals(ctx context.Context) (UIApprovalsResponse, err
 }
 
 func (client *Client) UIDecideApproval(ctx context.Context, approvalRequestID string, approved bool) (CapabilityResponse, error) {
+	return client.UIDecideApprovalWithReason(ctx, approvalRequestID, approved, "")
+}
+
+func (client *Client) UIDecideApprovalWithReason(ctx context.Context, approvalRequestID string, approved bool, reason string) (CapabilityResponse, error) {
 	approvalToken, err := client.ensureApprovalToken(ctx)
 	if err != nil {
 		return CapabilityResponse{}, err
@@ -57,6 +62,7 @@ func (client *Client) UIDecideApproval(ctx context.Context, approvalRequestID st
 	path := fmt.Sprintf("/v1/ui/approvals/%s/decision", approvalRequestID)
 	if err := client.doCapabilityJSON(ctx, client.defaultRequestTimeout, http.MethodPost, path, "", UIApprovalDecisionRequest{
 		Approved: &approved,
+		Reason:   strings.TrimSpace(reason),
 	}, &response, map[string]string{
 		"X-Loopgate-Approval-Token": approvalToken,
 	}); err != nil {

@@ -141,6 +141,11 @@ func (server *Server) tenantUserForControlSession(controlSessionID string) (tena
 }
 
 func (server *Server) logEvent(eventType string, sessionID string, data map[string]interface{}) error {
+	_, err := server.logEventWithHash(eventType, sessionID, data)
+	return err
+}
+
+func (server *Server) logEventWithHash(eventType string, sessionID string, data map[string]interface{}) (string, error) {
 	safeData := copyInterfaceMap(data)
 	_, hasTenant := safeData["tenant_id"]
 	_, hasUser := safeData["user_id"]
@@ -172,7 +177,7 @@ func (server *Server) logEvent(eventType string, sessionID string, data map[stri
 	safeData["previous_event_hash"] = server.lastAuditHash
 	canonicalData, err := canonicalizeAuditData(safeData)
 	if err != nil {
-		return fmt.Errorf("canonicalize audit event data: %w", err)
+		return "", fmt.Errorf("canonicalize audit event data: %w", err)
 	}
 	safeData = canonicalData
 
@@ -184,21 +189,21 @@ func (server *Server) logEvent(eventType string, sessionID string, data map[stri
 	}
 	eventHash, err := hashAuditEvent(auditEvent)
 	if err != nil {
-		return fmt.Errorf("hash audit event: %w", err)
+		return "", fmt.Errorf("hash audit event: %w", err)
 	}
 	auditEvent.Data["event_hash"] = eventHash
 
 	if err := audit.NewLedgerWriter(server.appendAuditEvent, nil).Record(server.auditPath, audit.ClassMustPersist, auditEvent); err != nil {
-		return err
+		return "", err
 	}
 	server.auditSequence = nextSequence
 	server.lastAuditHash = eventHash
 	server.auditEventsSinceCheckpoint++
 	server.diagnosticTextAfterAuditEvent(auditEvent)
 	if err := server.appendAuditHMACCheckpointIfDueLocked(); err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return eventHash, nil
 }
 
 func (server *Server) appendAuditHMACCheckpointIfDueLocked() error {

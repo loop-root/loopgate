@@ -150,6 +150,8 @@ type ControlPlaneClient interface {
 	PruneQuarantinedPayload(ctx context.Context, quarantineRef string) (QuarantineMetadataResponse, error)
 	ExecuteCapability(ctx context.Context, capabilityRequest CapabilityRequest) (CapabilityResponse, error)
 	DecideApproval(ctx context.Context, approvalRequestID string, approved bool) (CapabilityResponse, error)
+	ListPendingApprovals(ctx context.Context) (OperatorApprovalsResponse, error)
+	DecidePendingApproval(ctx context.Context, approvalRequestID string, approved bool, reason string) (OperatorApprovalDecisionResponse, error)
 	UIStatus(ctx context.Context) (UIStatusResponse, error)
 	UIApprovals(ctx context.Context) (UIApprovalsResponse, error)
 	UIDecideApproval(ctx context.Context, approvalRequestID string, approved bool) (CapabilityResponse, error)
@@ -311,6 +313,21 @@ type CapabilityResponse struct {
 	Metadata               map[string]interface{} `json:"metadata,omitempty"`
 }
 
+type OperatorApprovalSummary struct {
+	UIApprovalSummary
+	DecisionNonce          string `json:"decision_nonce"`
+	ApprovalManifestSHA256 string `json:"approval_manifest_sha256,omitempty"`
+}
+
+type OperatorApprovalsResponse struct {
+	Approvals []OperatorApprovalSummary `json:"approvals"`
+}
+
+type OperatorApprovalDecisionResponse struct {
+	CapabilityResponse
+	AuditEventHash string `json:"audit_event_hash,omitempty"`
+}
+
 type ResultClassification struct {
 	Exposure    string            `json:"exposure"`
 	Eligibility ResultEligibility `json:"eligibility"`
@@ -338,7 +355,8 @@ type ResultFieldMetadata struct {
 }
 
 type ApprovalDecisionRequest struct {
-	Approved bool `json:"approved"`
+	Approved bool   `json:"approved"`
+	Reason   string `json:"reason,omitempty"`
 	// DecisionNonce is the single-use nonce issued at approval creation time. Required.
 	DecisionNonce string `json:"decision_nonce"`
 	// ApprovalManifestSHA256 is the canonical approval manifest hash per AMP RFC 0005 §6.

@@ -104,6 +104,30 @@ Typical examples:
 
 Do not reduce friction by broadly widening shell or write authority.
 
+### When Loopgate asks for approval
+
+List pending approvals from the local control plane:
+
+```bash
+go run ./cmd/loopgate-policy-admin approvals list
+```
+
+Approve a pending request:
+
+```bash
+go run ./cmd/loopgate-policy-admin approvals approve <approval-id> -reason "reviewed and allowed"
+```
+
+Deny a pending request:
+
+```bash
+go run ./cmd/loopgate-policy-admin approvals deny <approval-id> -reason "outside allowed change window"
+```
+
+The approve and deny commands print the resulting audit event hash so you can
+correlate the human decision with `loopgate-ledger verify` or a later audit
+review.
+
 ### Apply a policy change safely
 
 Use this flow:

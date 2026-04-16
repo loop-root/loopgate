@@ -234,7 +234,7 @@ func approvalReasonForCapability(policyDecision policypkg.CheckResult, metadata 
 	}
 }
 
-func buildApprovalGrantedAuditData(approvalID string, pendingApproval pendingApproval) map[string]interface{} {
+func buildApprovalGrantedAuditData(approvalID string, pendingApproval pendingApproval, decisionReason string) map[string]interface{} {
 	auditData := map[string]interface{}{
 		"approval_request_id":  approvalID,
 		"capability":           pendingApproval.Request.Capability,
@@ -253,10 +253,13 @@ func buildApprovalGrantedAuditData(approvalID string, pendingApproval pendingApp
 	if grantTTLSeconds, found := pendingApproval.Metadata["grant_ttl_seconds"]; found {
 		auditData["grant_ttl_seconds"] = grantTTLSeconds
 	}
+	if trimmedDecisionReason := strings.TrimSpace(decisionReason); trimmedDecisionReason != "" {
+		auditData["operator_reason"] = secrets.RedactText(trimmedDecisionReason)
+	}
 	return auditData
 }
 
-func buildApprovalOperatorDeniedAuditData(approvalID string, pendingApproval pendingApproval) map[string]interface{} {
+func buildApprovalOperatorDeniedAuditData(approvalID string, pendingApproval pendingApproval, decisionReason string) map[string]interface{} {
 	auditData := map[string]interface{}{
 		"approval_request_id":  approvalID,
 		"capability":           pendingApproval.Request.Capability,
@@ -269,13 +272,16 @@ func buildApprovalOperatorDeniedAuditData(approvalID string, pendingApproval pen
 	if approvalClass, ok := pendingApproval.Metadata["approval_class"].(string); ok && strings.TrimSpace(approvalClass) != "" {
 		auditData["approval_class"] = approvalClass
 	}
+	if trimmedDecisionReason := strings.TrimSpace(decisionReason); trimmedDecisionReason != "" {
+		auditData["operator_reason"] = secrets.RedactText(trimmedDecisionReason)
+	}
 	return auditData
 }
 
 // validatePendingApprovalDecisionLocked performs session, expiry, nonce, and manifest checks
 // for a pending approval without writing audit events or changing approval state.
 // Must be called with server.mu held.
-func (server *Server) validatePendingApprovalDecisionLocked(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+func (server *Server) loadPendingApprovalForDecisionLocked(approvalID string) (pendingApproval, CapabilityResponse, bool) {
 	server.pruneExpiredLocked()
 	pendingApproval, found := server.approvals[approvalID]
 	if !found {
@@ -299,17 +305,11 @@ func (server *Server) validatePendingApprovalDecisionLocked(controlSession contr
 		}, false
 	}
 
-	if controlSession.ID != pendingApproval.ControlSessionID {
-		return pendingApproval, CapabilityResponse{
-			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
-			DenialReason:      "approval token does not match approval owner",
-			DenialCode:        DenialCodeApprovalOwnerMismatch,
-			ApprovalRequestID: approvalID,
-		}, false
-	}
 	pendingApproval = backfillApprovalManifestLocked(server.approvals, approvalID, pendingApproval)
+	return pendingApproval, CapabilityResponse{}, true
+}
 
+func validatePendingApprovalDecisionPayload(approvalID string, pendingApproval pendingApproval, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
 	if pendingApproval.State != approvalStatePending {
 		denialCode := DenialCodeApprovalStateInvalid
 		if pendingApproval.State == approvalStateConsumed || pendingApproval.State == approvalStateExecutionFailed {
@@ -369,33 +369,75 @@ func (server *Server) validatePendingApprovalDecisionLocked(controlSession contr
 	return pendingApproval, CapabilityResponse{}, true
 }
 
+// validatePendingApprovalDecisionLocked performs session, expiry, nonce, and manifest checks
+// for an approval-token decision path. Must be called with server.mu held.
+func (server *Server) validatePendingApprovalDecisionLocked(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+	pendingApproval, denialResponse, ok := server.loadPendingApprovalForDecisionLocked(approvalID)
+	if !ok {
+		return pendingApproval, denialResponse, false
+	}
+	if controlSession.ID != pendingApproval.ControlSessionID {
+		return pendingApproval, CapabilityResponse{
+			RequestID:         pendingApproval.Request.RequestID,
+			Status:            ResponseStatusDenied,
+			DenialReason:      "approval token does not match approval owner",
+			DenialCode:        DenialCodeApprovalOwnerMismatch,
+			ApprovalRequestID: approvalID,
+		}, false
+	}
+	return validatePendingApprovalDecisionPayload(approvalID, pendingApproval, decisionRequest)
+}
+
+func (server *Server) validatePendingApprovalDecisionLockedForOperator(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+	pendingApproval, denialResponse, ok := server.loadPendingApprovalForDecisionLocked(approvalID)
+	if !ok {
+		return pendingApproval, denialResponse, false
+	}
+	if strings.TrimSpace(controlSession.TenantID) != "" && strings.TrimSpace(pendingApproval.ExecutionContext.TenantID) != "" && controlSession.TenantID != pendingApproval.ExecutionContext.TenantID {
+		return pendingApproval, CapabilityResponse{
+			RequestID:         approvalID,
+			Status:            ResponseStatusDenied,
+			DenialReason:      "approval request not found",
+			DenialCode:        DenialCodeApprovalNotFound,
+			ApprovalRequestID: approvalID,
+		}, false
+	}
+	return validatePendingApprovalDecisionPayload(approvalID, pendingApproval, decisionRequest)
+}
+
 func (server *Server) validatePendingApprovalDecision(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	return server.validatePendingApprovalDecisionLocked(controlSession, approvalID, decisionRequest)
 }
 
+func (server *Server) validatePendingApprovalDecisionForOperator(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	return server.validatePendingApprovalDecisionLockedForOperator(controlSession, approvalID, decisionRequest)
+}
+
 // commitApprovalGrantConsumed appends approval.granted and transitions the approval to consumed.
 // Call after approval-scoped work succeeds so a post-decision failure does not leave a consumed
 // approval with no executed action. If audit append fails after side effects, the operator may
 // need manual recovery (rare).
-func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDecisionNonce string) error {
+func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDecisionNonce string, decisionReason string) (string, error) {
 	expectedDecisionNonce = strings.TrimSpace(expectedDecisionNonce)
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
 	pendingApproval, found := server.approvals[approvalID]
 	if !found {
-		return fmt.Errorf("approval request not found")
+		return "", fmt.Errorf("approval request not found")
 	}
 	if pendingApproval.State != approvalStatePending {
-		return fmt.Errorf("approval request is no longer pending")
+		return "", fmt.Errorf("approval request is no longer pending")
 	}
 	if expectedDecisionNonce == "" || pendingApproval.DecisionNonce != expectedDecisionNonce {
-		return fmt.Errorf("approval decision nonce mismatch")
+		return "", fmt.Errorf("approval decision nonce mismatch")
 	}
 
-	grantAuditData := buildApprovalGrantedAuditData(approvalID, pendingApproval)
+	grantAuditData := buildApprovalGrantedAuditData(approvalID, pendingApproval, decisionReason)
 	if session, ok := server.sessions[pendingApproval.ControlSessionID]; ok {
 		mergeAuditTenancyFromControlSession(grantAuditData, session)
 	}
@@ -405,8 +447,9 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 		grantExpiresAt = server.now().UTC().Add(operatorMountWriteGrantTTL)
 		grantAuditData["grant_expires_at_utc"] = grantExpiresAt.Format(time.RFC3339Nano)
 	}
-	if err := server.logEvent("approval.granted", pendingApproval.ControlSessionID, grantAuditData); err != nil {
-		return err
+	auditEventHash, err := server.logEventWithHash("approval.granted", pendingApproval.ControlSessionID, grantAuditData)
+	if err != nil {
+		return "", err
 	}
 	if grantRoot != "" {
 		controlSession := server.sessions[pendingApproval.ControlSessionID]
@@ -420,49 +463,120 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 	pendingApproval.DecisionSubmittedAt = server.now().UTC()
 	pendingApproval.DecisionNonce = ""
 	server.approvals[approvalID] = pendingApproval
-	return nil
+	return auditEventHash, nil
 }
 
-func (server *Server) validateAndRecordApprovalDecision(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+func (server *Server) recordPendingApprovalDecisionLocked(controlSession controlSession, approvalID string, pendingApproval pendingApproval, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, string, bool) {
+	if decisionRequest.Approved {
+		grantAuditData := buildApprovalGrantedAuditData(approvalID, pendingApproval, decisionRequest.Reason)
+		mergeAuditTenancyFromControlSession(grantAuditData, controlSession)
+		auditEventHash, err := server.logEventWithHash("approval.granted", pendingApproval.ControlSessionID, grantAuditData)
+		if err != nil {
+			return pendingApproval, CapabilityResponse{
+				RequestID:         pendingApproval.Request.RequestID,
+				Status:            ResponseStatusError,
+				DenialReason:      "control-plane audit is unavailable",
+				DenialCode:        DenialCodeAuditUnavailable,
+				ApprovalRequestID: approvalID,
+			}, "", false
+		}
+		pendingApproval.State = approvalStateConsumed
+		pendingApproval.DecisionSubmittedAt = server.now().UTC()
+		pendingApproval.DecisionNonce = ""
+		server.approvals[approvalID] = pendingApproval
+		return pendingApproval, CapabilityResponse{}, auditEventHash, true
+	}
+
+	deniedAuditData := buildApprovalOperatorDeniedAuditData(approvalID, pendingApproval, decisionRequest.Reason)
+	mergeAuditTenancyFromControlSession(deniedAuditData, controlSession)
+	auditEventHash, err := server.logEventWithHash("approval.denied", pendingApproval.ControlSessionID, deniedAuditData)
+	if err != nil {
+		return pendingApproval, CapabilityResponse{
+			RequestID:         pendingApproval.Request.RequestID,
+			Status:            ResponseStatusError,
+			DenialReason:      "control-plane audit is unavailable",
+			DenialCode:        DenialCodeAuditUnavailable,
+			ApprovalRequestID: approvalID,
+		}, "", false
+	}
+	pendingApproval.State = approvalStateDenied
+	pendingApproval.DecisionSubmittedAt = server.now().UTC()
+	pendingApproval.DecisionNonce = ""
+	server.approvals[approvalID] = pendingApproval
+	return pendingApproval, CapabilityResponse{}, auditEventHash, true
+}
+
+func (server *Server) validateAndRecordApprovalDecision(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, string, bool) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
 	pendingApproval, denialResponse, ok := server.validatePendingApprovalDecisionLocked(controlSession, approvalID, decisionRequest)
 	if !ok {
-		return pendingApproval, denialResponse, false
+		return pendingApproval, denialResponse, "", false
 	}
+	return server.recordPendingApprovalDecisionLocked(controlSession, approvalID, pendingApproval, decisionRequest)
+}
 
-	if decisionRequest.Approved {
-		grantAuditData := buildApprovalGrantedAuditData(approvalID, pendingApproval)
-		mergeAuditTenancyFromControlSession(grantAuditData, controlSession)
-		if err := server.logEvent("approval.granted", pendingApproval.ControlSessionID, grantAuditData); err != nil {
-			return pendingApproval, CapabilityResponse{
-				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
-				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
-				ApprovalRequestID: approvalID,
-			}, false
-		}
-		pendingApproval.State = approvalStateConsumed
-	} else {
-		deniedAuditData := buildApprovalOperatorDeniedAuditData(approvalID, pendingApproval)
-		mergeAuditTenancyFromControlSession(deniedAuditData, controlSession)
-		if err := server.logEvent("approval.denied", pendingApproval.ControlSessionID, deniedAuditData); err != nil {
-			return pendingApproval, CapabilityResponse{
-				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
-				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
-				ApprovalRequestID: approvalID,
-			}, false
-		}
-		pendingApproval.State = approvalStateDenied
+func (server *Server) validateAndRecordOperatorApprovalDecision(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, string, bool) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	pendingApproval, denialResponse, ok := server.validatePendingApprovalDecisionLockedForOperator(controlSession, approvalID, decisionRequest)
+	if !ok {
+		return pendingApproval, denialResponse, "", false
 	}
-	pendingApproval.DecisionSubmittedAt = server.now().UTC()
-	pendingApproval.DecisionNonce = ""
-	server.approvals[approvalID] = pendingApproval
-	return pendingApproval, CapabilityResponse{}, true
+	return server.recordPendingApprovalDecisionLocked(controlSession, approvalID, pendingApproval, decisionRequest)
+}
+
+func (server *Server) approvedExecutionTokenForPendingApproval(approvalID string, pendingApproval pendingApproval) (capabilityToken, CapabilityResponse, bool) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	server.pruneExpiredLocked()
+	ownerSession, found := server.sessions[pendingApproval.ExecutionContext.ControlSessionID]
+	if !found {
+		return capabilityToken{}, CapabilityResponse{
+			RequestID:         pendingApproval.Request.RequestID,
+			Status:            ResponseStatusDenied,
+			DenialReason:      "approval owner session is no longer active",
+			DenialCode:        DenialCodeApprovalStateInvalid,
+			ApprovalRequestID: approvalID,
+		}, false
+	}
+	return capabilityToken{
+		TokenID:             "approved:" + approvalID,
+		ControlSessionID:    pendingApproval.ExecutionContext.ControlSessionID,
+		ActorLabel:          pendingApproval.ExecutionContext.ActorLabel,
+		ClientSessionLabel:  pendingApproval.ExecutionContext.ClientSessionLabel,
+		AllowedCapabilities: copyCapabilitySet(pendingApproval.ExecutionContext.AllowedCapabilities),
+		PeerIdentity:        ownerSession.PeerIdentity,
+		TenantID:            ownerSession.TenantID,
+		UserID:              ownerSession.UserID,
+		ExpiresAt:           ownerSession.ExpiresAt,
+		SingleUse:           true,
+		ApprovedExecution:   true,
+		BoundCapability:     pendingApproval.Request.Capability,
+		BoundArgumentHash:   normalizedArgumentHash(pendingApproval.Request.Arguments),
+	}, CapabilityResponse{}, true
+}
+
+func (server *Server) auditApprovalDecisionDenial(controlSession controlSession, approvalID string, pendingApproval pendingApproval, denialResponse CapabilityResponse) error {
+	if strings.TrimSpace(denialResponse.DenialCode) == "" || denialResponse.DenialCode == DenialCodeAuditUnavailable {
+		return nil
+	}
+	approvalDeniedAuditData := map[string]interface{}{
+		"approval_request_id":  approvalID,
+		"approval_class":       pendingApproval.Metadata["approval_class"],
+		"reason":               secrets.RedactText(denialResponse.DenialReason),
+		"denial_code":          denialResponse.DenialCode,
+		"control_session_id":   controlSession.ID,
+		"actor_label":          controlSession.ActorLabel,
+		"client_session_label": controlSession.ClientSessionLabel,
+	}
+	if approvalClass, okClass := pendingApproval.Metadata["approval_class"].(string); okClass && strings.TrimSpace(approvalClass) != "" {
+		approvalDeniedAuditData["approval_class"] = approvalClass
+	}
+	return server.logEvent("approval.denied", controlSession.ID, approvalDeniedAuditData)
 }
 
 // backfillApprovalManifestLocked lazily computes and stores the approval manifest for any

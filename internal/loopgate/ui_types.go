@@ -70,7 +70,10 @@ type UIStatusResponse struct {
 
 type UIApprovalSummary struct {
 	ApprovalRequestID string `json:"approval_request_id"`
+	ControlSessionID  string `json:"control_session_id"`
+	Requester         string `json:"requester"`
 	Capability        string `json:"capability"`
+	CreatedAtUTC      string `json:"created_at_utc"`
 	Path              string `json:"path,omitempty"`
 	ContentBytes      int    `json:"content_bytes,omitempty"`
 	Preview           string `json:"preview,omitempty"`
@@ -142,7 +145,8 @@ func (folderAccessUpdateRequest FolderAccessUpdateRequest) Validate() error {
 }
 
 type UIApprovalDecisionRequest struct {
-	Approved *bool `json:"approved"`
+	Approved *bool  `json:"approved"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 func (uiApprovalDecisionRequest UIApprovalDecisionRequest) Validate() error {

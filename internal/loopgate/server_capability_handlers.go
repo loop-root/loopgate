@@ -3,8 +3,6 @@ package loopgate
 import (
 	"net/http"
 	"strings"
-
-	"loopgate/internal/secrets"
 )
 
 func (server *Server) handleCapabilityExecute(writer http.ResponseWriter, request *http.Request) {
@@ -86,85 +84,7 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 	if decisionRequest.Approved {
 		pendingApproval, denialResponse, ok := server.validatePendingApprovalDecision(controlSession, approvalID, decisionRequest)
 		if !ok {
-			if strings.TrimSpace(denialResponse.DenialCode) != "" && denialResponse.DenialCode != DenialCodeAuditUnavailable {
-				approvalDeniedAuditData := map[string]interface{}{
-					"approval_request_id":  approvalID,
-					"approval_class":       pendingApproval.Metadata["approval_class"],
-					"reason":               secrets.RedactText(denialResponse.DenialReason),
-					"denial_code":          denialResponse.DenialCode,
-					"control_session_id":   controlSession.ID,
-					"actor_label":          controlSession.ActorLabel,
-					"client_session_label": controlSession.ClientSessionLabel,
-				}
-				if approvalClass, okClass := pendingApproval.Metadata["approval_class"].(string); okClass && strings.TrimSpace(approvalClass) != "" {
-					approvalDeniedAuditData["approval_class"] = approvalClass
-				}
-				if err := server.logEvent("approval.denied", controlSession.ID, approvalDeniedAuditData); err != nil {
-					server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-						RequestID:         approvalID,
-						Status:            ResponseStatusError,
-						DenialReason:      "control-plane audit is unavailable",
-						DenialCode:        DenialCodeAuditUnavailable,
-						ApprovalRequestID: approvalID,
-					})
-					return
-				}
-			}
-			server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
-			return
-		}
-		if integrityDenial, integrityOK := server.verifyPendingApprovalStoredExecutionBody(pendingApproval); !integrityOK {
-			server.writePendingApprovalExecutionIntegrityDenial(writer, controlSession, approvalID, pendingApproval, integrityDenial)
-			return
-		}
-		if err := server.commitApprovalGrantConsumed(approvalID, decisionRequest.DecisionNonce); err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
-				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
-				ApprovalRequestID: approvalID,
-			})
-			return
-		}
-		response := server.executeCapabilityRequest(request.Context(), capabilityToken{
-			TokenID:             "approved:" + approvalID,
-			ControlSessionID:    pendingApproval.ExecutionContext.ControlSessionID,
-			ActorLabel:          pendingApproval.ExecutionContext.ActorLabel,
-			ClientSessionLabel:  pendingApproval.ExecutionContext.ClientSessionLabel,
-			AllowedCapabilities: copyCapabilitySet(pendingApproval.ExecutionContext.AllowedCapabilities),
-			PeerIdentity:        controlSession.PeerIdentity,
-			TenantID:            controlSession.TenantID,
-			UserID:              controlSession.UserID,
-			ExpiresAt:           controlSession.ExpiresAt,
-			SingleUse:           true,
-			ApprovedExecution:   true,
-			BoundCapability:     pendingApproval.Request.Capability,
-			BoundArgumentHash:   normalizedArgumentHash(pendingApproval.Request.Arguments),
-		}, pendingApproval.Request, false)
-		response.ApprovalRequestID = approvalID
-		server.markApprovalExecutionResult(approvalID, response.Status)
-		server.emitUIApprovalResolved(pendingApproval, approvalID, "approved", response.Status)
-		server.writeJSON(writer, httpStatusForResponse(response), response)
-		return
-	}
-
-	pendingApproval, denialResponse, ok := server.validateAndRecordApprovalDecision(controlSession, approvalID, decisionRequest)
-	if !ok {
-		if strings.TrimSpace(denialResponse.DenialCode) != "" && denialResponse.DenialCode != DenialCodeAuditUnavailable {
-			approvalDeniedAuditData := map[string]interface{}{
-				"approval_request_id":  approvalID,
-				"approval_class":       pendingApproval.Metadata["approval_class"],
-				"reason":               secrets.RedactText(denialResponse.DenialReason),
-				"denial_code":          denialResponse.DenialCode,
-				"control_session_id":   controlSession.ID,
-				"actor_label":          controlSession.ActorLabel,
-				"client_session_label": controlSession.ClientSessionLabel,
-			}
-			if approvalClass, okClass := pendingApproval.Metadata["approval_class"].(string); okClass && strings.TrimSpace(approvalClass) != "" {
-				approvalDeniedAuditData["approval_class"] = approvalClass
-			}
-			if err := server.logEvent("approval.denied", controlSession.ID, approvalDeniedAuditData); err != nil {
+			if err := server.auditApprovalDecisionDenial(controlSession, approvalID, pendingApproval, denialResponse); err != nil {
 				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
 					RequestID:         approvalID,
 					Status:            ResponseStatusError,
@@ -174,6 +94,47 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 				})
 				return
 			}
+			server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
+			return
+		}
+		if integrityDenial, integrityOK := server.verifyPendingApprovalStoredExecutionBody(pendingApproval); !integrityOK {
+			server.writePendingApprovalExecutionIntegrityDenial(writer, controlSession, approvalID, pendingApproval, integrityDenial)
+			return
+		}
+		if _, err := server.commitApprovalGrantConsumed(approvalID, decisionRequest.DecisionNonce, decisionRequest.Reason); err != nil {
+			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+				RequestID:         pendingApproval.Request.RequestID,
+				Status:            ResponseStatusError,
+				DenialReason:      "control-plane audit is unavailable",
+				DenialCode:        DenialCodeAuditUnavailable,
+				ApprovalRequestID: approvalID,
+			})
+			return
+		}
+		executionToken, denialResponse, ok := server.approvedExecutionTokenForPendingApproval(approvalID, pendingApproval)
+		if !ok {
+			server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
+			return
+		}
+		response := server.executeCapabilityRequest(request.Context(), executionToken, pendingApproval.Request, false)
+		response.ApprovalRequestID = approvalID
+		server.markApprovalExecutionResult(approvalID, response.Status)
+		server.emitUIApprovalResolved(pendingApproval, approvalID, "approved", response.Status)
+		server.writeJSON(writer, httpStatusForResponse(response), response)
+		return
+	}
+
+	pendingApproval, denialResponse, _, ok := server.validateAndRecordApprovalDecision(controlSession, approvalID, decisionRequest)
+	if !ok {
+		if err := server.auditApprovalDecisionDenial(controlSession, approvalID, pendingApproval, denialResponse); err != nil {
+			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+				RequestID:         approvalID,
+				Status:            ResponseStatusError,
+				DenialReason:      "control-plane audit is unavailable",
+				DenialCode:        DenialCodeAuditUnavailable,
+				ApprovalRequestID: approvalID,
+			})
+			return
 		}
 		server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return

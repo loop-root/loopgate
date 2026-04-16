@@ -386,7 +386,7 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 		t.Fatalf("expected approval_decision_nonce, got %#v", pendingResponse.Metadata)
 	}
 
-	if err := server.commitApprovalGrantConsumed(pendingResponse.ApprovalRequestID, decisionNonce); err != nil {
+	if _, err := server.commitApprovalGrantConsumed(pendingResponse.ApprovalRequestID, decisionNonce, ""); err != nil {
 		t.Fatalf("commit approval grant consumed: %v", err)
 	}
 

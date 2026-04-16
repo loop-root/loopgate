@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"loopgate/internal/config"
-	"loopgate/internal/secrets"
 	statepkg "loopgate/internal/state"
 )
 
@@ -329,6 +328,7 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 
 	approvalDecisionPayload := ApprovalDecisionRequest{
 		Approved:               *uiDecisionRequest.Approved,
+		Reason:                 strings.TrimSpace(uiDecisionRequest.Reason),
 		DecisionNonce:          decisionNonce,
 		ApprovalManifestSHA256: manifestSHA256,
 	}
@@ -336,31 +336,17 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 	if *uiDecisionRequest.Approved {
 		pendingApproval, denialResponse, ok := server.validatePendingApprovalDecision(controlSession, approvalID, approvalDecisionPayload)
 		if !ok {
-			if strings.TrimSpace(denialResponse.DenialCode) != "" && denialResponse.DenialCode != DenialCodeAuditUnavailable {
-				approvalDeniedAuditData := map[string]interface{}{
-					"approval_request_id":  approvalID,
-					"approval_class":       pendingApproval.Metadata["approval_class"],
-					"reason":               secrets.RedactText(denialResponse.DenialReason),
-					"denial_code":          denialResponse.DenialCode,
-					"control_session_id":   controlSession.ID,
-					"actor_label":          controlSession.ActorLabel,
-					"client_session_label": controlSession.ClientSessionLabel,
-				}
-				if approvalClass, okClass := pendingApproval.Metadata["approval_class"].(string); okClass && strings.TrimSpace(approvalClass) != "" {
-					approvalDeniedAuditData["approval_class"] = approvalClass
-				}
-				if err := server.logEvent("approval.denied", controlSession.ID, approvalDeniedAuditData); err != nil {
-					server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-						RequestID:         approvalID,
-						Status:            ResponseStatusError,
-						DenialReason:      "control-plane audit is unavailable",
-						DenialCode:        DenialCodeAuditUnavailable,
-						ApprovalRequestID: approvalID,
-					})
-					return
-				}
-				server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
+			if err := server.auditApprovalDecisionDenial(controlSession, approvalID, pendingApproval, denialResponse); err != nil {
+				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+					RequestID:         approvalID,
+					Status:            ResponseStatusError,
+					DenialReason:      "control-plane audit is unavailable",
+					DenialCode:        DenialCodeAuditUnavailable,
+					ApprovalRequestID: approvalID,
+				})
+				return
 			}
+			server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
 			server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 			return
 		}
@@ -368,7 +354,7 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 			server.writePendingApprovalExecutionIntegrityDenial(writer, controlSession, approvalID, pendingApproval, integrityDenial)
 			return
 		}
-		if err := server.commitApprovalGrantConsumed(approvalID, decisionNonce); err != nil {
+		if _, err := server.commitApprovalGrantConsumed(approvalID, decisionNonce, approvalDecisionPayload.Reason); err != nil {
 			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
 				RequestID:         pendingApproval.Request.RequestID,
 				Status:            ResponseStatusError,
@@ -380,21 +366,12 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 		}
 		// NOTE: This runs the full capability (e.g. host.plan.apply) before the HTTP response returns.
 		// UI clients should show a long-running indicator on Approve — large plans can take many seconds.
-		response := server.executeCapabilityRequest(request.Context(), capabilityToken{
-			TokenID:             "approved:" + approvalID,
-			ControlSessionID:    pendingApproval.ExecutionContext.ControlSessionID,
-			ActorLabel:          pendingApproval.ExecutionContext.ActorLabel,
-			ClientSessionLabel:  pendingApproval.ExecutionContext.ClientSessionLabel,
-			AllowedCapabilities: copyCapabilitySet(pendingApproval.ExecutionContext.AllowedCapabilities),
-			PeerIdentity:        controlSession.PeerIdentity,
-			TenantID:            controlSession.TenantID,
-			UserID:              controlSession.UserID,
-			ExpiresAt:           controlSession.ExpiresAt,
-			SingleUse:           true,
-			ApprovedExecution:   true,
-			BoundCapability:     pendingApproval.Request.Capability,
-			BoundArgumentHash:   normalizedArgumentHash(pendingApproval.Request.Arguments),
-		}, pendingApproval.Request, false)
+		executionToken, denialResponse, ok := server.approvedExecutionTokenForPendingApproval(approvalID, pendingApproval)
+		if !ok {
+			server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
+			return
+		}
+		response := server.executeCapabilityRequest(request.Context(), executionToken, pendingApproval.Request, false)
 		response.ApprovalRequestID = approvalID
 		server.markApprovalExecutionResult(approvalID, response.Status)
 		server.emitUIApprovalResolved(pendingApproval, approvalID, "approved", response.Status)
@@ -402,33 +379,19 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 		return
 	}
 
-	pendingApproval, denialResponse, validated := server.validateAndRecordApprovalDecision(controlSession, approvalID, approvalDecisionPayload)
+	pendingApproval, denialResponse, _, validated := server.validateAndRecordApprovalDecision(controlSession, approvalID, approvalDecisionPayload)
 	if !validated {
-		if strings.TrimSpace(denialResponse.DenialCode) != "" && denialResponse.DenialCode != DenialCodeAuditUnavailable {
-			approvalDeniedAuditData := map[string]interface{}{
-				"approval_request_id":  approvalID,
-				"approval_class":       pendingApproval.Metadata["approval_class"],
-				"reason":               secrets.RedactText(denialResponse.DenialReason),
-				"denial_code":          denialResponse.DenialCode,
-				"control_session_id":   controlSession.ID,
-				"actor_label":          controlSession.ActorLabel,
-				"client_session_label": controlSession.ClientSessionLabel,
-			}
-			if approvalClass, ok := pendingApproval.Metadata["approval_class"].(string); ok && strings.TrimSpace(approvalClass) != "" {
-				approvalDeniedAuditData["approval_class"] = approvalClass
-			}
-			if err := server.logEvent("approval.denied", controlSession.ID, approvalDeniedAuditData); err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-					RequestID:         approvalID,
-					Status:            ResponseStatusError,
-					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
-					ApprovalRequestID: approvalID,
-				})
-				return
-			}
-			server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
+		if err := server.auditApprovalDecisionDenial(controlSession, approvalID, pendingApproval, denialResponse); err != nil {
+			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+				RequestID:         approvalID,
+				Status:            ResponseStatusError,
+				DenialReason:      "control-plane audit is unavailable",
+				DenialCode:        DenialCodeAuditUnavailable,
+				ApprovalRequestID: approvalID,
+			})
+			return
 		}
+		server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
 		server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
@@ -595,7 +558,10 @@ func uiApprovalSummaryFromPending(pendingApproval pendingApproval) UIApprovalSum
 
 	summary := UIApprovalSummary{
 		ApprovalRequestID: pendingApproval.ID,
+		ControlSessionID:  pendingApproval.ControlSessionID,
+		Requester:         pendingApproval.ExecutionContext.ActorLabel,
 		Capability:        pendingApproval.Request.Capability,
+		CreatedAtUTC:      pendingApproval.CreatedAt.Format(timeLayoutRFC3339Nano),
 		Path:              stringMetadataValue(pendingApproval.Metadata, "path"),
 		ContentBytes:      intMetadataValue(pendingApproval.Metadata, "content_bytes"),
 		Preview:           preview,

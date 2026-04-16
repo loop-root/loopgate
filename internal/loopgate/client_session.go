@@ -152,6 +152,10 @@ func (client *Client) ExecuteCapability(ctx context.Context, capabilityRequest C
 }
 
 func (client *Client) DecideApproval(ctx context.Context, approvalRequestID string, approved bool) (CapabilityResponse, error) {
+	return client.DecideApprovalWithReason(ctx, approvalRequestID, approved, "")
+}
+
+func (client *Client) DecideApprovalWithReason(ctx context.Context, approvalRequestID string, approved bool, reason string) (CapabilityResponse, error) {
 	approvalToken, err := client.ensureApprovalToken(ctx)
 	if err != nil {
 		return CapabilityResponse{}, err
@@ -171,6 +175,7 @@ func (client *Client) DecideApproval(ctx context.Context, approvalRequestID stri
 	path := fmt.Sprintf("/v1/approvals/%s/decision", approvalRequestID)
 	if err := client.doCapabilityJSON(ctx, client.defaultRequestTimeout, http.MethodPost, path, "", ApprovalDecisionRequest{
 		Approved:               approved,
+		Reason:                 strings.TrimSpace(reason),
 		DecisionNonce:          decisionNonce,
 		ApprovalManifestSHA256: manifestSHA256,
 	}, &response, map[string]string{

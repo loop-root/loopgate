@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"loopgate/internal/config"
 	"loopgate/internal/loopgate"
@@ -42,6 +43,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runRenderTemplate(args[1:], stdout, stderr)
 	case "apply":
 		return runApply(args[1:], stdout, stderr)
+	case "approvals":
+		return runApprovals(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stderr)
 		return 0
@@ -59,6 +62,9 @@ func printUsage(w io.Writer) {
   loopgate-policy-admin diff            [-repo DIR] [-left-policy-file PATH] [-left-signature-file PATH] -right-policy-file PATH [-right-signature-file PATH]
   loopgate-policy-admin render-template [-preset strict-mvp|developer]
   loopgate-policy-admin apply           [-repo DIR] [-socket PATH] [-verify-setup] [-private-key-file PATH] [-key-id ID]
+  loopgate-policy-admin approvals list  [-repo DIR] [-socket PATH]
+  loopgate-policy-admin approvals approve <id> [-repo DIR] [-socket PATH] [-reason TEXT]
+  loopgate-policy-admin approvals deny <id>    [-repo DIR] [-socket PATH] [-reason TEXT]
 
 Defaults:
   -repo defaults to the current working directory.
@@ -159,6 +165,129 @@ func runApply(args []string, stdout io.Writer, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "previous_policy_sha256: %s\n", reloadResponse.PreviousPolicySHA256)
 	fmt.Fprintf(stdout, "policy_sha256: %s\n", reloadResponse.PolicySHA256)
 	fmt.Fprintf(stdout, "policy_changed: %t\n", reloadResponse.PolicyChanged)
+	return 0
+}
+
+func runApprovals(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) < 1 {
+		fmt.Fprintln(stderr, "ERROR: approvals subcommand is required")
+		printUsage(stderr)
+		return 2
+	}
+	switch args[0] {
+	case "list":
+		return runApprovalsList(args[1:], stdout, stderr)
+	case "approve":
+		return runApprovalDecision(args[1:], true, stdout, stderr)
+	case "deny":
+		return runApprovalDecision(args[1:], false, stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "ERROR: unknown approvals subcommand %q\n", args[0])
+		printUsage(stderr)
+		return 2
+	}
+}
+
+func runApprovalsList(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("approvals list", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	repoRootFlag := fs.String("repo", "", "repository root used to resolve the default socket path")
+	socketPathFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(stderr, "ERROR: unexpected positional arguments: %s\n", strings.Join(fs.Args(), " "))
+		return 2
+	}
+
+	baseRoot, err := resolveBaseRoot(*repoRootFlag)
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR:", err)
+		return 1
+	}
+	client := newPolicyAdminClient(resolveSocketPath(baseRoot, *socketPathFlag), "approvals-list")
+
+	approvalResponse, err := client.ListPendingApprovals(context.Background())
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR: list approvals:", err)
+		return 1
+	}
+	if len(approvalResponse.Approvals) == 0 {
+		fmt.Fprintln(stdout, "no pending approvals")
+		return 0
+	}
+
+	writer := tabwriter.NewWriter(stdout, 0, 8, 2, ' ', 0)
+	fmt.Fprintln(writer, "APPROVAL ID\tSESSION\tREQUESTER\tCAPABILITY\tREQUESTED AT")
+	for _, approval := range approvalResponse.Approvals {
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\n",
+			approval.ApprovalRequestID,
+			approval.ControlSessionID,
+			approval.Requester,
+			approval.Capability,
+			approval.CreatedAtUTC,
+		)
+	}
+	_ = writer.Flush()
+	return 0
+}
+
+func runApprovalDecision(args []string, approved bool, stdout io.Writer, stderr io.Writer) int {
+	commandName := "approvals deny"
+	if approved {
+		commandName = "approvals approve"
+	}
+	approvalID := ""
+	parseArgs := args
+	if len(args) > 0 && !strings.HasPrefix(strings.TrimSpace(args[0]), "-") {
+		approvalID = strings.TrimSpace(args[0])
+		parseArgs = args[1:]
+	}
+	fs := flag.NewFlagSet(commandName, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	repoRootFlag := fs.String("repo", "", "repository root used to resolve the default socket path")
+	socketPathFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
+	reasonFlag := fs.String("reason", "", "optional operator reason recorded in the audit trail")
+	if err := fs.Parse(parseArgs); err != nil {
+		return 2
+	}
+	if approvalID == "" {
+		if fs.NArg() != 1 {
+			fmt.Fprintf(stderr, "ERROR: %s requires exactly one approval id\n", commandName)
+			return 2
+		}
+		approvalID = strings.TrimSpace(fs.Arg(0))
+	} else if fs.NArg() != 0 {
+		fmt.Fprintf(stderr, "ERROR: %s requires exactly one approval id\n", commandName)
+		return 2
+	}
+
+	baseRoot, err := resolveBaseRoot(*repoRootFlag)
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR:", err)
+		return 1
+	}
+	client := newPolicyAdminClient(resolveSocketPath(baseRoot, *socketPathFlag), strings.ReplaceAll(commandName, " ", "-"))
+
+	response, err := client.DecidePendingApproval(context.Background(), approvalID, approved, strings.TrimSpace(*reasonFlag))
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR: decide approval:", err)
+		return 1
+	}
+
+	action := "denied"
+	if approved {
+		action = "approved"
+	}
+	if strings.TrimSpace(response.AuditEventHash) == "" {
+		fmt.Fprintf(stdout, "approval %s %s\n", approvalID, action)
+	} else {
+		fmt.Fprintf(stdout, "approval %s %s audit_event_hash=%s\n", approvalID, action, response.AuditEventHash)
+	}
+	if response.Status == loopgate.ResponseStatusError {
+		return 1
+	}
 	return 0
 }
 
@@ -402,6 +531,12 @@ func defaultPolicyAdminSessionID(subcommandName string) string {
 		trimmedSubcommandName = "policy-admin"
 	}
 	return "loopgate-policy-admin-" + trimmedSubcommandName + "-" + strconv.Itoa(os.Getpid())
+}
+
+func newPolicyAdminClient(socketPath string, subcommandName string) *loopgate.Client {
+	client := loopgate.NewClient(socketPath)
+	client.ConfigureSession("loopgate-policy-admin", defaultPolicyAdminSessionID(subcommandName), []string{"approval.read", "approval.write"})
+	return client
 }
 
 func resolvePolicySigningPrivateKeyPath(flagValue string, envValue string, keyID string) (string, string, error) {

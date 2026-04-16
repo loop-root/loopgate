@@ -3,6 +3,8 @@ package loopgate
 import "sort"
 
 const (
+	controlCapabilityApprovalRead            = "approval.read"
+	controlCapabilityApprovalWrite           = "approval.write"
 	controlCapabilityAuditExport             = "audit.export"
 	controlCapabilityConfigRead              = "config.read"
 	controlCapabilityConfigWrite             = "config.write"
@@ -26,6 +28,18 @@ const (
 )
 
 var internalControlCapabilityCatalog = map[string]CapabilitySummary{
+	controlCapabilityApprovalRead: {
+		Name:        controlCapabilityApprovalRead,
+		Category:    "approval",
+		Operation:   "read",
+		Description: "Read pending approval inventory through the local control plane.",
+	},
+	controlCapabilityApprovalWrite: {
+		Name:        controlCapabilityApprovalWrite,
+		Category:    "approval",
+		Operation:   "write",
+		Description: "Approve or deny pending approval requests through the local control plane.",
+	},
 	controlCapabilityAuditExport: {
 		Name:        controlCapabilityAuditExport,
 		Category:    "audit",

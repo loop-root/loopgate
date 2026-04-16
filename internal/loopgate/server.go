@@ -366,6 +366,8 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", server.handleHealth)
 	mux.HandleFunc("/v1/status", server.handleStatus)
+	mux.HandleFunc("/v1/control/approvals", server.handleControlApprovals)
+	mux.HandleFunc("/v1/control/approvals/", server.handleControlApprovalDecision)
 	mux.HandleFunc("/v1/ui/status", server.handleUIStatus)
 	mux.HandleFunc("/v1/ui/operator-mount-write-grants", server.handleUIOperatorMountWriteGrants)
 	mux.HandleFunc("/v1/ui/events", server.handleUIEvents)
