@@ -315,7 +315,7 @@ Completed in this subphase:
 
 ## Phase G: Replay-Window And Saturation Review
 
-Status: **pending**
+Status: **completed**
 
 Focus:
 - make replay retention and saturation behavior match real session lifetime and operator expectations
@@ -335,6 +335,16 @@ Acceptance criteria:
 
 Rollback:
 - constant/config rollback if tuning is too aggressive
+
+Completed in this phase:
+- reduced replay-state retention from 24 hours to the 1-hour control-session TTL
+- applied the tighter window consistently to:
+  - request replay entries
+  - auth nonce replay entries
+  - used single-use tokens
+  - terminal approval rows retained for replay/conflict visibility
+- left fail-closed replay-store saturation caps unchanged because the tighter retention window already reduces steady-state pressure substantially
+- added prune regressions for replay state and terminal approvals so the shorter retention remains intentional
 
 ## Phase H: Audit Integrity Posture Surfacing
 
@@ -431,8 +441,8 @@ Rollback:
 
 Start with:
 
-1. Phase G replay-window and saturation review
-2. then Phase H audit integrity posture surfacing
+1. Phase H audit integrity posture surfacing
+2. then Phase I policy-sign trust-path cleanup and CI baseline follow-through
 
-That keeps the now-unblocked retention/saturation review ahead of the next
-operator-facing integrity posture pass.
+That keeps the next operator-facing integrity posture work ahead of the
+remaining signer hardening and release-closure cleanup.

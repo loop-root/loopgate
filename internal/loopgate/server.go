@@ -189,9 +189,12 @@ type controlSession struct {
 }
 
 const (
-	sessionTTL                     = 1 * time.Hour
-	approvalTTL                    = 5 * time.Minute
-	requestReplayWindow            = 24 * time.Hour
+	sessionTTL  = 1 * time.Hour
+	approvalTTL = 5 * time.Minute
+	// Replay-tracked request IDs, auth nonces, used single-use tokens, and terminal approval
+	// rows only need to outlive the authoritative session lifetime. Keeping them longer than the
+	// 1-hour control-session TTL inflates in-memory state without adding meaningful protection.
+	requestReplayWindow            = sessionTTL
 	requestSignatureSkew           = 2 * time.Minute
 	maxOpenSessionBodyBytes        = 16 * 1024
 	maxCapabilityBodyBytes         = 512 * 1024
