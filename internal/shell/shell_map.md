@@ -9,7 +9,7 @@ Use it when changing:
 
 ## Core Role
 
-`internal/shell/` implements `HandleCommand` and a catalog of **operator commands** for the active Loopgate MVP (runtime config, tools, sandbox, memory, and other local control-plane workflows). This package supports terminal-based workflows and integration tests that drive the same Loopgate backends as **HTTP** control-plane clients (**in-tree MCP removed** — ADR 0010).
+`internal/shell/` implements `HandleCommand` and a catalog of **operator commands** for the active Loopgate MVP (runtime config, tools, sandbox, site inspection, connection management, and other local control-plane workflows). This package supports terminal-based workflows and integration tests that drive the same Loopgate backends as **HTTP** control-plane clients (**in-tree MCP removed** — ADR 0010).
 
 ## Key Files
 

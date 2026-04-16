@@ -22,7 +22,7 @@ Use it when changing:
 ## Relationship Notes
 
 - Ledger: `internal/ledger/`
-- Distillation / memory pipelines may read cursor fields — keep semantics documented when bumping schema.
+- Derived maintenance flows may read cursor fields — keep semantics documented when bumping schema.
 
 ## Important Watchouts
 

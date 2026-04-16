@@ -9,9 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"loopgate/internal/audit"
 	"loopgate/internal/config"
-	"loopgate/internal/ledger"
 	"loopgate/internal/loopgate"
 	modelruntime "loopgate/internal/modelruntime"
 	"loopgate/internal/sandbox"
@@ -643,21 +641,6 @@ func capabilityNamesFromStatus(status loopgate.StatusResponse) []string {
 		names = append(names, capability.Name)
 	}
 	return names
-}
-
-func writeContinuityLedger(t *testing.T, repoRoot string, ledgerEvents ...ledger.Event) {
-	t.Helper()
-
-	ledgerPath := filepath.Join(repoRoot, "core", "memory", "ledger", "ledger.jsonl")
-	if err := os.MkdirAll(filepath.Dir(ledgerPath), 0o700); err != nil {
-		t.Fatalf("mkdir ledger dir: %v", err)
-	}
-
-	for _, ledgerEvent := range ledgerEvents {
-		if err := audit.RecordMustPersist(ledgerPath, ledgerEvent); err != nil {
-			t.Fatalf("write ledger event: %v", err)
-		}
-	}
 }
 
 func testPolicyYAML(writeRequiresApproval bool) string {

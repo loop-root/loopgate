@@ -129,6 +129,7 @@ Completed in this phase so far:
 - tightened ignore coverage for memory ledger/distillate backup artifacts
 - moved tracked runtime sandbox/state artifacts out of source control and made `runtime/` fully gitignored
 - sanitized remaining hardcoded local paths in active docs and tests
+- removed a dead shell-test helper that still wrote to the extracted `core/memory/ledger/` path and tightened active internal maps so they no longer describe memory-only tooling as part of the current Loopgate surface
 
 ## Phase 5: Security hardening pass on the local-first core
 

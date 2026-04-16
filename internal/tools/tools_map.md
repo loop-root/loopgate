@@ -7,7 +7,7 @@ Use it when changing:
 - the real capability surface available to operator clients (via Loopgate)
 - native structured tool definitions
 - legacy actor-scoped tool registration labels that are still being cleaned up
-- explicit remembered-fact tools
+- filesystem, host-folder, and shell tool registration
 - sandbox-local execution behavior
 
 ## Core Role
@@ -33,13 +33,12 @@ This layer is important because:
   - default registry builders
   - currently the place where sandbox and default tool bundles are assembled
 - **Operator mount tools** (`operator_mount.fs_*`) are registered from `internal/loopgate/operator_mount.go` (not this package): session-scoped host directory access from pinned operator mount paths on `POST /v1/session/open`; optional `primary_operator_mount_path` selects the default root for relative paths without widening allowed roots
-- `memory_tools.go`
-  - explicit remembered-fact tool definition
-  - capability contract only; real execution is routed through Loopgate's dedicated memory path
 - `fs_read.go`
 - `fs_list.go`
 - `fs_write.go`
   - core filesystem tools
+- `host_folder_tools.go`
+  - Loopgate-routed host folder read/list/organize/apply tool contracts
 - `shell_exec.go`
   - shell execution tool
 - `path_open.go`
