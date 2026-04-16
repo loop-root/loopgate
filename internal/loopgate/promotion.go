@@ -17,7 +17,6 @@ import (
 
 const (
 	PromotionTargetDisplay = "display"
-	PromotionTargetMemory  = "memory"
 	PromotionTargetPrompt  = "prompt"
 
 	promotionTransformationIdentityCopy = "identity_copy"
@@ -68,7 +67,7 @@ func (validatedPromotionRequest promotionRequest) Validate() error {
 		return fmt.Errorf("source_content_sha256 is required")
 	}
 	switch validatedPromotionRequest.PromotionTarget {
-	case PromotionTargetDisplay, PromotionTargetMemory, PromotionTargetPrompt:
+	case PromotionTargetDisplay, PromotionTargetPrompt:
 	default:
 		return fmt.Errorf("invalid promotion target %q", validatedPromotionRequest.PromotionTarget)
 	}
@@ -257,9 +256,6 @@ func derivePromotedFieldMetadata(sourceFieldValue interface{}, promotionTarget s
 	case PromotionTargetDisplay:
 		resultFieldMetadata.PromptEligible = false
 		resultFieldMetadata.MemoryEligible = false
-	case PromotionTargetMemory:
-		resultFieldMetadata.PromptEligible = false
-		resultFieldMetadata.MemoryEligible = true
 	case PromotionTargetPrompt:
 		resultFieldMetadata.PromptEligible = true
 		resultFieldMetadata.MemoryEligible = false
@@ -286,13 +282,6 @@ func canonicalDerivedClassificationForTarget(promotionTarget string) (ResultClas
 	case PromotionTargetDisplay:
 		return normalizeResultClassification(ResultClassification{
 			Exposure: ResultExposureDisplay,
-		}, "")
-	case PromotionTargetMemory:
-		return normalizeResultClassification(ResultClassification{
-			Exposure: ResultExposureNone,
-			Eligibility: ResultEligibility{
-				Memory: true,
-			},
 		}, "")
 	case PromotionTargetPrompt:
 		return normalizeResultClassification(ResultClassification{

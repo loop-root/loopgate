@@ -39,7 +39,7 @@ func httpStatusForResponse(response CapabilityResponse) int {
 			DenialCodeRequestSignatureMissing, DenialCodeRequestSignatureInvalid, DenialCodeRequestTimestampInvalid,
 			DenialCodeRequestNonceReplayDetected, DenialCodeControlSessionBindingInvalid:
 			return http.StatusUnauthorized
-		case DenialCodeApprovalNotFound, DenialCodeContinuityInspectionNotFound:
+		case DenialCodeApprovalNotFound:
 			return http.StatusNotFound
 		case DenialCodeRequestReplayDetected, DenialCodeCapabilityTokenReused, DenialCodeApprovalStateConflict,
 			DenialCodeQuarantinePruneNotEligible:

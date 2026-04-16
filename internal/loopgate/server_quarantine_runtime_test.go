@@ -736,41 +736,6 @@ func TestPromoteQuarantinedArtifact_DeniesNestedOrNonScalarSelection(t *testing.
 	}
 }
 
-func TestPromoteQuarantinedArtifact_DeniesTaintedTextForMemoryTarget(t *testing.T) {
-	repoRoot := t.TempDir()
-	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	sourcePayload := `{"summary":"tainted remote text"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
-		RequestID:  "req-promote-memory",
-		Capability: "remote_fetch",
-	}, sourcePayload)
-	if err != nil {
-		t.Fatalf("store quarantined payload: %v", err)
-	}
-
-	derivedClassification, err := canonicalDerivedClassificationForTarget(PromotionTargetMemory)
-	if err != nil {
-		t.Fatalf("canonical derived classification: %v", err)
-	}
-
-	_, err = server.promoteQuarantinedArtifact(promotionRequest{
-		SourceQuarantineRef:   sourceQuarantineRef,
-		SourceContentSHA256:   payloadSHA256(sourcePayload),
-		PromotionTarget:       PromotionTargetMemory,
-		PromotedBy:            "operator_123",
-		SelectedFieldPaths:    []string{"summary"},
-		TransformationType:    promotionTransformationIdentityCopy,
-		DerivedClassification: derivedClassification,
-	})
-	if err == nil {
-		t.Fatal("expected tainted text promotion to memory to be denied")
-	}
-	if !strings.Contains(err.Error(), "display-only") {
-		t.Fatalf("unexpected tainted text memory denial: %v", err)
-	}
-}
-
 func TestPromoteQuarantinedArtifact_DeniesTaintedTextForPromptTarget(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
