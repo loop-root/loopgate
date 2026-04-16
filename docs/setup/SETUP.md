@@ -46,6 +46,8 @@ runtime/state/loopgate.sock
 ## Sign and apply policy
 
 Loopgate requires a valid detached signature for `core/policy/policy.yaml`.
+If you are using your own signer, install its public key into the operator trust directory first. See [Policy signing](./POLICY_SIGNING.md).
+If you use a custom `key_id`, pass it to both `loopgate-policy-sign -verify-setup` and `loopgate-policy-admin apply -verify-setup`.
 
 Validate signer setup and sign:
 

@@ -28,10 +28,14 @@ future enterprise transport design.
 These need to be fixed before a credible V1 / OSS release:
 
 - nonce replay persistence on the authenticated hot path
-- wrong denial code for `fs_read` rate limiting
-- misleading signed-request parser naming
 - missing authoritative audit records for auth-token failures
 - unnecessary epoch key material exposure on the wire
+
+Resolved ship-blocker items:
+
+- user-configurable policy signing trust anchor for open-source operators
+- wrong denial code for `fs_read` rate limiting
+- misleading signed-request parser naming
 
 ### Hardening after blocker closure
 
@@ -39,8 +43,9 @@ These are important, but not in the same “fix before V1” bucket:
 
 - HMAC checkpoint default posture and operator surfacing
 - replay-window and replay-store sizing review
-- policy-sign trust-path cleanup
+- policy-sign trust-path cleanup beyond the OSS trust-anchor blocker
 - stronger `loopgate-policy-sign` test coverage
+- `go test` execution in CI
 
 ## Working rules
 
@@ -114,7 +119,55 @@ Completed in this phase:
 - renamed `parseAndValidateSignedControlPlaneRequest(...)` to `parseSignedControlPlaneHeaders(...)`
 - replaced the hardcoded `"8 hours"` operator-mount approval text with the real TTL-derived string
 
-## Phase C: Auth Failure Audit Contract
+## Phase C: Policy Signing Trust Anchor Configuration
+
+Status: **completed**
+
+Focus:
+- remove the open-source launch blocker where the binary trusts only the compiled-in key
+
+Problem to solve:
+- the current docs tell operators to generate their own Ed25519 signer
+- the current binary will not trust that signer unless source is modified and rebuilt
+
+Recommended design direction:
+- support an operator-local trust-anchor source outside the repo
+- keep the compiled-in trust anchor as a fallback, not the only production path
+- avoid repo-local trust anchors that would weaken the detached-signature boundary back into ordinary repo editability
+
+Candidate implementation shape:
+- add an operator trust-anchor file under the Loopgate config directory
+- allow explicit file override for advanced operators
+- load:
+  - compiled default trust anchor
+  - plus optional operator-local trust anchors
+- require explicit `key_id` matching, not just “first key wins”
+
+Files likely involved:
+- `internal/config/policy_signing.go`
+- `internal/config/policy_signing_verify.go`
+- `cmd/loopgate-policy-sign/main.go`
+- `cmd/loopgate-policy-sign/main_test.go`
+- `docs/setup/POLICY_SIGNING.md`
+- `docs/setup/GETTING_STARTED.md`
+
+Acceptance criteria:
+- a fresh open-source user can generate a signer and a trust anchor without editing source
+- the trust anchor does not need to live in the repo checkout
+- existing built-in trust behavior still works unless intentionally overridden
+- signer/setup verification reflects the new trust-anchor source honestly
+
+Rollback:
+- keep the built-in trust anchor path intact while landing the operator-local trust source so the new source can be backed out independently
+
+Completed in this phase:
+- added operator-local trust-anchor loading from `os.UserConfigDir()/Loopgate/policy-signing/trusted/`
+- added `LOOPGATE_POLICY_SIGNING_TRUST_DIR` as an explicit override for advanced and test use
+- kept the compiled fallback trust anchor in place while allowing operator-installed public keys outside the repo
+- added config and CLI tests covering operator trust-anchor loading and `verify-setup`
+- updated policy-signing and setup docs so open-source users can generate their own signer and install the matching public key without editing source
+
+## Phase D: Auth Failure Audit Contract
 
 Status: **pending**
 
@@ -158,7 +211,7 @@ Acceptance criteria:
 Rollback:
 - helper-isolated revert possible if behavior proves too coupled
 
-## Phase D: Session MAC Response Minimization
+## Phase E: Session MAC Response Minimization
 
 Status: **pending**
 
@@ -181,7 +234,7 @@ Acceptance criteria:
 Rollback:
 - response field can be restored temporarily if an unexpected client dependency appears
 
-## Phase E: Nonce Replay Persistence Redesign
+## Phase F: Nonce Replay Persistence Redesign
 
 Status: **pending**
 
@@ -226,7 +279,7 @@ Acceptance criteria:
 Rollback:
 - switch back to the old persistence implementation behind the seam if needed
 
-## Phase F: Replay-Window And Saturation Review
+## Phase G: Replay-Window And Saturation Review
 
 Status: **pending**
 
@@ -249,7 +302,7 @@ Acceptance criteria:
 Rollback:
 - constant/config rollback if tuning is too aggressive
 
-## Phase G: Audit Integrity Posture Surfacing
+## Phase H: Audit Integrity Posture Surfacing
 
 Status: **pending**
 
@@ -276,28 +329,30 @@ Acceptance criteria:
 Rollback:
 - surfacing changes are low-risk; any default-on decision should be separate
 
-## Phase H: Policy-Sign Trust Path Cleanup
+## Phase I: Policy-Sign Trust Path Cleanup And CI Baseline
 
 Status: **pending**
 
 Focus:
-- remove ambiguous test-only trust behavior from the signer path
+- remove remaining trust ambiguity from the signer path and make regressions harder to miss
 
 Planned work:
 - delete dead `verifyPolicySignatureFile(...)`
 - replace `runningUnderGoTestBinary()` with a real test-only mechanism
 - expand `cmd/loopgate-policy-sign` and `internal/config` tests
+- add `go test ./...` to CI, then evaluate `-race` viability separately if runner cost is acceptable
 
 Acceptance criteria:
 - production binaries cannot enable test trust by argv naming
 - signer/operator flow has stronger test coverage
+- PRs and pushes run the test suite automatically
 - docs still match the real trust path
 
 Rollback:
 - dead-code removal is trivial
 - trust-path change should stay isolated enough to revert independently
 
-## Phase I: Readiness Closure
+## Phase J: Readiness Closure
 
 Status: **pending**
 
@@ -326,20 +381,21 @@ Rollback:
 
 1. Phase A: baseline and blocker classification
 2. Phase B: low-risk blocker fixes
-3. Phase C: auth failure audit contract and implementation
-4. Phase D: session MAC response minimization
-5. Phase E: nonce replay persistence redesign
-6. Phase F: replay-window and saturation review
-7. Phase G: audit integrity posture surfacing
-8. Phase H: policy-sign trust-path cleanup
-9. Phase I: readiness closure
+3. Phase C: policy signing trust anchor configuration
+4. Phase D: auth failure audit contract and implementation
+5. Phase E: session MAC response minimization
+6. Phase F: nonce replay persistence redesign
+7. Phase G: replay-window and saturation review
+8. Phase H: audit integrity posture surfacing
+9. Phase I: policy-sign trust-path cleanup and CI baseline
+10. Phase J: readiness closure
 
 ## Immediate next step
 
 Start with:
 
-1. Phase A baseline
-2. Phase B code slice
+1. Phase C trust-anchor implementation slice
+2. then Phase D auth-failure audit work
 
-That gives the project one safe correctness checkpoint before touching auth
-audit behavior or the nonce persistence redesign.
+That keeps the open-source launch blocker ahead of the next forensic/audit
+improvement slice.

@@ -46,6 +46,12 @@ Leave Loopgate running in its own terminal.
 
 In another terminal:
 
+If this is a fresh open-source setup and you are using your own signer, install your public key into the operator trust directory first. See [Policy signing](./POLICY_SIGNING.md).
+
+If you chose a custom `key_id`, pass it to every `-verify-setup` command:
+- `go run ./cmd/loopgate-policy-sign -key-id "$KEY_ID" -verify-setup`
+- `go run ./cmd/loopgate-policy-admin apply -key-id "$KEY_ID" -verify-setup`
+
 ```bash
 go run ./cmd/loopgate-policy-admin validate
 go run ./cmd/loopgate-policy-sign -verify-setup
@@ -107,6 +113,7 @@ sequenceDiagram
   - rerun `go run ./cmd/loopgate install-hooks`
 - Policy changes are not taking effect:
   - rerun `validate`, `-verify-setup`, and `apply -verify-setup`
+  - if you use a custom signer, make sure the same `-key-id` is passed to both verification commands
 - A task was denied and you want to know why:
   - `go run ./cmd/loopgate-ledger tail -verbose`
 - You want a structured local diagnostic snapshot:

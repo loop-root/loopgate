@@ -29,7 +29,8 @@ Use it when changing:
   - reads `core/policy/policy.yaml`
   - signs it with a PKCS#8 PEM-encoded Ed25519 private key supplied by the operator
   - resolves the signer key from `-private-key-file`, then `LOOPGATE_POLICY_SIGNING_PRIVATE_KEY_FILE`, then the default operator path under `os.UserConfigDir()/Loopgate/policy-signing/`
-  - `-verify-setup` checks that the embedded trust anchor, current `policy.yaml.sig`, and resolved private key all match before rollout
+  - trusts the compiled fallback key plus any operator-local public keys under `os.UserConfigDir()/Loopgate/policy-signing/trusted/` (or `LOOPGATE_POLICY_SIGNING_TRUST_DIR`)
+  - `-verify-setup` checks that the trusted public key, current `policy.yaml.sig`, and resolved private key all match before rollout
   - writes `core/policy/policy.yaml.sig`
 
 ## `cmd/loopgate-policy-admin/`
@@ -40,7 +41,7 @@ Use it when changing:
   - diffs two normalized policy documents so operators can review effective changes before signing
   - renders starter admin policy templates for `strict-mvp` and `developer`
   - hot-applies the already signed on-disk policy to a running local Loopgate instance via `apply`
-  - `apply -verify-setup` also verifies the local signer key against the embedded trust anchor before hot reload
+  - `apply -verify-setup` also verifies the local signer key against the trusted public key set before hot reload
   - treats detached signature verification as required for the default repo policy path and optional for ad hoc template files
 
 ## `cmd/loopgate-doctor/`

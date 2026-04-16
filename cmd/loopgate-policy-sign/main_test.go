@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"loopgate/internal/config"
 	"loopgate/internal/testutil"
 )
 
@@ -23,6 +24,47 @@ func TestResolvePolicySigningPrivateKeyPath_PrefersFlag(t *testing.T) {
 	}
 	if source != "-private-key-file" {
 		t.Fatalf("expected flag source, got %q", source)
+	}
+}
+
+func TestVerifyPolicySigningSetup_SucceedsWithOperatorTrustAnchor(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate operator signer: %v", err)
+	}
+
+	trustDir := t.TempDir()
+	t.Setenv("LOOPGATE_POLICY_SIGNING_TRUST_DIR", trustDir)
+	if err := writePEMEncodedEd25519PublicKey(filepath.Join(trustDir, "loopgate-local-root.pub.pem"), publicKey); err != nil {
+		t.Fatalf("write trust anchor: %v", err)
+	}
+
+	repoRoot := t.TempDir()
+	rawPolicyBytes := []byte("version: \"1\"\n")
+	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
+	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(policyPath, rawPolicyBytes, 0o600); err != nil {
+		t.Fatalf("write policy yaml: %v", err)
+	}
+	signatureFile, err := config.SignPolicyDocument(rawPolicyBytes, "loopgate-local-root", privateKey)
+	if err != nil {
+		t.Fatalf("sign policy yaml: %v", err)
+	}
+	if err := config.WritePolicySignatureYAML(repoRoot, signatureFile); err != nil {
+		t.Fatalf("write policy signature yaml: %v", err)
+	}
+
+	privateKeyPath := filepath.Join(t.TempDir(), "loopgate-local-root.pem")
+	writePEMEncodedEd25519PrivateKey(t, privateKeyPath, privateKey, 0o600)
+
+	verificationResult, err := verifyPolicySigningSetup(repoRoot, privateKeyPath, "-private-key-file", "loopgate-local-root")
+	if err != nil {
+		t.Fatalf("verify policy signing setup: %v", err)
+	}
+	if verificationResult.SignatureKeyID != "loopgate-local-root" {
+		t.Fatalf("expected signature key_id %q, got %q", "loopgate-local-root", verificationResult.SignatureKeyID)
 	}
 }
 
@@ -134,4 +176,16 @@ func writePEMEncodedEd25519PrivateKey(t *testing.T, path string, privateKey ed25
 	if err := os.WriteFile(path, privateKeyPEM, permissions); err != nil {
 		t.Fatalf("write private key: %v", err)
 	}
+}
+
+func writePEMEncodedEd25519PublicKey(path string, publicKey ed25519.PublicKey) error {
+	publicKeyDER, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return err
+	}
+	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicKeyDER,
+	})
+	return os.WriteFile(path, publicKeyPEM, 0o644)
 }

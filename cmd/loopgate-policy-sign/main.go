@@ -21,7 +21,7 @@ func main() {
 	policyPathFlag := signFlags.String("policy-file", "", "path to the policy YAML file to sign")
 	privateKeyPathFlag := signFlags.String("private-key-file", "", "path to a PKCS#8 PEM-encoded Ed25519 private key (overrides "+policySigningPrivateKeyFileEnv+" and the default operator path)")
 	keyIDFlag := signFlags.String("key-id", config.PolicySigningTrustAnchorKeyID, "trusted signing key identifier")
-	verifySetupFlag := signFlags.Bool("verify-setup", false, "verify that the embedded trust anchor, current policy signature, and operator signer key all line up")
+	verifySetupFlag := signFlags.Bool("verify-setup", false, "verify that the trusted public key, current policy signature, and operator signer key all line up")
 	if err := signFlags.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
 	}

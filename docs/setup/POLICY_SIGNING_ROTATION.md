@@ -9,19 +9,24 @@ This runbook covers the two real operator workflows for Loopgate policy signing:
 
 Those are not the same operation.
 
-## What is fixed by the binary
+## What Loopgate trusts
 
-Loopgate does **not** trust arbitrary local private keys. It trusts the Ed25519 public key embedded in `internal/config/policy_signing.go`.
+Loopgate trusts:
 
-Today that trust anchor is:
+- the compiled fallback public key in `internal/config/policy_signing.go`
+- any operator-installed public keys in the local trust directory
 
-- `key_id`: `loopgate-policy-root-2026-04`
-- constant: `PolicySigningTrustAnchorKeyID`
+Default operator trust directory on macOS:
+
+```text
+~/Library/Application Support/Loopgate/policy-signing/trusted/
+```
 
 Implication:
 
-- If you still control the matching private key, you can keep signing policy with no binary change.
-- If that private key is lost or suspected compromised, you do **not** have an in-place key swap. You must rotate the trust anchor and ship a new Loopgate binary that trusts the new public key.
+- if you still control the matching private key, you can keep signing policy with no binary change
+- if you want a new signer, you can install a new public key under a new `key_id` in the trust directory without editing source
+- if the compiled fallback key itself must change, that still requires a binary change
 
 ## A. Restore the same trusted signer
 
@@ -56,7 +61,7 @@ go run ./cmd/loopgate-policy-sign
 go test ./cmd/loopgate ./internal/config -count=1
 ```
 
-Do **not** generate a fresh key for this path. A new private key will not match the public key embedded in the current binary.
+Do **not** generate a fresh key for this path unless you also replace the matching public key in the operator trust directory for the same `key_id`.
 
 ## B. Planned trust-anchor rotation
 
@@ -71,20 +76,25 @@ openssl genpkey -algorithm Ed25519 -out /tmp/loopgate-policy-root-next.pem
 chmod 600 /tmp/loopgate-policy-root-next.pem
 ```
 
-Derive the public key in PKIX DER base64 for the embedded trust anchor:
-
-```bash
-openssl pkey -in /tmp/loopgate-policy-root-next.pem -pubout -outform DER | base64
-```
-
 Choose a new `key_id` that is explicit and monotonic, for example `loopgate-policy-root-2026-05`.
 
-### 2. Update the trusted public key in code
+Derive the public key PEM for the operator trust directory:
 
-Edit `internal/config/policy_signing.go`:
+```bash
+openssl pkey -in /tmp/loopgate-policy-root-next.pem -pubout
+```
 
-- replace `PolicySigningTrustAnchorKeyID`
-- replace `policySigningTrustAnchorDERBase64`
+### 2. Install the new public key in the operator trust directory
+
+Install the public key under that `key_id`:
+
+```bash
+install -d -m 700 "$HOME/Library/Application Support/Loopgate/policy-signing/trusted"
+openssl pkey \
+  -in /tmp/loopgate-policy-root-next.pem \
+  -pubout \
+  -out "$HOME/Library/Application Support/Loopgate/policy-signing/trusted/loopgate-policy-root-2026-05.pub.pem"
+```
 
 Do not reuse the old `key_id` for a different public key. That would blur audit meaning and rollback handling.
 
@@ -126,7 +136,7 @@ go run ./cmd/loopgate
 
 ### 6. Retire the old signer
 
-After the new binary and new signature are live everywhere that matters:
+After the new public key and new signature are live everywhere that matters:
 
 - remove the old private key from operator custody
 - revoke any backup handling path for the old key
@@ -139,15 +149,15 @@ If the current policy-signing private key is suspected exposed:
 1. Stop treating the current signer as authoritative for new policy changes.
 2. Preserve the currently deployed `policy.yaml` and `policy.yaml.sig` as evidence; do not rewrite them with the compromised key.
 3. Generate a new Ed25519 keypair.
-4. Rotate the embedded trust anchor in `internal/config/policy_signing.go`.
+4. Install a replacement public key under a new `key_id` in the operator trust directory.
 5. Re-sign `core/policy/policy.yaml` with the new signer.
-6. Roll out the new Loopgate binary and the new signature together.
+6. Roll out the updated signed policy and keep operator trust stores consistent everywhere that matters.
 7. Remove the compromised private key from every operator path and backup location you can control.
 
 Important:
 
 - A compromised signer is **not** fixed by moving the same file to a new path.
-- A compromised signer is **not** fixed by generating a new local private key unless the binary trust anchor changes too.
+- A compromised signer is **not** fixed by generating a new local private key unless the trusted public key for the intended `key_id` changes too.
 
 ## D. Rollback discipline
 
@@ -159,7 +169,7 @@ Treat these as a matched set:
 
 Rollback rules:
 
-- If you roll back the binary to an older embedded trust anchor, restore the matching signed policy file too.
+- If you rely on the compiled fallback trust anchor and roll back the binary, restore the matching signed policy file too.
 - Do not mix a new binary with an old signature unless that old `key_id` is still trusted by that binary.
 - Do not reuse a `key_id` across different public keys.
 

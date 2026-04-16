@@ -22,6 +22,8 @@ const (
 	policySignatureMessagePrefix      = "loopgate-policy-signature-v1\n"
 	PolicySigningTrustAnchorKeyID     = "loopgate-policy-root-2026-04"
 	policySigningTrustAnchorDERBase64 = "MCowBQYDK2VwAyEAEv/fxKaSKQMrZ8brWkB4ZbefF5q5G7RstOHOhqJzEbE="
+	policySigningTrustDirEnv          = "LOOPGATE_POLICY_SIGNING_TRUST_DIR"
+	policySigningPublicKeySuffix      = ".pub.pem"
 
 	testPolicySigningKeyIDEnv     = "LOOPGATE_TEST_POLICY_SIGNING_KEY_ID"
 	testPolicySigningPublicKeyEnv = "LOOPGATE_TEST_POLICY_SIGNING_PUBLIC_KEY"
@@ -147,6 +149,19 @@ func trustedPolicySigningKeys() (map[string]ed25519.PublicKey, error) {
 	trustedKeys := map[string]ed25519.PublicKey{
 		PolicySigningTrustAnchorKeyID: builtinPublicKey,
 	}
+	operatorTrustedKeys, err := loadOperatorTrustedPolicySigningKeys()
+	if err != nil {
+		return nil, err
+	}
+	for keyID, publicKey := range operatorTrustedKeys {
+		existingKey, exists := trustedKeys[keyID]
+		switch {
+		case !exists:
+			trustedKeys[keyID] = publicKey
+		case !publicKeysEqual(existingKey, publicKey):
+			return nil, fmt.Errorf("operator trust anchor for key_id %q conflicts with an already trusted public key", keyID)
+		}
+	}
 	if !runningUnderGoTestBinary() {
 		return trustedKeys, nil
 	}
@@ -175,6 +190,72 @@ func trustedPolicySigningKeys() (map[string]ed25519.PublicKey, error) {
 	return trustedKeys, nil
 }
 
+func loadOperatorTrustedPolicySigningKeys() (map[string]ed25519.PublicKey, error) {
+	trustDir, err := resolvePolicySigningTrustDir()
+	if err != nil {
+		return nil, err
+	}
+
+	dirEntries, err := os.ReadDir(trustDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]ed25519.PublicKey{}, nil
+		}
+		return nil, fmt.Errorf("read policy signing trust dir %s: %w", trustDir, err)
+	}
+
+	trustedKeys := make(map[string]ed25519.PublicKey)
+	for _, dirEntry := range dirEntries {
+		if dirEntry.IsDir() {
+			continue
+		}
+		entryName := strings.TrimSpace(dirEntry.Name())
+		if !strings.HasSuffix(entryName, policySigningPublicKeySuffix) {
+			continue
+		}
+
+		keyID := strings.TrimSuffix(entryName, policySigningPublicKeySuffix)
+		if err := identifiers.ValidateSafeIdentifier("policy signing trust anchor key_id", keyID); err != nil {
+			return nil, fmt.Errorf("invalid policy signing trust anchor filename %q: %w", entryName, err)
+		}
+
+		publicKeyPath := filepath.Join(trustDir, entryName)
+		rawPublicKeyBytes, err := os.ReadFile(publicKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("read policy signing trust anchor %s: %w", publicKeyPath, err)
+		}
+		publicKey, err := ParsePolicySigningPublicKeyPEM(rawPublicKeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("parse policy signing trust anchor %s: %w", publicKeyPath, err)
+		}
+
+		existingKey, exists := trustedKeys[keyID]
+		switch {
+		case !exists:
+			trustedKeys[keyID] = publicKey
+		case !publicKeysEqual(existingKey, publicKey):
+			return nil, fmt.Errorf("policy signing trust dir contains multiple different public keys for key_id %q", keyID)
+		}
+	}
+
+	return trustedKeys, nil
+}
+
+func resolvePolicySigningTrustDir() (string, error) {
+	if trustDir := strings.TrimSpace(os.Getenv(policySigningTrustDirEnv)); trustDir != "" {
+		return filepath.Clean(trustDir), nil
+	}
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("determine default policy signing trust dir: %w", err)
+	}
+	return defaultPolicySigningTrustDirForConfigDir(configDir), nil
+}
+
+func defaultPolicySigningTrustDirForConfigDir(configDir string) string {
+	return filepath.Join(filepath.Clean(configDir), "Loopgate", "policy-signing", "trusted")
+}
+
 func parseTrustedPolicySigningPublicKey(derBase64 string) (ed25519.PublicKey, error) {
 	derBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(derBase64))
 	if err != nil {
@@ -194,8 +275,45 @@ func parseTrustedPolicySigningPublicKey(derBase64 string) (ed25519.PublicKey, er
 	return append(ed25519.PublicKey(nil), publicKey...), nil
 }
 
+func ParsePolicySigningPublicKeyPEM(rawPublicKeyBytes []byte) (ed25519.PublicKey, error) {
+	publicKeyBlock, remainingBytes := pem.Decode(rawPublicKeyBytes)
+	if publicKeyBlock == nil {
+		return nil, fmt.Errorf("policy signing public key PEM block not found")
+	}
+	if strings.TrimSpace(string(remainingBytes)) != "" {
+		return nil, fmt.Errorf("policy signing public key PEM contains trailing data")
+	}
+	if strings.TrimSpace(publicKeyBlock.Type) != "PUBLIC KEY" {
+		return nil, fmt.Errorf("policy signing public key PEM type must be PUBLIC KEY")
+	}
+	publicKeyAny, err := x509.ParsePKIXPublicKey(publicKeyBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse policy signing public key PEM: %w", err)
+	}
+	publicKey, ok := publicKeyAny.(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("policy signing public key is not ed25519")
+	}
+	if len(publicKey) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("policy signing public key must be %d bytes", ed25519.PublicKeySize)
+	}
+	return append(ed25519.PublicKey(nil), publicKey...), nil
+}
+
 func runningUnderGoTestBinary() bool {
 	return strings.HasSuffix(filepath.Base(os.Args[0]), ".test")
+}
+
+func publicKeysEqual(left ed25519.PublicKey, right ed25519.PublicKey) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for idx := range left {
+		if left[idx] != right[idx] {
+			return false
+		}
+	}
+	return true
 }
 
 func policySignatureMessage(rawPolicyBytes []byte) []byte {

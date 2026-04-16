@@ -27,7 +27,7 @@ func VerifyPolicySigningSetup(repoRoot string, privateKeyPath string, expectedKe
 	}
 
 	if _, err := LoadPolicyWithHash(repoRoot); err != nil {
-		return PolicySigningSetupVerification{}, fmt.Errorf("verify policy signature against embedded trust anchor: %w", err)
+		return PolicySigningSetupVerification{}, fmt.Errorf("verify policy signature against trusted public keys: %w", err)
 	}
 
 	signatureFile, err := LoadPolicySignatureFile(repoRoot)

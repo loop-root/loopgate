@@ -58,6 +58,8 @@ If Claude says a hook script is missing, reinstall first before disabling anythi
 
 ### 3. Validate and sign policy
 
+If you use a custom signer `key_id`, pass it to both `-verify-setup` commands below.
+
 ```bash
 go run ./cmd/loopgate-policy-admin validate
 go run ./cmd/loopgate-policy-sign -verify-setup
@@ -98,6 +100,14 @@ Use this flow:
 go run ./cmd/loopgate-policy-admin validate
 go run ./cmd/loopgate-policy-sign -verify-setup
 go run ./cmd/loopgate-policy-admin apply -verify-setup
+```
+
+With a custom signer:
+
+```bash
+go run ./cmd/loopgate-policy-admin validate
+go run ./cmd/loopgate-policy-sign -key-id "$KEY_ID" -verify-setup
+go run ./cmd/loopgate-policy-admin apply -key-id "$KEY_ID" -verify-setup
 ```
 
 ### Check MCP broker state
