@@ -52,7 +52,7 @@ func TestRenderManPage_HasBorders(t *testing.T) {
 		t.Fatal("no man page for /sandbox")
 	}
 
-	// Single border chars from ui.SingleBorder()
+	// Shell-local panel renderer uses single-line box drawing characters.
 	if !strings.Contains(page, "┌") || !strings.Contains(page, "┘") {
 		t.Error("man page missing border characters")
 	}

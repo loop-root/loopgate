@@ -13,7 +13,6 @@ import (
 	"loopgate/internal/safety"
 	"loopgate/internal/sandbox"
 	setuppkg "loopgate/internal/setup"
-	"loopgate/internal/ui"
 
 	"github.com/chzyer/readline"
 )
@@ -193,14 +192,14 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 			}
 
 			fmt.Println(formatSiteInspectionResponse(inspectionResponse))
-			fmt.Println(ui.Approval(ui.ApprovalRequest{
+			fmt.Println(renderApproval(approvalDisplayRequest{
 				Tool:   "site trust draft",
 				Class:  loopgate.ApprovalClassLabel(loopgate.ApprovalClassCreateTrustDraft),
 				Path:   inspectionResponse.NormalizedURL,
 				Reason: "create reviewable trust draft for exact source",
 			}))
-			oldPrompt := ui.Prompt(0)
-			rl.SetPrompt(ui.ApprovalPrompt("site trust draft"))
+			oldPrompt := rl.Config.Prompt
+			rl.SetPrompt(approvalPrompt("site trust draft"))
 			answer, readErr := rl.Readline()
 			rl.SetPrompt(oldPrompt)
 			rl.Refresh()
@@ -301,14 +300,14 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 			}
 			sandboxSourcePath := strings.TrimSpace(fields[2])
 			hostDestinationPath := strings.TrimSpace(fields[3])
-			fmt.Println(ui.Approval(ui.ApprovalRequest{
+			fmt.Println(renderApproval(approvalDisplayRequest{
 				Tool:   "sandbox export",
 				Class:  loopgate.ApprovalClassLabel(loopgate.ApprovalClassExportSandboxArt),
 				Path:   displaySandboxPath(sandboxSourcePath),
 				Reason: fmt.Sprintf("export staged sandbox artifact to %s", hostDestinationPath),
 			}))
-			oldPrompt := ui.Prompt(0)
-			rl.SetPrompt(ui.ApprovalPrompt("sandbox export"))
+			oldPrompt := rl.Config.Prompt
+			rl.SetPrompt(approvalPrompt("sandbox export"))
 			answer, readErr := rl.Readline()
 			rl.SetPrompt(oldPrompt)
 			rl.Refresh()
@@ -421,7 +420,7 @@ func HandleCommand(commandContext CommandContext, input string, rl *readline.Ins
 
 	case "/policy":
 		fsCfg := commandContext.Policy.Tools.Filesystem
-		return CommandResult{Output: ui.Policy(ui.PolicyConfig{
+		return CommandResult{Output: renderPolicySummary(policyDisplayConfig{
 			Version:               commandContext.Policy.Version,
 			ReadEnabled:           fsCfg.ReadEnabled,
 			WriteEnabled:          fsCfg.WriteEnabled,
@@ -541,14 +540,14 @@ func handleSetupCommand(commandContext CommandContext, rl *readline.Instance) Co
 		return CommandResult{Output: "Denied: setup wizard requires Loopgate-backed model validation.", Handled: true}
 	}
 
-	fmt.Println(ui.WizardHeader())
+	fmt.Println(wizardHeader())
 	setupResult, err := setuppkg.RunModelWizard(context.Background(), commandContext.RepoRoot, commandContext.CurrentRuntimeConfig, commandContext.LoopgateClient.ValidateModelConfig, commandContext.LoopgateClient.StoreModelConnection, setuppkg.ProbeOpenAICompatibleModels, &readlineWizardPrompter{rl: rl})
 	if err != nil {
-		return CommandResult{Output: ui.Red("✗") + " " + err.Error(), Handled: true}
+		return CommandResult{Output: red("✗") + " " + err.Error(), Handled: true}
 	}
 
 	return CommandResult{
-		Output:               ui.WizardSummary(strings.Split(setupResult.Summary, "\n")),
+		Output:               wizardSummary(strings.Split(setupResult.Summary, "\n")),
 		Handled:              true,
 		RuntimeConfigChanged: true,
 		UpdatedRuntimeConfig: setupResult.RuntimeConfig,
@@ -581,7 +580,7 @@ func executeLoopgateCapability(commandContext CommandContext, rl *readline.Insta
 
 		approvalDisplayMetadata := sanitizeApprovalDisplayMetadata(capabilityResponse.Metadata)
 		preview, hidden := approvalPreview(loopgateresult.StructuredDisplayText(approvalDisplayMetadata), 140)
-		fmt.Println(ui.Approval(ui.ApprovalRequest{
+		fmt.Println(renderApproval(approvalDisplayRequest{
 			Tool:    capabilityRequest.Capability,
 			Class:   approvalClassDisplayLabel(approvalDisplayMetadata),
 			Path:    toString(approvalDisplayMetadata["path"]),
@@ -591,8 +590,8 @@ func executeLoopgateCapability(commandContext CommandContext, rl *readline.Insta
 			Reason:  toString(approvalDisplayMetadata["approval_reason"]),
 		}))
 
-		oldPrompt := ui.Prompt(0)
-		rl.SetPrompt(ui.ApprovalPrompt(capabilityRequest.Capability))
+		oldPrompt := rl.Config.Prompt
+		rl.SetPrompt(approvalPrompt(capabilityRequest.Capability))
 		answer, readErr := rl.Readline()
 		rl.SetPrompt(oldPrompt)
 		rl.Refresh()
@@ -757,7 +756,7 @@ func displaySandboxPath(rawPath string) string {
 
 func (prompter *readlineWizardPrompter) Ask(promptLabel string, defaultValue string) (string, error) {
 	// Style the prompt: "  ▸ label > "
-	styledPrompt := "  " + ui.Teal("▸") + " " + promptLabel
+	styledPrompt := "  " + teal("▸") + " " + promptLabel
 	originalPrompt := prompter.rl.Config.Prompt
 	prompter.rl.SetPrompt(styledPrompt)
 	answer, err := prompter.rl.ReadlineWithDefault(defaultValue)
@@ -767,7 +766,7 @@ func (prompter *readlineWizardPrompter) Ask(promptLabel string, defaultValue str
 }
 
 func (prompter *readlineWizardPrompter) AskSecret(promptLabel string) (string, error) {
-	styledPrompt := "  " + ui.Amber("▸") + " " + promptLabel
+	styledPrompt := "  " + amber("▸") + " " + promptLabel
 	secretBytes, err := prompter.rl.ReadPassword(styledPrompt)
 	if err != nil {
 		return "", err
@@ -781,11 +780,11 @@ func (prompter *readlineWizardPrompter) Select(title string, options []setuppkg.
 	prompter.rl.Clean()
 	defer prompter.rl.Refresh()
 
-	uiOptions := make([]ui.SelectOption, len(options))
+	uiOptions := make([]selectOption, len(options))
 	for i, opt := range options {
-		uiOptions[i] = ui.SelectOption{Value: opt.Value, Label: opt.Label, Desc: opt.Desc}
+		uiOptions[i] = selectOption{Value: opt.Value, Label: opt.Label, Desc: opt.Desc}
 	}
-	return ui.SelectMenu(title, uiOptions, defaultIdx)
+	return selectMenu(title, uiOptions, defaultIdx)
 }
 
 func approvalPreview(content string, maxLen int) (string, bool) {

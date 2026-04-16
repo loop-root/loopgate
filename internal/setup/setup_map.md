@@ -23,7 +23,7 @@ Use it when changing:
 
 - Runtime client: `internal/modelruntime/`
 - Loopgate connections API: `internal/loopgate/model_connections.go` (and client)
-- Terminal UI primitives: `internal/ui/`
+- Terminal prompting and selection now live in `internal/shell/`
 
 ## Important Watchouts
 

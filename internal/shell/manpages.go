@@ -1,7 +1,5 @@
 package shell
 
-import "loopgate/internal/ui"
-
 // commandManPage holds the content for a command's help/man page.
 type commandManPage struct {
 	Title       string
@@ -34,53 +32,53 @@ func isHelpRequest(arg string) bool {
 }
 
 func renderManPage(page commandManPage) string {
-	lines := []string{ui.Divider()}
+	lines := []string{divider()}
 
 	if page.Synopsis != "" {
-		lines = append(lines, ui.KV("usage", ui.White(page.Synopsis)))
-		lines = append(lines, ui.Divider())
+		lines = append(lines, renderManKV("usage", white(page.Synopsis)))
+		lines = append(lines, divider())
 	}
 
 	if len(page.Description) > 0 {
 		for _, line := range page.Description {
-			lines = append(lines, ui.Dim(line))
+			lines = append(lines, dim(line))
 		}
-		lines = append(lines, ui.Divider())
+		lines = append(lines, divider())
 	}
 
 	if len(page.Subcommands) > 0 {
-		lines = append(lines, ui.Teal("Subcommands:"))
+		lines = append(lines, teal("Subcommands:"))
 		for _, sub := range page.Subcommands {
-			name := ui.Teal(padCmd(sub.Name, 14))
+			name := teal(padCmd(sub.Name, 14))
 			args := ""
 			if sub.Args != "" {
-				args = ui.Purple(sub.Args) + "  "
+				args = purple(sub.Args) + "  "
 			}
-			lines = append(lines, "  "+name+" "+args+ui.Dim(sub.Desc))
+			lines = append(lines, "  "+name+" "+args+dim(sub.Desc))
 		}
-		lines = append(lines, ui.Divider())
+		lines = append(lines, divider())
 	}
 
 	if len(page.Examples) > 0 {
-		lines = append(lines, ui.Dim("Examples:"))
+		lines = append(lines, dim("Examples:"))
 		for _, ex := range page.Examples {
-			lines = append(lines, "  "+ui.White(ex.Command))
+			lines = append(lines, "  "+white(ex.Command))
 			if ex.Desc != "" {
-				lines = append(lines, "    "+ui.Dim(ex.Desc))
+				lines = append(lines, "    "+dim(ex.Desc))
 			}
 		}
-		lines = append(lines, ui.Divider())
+		lines = append(lines, divider())
 	}
 
 	if len(page.Notes) > 0 {
 		for _, note := range page.Notes {
-			lines = append(lines, ui.Dim(note))
+			lines = append(lines, dim(note))
 		}
-		lines = append(lines, ui.Divider())
+		lines = append(lines, divider())
 	}
 
-	return ui.PanelWithOptions(page.Title,
-		[]ui.PanelOption{ui.WithSingleBorder(), ui.WithMinWidth(62)},
+	return renderPanel(page.Title,
+		[]panelOption{withSingleBorder(), withMinWidth(62)},
 		lines...)
 }
 

@@ -12,7 +12,6 @@ import (
 	"loopgate/internal/loopgate"
 	modelruntime "loopgate/internal/modelruntime"
 	"loopgate/internal/sandbox"
-	"loopgate/internal/ui"
 )
 
 type CommandContext struct {
@@ -26,7 +25,7 @@ type CommandContext struct {
 
 func buildHelpText() string {
 	catalog := commandCatalog()
-	entries := make([]ui.HelpCommandEntry, 0, len(catalog))
+	entries := make([]helpCommandEntry, 0, len(catalog))
 	for _, cmd := range catalog {
 		args := cmd.ShortArgs
 		if args == "" {
@@ -36,13 +35,13 @@ func buildHelpText() string {
 		if desc == "" {
 			desc = cmd.Description
 		}
-		entries = append(entries, ui.HelpCommandEntry{
+		entries = append(entries, helpCommandEntry{
 			Name: cmd.Name,
 			Args: args,
 			Desc: desc,
 		})
 	}
-	return ui.HelpPanel(entries)
+	return renderHelpPanel(entries)
 }
 
 func summarizeAgent(commandContext CommandContext) string {

@@ -30,7 +30,7 @@ Use it when changing:
 
 - Results formatting: `internal/loopgateresult/`
 - Loopgate client: `internal/loopgate/client.go`
-- UI output: `internal/ui/`
+- Shell-local display rendering in this package
 
 ## Important Watchouts
 

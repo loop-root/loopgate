@@ -155,3 +155,4 @@ The immediate next cleanup slices are:
 3. keep hardening the local audit and demo surfaces without widening authority
 - Removed the dead `internal/orchestrator/` XML tool-call path after native tool use became the only live model tool surface. Prompt/compiler docs now forbid pseudo-tool XML instead of teaching a removed fallback.
 - Removed the unused `internal/threadstore/` package, which had no remaining imports in the active Loopgate repo.
+- Removed the unused `internal/signal/` package after confirming the live command entrypoints already use standard-library signal handling directly.
