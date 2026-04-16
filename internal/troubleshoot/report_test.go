@@ -19,7 +19,7 @@ func testRepoRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
-func TestBuildReport_MorphWorkspace(t *testing.T) {
+func TestBuildReport_LoopgateWorkspace(t *testing.T) {
 	root := testRepoRoot(t)
 	rc, err := LoadEffectiveRuntimeConfig(root)
 	if err != nil {

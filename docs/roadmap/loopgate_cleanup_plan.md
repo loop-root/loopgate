@@ -132,6 +132,7 @@ Completed in this phase so far:
 - removed a dead shell-test helper that still wrote to the extracted `core/memory/ledger/` path and tightened active internal maps so they no longer describe memory-only tooling as part of the current Loopgate surface
 - tightened remaining internal setup/prompt map language so the active repo no longer implies an in-tree TUI surface or a live durable memory path inside Loopgate
 - removed dead no-op morphling-class fixture helpers from integration, server, and CLI tests so the test tree no longer implies the retired class-policy path still affects active Loopgate behavior
+- trimmed stale Haven-era demo-reset targets from the troubleshoot layer and renamed the remaining workspace report test to Loopgate language
 
 ## Phase 5: Security hardening pass on the local-first core
 

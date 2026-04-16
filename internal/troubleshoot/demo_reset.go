@@ -32,10 +32,6 @@ func ResetDemoState(repoRoot string, runtimeConfig config.RuntimeConfig, socketP
 		filepath.Join(repoRoot, "runtime", "state", "config"),
 		filepath.Join(repoRoot, "runtime", "state", "policy_hash.sha256"),
 		filepath.Join(repoRoot, "runtime", "state", ".history"),
-		filepath.Join(repoRoot, "runtime", "state", "haven_desk_notes.json"),
-		filepath.Join(repoRoot, "runtime", "state", "haven_journal_resident.json"),
-		filepath.Join(repoRoot, "runtime", "state", "haven_preferences.json"),
-		filepath.Join(repoRoot, "runtime", "state", "haven_presence.json"),
 	}
 	if socketPath = filepath.Clean(socketPath); socketPath != "" {
 		resetTargets = append(resetTargets, socketPath)
