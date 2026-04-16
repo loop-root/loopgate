@@ -94,7 +94,7 @@ being moved to a separate `continuity` repo.
   - Security guarantees: `0600` file permissions for sensitive files, append-only ledger path, atomic temp-write+rename for state-like files, quarantine dir `0700`.
   - Validation/normalization: chain metadata, full prior-chain verification on append/bootstrap, canonical file paths, redacted audit metadata.
   - Gaps: hash chains are **tamper-evident within the file**, not **keyed proof of Loopgate authorship**; a same-user filesystem writer can replace a JSONL file with a new internally consistent chain. Malformed ledger content fails closed, but there is not yet signed checkpoints or remote append-only export in-tree. **Operator-facing detail:** [LEDGER_AND_AUDIT_INTEGRITY.md](setup/LEDGER_AND_AUDIT_INTEGRITY.md).
-  - Evidence: [ledger.go](../internal/ledger/ledger.go), [state.go](../internal/state/state.go), [distillate.go](../internal/memory/distillate.go), [quarantine.go](../internal/loopgate/quarantine.go).
+  - Evidence: [ledger.go](../internal/ledger/ledger.go), [state.go](../internal/state/state.go), [quarantine.go](../internal/loopgate/quarantine.go).
 - Operator client → future `morphui` bridge/browser
   - Data: delegated Loopgate credentials, display-safe UI events, approval decisions.
   - Channel: planned launch-bound local channel plus browser HTTP.

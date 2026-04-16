@@ -8,9 +8,9 @@
 | Artifact | Typical path (repo layout) | Role |
 | --- | --- | --- |
 | **Loopgate control-plane audit** | `runtime/state/loopgate_events.jsonl` (+ rotated segments / manifest under `runtime/state/loopgate_event_segments/`) | Authoritative append-only record of security-relevant control-plane actions Loopgate chose to persist |
-| **Client / orchestrator ledger** | Often `core/memory/ledger/ledger.jsonl` (layout may vary by client) | Session-scoped tool and lifecycle events on the **unprivileged** client side |
+| **Client-side companion ledger** | External to this repo after the continuity split | Session-scoped tool and lifecycle events on the **unprivileged** client side when a separate harness keeps its own append-only record |
 
-Both use the shared **`internal/ledger`** machinery: monotonic sequence fields, `previous_event_hash`, and `event_hash` per line (SHA-256 over canonical JSON **excluding** the stored `event_hash`).
+Loopgate's control-plane audit uses the shared **`internal/ledger`** machinery: monotonic sequence fields, `previous_event_hash`, and `event_hash` per line (SHA-256 over canonical JSON **excluding** the stored `event_hash`). External harnesses may reuse that package, but they are no longer part of the active Loopgate repo layout.
 
 ## What the hash chain gives you
 

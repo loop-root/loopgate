@@ -67,7 +67,7 @@ Conflict anchors let the system detect supersession and conflicts for the same l
 ## Relationship Notes
 
 - Loopgate memory/TCL integration: `internal/loopgate/memory_tcl.go` and related tests
-- Lower-level memory primitives: `internal/memory/`
+- Lower-level persistence/runtime extraction work now lives in the sibling `continuity` repo
 
 ## Important Watchouts
 

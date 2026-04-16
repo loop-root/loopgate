@@ -22,7 +22,7 @@ func TestSafePath_AllowsNormalFileUnderRepo(t *testing.T) {
 	repo := t.TempDir()
 	writeFile(t, filepath.Join(repo, "body", "real.txt"), "hello")
 
-	abs, err := SafePath(repo, []string{"."}, []string{"core/memory/ledger"}, "body/real.txt")
+	abs, err := SafePath(repo, []string{"."}, []string{"runtime/state"}, "body/real.txt")
 	if err != nil {
 		t.Fatalf("expected allow, got err: %v", err)
 	}
@@ -48,9 +48,9 @@ func TestSafePath_DeniesTraversal(t *testing.T) {
 
 func TestSafePath_DeniesDeniedPath(t *testing.T) {
 	repo := t.TempDir()
-	writeFile(t, filepath.Join(repo, "core", "memory", "ledger", "ledger.jsonl"), "x")
+	writeFile(t, filepath.Join(repo, "runtime", "state", "loopgate_events.jsonl"), "x")
 
-	_, err := SafePath(repo, []string{"."}, []string{"core/memory/ledger"}, "core/memory/ledger/ledger.jsonl")
+	_, err := SafePath(repo, []string{"."}, []string{"runtime/state"}, "runtime/state/loopgate_events.jsonl")
 	if err == nil {
 		t.Fatalf("expected deny for denied path, got allow")
 	}
@@ -158,7 +158,7 @@ func TestSafePath_DeniesSymlinkToDeniedPath(t *testing.T) {
 	repo := t.TempDir()
 
 	// Create a denied directory with a file
-	deniedDir := filepath.Join(repo, "core", "memory", "ledger")
+	deniedDir := filepath.Join(repo, "runtime", "state")
 	writeFile(t, filepath.Join(deniedDir, "secret.jsonl"), "sensitive")
 
 	// Create a symlink from an allowed location to the denied location
@@ -171,7 +171,7 @@ func TestSafePath_DeniesSymlinkToDeniedPath(t *testing.T) {
 	}
 
 	// Try to access via symlink - should be denied
-	_, err := SafePath(repo, []string{"."}, []string{"core/memory/ledger"}, "body/sneaky/secret.jsonl")
+	_, err := SafePath(repo, []string{"."}, []string{"runtime/state"}, "body/sneaky/secret.jsonl")
 	if err == nil {
 		t.Fatal("expected deny for symlink to denied path")
 	}
