@@ -62,6 +62,40 @@ func TestClientExecuteCapability_ReadAndWrite(t *testing.T) {
 	}
 }
 
+func TestClientExecuteCapability_FsReadRateLimitUsesDedicatedDenialCode(t *testing.T) {
+	repoRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoRoot, "notes.txt"), []byte("hello loopgate"), 0o600); err != nil {
+		t.Fatalf("write notes file: %v", err)
+	}
+
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	nowUTC := server.now().UTC()
+	server.mu.Lock()
+	preloadedReads := make([]time.Time, 0, defaultFsReadRateLimit)
+	for i := 0; i < defaultFsReadRateLimit; i++ {
+		preloadedReads = append(preloadedReads, nowUTC)
+	}
+	server.sessionReadCounts[client.controlSessionID] = preloadedReads
+	server.mu.Unlock()
+
+	deniedResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		RequestID:  "req-read-rate-limited",
+		Capability: "fs_read",
+		Arguments: map[string]string{
+			"path": "notes.txt",
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute rate-limited fs_read: %v", err)
+	}
+	if deniedResponse.Status != ResponseStatusDenied {
+		t.Fatalf("expected denied fs_read response, got %#v", deniedResponse)
+	}
+	if deniedResponse.DenialCode != DenialCodeFsReadRateLimitExceeded {
+		t.Fatalf("expected fs_read rate-limit denial code, got %#v", deniedResponse)
+	}
+}
+
 func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 	repoRoot := t.TempDir()
 	memoryDir := filepath.Join(repoRoot, ".morph", "memory")
@@ -282,7 +316,7 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForOperator(
 	if approvalClass, _ := response.Metadata["approval_class"].(string); approvalClass != ApprovalClassWriteHostFolder {
 		t.Fatalf("expected approval_class %q, got %#v", ApprovalClassWriteHostFolder, response.Metadata)
 	}
-	if approvalReason, _ := response.Metadata["approval_reason"].(string); approvalReason != fmt.Sprintf("Grant write access to %s for 8 hours", resolvedRepoRoot) {
+	if approvalReason, _ := response.Metadata["approval_reason"].(string); approvalReason != fmt.Sprintf("Grant write access to %s for %s", resolvedRepoRoot, operatorMountWriteGrantTTL) {
 		t.Fatalf("expected approval_reason for root grant, got %#v", response.Metadata)
 	}
 	server.mu.Lock()
@@ -291,7 +325,7 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForOperator(
 	if !found {
 		t.Fatalf("pending approval %q not found", response.ApprovalRequestID)
 	}
-	if pendingApproval.Reason != fmt.Sprintf("Grant write access to %s for 8 hours", resolvedRepoRoot) {
+	if pendingApproval.Reason != fmt.Sprintf("Grant write access to %s for %s", resolvedRepoRoot, operatorMountWriteGrantTTL) {
 		t.Fatalf("pending approval reason = %q", pendingApproval.Reason)
 	}
 	if _, err := os.Stat(filepath.Join(repoRoot, "test.md")); !errors.Is(err, os.ErrNotExist) {

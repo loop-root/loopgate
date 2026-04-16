@@ -97,6 +97,7 @@ const (
 	DenialCodeApprovalStateConflict = "approval_state_conflict"
 
 	DenialCodeProcessBindingRejected      = "process_binding_rejected"
+	DenialCodeFsReadRateLimitExceeded     = "fs_read_rate_limit_exceeded"
 	DenialCodeFsReadSizeLimitExceeded     = "fs_read_size_limit_exceeded"
 	DenialCodeMCPGatewayServerNotFound    = "mcp_gateway_server_not_found"
 	DenialCodeMCPGatewayServerDisabled    = "mcp_gateway_server_disabled"

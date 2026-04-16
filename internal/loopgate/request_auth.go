@@ -100,11 +100,11 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 	return tokenClaims, true
 }
 
-// parseAndValidateSignedControlPlaneRequest checks signed-request headers and timestamp skew.
+// parseSignedControlPlaneHeaders checks signed-request headers and timestamp skew.
 // It does not verify the HMAC. Callers supply expectedControlSessionID (for
 // example, a scoped worker session id from a compatibility table); those ids
 // are not necessarily rows in server.sessions.
-func (server *Server) parseAndValidateSignedControlPlaneRequest(request *http.Request, expectedControlSessionID string) (requestTimestamp string, requestNonce string, requestSignature string, denial CapabilityResponse, ok bool) {
+func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expectedControlSessionID string) (requestTimestamp string, requestNonce string, requestSignature string, denial CapabilityResponse, ok bool) {
 	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
 	requestTimestamp = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
 	requestNonce = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))

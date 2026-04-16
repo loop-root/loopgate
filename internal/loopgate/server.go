@@ -925,7 +925,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 				"request_id":           capabilityRequest.RequestID,
 				"capability":           capabilityRequest.Capability,
 				"reason":               "fs_read rate limit exceeded",
-				"denial_code":          DenialCodeFsReadSizeLimitExceeded,
+				"denial_code":          DenialCodeFsReadRateLimitExceeded,
 				"actor_label":          effectiveTokenClaims.ActorLabel,
 				"client_session_label": effectiveTokenClaims.ClientSessionLabel,
 				"control_session_id":   effectiveTokenClaims.ControlSessionID,
@@ -936,7 +936,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 				RequestID:    capabilityRequest.RequestID,
 				Status:       ResponseStatusDenied,
 				DenialReason: "fs_read rate limit exceeded",
-				DenialCode:   DenialCodeFsReadSizeLimitExceeded,
+				DenialCode:   DenialCodeFsReadRateLimitExceeded,
 			}
 		}
 	}

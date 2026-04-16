@@ -52,7 +52,7 @@ These are important, but not in the same “fix before V1” bucket:
 
 ## Phase A: Baseline And Blocker Classification
 
-Status: **pending**
+Status: **completed**
 
 Focus:
 - capture the current behavior before changing it
@@ -76,9 +76,19 @@ Acceptance criteria:
 Rollback:
 - not applicable; read-only phase
 
+Completed in this phase:
+- mapped the Phase B slice to:
+  - `internal/loopgate/types.go`
+  - `internal/loopgate/server.go`
+  - `internal/loopgate/request_auth.go`
+  - `internal/loopgate/approval_flow.go`
+  - `internal/loopgate/server_test.go`
+- confirmed the Phase B approval-flow expectations were already covered in `server_test.go`
+- added a dedicated regression test for the `fs_read` throttle denial code
+
 ## Phase B: Low-Risk Blocker Fixes
 
-Status: **pending**
+Status: **completed**
 
 Focus:
 - close the smallest blocker items first
@@ -97,6 +107,12 @@ Acceptance criteria:
 
 Rollback:
 - trivial revert; no stored-state migration
+
+Completed in this phase:
+- added `DenialCodeFsReadRateLimitExceeded`
+- switched the `fs_read` throttle path to the dedicated denial code
+- renamed `parseAndValidateSignedControlPlaneRequest(...)` to `parseSignedControlPlaneHeaders(...)`
+- replaced the hardcoded `"8 hours"` operator-mount approval text with the real TTL-derived string
 
 ## Phase C: Auth Failure Audit Contract
 

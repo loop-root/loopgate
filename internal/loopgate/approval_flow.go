@@ -194,7 +194,7 @@ func approvalReasonForCapability(policyDecision policypkg.CheckResult, metadata 
 	}
 	switch capabilityRequest.Capability {
 	case "operator_mount.fs_write", "operator_mount.fs_mkdir":
-		return fmt.Sprintf("Grant write access to %s for 8 hours", grantRootPath)
+		return fmt.Sprintf("Grant write access to %s for %s", grantRootPath, operatorMountWriteGrantTTL)
 	default:
 		return policyDecision.Reason
 	}
