@@ -15,7 +15,6 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: true,
 			},
 		}, ""
 	case "fs_write", "operator_mount.fs_write":
@@ -23,7 +22,6 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: false,
 			},
 		}, ""
 	case "shell_exec":
@@ -31,7 +29,6 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: false,
 			},
 		}, ""
 	case "fs_read", "operator_mount.fs_read":
@@ -39,7 +36,6 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: false,
 			},
 		}, ""
 	case "fs_mkdir", "operator_mount.fs_mkdir":
@@ -47,7 +43,6 @@ func classifyCapabilityResult(capability string) (ResultClassification, string) 
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: false,
 			},
 		}, ""
 	default:
@@ -71,7 +66,6 @@ func buildCapabilityResult(capability string, arguments map[string]string, outpu
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: false,
 			},
 		}
 		fieldsMeta, err := fieldsMetadataForStructuredResult(structuredResult, ResultFieldOriginLocal, classification)
@@ -93,7 +87,6 @@ func buildCapabilityResult(capability string, arguments map[string]string, outpu
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: true,
 			},
 		}
 		fieldsMeta, err := fieldsMetadataForStructuredResult(structuredResult, ResultFieldOriginLocal, classification)
@@ -111,7 +104,6 @@ func buildCapabilityResult(capability string, arguments map[string]string, outpu
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: false,
 			},
 		}
 		fieldsMeta, err := fieldsMetadataForStructuredResult(structuredResult, ResultFieldOriginLocal, classification)
@@ -129,7 +121,6 @@ func buildCapabilityResult(capability string, arguments map[string]string, outpu
 			Exposure: ResultExposureDisplay,
 			Eligibility: ResultEligibility{
 				Prompt: true,
-				Memory: false,
 			},
 		}
 		fieldsMeta, err := fieldsMetadataForStructuredResult(structuredResult, ResultFieldOriginLocal, classification)
@@ -187,7 +178,6 @@ func buildResultFieldMetadata(fieldValue interface{}, fieldOrigin string, classi
 		Kind:           fieldKind,
 		ScalarSubclass: scalarSubclassForResultField(fieldValue),
 		PromptEligible: classification.PromptEligible(),
-		MemoryEligible: classification.MemoryEligible(),
 	}
 	if err := fieldMetadata.Validate(); err != nil {
 		return ResultFieldMetadata{}, err

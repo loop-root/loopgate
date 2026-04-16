@@ -1078,7 +1078,6 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		resultMetadata = make(map[string]interface{})
 	}
 	resultMetadata["prompt_eligible"] = classification.PromptEligible()
-	resultMetadata["memory_eligible"] = classification.MemoryEligible()
 	resultMetadata["display_only"] = classification.DisplayOnly()
 	resultMetadata["audit_only"] = classification.AuditOnly()
 	resultMetadata["quarantined"] = classification.Quarantined()

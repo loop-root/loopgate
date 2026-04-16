@@ -65,7 +65,6 @@ func TestFormatCapabilityResponse_AuditOnlyResultsDoNotRenderNormalOutput(t *tes
 				SizeBytes:      len("should not render"),
 				Kind:           loopgate.ResultFieldKindScalar,
 				PromptEligible: false,
-				MemoryEligible: false,
 			},
 		},
 		Classification: loopgate.ResultClassification{

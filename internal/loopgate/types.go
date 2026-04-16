@@ -319,7 +319,6 @@ type ResultClassification struct {
 
 type ResultEligibility struct {
 	Prompt bool `json:"prompt"`
-	Memory bool `json:"memory"`
 }
 
 type ResultQuarantine struct {
@@ -336,7 +335,6 @@ type ResultFieldMetadata struct {
 	Kind           string `json:"kind"`
 	ScalarSubclass string `json:"scalar_subclass,omitempty"`
 	PromptEligible bool   `json:"prompt_eligible"`
-	MemoryEligible bool   `json:"memory_eligible"`
 }
 
 type ApprovalDecisionRequest struct {
@@ -457,13 +455,13 @@ func (resultClassification ResultClassification) Validate() error {
 		return fmt.Errorf("invalid result exposure %q", resultClassification.Exposure)
 	}
 	if resultClassification.Exposure == ResultExposureAudit {
-		if resultClassification.Eligibility.Prompt || resultClassification.Eligibility.Memory {
-			return fmt.Errorf("audit exposure cannot also be prompt- or memory-eligible")
+		if resultClassification.Eligibility.Prompt {
+			return fmt.Errorf("audit exposure cannot also be prompt-eligible")
 		}
 	}
 	if resultClassification.Quarantine.Quarantined {
-		if resultClassification.Eligibility.Prompt || resultClassification.Eligibility.Memory {
-			return fmt.Errorf("quarantined classification cannot be prompt- or memory-eligible")
+		if resultClassification.Eligibility.Prompt {
+			return fmt.Errorf("quarantined classification cannot also be prompt-eligible")
 		}
 		if strings.TrimSpace(resultClassification.Quarantine.Ref) == "" {
 			return fmt.Errorf("quarantined classification requires quarantine ref")
@@ -480,14 +478,9 @@ func (resultClassification ResultClassification) PromptEligible() bool {
 	return resultClassification.Eligibility.Prompt
 }
 
-func (resultClassification ResultClassification) MemoryEligible() bool {
-	return resultClassification.Eligibility.Memory
-}
-
 func (resultClassification ResultClassification) DisplayOnly() bool {
 	return resultClassification.Exposure == ResultExposureDisplay &&
-		!resultClassification.Eligibility.Prompt &&
-		!resultClassification.Eligibility.Memory
+		!resultClassification.Eligibility.Prompt
 }
 
 func (resultClassification ResultClassification) AuditOnly() bool {
@@ -533,8 +526,8 @@ func (resultFieldMetadata ResultFieldMetadata) Validate() error {
 	default:
 		return fmt.Errorf("invalid field scalar_subclass %q", resultFieldMetadata.ScalarSubclass)
 	}
-	if resultFieldMetadata.Kind == ResultFieldKindScalar && resultFieldMetadata.ScalarSubclass == "" && (resultFieldMetadata.PromptEligible || resultFieldMetadata.MemoryEligible) {
-		return fmt.Errorf("scalar field eligible for prompt or memory requires scalar_subclass")
+	if resultFieldMetadata.Kind == ResultFieldKindScalar && resultFieldMetadata.ScalarSubclass == "" && resultFieldMetadata.PromptEligible {
+		return fmt.Errorf("prompt-eligible scalar field requires scalar_subclass")
 	}
 	if resultFieldMetadata.Kind != ResultFieldKindScalar && resultFieldMetadata.ScalarSubclass != "" {
 		return fmt.Errorf("non-scalar field must not set scalar_subclass")

@@ -234,7 +234,7 @@ The current MVP does not expose a generic HTTP capability yet, which keeps this 
 Current implementation detail:
 
 - filesystem capabilities now use explicit per-capability classification instead of inferring eligibility from the absence of a quarantine ref
-- `fs_read` is currently classified as `display_only` and is not prompt-eligible or memory-eligible by default
+- `fs_read` is currently classified as a prompt-eligible display result; the old continuity-owned memory-eligibility axis has been removed from active Loopgate result metadata
 - `quarantine_ref` now points to a Loopgate-owned record under `runtime/state/quarantine`
 - quarantine metadata and raw payload bytes now live separately, so metadata/lineage can survive blob pruning without keeping the full payload inline
 - quarantine metadata now exposes separate trust and storage facts:

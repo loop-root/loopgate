@@ -28,7 +28,6 @@ func (server *Server) buildCapabilityResult(capabilityRequest CapabilityRequest,
 				Kind:           ResultFieldKindScalar,
 				ScalarSubclass: ResultFieldScalarSubclassStrictIdentifier,
 				PromptEligible: false,
-				MemoryEligible: false,
 			},
 		}
 		extractedFieldValues, err := extractConfiguredResponseFields(configuredCapabilityDefinition, output)
@@ -68,7 +67,6 @@ func (server *Server) buildCapabilityResult(capabilityRequest CapabilityRequest,
 					SizeBytes:      fieldSizeBytes,
 					Kind:           ResultFieldKindBlobRef,
 					PromptEligible: false,
-					MemoryEligible: false,
 				}
 				continue
 			}
@@ -81,7 +79,6 @@ func (server *Server) buildCapabilityResult(capabilityRequest CapabilityRequest,
 				SizeBytes:      fieldSizeBytes,
 				Kind:           fieldKind,
 				PromptEligible: false,
-				MemoryEligible: false,
 			}
 			if fieldKind == ResultFieldKindScalar {
 				resultFieldMetadata.ScalarSubclass = scalarSubclassForConfiguredFieldValue(fieldValue, responseField.Sensitivity)

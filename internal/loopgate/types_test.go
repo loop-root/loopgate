@@ -220,7 +220,6 @@ func TestCapabilityResponseResultClassification_RejectsExtraFieldMetadata(t *tes
 				SizeBytes:      len("unsafe"),
 				Kind:           ResultFieldKindScalar,
 				PromptEligible: false,
-				MemoryEligible: false,
 			},
 			"extra": {
 				Origin:         ResultFieldOriginRemote,
@@ -230,7 +229,6 @@ func TestCapabilityResponseResultClassification_RejectsExtraFieldMetadata(t *tes
 				SizeBytes:      len("extra"),
 				Kind:           ResultFieldKindScalar,
 				PromptEligible: false,
-				MemoryEligible: false,
 			},
 		},
 		Classification: ResultClassification{

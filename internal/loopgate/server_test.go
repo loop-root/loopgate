@@ -53,9 +53,6 @@ func TestClientExecuteCapability_ReadAndWrite(t *testing.T) {
 	if promptEligible, ok := readResponse.Metadata["prompt_eligible"].(bool); !ok || !promptEligible {
 		t.Fatalf("expected fs_read to be prompt-eligible, got %#v", readResponse.Metadata)
 	}
-	if memoryEligible, ok := readResponse.Metadata["memory_eligible"].(bool); !ok || memoryEligible {
-		t.Fatalf("expected fs_read to be non-memory-eligible, got %#v", readResponse.Metadata)
-	}
 	if displayOnly, ok := readResponse.Metadata["display_only"].(bool); !ok || displayOnly {
 		t.Fatalf("expected fs_read to not be display_only, got %#v", readResponse.Metadata)
 	}

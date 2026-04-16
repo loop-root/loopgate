@@ -547,8 +547,8 @@ func TestConfiguredCapability_UsesBlobRefForOversizedFieldWhenAllowed(t *testing
 	if serviceFieldMeta.Kind != ResultFieldKindBlobRef {
 		t.Fatalf("expected blob_ref field kind metadata, got %#v", serviceFieldMeta)
 	}
-	if serviceFieldMeta.PromptEligible || serviceFieldMeta.MemoryEligible {
-		t.Fatalf("expected blob_ref field to remain non-prompt/non-memory eligible, got %#v", serviceFieldMeta)
+	if serviceFieldMeta.PromptEligible {
+		t.Fatalf("expected blob_ref field to remain non-prompt eligible, got %#v", serviceFieldMeta)
 	}
 }
 
@@ -613,7 +613,7 @@ func TestConfiguredMarkdownFrontmatterCapability_ExtractsScalarFields(t *testing
 		t.Fatalf("expected markdown_frontmatter_keys extractor, got %#v", response.Metadata)
 	}
 	versionFieldMeta := response.FieldsMeta["version"]
-	if versionFieldMeta.Kind != ResultFieldKindScalar || versionFieldMeta.PromptEligible || versionFieldMeta.MemoryEligible {
+	if versionFieldMeta.Kind != ResultFieldKindScalar || versionFieldMeta.PromptEligible {
 		t.Fatalf("unexpected version field metadata: %#v", versionFieldMeta)
 	}
 }
@@ -673,8 +673,8 @@ func TestConfiguredMarkdownSectionCapability_ExtractsDisplayOnlyTaintedText(t *t
 	if summaryFieldMeta.Sensitivity != ResultFieldSensitivityTaintedText {
 		t.Fatalf("expected tainted text sensitivity, got %#v", summaryFieldMeta)
 	}
-	if summaryFieldMeta.PromptEligible || summaryFieldMeta.MemoryEligible {
-		t.Fatalf("expected markdown section text to stay non-prompt/non-memory eligible, got %#v", summaryFieldMeta)
+	if summaryFieldMeta.PromptEligible {
+		t.Fatalf("expected markdown section text to stay non-prompt eligible, got %#v", summaryFieldMeta)
 	}
 }
 
@@ -795,7 +795,7 @@ func TestConfiguredHTMLMetaCapability_ExtractsDisplayOnlyTaintedMetadata(t *test
 		t.Fatalf("expected html_meta_allowlist extractor, got %#v", response.Metadata)
 	}
 	descriptionFieldMeta := response.FieldsMeta["description"]
-	if descriptionFieldMeta.Sensitivity != ResultFieldSensitivityTaintedText || descriptionFieldMeta.PromptEligible || descriptionFieldMeta.MemoryEligible {
+	if descriptionFieldMeta.Sensitivity != ResultFieldSensitivityTaintedText || descriptionFieldMeta.PromptEligible {
 		t.Fatalf("unexpected html description field metadata: %#v", descriptionFieldMeta)
 	}
 }
@@ -927,7 +927,7 @@ func TestConfiguredPublicJSONIssueListCapability_ExecutesWithoutSecretResolution
 		t.Fatalf("expected bounded issue list of 2 items, got %#v", issueItems)
 	}
 	issuesFieldMeta := response.FieldsMeta["issues"]
-	if issuesFieldMeta.Kind != ResultFieldKindArray || issuesFieldMeta.PromptEligible || issuesFieldMeta.MemoryEligible {
+	if issuesFieldMeta.Kind != ResultFieldKindArray || issuesFieldMeta.PromptEligible {
 		t.Fatalf("unexpected issues field metadata: %#v", issuesFieldMeta)
 	}
 	if response.Metadata["extractor"] != extractorJSONObjectList {

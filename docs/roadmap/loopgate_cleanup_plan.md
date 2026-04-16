@@ -122,6 +122,7 @@ Completed in this phase so far:
 - preserved the remaining Loopgate-side continuity/memory contract residue in the sibling `continuity` repo and removed the dead `memory` promotion target plus unused continuity/memory denial codes from the main Loopgate runtime
 - confirmed the remaining local `core/memory/` residue is preserved in the sibling `continuity` repo snapshot and kept out of Loopgate source control
 - removed the leftover tracked `cmd/memorybench` cache residue from Loopgate after preserving the same local artifact in the sibling `memBench` repo
+- preserved the post-split `memory_eligible` result-classification contract in the sibling `continuity` repo and removed that continuity-specific metadata axis from active Loopgate responses and UI projections
 - tightened ignore coverage for memory ledger/distillate backup artifacts
 - moved tracked runtime sandbox/state artifacts out of source control and made `runtime/` fully gitignored
 - sanitized remaining hardcoded local paths in active docs and tests

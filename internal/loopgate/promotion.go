@@ -255,10 +255,8 @@ func derivePromotedFieldMetadata(sourceFieldValue interface{}, promotionTarget s
 	switch promotionTarget {
 	case PromotionTargetDisplay:
 		resultFieldMetadata.PromptEligible = false
-		resultFieldMetadata.MemoryEligible = false
 	case PromotionTargetPrompt:
 		resultFieldMetadata.PromptEligible = true
-		resultFieldMetadata.MemoryEligible = false
 	default:
 		return ResultFieldMetadata{}, fmt.Errorf("invalid promotion target %q", promotionTarget)
 	}

@@ -182,7 +182,6 @@ type UIEventToolResult struct {
 	Content          string `json:"content,omitempty"`
 	DisplayOnly      bool   `json:"display_only"`
 	PromptEligible   bool   `json:"prompt_eligible"`
-	MemoryEligible   bool   `json:"memory_eligible"`
 	Quarantined      bool   `json:"quarantined"`
 	QuarantineNotice string `json:"quarantine_notice,omitempty"`
 }

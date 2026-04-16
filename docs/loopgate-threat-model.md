@@ -196,7 +196,7 @@ flowchart TD
 6. Quarantine boundary erosion through future UI rendering or operator inspection shortcuts
    1. Raw remote payload is stored in Loopgate quarantine.
    2. Future UI/bridge code mistakenly renders or forwards quarantined content.
-   3. Untrusted or sensitive provider payload becomes prompt-eligible, memory-eligible, or browser-visible.
+   3. Untrusted or sensitive provider payload becomes prompt-eligible or browser-visible.
    4. Impact: prompt injection, sensitive-data leakage, or browser-side abuse.
 
 ## Threat model table
@@ -214,7 +214,7 @@ flowchart TD
 
 ### Highest-priority fixes
 
-- Keep quarantine semantics strict (not prompt-eligible, not memory-eligible, not auto-rendered in browser or UI; access requires explicit operator intent). Evidence: [quarantine.go](../internal/loopgate/quarantine.go), [claude_code_hooks_mvp.md](design_overview/claude_code_hooks_mvp.md).
+- Keep quarantine semantics strict (not prompt-eligible, not auto-rendered in browser or UI; access requires explicit operator intent). Evidence: [quarantine.go](../internal/loopgate/quarantine.go), [claude_code_hooks_mvp.md](design_overview/claude_code_hooks_mvp.md).
 
 ### Near-term control-plane work
 

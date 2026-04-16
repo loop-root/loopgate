@@ -782,7 +782,6 @@ func buildUIToolResultEvent(capability string, capabilityResponse CapabilityResp
 	classification, err := capabilityResponse.ResultClassification()
 	if err == nil {
 		uiEventToolResult.PromptEligible = classification.PromptEligible()
-		uiEventToolResult.MemoryEligible = classification.MemoryEligible()
 		uiEventToolResult.DisplayOnly = classification.DisplayOnly()
 		uiEventToolResult.Quarantined = classification.Quarantined()
 	}

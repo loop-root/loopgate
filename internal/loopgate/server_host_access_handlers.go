@@ -741,7 +741,6 @@ func hostAccessListClassification() ResultClassification {
 		Exposure: ResultExposureDisplay,
 		Eligibility: ResultEligibility{
 			Prompt: true,
-			Memory: true,
 		},
 	}
 }
@@ -751,7 +750,6 @@ func hostAccessReadClassification() ResultClassification {
 		Exposure: ResultExposureDisplay,
 		Eligibility: ResultEligibility{
 			Prompt: true,
-			Memory: false,
 		},
 	}
 }
@@ -761,7 +759,6 @@ func hostAccessPlanClassification() ResultClassification {
 		Exposure: ResultExposureDisplay,
 		Eligibility: ResultEligibility{
 			Prompt: true,
-			Memory: true,
 		},
 	}
 }
@@ -771,7 +768,6 @@ func hostAccessApplyClassification() ResultClassification {
 		Exposure: ResultExposureDisplay,
 		Eligibility: ResultEligibility{
 			Prompt: true,
-			Memory: false,
 		},
 	}
 }
@@ -783,7 +779,6 @@ func (server *Server) hostAccessStructuredSuccess(tokenClaims capabilityToken, c
 	}
 	resultMetadata := map[string]interface{}{
 		"prompt_eligible": classification.PromptEligible(),
-		"memory_eligible": classification.MemoryEligible(),
 		"display_only":    classification.DisplayOnly(),
 		"audit_only":      classification.AuditOnly(),
 		"quarantined":     classification.Quarantined(),

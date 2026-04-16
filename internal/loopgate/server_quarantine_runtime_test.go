@@ -785,10 +785,10 @@ func TestContradictoryClassificationIsRejected(t *testing.T) {
 	_, err = normalizeResultClassification(ResultClassification{
 		Exposure: ResultExposureAudit,
 		Eligibility: ResultEligibility{
-			Memory: true,
+			Prompt: true,
 		},
 	}, "")
 	if err == nil {
-		t.Fatal("expected contradictory audit_only + display_only classification to be denied")
+		t.Fatal("expected contradictory audit_only + prompt_eligible classification to be denied")
 	}
 }
