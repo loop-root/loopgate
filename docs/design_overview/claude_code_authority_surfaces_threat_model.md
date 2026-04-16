@@ -135,10 +135,10 @@ Special note for `SessionEnd`:
 - the exit reason is useful for local continuity hygiene, but it must not be
   treated as a model-authored authority input
 - any future thread rollover or promotion tied to SessionEnd should reuse the
-  existing append-only continuity-thread model rather than inventing a second
-  session-history store
+  existing append-only local session-history model rather than inventing a
+  second parallel history store
 - Claude `session_id` binding should stay Loopgate-owned and local-only so the
-  hook harness does not become the source of truth for continuity state
+  hook harness does not become the source of truth for local history state
 
 ## Abuse paths
 

@@ -131,7 +131,8 @@ Current handler posture:
 - `UserPromptSubmit` remains **audit-only** and does not inject additional
   memory context on each turn
 - `SessionEnd` records a **local session lifecycle boundary** for audit and
-  future continuity rollover work, but does not itself create durable memory
+  future local session-history rollover work, but does not itself create
+  durable memory
 - other known observability events such as `ConfigChange` may be accepted as
   **audit-only**
 - known governance-relevant non-tool events such as `PermissionRequest` are
@@ -142,14 +143,14 @@ Current handler posture:
 Any future memory access should happen through explicit governed memory
 operations rather than hook-time prompt injection.
 
-Local memory lifecycle in the current Claude Code MVP is:
+Local remembered-context lifecycle in the current Claude Code MVP is:
 
 1. `SessionStart` records a local lifecycle boundary and binds Claude
-   `session_id` to a local continuity-thread record
-2. `UserPromptSubmit` records prompt submission for audit and continuity
+   `session_id` to a local Loopgate-owned session-history record
+2. `UserPromptSubmit` records prompt submission for audit and session-history
    correlation, but does not add memory recall
 3. `SessionEnd` records the session boundary and exit reason for audit and
-   attempts a safe local continuity-thread rollover
+   attempts a safe local session-history rollover
 4. durable state, if introduced later, should still come from explicit
    governed write paths rather than hook text alone
 
