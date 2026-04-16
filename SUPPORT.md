@@ -45,6 +45,8 @@ A useful report usually includes:
 - whether the behavior was a denial, runtime error, or audit surprise
 - the relevant Loopgate version, branch, or commit if known
 - redacted diagnostic context if the problem depends on local configuration
+- whether `go run ./cmd/loopgate-ledger verify` succeeded
+- whether `go run ./cmd/loopgate-doctor report` showed anything unexpected
 
 ## Scope boundaries
 
