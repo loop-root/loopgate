@@ -53,7 +53,6 @@ type Persona struct {
 			ShellExecution   bool `yaml:"shell_execution"`
 			NetworkAccess    bool `yaml:"network_access"`
 			SecretOperations bool `yaml:"secret_operations"`
-			MemoryPromotion  bool `yaml:"memory_promotion"`
 			IrreversibleActs bool `yaml:"irreversible_actions"`
 		} `yaml:"require_explicit_approval_for"`
 	} `yaml:"risk_controls"`
@@ -64,13 +63,6 @@ type Persona struct {
 		SeparateObservationInference bool `yaml:"separate_observation_from_inference"`
 		PreferEvidenceOverGuessing   bool `yaml:"prefer_evidence_over_guessing"`
 	} `yaml:"hallucination_controls"`
-	Memory struct {
-		PromotionRequiresApproval bool `yaml:"promotion_requires_approval"`
-		AllowPersonaSelfEdit      bool `yaml:"allow_persona_self_edit"`
-		AllowAutomaticPromotion   bool `yaml:"allow_automatic_promotion"`
-		RequireUserReview         bool `yaml:"require_user_review"`
-		RecordPromotionRationale  bool `yaml:"record_promotion_rationale"`
-	} `yaml:"memory"`
 	Defaults struct {
 		Tone                    string `yaml:"tone"`
 		SafetyMode              string `yaml:"safety_mode"`
@@ -149,7 +141,7 @@ func defaultPersona() Persona {
 	persona.RiskControls.DenyByDefault = true
 	persona.RiskControls.RiskyBehaviorDefinition = []string{
 		"Any action that writes, deletes, renames, or overwrites files.",
-		"Any action that changes policy, persona, memory, permissions, or secret references.",
+		"Any action that changes policy, persona, permissions, durable records, or secret references.",
 		"Any action that executes shell commands, invokes external network access, or touches credentials.",
 		"Any action that relies on unverified model output to mutate trusted state.",
 		"Any action that is difficult to reverse or weakens auditability, determinism, or security boundaries.",
@@ -166,7 +158,6 @@ func defaultPersona() Persona {
 	persona.RiskControls.RequireExplicitApprovalFor.ShellExecution = true
 	persona.RiskControls.RequireExplicitApprovalFor.NetworkAccess = true
 	persona.RiskControls.RequireExplicitApprovalFor.SecretOperations = true
-	persona.RiskControls.RequireExplicitApprovalFor.MemoryPromotion = true
 	persona.RiskControls.RequireExplicitApprovalFor.IrreversibleActs = true
 
 	persona.HallucinationControls.AdmitUnknowns = true
@@ -174,12 +165,6 @@ func defaultPersona() Persona {
 	persona.HallucinationControls.LabelUnverifiedClaims = true
 	persona.HallucinationControls.SeparateObservationInference = true
 	persona.HallucinationControls.PreferEvidenceOverGuessing = true
-
-	persona.Memory.PromotionRequiresApproval = true
-	persona.Memory.AllowPersonaSelfEdit = false
-	persona.Memory.AllowAutomaticPromotion = false
-	persona.Memory.RequireUserReview = true
-	persona.Memory.RecordPromotionRationale = true
 
 	persona.Defaults.Tone = "helpful, honest, direct, security-minded"
 	persona.Defaults.SafetyMode = "normal"
@@ -282,7 +267,7 @@ func applyPersonaDefaults(persona *Persona) {
 	if len(persona.RiskControls.RiskyBehaviorDefinition) == 0 {
 		persona.RiskControls.RiskyBehaviorDefinition = []string{
 			"Any action that writes, deletes, renames, or overwrites files.",
-			"Any action that changes policy, persona, memory, permissions, or secret references.",
+			"Any action that changes policy, persona, permissions, durable records, or secret references.",
 			"Any action that executes shell commands, invokes external network access, or touches credentials.",
 			"Any action that relies on unverified model output to mutate trusted state.",
 			"Any action that is difficult to reverse or weakens auditability, determinism, or security boundaries.",
@@ -314,9 +299,6 @@ func applyPersonaDefaults(persona *Persona) {
 	if !persona.RiskControls.RequireExplicitApprovalFor.SecretOperations {
 		persona.RiskControls.RequireExplicitApprovalFor.SecretOperations = true
 	}
-	if !persona.RiskControls.RequireExplicitApprovalFor.MemoryPromotion {
-		persona.RiskControls.RequireExplicitApprovalFor.MemoryPromotion = true
-	}
 	if !persona.RiskControls.RequireExplicitApprovalFor.IrreversibleActs {
 		persona.RiskControls.RequireExplicitApprovalFor.IrreversibleActs = true
 	}
@@ -334,15 +316,6 @@ func applyPersonaDefaults(persona *Persona) {
 	}
 	if !persona.HallucinationControls.PreferEvidenceOverGuessing {
 		persona.HallucinationControls.PreferEvidenceOverGuessing = true
-	}
-	if !persona.Memory.PromotionRequiresApproval {
-		persona.Memory.PromotionRequiresApproval = true
-	}
-	if !persona.Memory.RequireUserReview {
-		persona.Memory.RequireUserReview = true
-	}
-	if !persona.Memory.RecordPromotionRationale {
-		persona.Memory.RecordPromotionRationale = true
 	}
 	if persona.Defaults.Tone == "" {
 		persona.Defaults.Tone = "helpful, honest, direct, security-minded"

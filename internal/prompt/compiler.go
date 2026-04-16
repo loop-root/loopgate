@@ -181,12 +181,10 @@ func buildSystemInstruction(request Request) (string, error) {
 
 	writeSection(&builder, "POLICY SUMMARY", []string{
 		fmt.Sprintf(
-			"fs_read=%t; fs_write=%t; fs_write_approval=%t; memory_promotion_approval=%t; persona_self_edit=%t",
+			"fs_read=%t; fs_write=%t; fs_write_approval=%t",
 			request.Policy.Tools.Filesystem.ReadEnabled,
 			request.Policy.Tools.Filesystem.WriteEnabled,
 			request.Policy.Tools.Filesystem.WriteRequiresApproval,
-			request.Persona.Memory.PromotionRequiresApproval,
-			request.Persona.Memory.AllowPersonaSelfEdit,
 		),
 	})
 
