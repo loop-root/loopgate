@@ -48,13 +48,13 @@ The next prompt pass should:
 
 - stop hardcoding the old file-plus-shell self-description
 - describe the actual native-schema tools that are available, including Todo as a carry-over surface
-- explain the explicit remember path honestly
-- stop overstating memory reliability
+- explain the remembered-context channel honestly
+- stop overstating remembered-context reliability
 - keep legacy shell- or slash-command language out of the active generic system prompt
 
 ## Important Watchouts
 
 - Do not claim product features that do not exist.
 - Do not let friendly copy contradict the actual tool surface.
-- If memory is probabilistic or incomplete, say so honestly.
-- If a durable memory path exists, name it clearly enough that the model can reliably choose it when asked.
+- If remembered context is probabilistic, partial, or historical, say so honestly.
+- If the model has a stable remembered-context or governed artifact path, name it clearly enough that the model can reliably choose it when asked.

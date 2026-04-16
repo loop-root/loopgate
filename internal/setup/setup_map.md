@@ -4,7 +4,7 @@ This file maps `internal/setup/`, the **interactive model setup wizard** (provid
 
 Use it when changing:
 
-- CLI or TUI flows that configure `modelruntime.Config`
+- CLI or other interactive terminal flows that configure `modelruntime.Config`
 - probing models, saving connections through Loopgate, or wizard UX
 
 ## Core Role
