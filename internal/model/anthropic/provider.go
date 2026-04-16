@@ -616,7 +616,7 @@ func extractToolUseBlocks(contentBlocks []contentPart) []model.ToolUseBlock {
 				}
 			}
 			// If input JSON is malformed, args stays empty and schema
-			// validation in the orchestrator will catch missing required fields.
+			// Loopgate validation will catch missing required fields.
 		}
 
 		blocks = append(blocks, model.ToolUseBlock{

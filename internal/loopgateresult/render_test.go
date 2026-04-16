@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"loopgate/internal/loopgate"
-	"loopgate/internal/orchestrator"
 )
 
 func TestPromptEligibleOutput_FailsClosedOnInvalidClassification(t *testing.T) {
@@ -134,7 +133,7 @@ func TestToolResultFromCapabilityResponse_DisplayOnlyStaysOutOfPromptOutput(t *t
 	if err != nil {
 		t.Fatalf("tool result from capability response: %v", err)
 	}
-	if toolResult.Status != orchestrator.StatusSuccess {
+	if toolResult.Status != StatusSuccess {
 		t.Fatalf("unexpected tool result status: %#v", toolResult)
 	}
 	if toolResult.Output != "" {
@@ -143,10 +142,10 @@ func TestToolResultFromCapabilityResponse_DisplayOnlyStaysOutOfPromptOutput(t *t
 }
 
 func TestPromptEligibleToolResults_FiltersEmptySuccessOutputOnly(t *testing.T) {
-	filteredResults := PromptEligibleToolResults([]orchestrator.ToolResult{
-		{CallID: "empty-success", Status: orchestrator.StatusSuccess, Output: ""},
-		{CallID: "prompt-success", Status: orchestrator.StatusSuccess, Output: "{\"ok\":true}"},
-		{CallID: "denied", Status: orchestrator.StatusDenied, Reason: "denied"},
+	filteredResults := PromptEligibleToolResults([]ToolResult{
+		{CallID: "empty-success", Status: StatusSuccess, Output: ""},
+		{CallID: "prompt-success", Status: StatusSuccess, Output: "{\"ok\":true}"},
+		{CallID: "denied", Status: StatusDenied, Reason: "denied"},
 	})
 	if len(filteredResults) != 2 {
 		t.Fatalf("unexpected filtered results: %#v", filteredResults)
@@ -204,15 +203,15 @@ func TestPromptEligibleOutput_UsesFieldMetadataInsteadOfWholeStructuredResult(t 
 
 func TestSummarizeToolResults_PartialSuccessIncludesAllOutcomes(t *testing.T) {
 	summaryText := SummarizeToolResults(
-		[]orchestrator.ToolCall{
+		[]ToolCall{
 			{ID: "call-status", Name: "status.check"},
 			{ID: "call-issues", Name: "github.issues_list"},
 			{ID: "call-search", Name: "search.docs"},
 		},
-		[]orchestrator.ToolResult{
-			{CallID: "call-status", Status: orchestrator.StatusSuccess},
-			{CallID: "call-issues", Status: orchestrator.StatusDenied, Reason: "policy denied"},
-			{CallID: "call-search", Status: orchestrator.StatusError, Reason: "source unavailable"},
+		[]ToolResult{
+			{CallID: "call-status", Status: StatusSuccess},
+			{CallID: "call-issues", Status: StatusDenied, Reason: "policy denied"},
+			{CallID: "call-search", Status: StatusError, Reason: "source unavailable"},
 		},
 	)
 
@@ -232,8 +231,8 @@ func TestSummarizeToolResults_PartialSuccessIncludesAllOutcomes(t *testing.T) {
 
 func TestSummarizeToolResults_UsesOutputWhenReasonMissing(t *testing.T) {
 	summaryText := SummarizeToolResults(
-		[]orchestrator.ToolCall{{ID: "call-status", Name: "status.check"}},
-		[]orchestrator.ToolResult{{CallID: "call-status", Status: orchestrator.StatusError, Output: "remote timeout"}},
+		[]ToolCall{{ID: "call-status", Name: "status.check"}},
+		[]ToolResult{{CallID: "call-status", Status: StatusError, Output: "remote timeout"}},
 	)
 
 	if !strings.Contains(summaryText, "remote timeout") {

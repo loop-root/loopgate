@@ -24,6 +24,7 @@ Its main job here is converting tool registry schemas into native tool definitio
   - conversion from `internal/tools` schemas to provider tool schemas
   - important for keeping registry-backed native tools visible to the model
   - also filters native tool defs down to the actually granted capability set when a client assembles a model request
+  - includes the compact `invoke_capability` schema for clients that intentionally trade richer provider schemas for a smaller single-dispatch contract
 - `toolschema_test.go`
   - regression coverage for native tool eligibility and schema shape
 - `prompt_adapter.go`

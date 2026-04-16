@@ -23,7 +23,7 @@ This is where product truth and model truth either align or drift.
     - `RUNTIME CONTRACT`
     - `AVAILABLE TOOLS`
     - `SELF-DESCRIPTION RULES`
-    - `TOOL USE` / `TOOL CALL PROTOCOL`
+    - `TOOL USE` / `TOOL USE AVAILABILITY`
 - `compiler_test.go`
   - prompt contract tests
   - first place to update when changing self-description or runtime language

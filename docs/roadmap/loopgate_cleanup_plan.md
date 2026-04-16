@@ -153,3 +153,5 @@ The immediate next cleanup slices are:
 1. finish the active-doc and map sanitization pass
 2. remove remaining historical naming from active tests/comments where it no longer helps
 3. keep hardening the local audit and demo surfaces without widening authority
+- Removed the dead `internal/orchestrator/` XML tool-call path after native tool use became the only live model tool surface. Prompt/compiler docs now forbid pseudo-tool XML instead of teaching a removed fallback.
+- Removed the unused `internal/threadstore/` package, which had no remaining imports in the active Loopgate repo.

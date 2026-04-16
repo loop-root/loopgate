@@ -5,10 +5,10 @@ import (
 	"fmt"
 )
 
-// InvokeCapability is a synthetic registry entry used only for native structured
-// tool-use: the model calls invoke_capability with a target capability name and
-// JSON arguments; orchestrator expands this to a normal capability before execution.
-// Execute is not used on the Loopgate path.
+// InvokeCapability is a synthetic registry entry used only for compact native
+// tool schemas: the model calls invoke_capability with a target capability name
+// and JSON arguments. The current Loopgate path does not execute this tool
+// directly.
 type InvokeCapability struct{}
 
 func (t *InvokeCapability) Name() string      { return "invoke_capability" }
@@ -40,5 +40,5 @@ func (t *InvokeCapability) Schema() Schema {
 func (t *InvokeCapability) Execute(ctx context.Context, args map[string]string) (string, error) {
 	_ = ctx
 	_ = args
-	return "", fmt.Errorf("invoke_capability is not executed directly; orchestrator expands this to the target capability")
+	return "", fmt.Errorf("invoke_capability is not executed directly on the current Loopgate path")
 }

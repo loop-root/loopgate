@@ -29,7 +29,7 @@ Use it when changing:
 ## Relationship Notes
 
 - Audit wrapper: `internal/audit/ledger.go`
-- Client-side thread store (separate concern): `internal/threadstore/`
+- Client-side thread history persistence is no longer implemented in-tree.
 
 ## Important Watchouts
 

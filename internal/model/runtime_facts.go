@@ -9,8 +9,8 @@ import "strings"
 const ConstrainedNativeToolsRuntimeFact = "haven_constrained_native_tools:v1"
 
 // CompactNativeDispatchRuntimeFact is a legacy runtime marker indicating the
-// client sends only invoke_capability in NativeToolDefs; orchestrator expands
-// to real capability names before Loopgate execution.
+// client sent only invoke_capability in NativeToolDefs as a compact provider
+// schema rather than enumerating every governed capability separately.
 const CompactNativeDispatchRuntimeFact = "haven_compact_native_dispatch:v1"
 
 // ConstrainedNativeToolsFromRuntimeFacts reports whether the client asked for

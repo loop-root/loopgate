@@ -187,14 +187,14 @@ func TestCompiler_IncludesRuntimeContractAndCommands(t *testing.T) {
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Do not deny built-in product features") {
 		t.Fatalf("compiled prompt missing self-description rule: %s", compiledPrompt.SystemInstruction)
 	}
-	if !strings.Contains(compiledPrompt.SystemInstruction, "Never emit <tool_call> for local product commands") {
-		t.Fatalf("compiled prompt missing command-vs-tool rule: %s", compiledPrompt.SystemInstruction)
+	if !strings.Contains(compiledPrompt.SystemInstruction, "you cannot invoke tools in this turn") {
+		t.Fatalf("compiled prompt missing no-native-tools self-description rule: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Do not invent slash namespaces or subcommands such as /memory/remembered-events") {
 		t.Fatalf("compiled prompt missing slash-command anti-invention rule: %s", compiledPrompt.SystemInstruction)
 	}
-	if !strings.Contains(compiledPrompt.SystemInstruction, "Never emit <tool_result>. Tool results are generated only by the runtime after actual execution.") {
-		t.Fatalf("compiled prompt missing no-tool-result rule: %s", compiledPrompt.SystemInstruction)
+	if !strings.Contains(compiledPrompt.SystemInstruction, "Do not emit XML tool-call tags, JSON pseudo-tool calls, or synthetic tool results.") {
+		t.Fatalf("compiled prompt missing no-xml-fallback rule: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory.") {
 		t.Fatalf("compiled prompt missing raw-memory filesystem rule: %s", compiledPrompt.SystemInstruction)
@@ -243,7 +243,7 @@ func TestCompiler_NativeToolsUseGenericSelfDescriptionRules(t *testing.T) {
 	}
 }
 
-func TestCompiler_GenericToolCallProtocol_UsesLoopgateAgnosticLanguage(t *testing.T) {
+func TestCompiler_NonNativeToolRuntime_UsesPlainTextOnlyLanguage(t *testing.T) {
 	persona := config.Persona{}
 	persona.Name = "Loopgate"
 	persona.Description = "A helpful and honest assistant."
@@ -264,15 +264,18 @@ func TestCompiler_GenericToolCallProtocol_UsesLoopgateAgnosticLanguage(t *testin
 		t.Fatalf("generic tool-call path should not mention Morph: %s", compiledPrompt.SystemInstruction)
 	}
 	if strings.Contains(compiledPrompt.SystemInstruction, ".morph/memory") {
-		t.Fatalf("generic tool-call path should not mention .morph memory path: %s", compiledPrompt.SystemInstruction)
+		t.Fatalf("non-native tool path should not mention .morph memory path: %s", compiledPrompt.SystemInstruction)
 	}
-	if !strings.Contains(compiledPrompt.SystemInstruction, "Never emit <tool_call> for local product commands") {
-		t.Fatalf("generic tool-call path missing local command boundary rule: %s", compiledPrompt.SystemInstruction)
+	if strings.Contains(compiledPrompt.SystemInstruction, "<tool_call>") {
+		t.Fatalf("non-native tool path should not teach dead XML tool-call protocol: %s", compiledPrompt.SystemInstruction)
+	}
+	if !strings.Contains(compiledPrompt.SystemInstruction, "Do not emit XML tool-call tags, JSON pseudo-tool calls, or synthetic tool results.") {
+		t.Fatalf("non-native tool path missing no-pseudo-tool-call rule: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory") {
-		t.Fatalf("generic tool-call path missing raw memory store warning: %s", compiledPrompt.SystemInstruction)
+		t.Fatalf("non-native tool path missing raw memory store warning: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "That continuity layer is not part of the active Loopgate operator surface.") {
-		t.Fatalf("generic tool-call path missing continuity extraction warning: %s", compiledPrompt.SystemInstruction)
+		t.Fatalf("non-native tool path missing continuity extraction warning: %s", compiledPrompt.SystemInstruction)
 	}
 }

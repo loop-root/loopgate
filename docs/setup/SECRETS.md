@@ -210,7 +210,7 @@ Shared helpers in `internal/secrets/redact.go`:
 - `RedactStringMap(map[string]string) map[string]interface{}`
 - `RedactStructuredFields(map[string]interface{}) map[string]interface{}`
 
-These are used by orchestrator ledger logging for tool args/output/reasons.
+These are used by Loopgate audit and result-rendering paths for tool args/output/reasons.
 
 ## 5) Non-negotiable constraints
 

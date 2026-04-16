@@ -192,7 +192,7 @@ func buildSystemInstruction(request Request) (string, error) {
 	if request.HasNativeTools {
 		// Native tool use: tools are defined via the API's structured tool definitions.
 		// Do NOT emit text-based AVAILABLE TOOLS or CAPABILITY SELECTION GUIDANCE —
-		// having both confuses the model into using XML tool calls instead of the native API.
+		// having both confuses the model into using redundant pseudo-protocols.
 	} else {
 		writeSection(&builder, "AVAILABLE COMMANDS", formatAvailableCommands(request.AvailableCommands))
 		writeSection(&builder, "AVAILABLE TOOLS", formatAvailableTools(request.AvailableTools))
@@ -209,11 +209,12 @@ func buildSystemInstruction(request Request) (string, error) {
 			"If a matching capability is not listed in those places, say it is unavailable.",
 		})
 	} else {
-		// Generic text-protocol runtime: local commands may exist, but the prompt should not
-		// teach any legacy product name or shell branding here.
+		// Local command-only / no-native-tool runtime: tools may still be described for
+		// self-description, but there is no XML or pseudo-tool-call fallback.
 		writeSection(&builder, "SELF-DESCRIPTION RULES", []string{
 			"When the user asks what you can do, answer from both AVAILABLE COMMANDS and AVAILABLE TOOLS.",
 			"Commands are local product actions. Tools are Loopgate-governed capabilities. Do not confuse them.",
+			"If this request did not attach native tool definitions, you cannot invoke tools in this turn; describe them honestly in plain text instead.",
 			"Do not deny built-in product features that are listed in RUNTIME CONTRACT or AVAILABLE COMMANDS.",
 			"If a matching capability is not listed, say it is unavailable. Do not substitute an unrelated capability just because it is available.",
 			"Only mention slash commands that are explicitly listed in AVAILABLE COMMANDS. Do not invent slash namespaces or subcommands such as /memory/remembered-events.",
@@ -241,21 +242,12 @@ func buildSystemInstruction(request Request) (string, error) {
 			})
 		}
 	} else {
-		writeSection(&builder, "TOOL CALL PROTOCOL", []string{
-			"Respond with either normal assistant text or one or more complete <tool_call> blocks. Do not mix unfinished tool tags into prose.",
-			"If you need a tool, emit exactly one or more <tool_call> blocks containing JSON.",
-			"Example:",
-			`<tool_call>`,
-			`{"name":"fs_read","args":{"path":"docs/setup/SETUP.md"}}`,
-			`</tool_call>`,
-			"Each <tool_call> block must contain exactly one complete JSON object and a closing </tool_call> tag.",
-			"Do not wrap <tool_call> blocks in Markdown fences.",
-			"If you are unsure whether a listed tool matches, do not emit a tool call for it.",
-			"Do not claim a tool succeeded unless you received a tool result.",
-			"Never emit <tool_result>. Tool results are generated only by the runtime after actual execution.",
-			"Never emit <tool_call> for local product commands such as /site or /setup.",
+		writeSection(&builder, "TOOL USE AVAILABILITY", []string{
+			"This request did not attach native tool definitions for direct tool invocation.",
+			"Do not emit XML tool-call tags, JSON pseudo-tool calls, or synthetic tool results.",
+			"If the user asks how to use a local product command, answer in plain text instead of pretending to invoke it.",
+			"If a governed capability is only described in AVAILABLE TOOLS and not attached as a native tool definition, explain it in plain text rather than claiming execution.",
 			"Never use filesystem tools to inspect or modify raw memory stores such as runtime/state/memory. That continuity layer is not part of the active Loopgate operator surface.",
-			"If the user asks how to use a local product command, answer in plain text instead of emitting a tool call.",
 		})
 	}
 

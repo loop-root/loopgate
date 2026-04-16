@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"loopgate/internal/loopgate"
-	"loopgate/internal/orchestrator"
 	"loopgate/internal/secrets"
 )
 
@@ -76,49 +75,49 @@ func PromptEligibleOutput(capabilityResponse loopgate.CapabilityResponse) (strin
 	return StructuredPromptText(promptStructuredResult), nil
 }
 
-func ToolResultFromCapabilityResponse(callID string, capabilityResponse loopgate.CapabilityResponse) (orchestrator.ToolResult, error) {
+func ToolResultFromCapabilityResponse(callID string, capabilityResponse loopgate.CapabilityResponse) (ToolResult, error) {
 	switch capabilityResponse.Status {
 	case loopgate.ResponseStatusSuccess:
 		promptOutput, err := PromptEligibleOutput(capabilityResponse)
 		if err != nil {
-			return orchestrator.ToolResult{
+			return ToolResult{
 				CallID: callID,
-				Status: orchestrator.StatusError,
+				Status: StatusError,
 				Reason: "invalid result classification from Loopgate",
 			}, err
 		}
-		return orchestrator.ToolResult{
+		return ToolResult{
 			CallID: callID,
-			Status: orchestrator.StatusSuccess,
+			Status: StatusSuccess,
 			Output: promptOutput,
 		}, nil
 	case loopgate.ResponseStatusDenied:
-		return orchestrator.ToolResult{
+		return ToolResult{
 			CallID:     callID,
-			Status:     orchestrator.StatusDenied,
+			Status:     StatusDenied,
 			Reason:     secrets.RedactText(capabilityResponse.DenialReason),
 			DenialCode: strings.TrimSpace(capabilityResponse.DenialCode),
 		}, nil
 	case loopgate.ResponseStatusError:
-		return orchestrator.ToolResult{
+		return ToolResult{
 			CallID:     callID,
-			Status:     orchestrator.StatusError,
+			Status:     StatusError,
 			Reason:     secrets.RedactText(capabilityResponse.DenialReason),
 			DenialCode: strings.TrimSpace(capabilityResponse.DenialCode),
 		}, nil
 	default:
-		return orchestrator.ToolResult{
+		return ToolResult{
 			CallID: callID,
-			Status: orchestrator.StatusError,
+			Status: StatusError,
 			Reason: "unknown Loopgate response status",
 		}, fmt.Errorf("unknown Loopgate response status %q", capabilityResponse.Status)
 	}
 }
 
-func PromptEligibleToolResults(toolResults []orchestrator.ToolResult) []orchestrator.ToolResult {
-	filteredResults := make([]orchestrator.ToolResult, 0, len(toolResults))
+func PromptEligibleToolResults(toolResults []ToolResult) []ToolResult {
+	filteredResults := make([]ToolResult, 0, len(toolResults))
 	for _, toolResult := range toolResults {
-		if toolResult.Status == orchestrator.StatusSuccess && strings.TrimSpace(toolResult.Output) == "" {
+		if toolResult.Status == StatusSuccess && strings.TrimSpace(toolResult.Output) == "" {
 			continue
 		}
 		filteredResults = append(filteredResults, toolResult)
@@ -126,7 +125,7 @@ func PromptEligibleToolResults(toolResults []orchestrator.ToolResult) []orchestr
 	return filteredResults
 }
 
-func SummarizeToolResults(toolCalls []orchestrator.ToolCall, toolResults []orchestrator.ToolResult) string {
+func SummarizeToolResults(toolCalls []ToolCall, toolResults []ToolResult) string {
 	if len(toolResults) == 0 {
 		return ""
 	}
@@ -138,18 +137,18 @@ func SummarizeToolResults(toolCalls []orchestrator.ToolCall, toolResults []orche
 		callIDsInOrder = append(callIDsInOrder, toolCall.ID)
 	}
 
-	resultByCallID := make(map[string]orchestrator.ToolResult, len(toolResults))
+	resultByCallID := make(map[string]ToolResult, len(toolResults))
 	successCount := 0
 	deniedCount := 0
 	errorCount := 0
 	for _, toolResult := range toolResults {
 		resultByCallID[toolResult.CallID] = toolResult
 		switch toolResult.Status {
-		case orchestrator.StatusSuccess:
+		case StatusSuccess:
 			successCount++
-		case orchestrator.StatusDenied:
+		case StatusDenied:
 			deniedCount++
-		case orchestrator.StatusError:
+		case StatusError:
 			errorCount++
 		}
 	}
@@ -191,23 +190,23 @@ func SummarizeToolResults(toolCalls []orchestrator.ToolCall, toolResults []orche
 	return strings.Join(summaryLines, "\n")
 }
 
-func summarizeSingleToolResult(capabilityName string, toolResult orchestrator.ToolResult) string {
+func summarizeSingleToolResult(capabilityName string, toolResult ToolResult) string {
 	if capabilityName == "" {
 		capabilityName = toolResult.CallID
 	}
 	switch toolResult.Status {
-	case orchestrator.StatusSuccess:
+	case StatusSuccess:
 		return fmt.Sprintf("- %s: ok", capabilityName)
-	case orchestrator.StatusDenied:
+	case StatusDenied:
 		return fmt.Sprintf("- %s: denied (%s)", capabilityName, summarizeToolResultReason(toolResult))
-	case orchestrator.StatusError:
+	case StatusError:
 		return fmt.Sprintf("- %s: error (%s)", capabilityName, summarizeToolResultReason(toolResult))
 	default:
 		return fmt.Sprintf("- %s: %s", capabilityName, toolResult.Status)
 	}
 }
 
-func summarizeToolResultReason(toolResult orchestrator.ToolResult) string {
+func summarizeToolResultReason(toolResult ToolResult) string {
 	trimmedReason := strings.TrimSpace(toolResult.Reason)
 	if trimmedReason != "" {
 		return trimmedReason

@@ -12,7 +12,7 @@ Use it when changing:
 
 `internal/policy/` evaluates **whether a registered tool operation is allowed** under the loaded `config.Policy` (typically from `core/policy/policy.yaml` via the config loader).
 
-It does not execute tools or mint capabilities; Loopgate and the orchestrator call this after resolving tool metadata.
+It does not execute tools or mint capabilities; Loopgate calls this after resolving tool metadata.
 
 ## Key Files
 

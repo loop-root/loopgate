@@ -9,7 +9,7 @@ This guide documents how tools are invoked, where policy is enforced, and what i
 The operator client (terminal CLI, IDE-hosted agent, or local HTTP UI) has two execution paths:
 
 1. Slash commands (`/ls`, `/cat`, `/write`, etc.) handled by `internal/shell`.
-2. Model-driven tool calls parsed from `<tool_call>...</tool_call>` blocks and executed by `internal/orchestrator`.
+2. Provider-native structured tool use when a request explicitly includes native tool definitions.
 
 Both paths are policy-gated. Model output is untrusted.
 
@@ -33,23 +33,21 @@ Notes:
 - `/write` respects policy and can require explicit approval.
 - `/debug safepath` is read-only and helps explain allow/deny path decisions.
 
-## 3) Model tool-call format
+## 3) Native structured tool use
 
-When non-slash input reaches the model, the client parses this structure:
-
-```text
-<tool_call>
-{"name":"fs_read","args":{"path":"docs/setup/SETUP.md"}}
-</tool_call>
-```
+When a request includes provider-native tool definitions, the model may return
+structured tool-use blocks through the provider API instead of plain text.
 
 Execution flow:
 
-`model output -> parser -> schema validation -> policy check -> approval (if required) -> tool execute -> ledger`
+`model output -> native tool block decode -> Loopgate request validation -> policy check -> approval (if required) -> capability execute -> audit`
 
-## 4) Registered orchestrator tools
+There is no longer an XML `<tool_call>...</tool_call>` fallback in the active
+Loopgate path.
 
-Default registry in `internal/tools/defaults.go`:
+## 4) Registered native tools
+
+Default allowlisted tools in `internal/tools/defaults.go` / `internal/model/toolschema.go` include:
 
 - `fs_read` (`read`)
 - `fs_write` (`write`)
@@ -63,12 +61,14 @@ Tool events are written to the append-only ledger.
 
 - Tool args, output, and reasons are redacted via `internal/secrets` helpers.
 - Truncation is applied after redaction.
-- Ledger append failures in orchestrator logging are surfaced (error callback or stderr warning), not silently dropped.
+- Ledger append failures on security-relevant Loopgate actions are surfaced, not silently dropped.
 
 ## 6) Security-relevant behavior to keep in mind
 
 - SafePath enforces allowed roots + deny paths on resolved targets.
-- Slash-command `/write` and orchestrator `fs_write` both use the hardened write helper in `internal/tools/fs_write.go`.
+- Slash-command `/write` and governed capability writes both use the hardened write helper in `internal/tools/fs_write.go`.
 - `internal/tools/fs_write` uses a no-follow open path (`openat` + `O_NOFOLLOW`) after validation.
 
-If you add new tools, route them through the orchestrator registry and declare operation type explicitly.
+If you add new tools, register them explicitly, declare operation type honestly,
+and keep the native tool allowlist in `internal/model/toolschema.go` aligned
+with the real execution path.

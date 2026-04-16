@@ -13,8 +13,9 @@ type NativeToolDefBuildOptions struct {
 	// capabilities so models do not call them for self-directed planning.
 	UserIntentGuards bool
 	// CompactNativeTools sends a single invoke_capability native tool definition whose
-	// arguments_json dispatches to real capabilities, shrinking provider tool-schema TPM.
-	// Loopgate still authorizes the resolved capability name at execution time.
+	// arguments_json encodes the target governed capability, shrinking provider
+	// tool-schema TPM. Loopgate still authorizes the resolved capability name at
+	// execution time.
 	CompactNativeTools bool
 }
 
@@ -43,7 +44,7 @@ var nativeToolAllowlist = map[string]bool{
 	"host.folder.read":        true,
 	"host.organize.plan":      true,
 	"host.plan.apply":         true,
-	// Synthetic dispatcher; orchestrator expands to real capability before execution.
+	// Synthetic dispatcher schema used to compact provider-facing native tool defs.
 	"invoke_capability": true,
 }
 
