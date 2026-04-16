@@ -245,7 +245,7 @@ func TestProvider_GenerateIncludesEmptyAssistantContentForToolCalls(t *testing.T
 	if err := json.Unmarshal([]byte(argsWire), &argsObj); err != nil {
 		t.Fatalf("arguments string should be JSON: %v", err)
 	}
-	if argsObj["title"] != "plan" || argsObj["body"] != "draft" {
+	if argsObj["path"] != "notes/plan.txt" || argsObj["content"] != "draft" {
 		t.Fatalf("arguments payload: %#v", argsObj)
 	}
 }

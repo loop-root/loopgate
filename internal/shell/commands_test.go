@@ -15,6 +15,7 @@ import (
 	"loopgate/internal/loopgate"
 	modelruntime "loopgate/internal/modelruntime"
 	"loopgate/internal/sandbox"
+	"loopgate/internal/testutil"
 )
 
 func TestApprovalPreview_HidesSensitiveContent(t *testing.T) {
@@ -568,12 +569,13 @@ func (stubClient *stubSiteClient) InspectSite(context.Context, loopgate.SiteInsp
 func startTestLoopgate(t *testing.T, repoRoot string, policyYAML string) (*loopgate.Client, loopgate.StatusResponse) {
 	t.Helper()
 
-	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
-	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
-		t.Fatalf("mkdir policy dir: %v", err)
+	policySigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new test policy signer: %v", err)
 	}
-	if err := os.WriteFile(policyPath, []byte(policyYAML), 0o600); err != nil {
-		t.Fatalf("write policy: %v", err)
+	policySigner.ConfigureEnv(t.Setenv)
+	if err := policySigner.WriteSignedPolicyYAML(repoRoot, policyYAML); err != nil {
+		t.Fatalf("write signed policy: %v", err)
 	}
 	testExecutablePath, err := os.Executable()
 	if err != nil {
