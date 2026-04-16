@@ -21,6 +21,8 @@ import (
 	"loopgate/internal/troubleshoot"
 )
 
+var ensureLoopgateStoppedForDemoReset = ensureLoopgateStopped
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -275,7 +277,7 @@ func runDemoResetWithIO(repoRoot string, socketPath string, confirmed bool, stdo
 		fmt.Fprintln(stderr, "ERROR: demo-reset is destructive; rerun with -yes")
 		return 2
 	}
-	if err := ensureLoopgateStopped(socketPath); err != nil {
+	if err := ensureLoopgateStoppedForDemoReset(socketPath); err != nil {
 		fmt.Fprintln(stderr, "ERROR:", err)
 		return 1
 	}

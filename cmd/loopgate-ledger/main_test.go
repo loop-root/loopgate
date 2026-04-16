@@ -2,15 +2,11 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
@@ -186,42 +182,16 @@ func TestRunDemoResetWithIO_RemovesLocalDemoState(t *testing.T) {
 
 func TestRunDemoResetWithIO_RefusesWhenLoopgateIsRunning(t *testing.T) {
 	repoRoot := t.TempDir()
-	socketFile, err := os.CreateTemp("", "loopgate-ledger-*.sock")
-	if err != nil {
-		t.Fatalf("create temp socket file: %v", err)
-	}
-	socketPath := socketFile.Name()
-	_ = socketFile.Close()
-	_ = os.Remove(socketPath)
-	listener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		t.Fatalf("listen unix socket: %v", err)
+	socketPath := filepath.Join(repoRoot, "runtime", "state", "loopgate.sock")
+	previousEnsureLoopgateStopped := ensureLoopgateStoppedForDemoReset
+	ensureLoopgateStoppedForDemoReset = func(actualSocketPath string) error {
+		if actualSocketPath != socketPath {
+			t.Fatalf("expected demo-reset to probe socket %q, got %q", socketPath, actualSocketPath)
+		}
+		return fmt.Errorf("refusing demo reset while Loopgate is running at %s", actualSocketPath)
 	}
 	defer func() {
-		_ = listener.Close()
-		_ = os.Remove(socketPath)
-	}()
-
-	httpServer := &http.Server{
-		Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			if request.URL.Path != "/v1/health" {
-				http.NotFound(writer, request)
-				return
-			}
-			writer.Header().Set("Content-Type", "application/json")
-			_, _ = writer.Write([]byte(`{"ok":true}`))
-		}),
-	}
-	serverDone := make(chan struct{})
-	go func() {
-		defer close(serverDone)
-		_ = httpServer.Serve(listener)
-	}()
-	defer func() {
-		shutdownContext, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		_ = httpServer.Shutdown(shutdownContext)
-		<-serverDone
+		ensureLoopgateStoppedForDemoReset = previousEnsureLoopgateStopped
 	}()
 
 	var stdout bytes.Buffer

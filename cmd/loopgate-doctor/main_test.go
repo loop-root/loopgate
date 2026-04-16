@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -23,7 +22,11 @@ import (
 )
 
 func TestRunTrustCheck_UsesRunningLoopgateServer(t *testing.T) {
-	repoRoot := t.TempDir()
+	repoRoot, err := os.MkdirTemp("/tmp", "lgd-repo-")
+	if err != nil {
+		t.Fatalf("create repo root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(repoRoot) })
 	policySigner, err := testutil.NewPolicyTestSigner()
 	if err != nil {
 		t.Fatalf("new policy test signer: %v", err)
@@ -75,42 +78,20 @@ func TestRunTrustCheck_UsesRunningLoopgateServer(t *testing.T) {
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_CLIENT_CERTIFICATE", testCertificates.ClientCertificatePEM)
 	t.Setenv("LOOPGATE_AUDIT_EXPORT_CLIENT_PRIVATE_KEY", testCertificates.ClientPrivateKeyPEM)
 
-	socketFile, err := os.CreateTemp("", "loopgate-doctor-*.sock")
-	if err != nil {
-		t.Fatalf("create temp socket file: %v", err)
+	socketPath := filepath.Join(repoRoot, "runtime", "state", "loopgate.sock")
+	calledSocketPath := ""
+	previousCheckAuditExportTrust := checkAuditExportTrust
+	checkAuditExportTrust = func(actualSocketPath string) (loopgate.AuditExportTrustCheckResponse, error) {
+		calledSocketPath = actualSocketPath
+		return loopgate.AuditExportTrustCheckResponse{
+			Status:       "healthy",
+			Summary:      "audit export trust is healthy",
+			EndpointHost: "admin.example.com",
+		}, nil
 	}
-	socketPath := socketFile.Name()
-	_ = socketFile.Close()
-	_ = os.Remove(socketPath)
-	t.Cleanup(func() { _ = os.Remove(socketPath) })
-
-	server, err := loopgate.NewServerForIntegrationHarness(repoRoot, socketPath)
-	if err != nil {
-		t.Fatalf("new server: %v", err)
-	}
-	serverContext, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan struct{})
-	go func() {
-		defer close(serverDone)
-		_ = server.Serve(serverContext)
-	}()
 	t.Cleanup(func() {
-		cancel()
-		<-serverDone
+		checkAuditExportTrust = previousCheckAuditExportTrust
 	})
-
-	healthClient := loopgate.NewClient(socketPath)
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		_, healthErr := healthClient.Health(context.Background())
-		if healthErr == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("wait for loopgate health: %v", healthErr)
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -134,6 +115,9 @@ func TestRunTrustCheck_UsesRunningLoopgateServer(t *testing.T) {
 	}
 	if response.EndpointHost != "admin.example.com" {
 		t.Fatalf("unexpected endpoint host in trust-check response: %#v", response)
+	}
+	if calledSocketPath != socketPath {
+		t.Fatalf("expected trust-check to use socket path %q, got %q", socketPath, calledSocketPath)
 	}
 }
 

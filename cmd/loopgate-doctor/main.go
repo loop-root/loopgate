@@ -17,6 +17,12 @@ import (
 	"loopgate/internal/troubleshoot"
 )
 
+var checkAuditExportTrust = func(socketPath string) (loopgate.AuditExportTrustCheckResponse, error) {
+	client := loopgate.NewClient(socketPath)
+	client.ConfigureSession("loopgate-doctor", defaultDoctorSessionID("trust-check"), []string{"diagnostic.read"})
+	return client.CheckAuditExportTrust(context.Background())
+}
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -147,10 +153,7 @@ func runTrustCheck(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	socketPath := resolveSocketPath(repoRoot, *socketPathFlag)
-	client := loopgate.NewClient(socketPath)
-	client.ConfigureSession("loopgate-doctor", defaultDoctorSessionID("trust-check"), []string{"diagnostic.read"})
-
-	trustCheckResponse, err := client.CheckAuditExportTrust(context.Background())
+	trustCheckResponse, err := checkAuditExportTrust(socketPath)
 	if err != nil {
 		fmt.Fprintln(stderr, "ERROR: audit export trust check:", err)
 		return 1
