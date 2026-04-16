@@ -37,6 +37,21 @@ type peerIdentity struct {
 	EPID int
 }
 
+// Locking invariant for Server state:
+//   - Prefer holding exactly one of these mutex families at a time.
+//   - Current production code treats auditMu, uiMu, connectionsMu,
+//     modelConnectionsMu, hostAccessPlansMu, providerTokenMu, pkceMu, and
+//     policyRuntimeMu as leaf-domain locks. Callers snapshot state under one
+//     lock, release it, and only then cross into another domain.
+//   - mu is the primary state lock for sessions, tokens, approvals, replay
+//     tables, and other authoritative control-plane state.
+//   - auditMu is a strict leaf lock for append-only audit sequencing and disk
+//     persistence. Never acquire mu while holding auditMu. logEvent* helpers
+//     intentionally resolve tenancy before taking auditMu so we never invert
+//     into auditMu -> mu.
+//   - If future code truly must hold more than one of these at once, document
+//     the exact acquisition order in the same change before merging. Do not
+//     introduce ad hoc nested locking.
 type Server struct {
 	repoRoot                   string
 	socketPath                 string
