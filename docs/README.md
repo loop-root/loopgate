@@ -29,6 +29,7 @@ repositories.
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./loopgate-threat-model.md)
 - [Loopgate cleanup plan](./roadmap/loopgate_cleanup_plan.md)
+- [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
 - [Support](../SUPPORT.md)
 - [Security reporting](../SECURITY.md)
 

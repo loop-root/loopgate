@@ -39,6 +39,7 @@ separate `ARCHIVED` repository.
 ## Roadmap and threat model
 
 - `docs/roadmap/roadmap.md`
+- `docs/roadmap/loopgate_v1_hardening_plan.md`
 - `docs/loopgate-threat-model.md`
 
 ## RFCs

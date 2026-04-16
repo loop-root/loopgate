@@ -44,6 +44,7 @@ repository. Continuity-specific planning now belongs in the separate
 - preserve fail-closed hook behavior
 - keep the governed MCP path request-driven and auditable
 - tighten the append-only audit story, especially around tamper and replacement gaps
+- execute the review-driven local-core hardening plan in `docs/roadmap/loopgate_v1_hardening_plan.md`
 
 ### 4. Core simplification
 
