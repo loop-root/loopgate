@@ -115,10 +115,10 @@ Why they matter less:
 
 Special note for `SessionStart`:
 
-- it may inject bounded historical wake-state context
+- it may inject bounded remembered context
 - that injected text is still content, not authority
-- it must reuse Loopgate's existing wake-state contract rather than inventing a
-  second memory summary format
+- it must reuse Loopgate's existing remembered-context contract rather than
+  inventing a second history-summary format
 
 Special note for `UserPromptSubmit`:
 
@@ -193,19 +193,19 @@ Residual risk:
 Attack:
 
 1. A local caller triggers the SessionStart hook path repeatedly.
-2. Loopgate returns unbounded or raw memory instead of the bounded wake-state projection.
+2. Loopgate returns unbounded or raw memory instead of the bounded remembered-context projection.
 3. Historical memory leaks through a hook path that was supposed to stay narrow.
 
 Impact:
 
 - unnecessary memory disclosure
-- drift between prompt memory and authoritative wake-state policy
+- drift between prompt memory and authoritative remembered-context policy
 
 Current control:
 
-- SessionStart uses the same bounded wake-state formatter as the existing memory
+- SessionStart uses the same bounded remembered-context formatter as the existing memory
   prompt path
-- the injected text is explicitly marked historical and not fresh verification
+- the injected text is explicitly marked historical context and not fresh verification
 
 Residual risk:
 
@@ -230,7 +230,7 @@ Current control:
 
 - `UserPromptSubmit` uses server-side `discover -> recall -> format`
 - the recall path remains bounded by `max_items` and `max_tokens`
-- injected output is explicitly labeled historical continuity rather than fresh
+- injected output is explicitly labeled historical context rather than fresh
   verification
 
 Residual risk:

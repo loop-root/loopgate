@@ -126,28 +126,28 @@ func TestCompiler_IncludesIssueSelectionGuidanceWhenIssueCapabilityExists(t *tes
 	}
 }
 
-func TestCompiler_IncludesRememberedContinuityAsHistoricalContext(t *testing.T) {
+func TestCompiler_IncludesRememberedContextAsHistoricalContext(t *testing.T) {
 	persona := config.Persona{}
 	persona.Name = "Loopgate"
 	persona.Description = "A helpful and honest assistant."
 
 	compiler := NewCompiler()
 	compiledPrompt, err := compiler.Compile(Request{
-		Persona:     persona,
-		Policy:      config.Policy{},
-		SessionID:   "s-memory",
-		TurnCount:   3,
-		WakeState:   "Remembered continuity follows. This is historical continuity, not fresh verification.\nremembered_fact: service_id=stripe_status (freshly_checked via loopgate.capability.result:req-status)",
-		UserMessage: "What's going on?",
+		Persona:           persona,
+		Policy:            config.Policy{},
+		SessionID:         "s-memory",
+		TurnCount:         3,
+		RememberedContext: "Remembered context follows. This is historical context, not fresh verification.\nremembered_fact: service_id=stripe_status (freshly_checked via loopgate.capability.result:req-status)",
+		UserMessage:       "What's going on?",
 	})
 	if err != nil {
 		t.Fatalf("compile prompt: %v", err)
 	}
-	if !strings.Contains(compiledPrompt.SystemInstruction, "REMEMBERED CONTINUITY:") {
-		t.Fatalf("compiled prompt missing remembered continuity section: %s", compiledPrompt.SystemInstruction)
+	if !strings.Contains(compiledPrompt.SystemInstruction, "REMEMBERED CONTEXT:") {
+		t.Fatalf("compiled prompt missing remembered context section: %s", compiledPrompt.SystemInstruction)
 	}
-	if !strings.Contains(compiledPrompt.SystemInstruction, "historical continuity, not fresh verification") {
-		t.Fatalf("compiled prompt missing historical continuity warning: %s", compiledPrompt.SystemInstruction)
+	if !strings.Contains(compiledPrompt.SystemInstruction, "historical context, not fresh verification") {
+		t.Fatalf("compiled prompt missing historical context warning: %s", compiledPrompt.SystemInstruction)
 	}
 	if !strings.Contains(compiledPrompt.SystemInstruction, "remembered_fact: service_id=stripe_status") {
 		t.Fatalf("compiled prompt missing remembered fact: %s", compiledPrompt.SystemInstruction)

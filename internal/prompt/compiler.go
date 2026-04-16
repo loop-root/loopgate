@@ -39,7 +39,7 @@ type Request struct {
 	Policy            config.Policy
 	SessionID         string
 	TurnCount         int
-	WakeState         string
+	RememberedContext string
 	Conversation      []ConversationTurn
 	UserMessage       string
 	AvailableTools    []ToolDefinition
@@ -264,7 +264,7 @@ func buildSystemInstruction(request Request) (string, error) {
 		fmt.Sprintf("Turn count: %d", request.TurnCount),
 		"Be concise, helpful, and explicit about uncertainty.",
 	})
-	writeSection(&builder, "REMEMBERED CONTINUITY", strings.Split(strings.TrimSpace(request.WakeState), "\n"))
+	writeSection(&builder, "REMEMBERED CONTEXT", strings.Split(strings.TrimSpace(request.RememberedContext), "\n"))
 
 	return strings.TrimSpace(builder.String()), nil
 }

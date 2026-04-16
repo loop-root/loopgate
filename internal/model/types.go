@@ -50,7 +50,7 @@ type Request struct {
 	Policy            config.Policy
 	SessionID         string
 	TurnCount         int
-	WakeState         string
+	RememberedContext string
 	Conversation      []ConversationTurn
 	UserMessage       string
 	AvailableTools    []ToolDefinition

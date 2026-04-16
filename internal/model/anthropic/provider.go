@@ -131,7 +131,7 @@ func (provider *Provider) Generate(ctx context.Context, request model.Request) (
 		Policy:             request.Policy,
 		SessionID:          request.SessionID,
 		TurnCount:          request.TurnCount,
-		WakeState:          request.WakeState,
+		RememberedContext:  request.RememberedContext,
 		Conversation:       model.ToPromptConversationTurns(request.Conversation),
 		UserMessage:        request.UserMessage,
 		AvailableTools:     model.ToPromptTools(request.AvailableTools),

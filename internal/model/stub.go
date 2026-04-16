@@ -29,7 +29,7 @@ func (provider *StubProvider) Generate(ctx context.Context, request Request) (Re
 		Policy:             request.Policy,
 		SessionID:          request.SessionID,
 		TurnCount:          request.TurnCount,
-		WakeState:          request.WakeState,
+		RememberedContext:  request.RememberedContext,
 		Conversation:       ToPromptConversationTurns(request.Conversation),
 		UserMessage:        request.UserMessage,
 		AvailableTools:     ToPromptTools(request.AvailableTools),

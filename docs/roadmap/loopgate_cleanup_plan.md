@@ -124,6 +124,7 @@ Completed in this phase so far:
 - removed the leftover tracked `cmd/memorybench` cache residue from Loopgate after preserving the same local artifact in the sibling `memBench` repo
 - preserved the post-split `memory_eligible` result-classification contract in the sibling `continuity` repo and removed that continuity-specific metadata axis from active Loopgate responses and UI projections
 - preserved the unused persona `memory_promotion` / persona-memory prompt contract in the sibling `continuity` repo and removed those continuity-specific knobs from the active Loopgate persona defaults and prompt summary
+- preserved the old `WakeState` / remembered-continuity prompt contract in the sibling `continuity` repo and renamed the active Loopgate request field and prompt section to neutral remembered-context language
 - tightened ignore coverage for memory ledger/distillate backup artifacts
 - moved tracked runtime sandbox/state artifacts out of source control and made `runtime/` fully gitignored
 - sanitized remaining hardcoded local paths in active docs and tests
