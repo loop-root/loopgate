@@ -32,6 +32,8 @@ repositories.
 - [Loopgate cleanup plan](./roadmap/loopgate_cleanup_plan.md)
 - [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
 - [Release candidate checklist](./roadmap/release_candidate_checklist.md)
+- [Repository sealing review](./roadmap/repository_sealing_review.md)
+- [Changelog](../CHANGELOG.md)
 - [Support](../SUPPORT.md)
 - [Security reporting](../SECURITY.md)
 

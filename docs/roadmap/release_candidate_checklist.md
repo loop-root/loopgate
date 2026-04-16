@@ -90,4 +90,5 @@ If you do cut a release candidate:
   - current active harness
   - main governance guarantees
   - the most important non-goals or deferred areas
+- update `CHANGELOG.md`
 - record the exact commit and tag in the release note or roadmap trail

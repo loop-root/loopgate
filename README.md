@@ -106,6 +106,7 @@ Start here:
 - [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./docs/loopgate-threat-model.md)
 - [Release candidate checklist](./docs/roadmap/release_candidate_checklist.md)
+- [Changelog](./CHANGELOG.md)
 - [Support](./SUPPORT.md)
 - [Security reporting](./SECURITY.md)
 
