@@ -68,20 +68,23 @@ func approvalTokenHash(token string) string {
 func (server *Server) authenticateApproval(writer http.ResponseWriter, request *http.Request) (controlSession, bool) {
 	requestPeerIdentity, ok := peerIdentityFromContext(request.Context())
 	if !ok {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "missing authenticated peer identity",
 			DenialCode:   DenialCodeApprovalTokenInvalid,
-		})
+		}, authDeniedAuditOptions{authKind: "approval_token"})
 		return controlSession{}, false
 	}
 
 	approvalToken := strings.TrimSpace(request.Header.Get("X-Loopgate-Approval-Token"))
 	if approvalToken == "" {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "missing approval token",
 			DenialCode:   DenialCodeApprovalTokenMissing,
+		}, authDeniedAuditOptions{
+			authKind:    "approval_token",
+			requestPeer: &requestPeerIdentity,
 		})
 		return controlSession{}, false
 	}
@@ -93,10 +96,13 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	controlSessionID, indexed := server.approvalTokenIndex[tokenHash]
 	if !indexed {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "invalid approval token",
 			DenialCode:   DenialCodeApprovalTokenInvalid,
+		}, authDeniedAuditOptions{
+			authKind:    "approval_token",
+			requestPeer: &requestPeerIdentity,
 		})
 		return controlSession{}, false
 	}
@@ -104,10 +110,14 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	if !sessionExists {
 		delete(server.approvalTokenIndex, tokenHash)
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "invalid approval token",
 			DenialCode:   DenialCodeApprovalTokenInvalid,
+		}, authDeniedAuditOptions{
+			authKind:         "approval_token",
+			controlSessionID: controlSessionID,
+			requestPeer:      &requestPeerIdentity,
 		})
 		return controlSession{}, false
 	}
@@ -115,10 +125,18 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	// Constant-time comparison to prevent timing oracle on the raw token value.
 	if subtle.ConstantTimeCompare([]byte(activeSession.ApprovalToken), []byte(approvalToken)) != 1 {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "invalid approval token",
 			DenialCode:   DenialCodeApprovalTokenInvalid,
+		}, authDeniedAuditOptions{
+			authKind:           "approval_token",
+			controlSessionID:   activeSession.ID,
+			actorLabel:         activeSession.ActorLabel,
+			clientSessionLabel: activeSession.ClientSessionLabel,
+			tenantID:           activeSession.TenantID,
+			userID:             activeSession.UserID,
+			requestPeer:        &requestPeerIdentity,
 		})
 		return controlSession{}, false
 	}
@@ -127,19 +145,35 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 		delete(server.sessions, controlSessionID)
 		delete(server.approvalTokenIndex, tokenHash)
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "expired approval token",
 			DenialCode:   DenialCodeApprovalTokenExpired,
+		}, authDeniedAuditOptions{
+			authKind:           "approval_token",
+			controlSessionID:   activeSession.ID,
+			actorLabel:         activeSession.ActorLabel,
+			clientSessionLabel: activeSession.ClientSessionLabel,
+			tenantID:           activeSession.TenantID,
+			userID:             activeSession.UserID,
+			requestPeer:        &requestPeerIdentity,
 		})
 		return controlSession{}, false
 	}
 	if activeSession.PeerIdentity != requestPeerIdentity {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "approval token peer binding mismatch",
 			DenialCode:   DenialCodeApprovalTokenInvalid,
+		}, authDeniedAuditOptions{
+			authKind:           "approval_token",
+			controlSessionID:   activeSession.ID,
+			actorLabel:         activeSession.ActorLabel,
+			clientSessionLabel: activeSession.ClientSessionLabel,
+			tenantID:           activeSession.TenantID,
+			userID:             activeSession.UserID,
+			requestPeer:        &requestPeerIdentity,
 		})
 		return controlSession{}, false
 	}

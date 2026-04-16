@@ -8,25 +8,77 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"loopgate/internal/secrets"
 )
+
+type authDeniedAuditOptions struct {
+	authKind           string
+	controlSessionID   string
+	actorLabel         string
+	clientSessionLabel string
+	tenantID           string
+	userID             string
+	requestPeer        *peerIdentity
+}
+
+func (server *Server) writeAuditedAuthDenial(writer http.ResponseWriter, request *http.Request, denial CapabilityResponse, options authDeniedAuditOptions) bool {
+	auditData := map[string]interface{}{
+		"auth_kind":      options.authKind,
+		"denial_code":    denial.DenialCode,
+		"reason":         secrets.RedactText(denial.DenialReason),
+		"request_method": request.Method,
+		"request_path":   request.URL.Path,
+	}
+	if strings.TrimSpace(options.controlSessionID) != "" {
+		auditData["control_session_id"] = options.controlSessionID
+	}
+	if strings.TrimSpace(options.actorLabel) != "" {
+		auditData["actor_label"] = options.actorLabel
+	}
+	if strings.TrimSpace(options.clientSessionLabel) != "" {
+		auditData["client_session_label"] = options.clientSessionLabel
+	}
+	if strings.TrimSpace(options.tenantID) != "" {
+		auditData["tenant_id"] = options.tenantID
+	}
+	if strings.TrimSpace(options.userID) != "" {
+		auditData["user_id"] = options.userID
+	}
+	if options.requestPeer != nil {
+		auditData["peer_uid"] = options.requestPeer.UID
+		auditData["peer_pid"] = options.requestPeer.PID
+		auditData["peer_epid"] = options.requestPeer.EPID
+	}
+
+	if err := server.logEvent("auth.denied", options.controlSessionID, auditData); err != nil {
+		server.writeJSON(writer, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
+		return false
+	}
+	server.writeJSON(writer, httpStatusForResponse(denial), denial)
+	return false
+}
 
 func (server *Server) authenticate(writer http.ResponseWriter, request *http.Request) (capabilityToken, bool) {
 	requestPeerIdentity, ok := peerIdentityFromContext(request.Context())
 	if !ok {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "missing authenticated peer identity",
 			DenialCode:   DenialCodeCapabilityTokenInvalid,
-		})
+		}, authDeniedAuditOptions{authKind: "capability_token"})
 		return capabilityToken{}, false
 	}
 
 	authorizationHeader := strings.TrimSpace(request.Header.Get("Authorization"))
 	if !strings.HasPrefix(strings.ToLower(authorizationHeader), "bearer ") {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "missing capability token",
 			DenialCode:   DenialCodeCapabilityTokenMissing,
+		}, authDeniedAuditOptions{
+			authKind:    "capability_token",
+			requestPeer: &requestPeerIdentity,
 		})
 		return capabilityToken{}, false
 	}
@@ -57,42 +109,77 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 	server.mu.Unlock()
 
 	if !found {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "invalid capability token",
 			DenialCode:   DenialCodeCapabilityTokenInvalid,
+		}, authDeniedAuditOptions{
+			authKind:    "capability_token",
+			requestPeer: &requestPeerIdentity,
 		})
 		return capabilityToken{}, false
 	}
 	if tokenExpired {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "expired capability token",
 			DenialCode:   DenialCodeCapabilityTokenExpired,
+		}, authDeniedAuditOptions{
+			authKind:           "capability_token",
+			controlSessionID:   tokenClaims.ControlSessionID,
+			actorLabel:         tokenClaims.ActorLabel,
+			clientSessionLabel: tokenClaims.ClientSessionLabel,
+			tenantID:           tokenClaims.TenantID,
+			userID:             tokenClaims.UserID,
+			requestPeer:        &requestPeerIdentity,
 		})
 		return capabilityToken{}, false
 	}
 	if sessionExpired {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "expired capability token",
 			DenialCode:   DenialCodeCapabilityTokenExpired,
+		}, authDeniedAuditOptions{
+			authKind:           "capability_token",
+			controlSessionID:   tokenClaims.ControlSessionID,
+			actorLabel:         tokenClaims.ActorLabel,
+			clientSessionLabel: tokenClaims.ClientSessionLabel,
+			tenantID:           tokenClaims.TenantID,
+			userID:             tokenClaims.UserID,
+			requestPeer:        &requestPeerIdentity,
 		})
 		return capabilityToken{}, false
 	}
 	if !sessionFound {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "invalid capability token",
 			DenialCode:   DenialCodeCapabilityTokenInvalid,
+		}, authDeniedAuditOptions{
+			authKind:           "capability_token",
+			controlSessionID:   tokenClaims.ControlSessionID,
+			actorLabel:         tokenClaims.ActorLabel,
+			clientSessionLabel: tokenClaims.ClientSessionLabel,
+			tenantID:           tokenClaims.TenantID,
+			userID:             tokenClaims.UserID,
+			requestPeer:        &requestPeerIdentity,
 		})
 		return capabilityToken{}, false
 	}
 	if tokenClaims.PeerIdentity != requestPeerIdentity {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
+		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "capability token peer binding mismatch",
 			DenialCode:   DenialCodeCapabilityTokenInvalid,
+		}, authDeniedAuditOptions{
+			authKind:           "capability_token",
+			controlSessionID:   tokenClaims.ControlSessionID,
+			actorLabel:         tokenClaims.ActorLabel,
+			clientSessionLabel: tokenClaims.ClientSessionLabel,
+			tenantID:           tokenClaims.TenantID,
+			userID:             tokenClaims.UserID,
+			requestPeer:        &requestPeerIdentity,
 		})
 		return capabilityToken{}, false
 	}

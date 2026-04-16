@@ -169,12 +169,12 @@ Completed in this phase:
 
 ## Phase D: Auth Failure Audit Contract
 
-Status: **pending**
+Status: **completed**
 
 Focus:
 - make auth-token failures durably visible in the authoritative audit path
 
-### Phase C1: Define the audit contract
+### Phase D1: Define the audit contract
 
 Decide explicitly:
 - which failures are audited
@@ -196,7 +196,7 @@ Recommended event shape:
 - control session identifier if available
 - safe peer summary only if already accepted elsewhere
 
-### Phase C2: Implement auth-failure audit logging
+### Phase D2: Implement auth-failure audit logging
 
 Planned work:
 - add a narrow helper for auth denial audit emission
@@ -210,6 +210,17 @@ Acceptance criteria:
 
 Rollback:
 - helper-isolated revert possible if behavior proves too coupled
+
+Completed in this phase:
+- added a shared fail-closed `auth.denied` audit path for capability-token and approval-token authentication failures
+- audited:
+  - missing peer identity
+  - missing token
+  - invalid token
+  - expired token
+  - peer binding mismatch
+- kept the JSON denial contract stable unless audit append itself fails, in which case the route now returns `DenialCodeAuditUnavailable`
+- added regression tests covering capability-token and approval-token auth denials plus audit-unavailable behavior
 
 ## Phase E: Session MAC Response Minimization
 
@@ -352,6 +363,9 @@ Rollback:
 - dead-code removal is trivial
 - trust-path change should stay isolated enough to revert independently
 
+Completed in this phase so far:
+- added GitHub Actions CI coverage with `go vet ./...` and `go test -race -count=1 ./...` on pushes to `main` and all pull requests
+
 ## Phase J: Readiness Closure
 
 Status: **pending**
@@ -394,8 +408,8 @@ Rollback:
 
 Start with:
 
-1. Phase C trust-anchor implementation slice
-2. then Phase D auth-failure audit work
+1. Phase E session MAC response minimization
+2. then Phase F nonce replay persistence redesign
 
-That keeps the open-source launch blocker ahead of the next forensic/audit
-improvement slice.
+That keeps the remaining wire-exposure cleanup ahead of the larger replay
+persistence redesign.
