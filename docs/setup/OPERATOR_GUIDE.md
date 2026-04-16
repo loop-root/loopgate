@@ -23,7 +23,19 @@ Loopgate is not a chat UI. It is the local authority layer.
 
 ## Basic workflow
 
-### 1. Start Loopgate
+### 1. Initialize local policy signing
+
+For a first-time local setup:
+
+```bash
+go run ./cmd/loopgate init
+go run ./cmd/loopgate-policy-admin validate
+```
+
+If you later re-sign policy intentionally, reuse the `key_id` printed by
+`loopgate init`.
+
+### 2. Start Loopgate
 
 ```bash
 go run ./cmd/loopgate
@@ -35,7 +47,7 @@ Expected local socket:
 runtime/state/loopgate.sock
 ```
 
-### 2. Install Claude hooks
+### 3. Install Claude hooks
 
 ```bash
 go run ./cmd/loopgate install-hooks
@@ -56,7 +68,7 @@ will sweep those repo-local Loopgate entries too.
 
 If Claude says a hook script is missing, reinstall first before disabling anything.
 
-### 3. Validate and sign policy
+### 4. Re-sign policy when you intentionally change it
 
 If you use a custom signer `key_id`, pass it to both `-verify-setup` commands below.
 
@@ -65,13 +77,13 @@ go run ./cmd/loopgate-policy-admin validate
 go run ./cmd/loopgate-policy-sign -verify-setup
 ```
 
-### 4. Hot-apply policy
+### 5. Hot-apply policy
 
 ```bash
 go run ./cmd/loopgate-policy-admin apply -verify-setup
 ```
 
-### 5. Exercise the harness
+### 6. Exercise the harness
 
 Run a normal Claude Code task and watch for:
 - low-risk reads that should be allow + audit

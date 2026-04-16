@@ -90,6 +90,13 @@ func handleLoopgateSubcommand(args []string) bool {
 		return false
 	}
 	switch args[0] {
+	case "init":
+		if err := runInit(args[1:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: init:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
 	case "install-hooks":
 		if err := runInstallHooks(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: install hooks:", err)

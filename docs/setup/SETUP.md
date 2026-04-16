@@ -31,6 +31,22 @@ go mod tidy
 go test ./...
 ```
 
+## Initialize local policy signing
+
+For the default first-time local setup:
+
+```bash
+go run ./cmd/loopgate init
+go run ./cmd/loopgate-policy-admin validate
+```
+
+`loopgate init` creates a local Ed25519 signer for this operator, installs the
+matching public key in the operator trust directory, and signs the checked-in
+policy.
+
+If you later re-sign intentionally with `loopgate-policy-sign`, reuse the
+printed `key_id`.
+
 ## Start Loopgate
 
 ```bash
@@ -47,11 +63,14 @@ On the first successful Loopgate start, the default Keychain-backed audit HMAC
 checkpoint key is bootstrapped automatically for the shipped macOS-first
 runtime config.
 
-## Sign and apply policy
+## Re-sign and apply policy
 
 Loopgate requires a valid detached signature for `core/policy/policy.yaml`.
-If you are using your own signer, install its public key into the operator trust directory first. See [Policy signing](./POLICY_SIGNING.md).
-If you use a custom `key_id`, pass it to both `loopgate-policy-sign -verify-setup` and `loopgate-policy-admin apply -verify-setup`.
+If you intentionally use your own signer instead of `loopgate init`, install its
+public key into the operator trust directory first. See
+[Policy signing](./POLICY_SIGNING.md).
+If you use a custom `key_id`, pass it to both `loopgate-policy-sign
+-verify-setup` and `loopgate-policy-admin apply -verify-setup`.
 
 Validate signer setup and sign:
 

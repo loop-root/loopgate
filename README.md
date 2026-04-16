@@ -63,7 +63,8 @@ What is not the active product story right now:
 ## Quick start
 
 ```bash
-go test ./...
+go run ./cmd/loopgate init
+go run ./cmd/loopgate-policy-admin validate
 go run ./cmd/loopgate
 ```
 

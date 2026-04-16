@@ -14,8 +14,8 @@ It assumes the current supported product shape:
 ## What you will do
 
 1. validate the checkout
-2. start Loopgate
-3. validate and sign policy
+2. initialize local policy signing
+3. start Loopgate
 4. install Claude Code hooks
 5. run a normal task and inspect the local audit if needed
 
@@ -28,7 +28,19 @@ go mod tidy
 go test ./...
 ```
 
-### 2. Start Loopgate
+### 2. Initialize local policy signing
+
+```bash
+go run ./cmd/loopgate init
+go run ./cmd/loopgate-policy-admin validate
+```
+
+`loopgate init` creates a local Ed25519 signer for this operator, installs the
+matching trust anchor under your Loopgate config directory, signs the checked-in
+policy, and prints the `key_id` you should reuse later if you intentionally
+re-sign with `loopgate-policy-sign`.
+
+### 3. Start Loopgate
 
 ```bash
 go run ./cmd/loopgate
@@ -45,27 +57,6 @@ Leave Loopgate running in its own terminal.
 On the first successful start, Loopgate also bootstraps the default
 Keychain-backed audit HMAC checkpoint key used for tamper-evident audit
 checkpoints.
-
-### 3. Validate and sign policy
-
-In another terminal:
-
-If this is a fresh open-source setup and you are using your own signer, install your public key into the operator trust directory first. See [Policy signing](./POLICY_SIGNING.md).
-
-If you chose a custom `key_id`, pass it to every `-verify-setup` command:
-- `go run ./cmd/loopgate-policy-sign -key-id "$KEY_ID" -verify-setup`
-- `go run ./cmd/loopgate-policy-admin apply -key-id "$KEY_ID" -verify-setup`
-
-```bash
-go run ./cmd/loopgate-policy-admin validate
-go run ./cmd/loopgate-policy-sign -verify-setup
-```
-
-If Loopgate is already running and you changed policy:
-
-```bash
-go run ./cmd/loopgate-policy-admin apply -verify-setup
-```
 
 ### 4. Install Claude Code hooks
 
@@ -117,7 +108,7 @@ sequenceDiagram
   - rerun `go run ./cmd/loopgate install-hooks`
 - Policy changes are not taking effect:
   - rerun `validate`, `-verify-setup`, and `apply -verify-setup`
-  - if you use a custom signer, make sure the same `-key-id` is passed to both verification commands
+  - if you used `loopgate init`, pass the printed `-key-id` to later `loopgate-policy-sign` and `loopgate-policy-admin apply -verify-setup` commands
 - A task was denied and you want to know why:
   - `go run ./cmd/loopgate-ledger tail -verbose`
 - You want a structured local diagnostic snapshot:

@@ -4,6 +4,15 @@
 
 Loopgate now requires a detached signature for the live policy file.
 
+For the default first-time local setup, prefer:
+
+```bash
+go run ./cmd/loopgate init
+```
+
+That creates a local signer, installs the matching trust anchor, and signs the
+checked-in policy for you.
+
 Required files:
 
 - `core/policy/policy.yaml`
