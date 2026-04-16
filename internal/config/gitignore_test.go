@@ -20,6 +20,7 @@ func TestGitignore_ContainsRuntimeAndBuildArtifactRules(t *testing.T) {
 	requiredPatterns := []string{
 		"runtime/",
 		".cache/",
+		"cmd/memorybench/",
 		"core/memory/ledger/*.jsonl",
 		"core/memory/distillates/*.jsonl",
 		"core/memory/keys/",

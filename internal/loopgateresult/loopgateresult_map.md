@@ -18,9 +18,6 @@ Use it when changing:
   - `FormatDisplayResponse`, `StructuredDisplayText`, `StructuredPromptText`
   - `SanitizedApprovalMetadata`
 
-- `memory.go`
-  - memory-specific display helpers where separated from generic render
-
 - `render_test.go`
   - formatting regressions
 

@@ -1,23 +1,21 @@
 # Core Map
 
-This file maps **`core/`** — checked-in policy plus a memory-related tree that still contains cleanup debt.
+This file maps **`core/`** — the checked-in Loopgate policy defaults and signing material.
 
 Use it when changing:
 
 - default capability policy YAML
-- understanding what under `core/memory/` is durable design input versus machine-local runtime residue
+- detached signature handling for policy distribution and verification
 
 ## Core Role
 
-- **`core/policy/`** is **source-of-truth YAML** for governance:
-  - `policy.yaml` — Loopgate policy defaults and local development constraints
+- **`core/policy/`** is the checked-in governance source of truth:
+  - `policy.yaml` — active Loopgate policy defaults and local development constraints
+  - `policy.yaml.sig` — detached signature for the current policy
+  - `policy.example.yaml` — example operator policy showing the intended shape without local secrets
 
-- **`core/memory/`** is **not** clean source-of-truth application state. It has historically mixed:
-  - format/reference material the code still knows how to read
-  - tracked historical runtime artifacts
-  - local memory/ledger leftovers that should not grow in git
-
-Treat anything under `core/memory/` as sensitive until proven otherwise. Do not commit new runtime-generated memory, keys, or ledger files there.
+Historical `core/memory/` residue has been preserved in the sibling `continuity`
+repo and removed from the active Loopgate tree.
 
 ## Relationship Notes
 
@@ -26,6 +24,6 @@ Treat anything under `core/memory/` as sensitive until proven otherwise. Do not 
 
 ## Important Watchouts
 
-- Policy edits have direct security impact — require tests and review.
-- The checked-in policy file is still a local working policy today, not yet a polished open-source-safe default.
-- Prefer keeping generated memory blobs, ledgers, and keys out of git; align with `.gitignore` and the cleanup plan.
+- Policy edits have direct security impact and must remain signed.
+- The checked-in policy file is still an operator-facing default, not a toy example.
+- Do not reintroduce runtime-generated memory, ledger, or key artifacts under `core/`.

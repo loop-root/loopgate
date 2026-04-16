@@ -181,8 +181,6 @@ tools:
     # Block sensitive subtrees even if a broad allowed_roots would include them.
     denied_paths:
       - ".morph/memory"
-      - "core/memory/ledger"
-      - "core/memory/distillates"
       - "core/policy"
       - "persona"
       - "runtime/state/memory"
