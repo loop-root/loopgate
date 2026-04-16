@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"loopgate/internal/identifiers"
 
@@ -111,10 +112,6 @@ func validatePolicySignatureFile(signatureFile PolicySignatureFile) error {
 	return nil
 }
 
-func verifyPolicySignatureFile(rawPolicyBytes []byte, signatureFile PolicySignatureFile) error {
-	return VerifyPolicyDocumentSignature(rawPolicyBytes, signatureFile)
-}
-
 // VerifyPolicyDocumentSignature verifies a detached policy signature file
 // against the provided raw policy YAML bytes.
 func VerifyPolicyDocumentSignature(rawPolicyBytes []byte, signatureFile PolicySignatureFile) error {
@@ -162,7 +159,7 @@ func trustedPolicySigningKeys() (map[string]ed25519.PublicKey, error) {
 			return nil, fmt.Errorf("operator trust anchor for key_id %q conflicts with an already trusted public key", keyID)
 		}
 	}
-	if !runningUnderGoTestBinary() {
+	if !testing.Testing() {
 		return trustedKeys, nil
 	}
 
@@ -298,10 +295,6 @@ func ParsePolicySigningPublicKeyPEM(rawPublicKeyBytes []byte) (ed25519.PublicKey
 		return nil, fmt.Errorf("policy signing public key must be %d bytes", ed25519.PublicKeySize)
 	}
 	return append(ed25519.PublicKey(nil), publicKey...), nil
-}
-
-func runningUnderGoTestBinary() bool {
-	return strings.HasSuffix(filepath.Base(os.Args[0]), ".test")
 }
 
 func publicKeysEqual(left ed25519.PublicKey, right ed25519.PublicKey) bool {

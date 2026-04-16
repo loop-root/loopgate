@@ -373,7 +373,7 @@ Rollback:
 
 ## Phase I: Policy-Sign Trust Path Cleanup And CI Baseline
 
-Status: **pending**
+Status: **completed**
 
 Focus:
 - remove remaining trust ambiguity from the signer path and make regressions harder to miss
@@ -396,6 +396,10 @@ Rollback:
 
 Completed in this phase so far:
 - added GitHub Actions CI coverage with `go vet ./...` and `go test -race -count=1 ./...` on pushes to `main` and all pull requests
+- removed the dead `verifyPolicySignatureFile(...)` wrapper
+- replaced argv-name-based `runningUnderGoTestBinary()` trust extension with `testing.Testing()` plus the existing explicit `LOOPGATE_TEST_POLICY_SIGNING_*` test env
+- kept operator-local trust anchors and explicit test-only trust separate, so production binaries no longer accept test trust merely because of executable naming
+- kept signer verification coverage green across `internal/config`, `cmd/loopgate-policy-sign`, and `cmd/loopgate-policy-admin`
 
 ## Phase J: Readiness Closure
 
@@ -439,7 +443,6 @@ Rollback:
 
 Start with:
 
-1. Phase I policy-sign trust-path cleanup and CI baseline follow-through
-2. then Phase J readiness closure
+1. Phase J readiness closure
 
-That keeps the remaining signer hardening ahead of final release-closure cleanup.
+That leaves final release-closure cleanup as the next focused slice.
