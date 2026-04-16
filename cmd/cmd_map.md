@@ -50,7 +50,7 @@ Use it when changing:
   - builds offline derived operator reports from local repo state
   - writes diagnostic bundles without touching authoritative audit history
   - can query a running local Loopgate instance for the read-only audit export trust preflight via `trust-check`
-  - `report` now includes `ledger_verify.hmac_checkpoints` when audit HMAC checkpoints are configured
+  - `report` includes `ledger_verify.hmac_checkpoints`, including `bootstrap_pending` before the first successful server start creates the default macOS Keychain-backed checkpoint key
 
 ## Relationship Notes
 
@@ -60,7 +60,7 @@ Use it when changing:
 
 - `main.go`
   - verifies the authoritative local audit chain over the active JSONL plus any sealed segments
-  - verifies audit HMAC checkpoints too when configured
+  - verifies audit HMAC checkpoints too in the shipped macOS-first default posture
   - provides readable `tail -verbose` output for operator/demo review
   - provides `demo-reset` as an explicit local demo-only destructive reset path
 

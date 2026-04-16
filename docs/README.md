@@ -12,6 +12,7 @@ The current active story is:
 - signed policy
 - approvals
 - local audit
+- default-on audit HMAC checkpoints on macOS
 - governed local MCP/runtime work
 
 Use the documents below as the current source of truth for the active product.

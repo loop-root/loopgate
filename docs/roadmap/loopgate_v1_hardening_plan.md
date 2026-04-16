@@ -363,6 +363,9 @@ Completed in this phase:
 - taught offline diagnostics to report `bootstrap_pending` instead of a vague secret-load failure before the first successful server start
 - updated getting-started, operator, ledger, and doctor docs so the stronger default posture is explicit
 - aligned the tracked GitHub Actions workflow with the macOS-first supported target
+- added `Server.AuditIntegrityModeMessage()` to surface active mode at startup (printed alongside socket path)
+- added "Know your audit integrity mode" section to `OPERATOR_GUIDE.md` explaining both modes, how to check via `loopgate-doctor report`, and a config snippet to enable HMAC checkpoints
+- 4 unit tests added in `internal/loopgate/server_audit_integrity_mode_test.go` (2026-04-16)
 
 Acceptance criteria:
 - operators can tell which integrity mode they are running
@@ -403,7 +406,7 @@ Completed in this phase so far:
 
 ## Phase J: Readiness Closure
 
-Status: **pending**
+Status: **completed**
 
 Focus:
 - close the loop between code, tests, docs, and release posture
@@ -426,6 +429,27 @@ Acceptance criteria:
 Rollback:
 - not a single rollback point; this phase validates that earlier slices are safe to keep
 
+Completed in this phase:
+- updated top-level and setup docs so operator-facing text matches the current shipped posture:
+  - HMAC checkpoints are default-on in the macOS-first runtime config
+  - first server start bootstraps the default Keychain-backed checkpoint key
+  - `bootstrap_pending` is documented as a first-run state, not a generic failure
+- re-ran the full suite and targeted regressions after the Phase H and Phase I changes:
+  - `go test ./...`
+  - `go vet ./...`
+  - signer-path regressions
+  - audit-integrity and checkpoint bootstrap regressions
+- confirmed the original ship-blocker list is closed in the active codebase:
+  - nonce replay no longer rewrites the full snapshot on every authenticated request
+  - `fs_read` throttling has its own denial code
+  - auth denials enter the authoritative audit path
+  - `EpochKeyMaterialHex` is gone from the session MAC response
+  - OSS operators can use local trust anchors for policy signing
+
+Deferred with rationale:
+- stronger launcher-bound bootstrap identity remains a future hardening item, but it is not one of the original V1 ship blockers for the current macOS-first local product
+- broader product and UX improvements remain tracked separately in `loopgate_v1_product_gaps.md`
+
 ## Current execution order
 
 1. Phase A: baseline and blocker classification
@@ -443,6 +467,7 @@ Rollback:
 
 Start with:
 
-1. Phase J readiness closure
+1. decide whether to cut a release candidate / tag from the now-closed hardening roadmap
+2. or take one final publishability / docs polish pass if you want a stricter OSS launch checklist first
 
-That leaves final release-closure cleanup as the next focused slice.
+That leaves roadmap execution itself complete; the next work is release judgment, not another blocker phase.

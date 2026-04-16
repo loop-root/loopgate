@@ -43,6 +43,10 @@ Default socket:
 runtime/state/loopgate.sock
 ```
 
+On the first successful Loopgate start, the default Keychain-backed audit HMAC
+checkpoint key is bootstrapped automatically for the shipped macOS-first
+runtime config.
+
 ## Sign and apply policy
 
 Loopgate requires a valid detached signature for `core/policy/policy.yaml`.
