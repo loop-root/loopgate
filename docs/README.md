@@ -43,6 +43,7 @@ repositories.
 - [Claude Code authority surfaces threat model](./design_overview/claude_code_authority_surfaces_threat_model.md)
 - [Loopgate design overview](./design_overview/loopgate.md)
 - [Architecture](./design_overview/architecture.md)
+- [Locking model](./design_overview/loopgate_locking.md)
 - [RFC 0001: Loopgate Token and Request Integrity Policy](./rfcs/0001-loopgate-token-policy.md)
 - [RFC 0016: Claude tool policy surface and governed MCP gateway](./rfcs/0016-claude-tool-policy-and-mcp-gateway.md)
 

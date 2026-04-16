@@ -33,6 +33,15 @@ type Client struct {
 	defaultRequestTimeout time.Duration
 	modelReplyTimeout     time.Duration
 
+	// mu protects the mutable delegated/open-session credentials cached on the
+	// client side. This is transport convenience state only; the server remains
+	// authoritative for session identity, capability scope, and expiry.
+	//
+	// Why this lock exists:
+	//   - one CLI/client instance can refresh session material while other goroutines
+	//     issue requests through the same Client
+	//   - approval decision nonces/manifests must stay aligned with the current
+	//     control session and MAC key snapshot
 	mu                       sync.Mutex
 	delegatedSession         bool
 	actor                    string

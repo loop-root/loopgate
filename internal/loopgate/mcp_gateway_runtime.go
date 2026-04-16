@@ -37,7 +37,16 @@ type mcpGatewayLaunchedServer struct {
 	StdoutReader               *os.File
 	StdoutBufferedReader       *bufio.Reader
 	Initialized                bool
-	ioMu                       sync.Mutex
+	// ioMu serializes stdio access for a single launched MCP server process.
+	//
+	// Why this lock exists:
+	//   - MCP stdio is a single ordered byte stream
+	//   - concurrent writes or read/write interleaving would corrupt framing and
+	//     make launch/execute debugging impossible
+	//
+	// Sequencing rule:
+	//   - ioMu is process-local; never hold it while touching Server mutexes
+	ioMu sync.Mutex
 }
 
 func buildMCPGatewayEnsureLaunchResponse(launchedServer *mcpGatewayLaunchedServer, reused bool) MCPGatewayEnsureLaunchResponse {

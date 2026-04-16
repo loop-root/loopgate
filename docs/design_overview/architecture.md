@@ -120,6 +120,7 @@ Loopgate currently ships:
 - local operator and troubleshooting flows
 
 See `docs/design_overview/loopgate.md`,
+`docs/design_overview/loopgate_locking.md`,
 `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`, and
 `docs/setup/OPERATOR_GUIDE.md` for the operator-facing view.
 

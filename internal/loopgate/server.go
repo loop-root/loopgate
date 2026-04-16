@@ -88,29 +88,105 @@ type Server struct {
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
 	diagnostic *loopdiag.Manager
 
+	// auditMu serializes the authoritative append-only audit chain state.
+	//
+	// Protected fields:
+	//   - auditSequence
+	//   - lastAuditHash
+	//   - auditEventsSinceCheckpoint
+	//
+	// Why this lock exists:
+	//   - hash-chain sequencing and disk append must behave like one logical commit
+	//   - two concurrent writers must never assign the same sequence or previous hash
+	//
+	// Sequencing rule:
+	//   - treat auditMu as a leaf lock
+	//   - resolve any control-session-derived metadata before taking auditMu
+	//   - never acquire mu while holding auditMu
 	auditMu                    sync.Mutex
 	auditSequence              uint64
 	lastAuditHash              string
 	auditEventsSinceCheckpoint int
 
+	// auditExportMu protects export-side progress state that is derived from the
+	// immutable ledger but persisted independently for batching/retry.
+	//
+	// Why this lock exists:
+	//   - audit export is not authoritative audit state
+	//   - export cursors and "last exported" bookkeeping can advance independently
+	//     of live request handling without contending on auditMu or mu
+	//
+	// Sequencing rule:
+	//   - do not hold auditExportMu while calling logEvent
+	//   - snapshot/export work should read ledger state separately, then update the
+	//     export cursor under auditExportMu
 	auditExportMu sync.Mutex
 
+	// promotionMu serializes promotion/quarantine file workflows so a single
+	// derived artifact path is promoted exactly once per logical action.
+	//
+	// Why this lock exists:
+	//   - promotion is request-driven but file-system side effects must not race
+	//     each other and produce duplicate/misaligned derived artifacts
+	//
+	// Sequencing rule:
+	//   - keep promotionMu isolated from mu/auditMu; collect control-plane context
+	//     first, then enter promotion code
 	promotionMu sync.Mutex
 
+	// uiMu protects only derived UI event projection state.
+	//
+	// Protected fields:
+	//   - uiSequence
+	//   - uiEvents
+	//   - uiSubscribers
+	//   - nextUISubscriberID
+	//
+	// Why this lock exists:
+	//   - UI replay/event-stream buffers are convenience projections, not source of truth
+	//   - keeping them separate prevents chatty subscribers from contending on mu
+	//
+	// Sequencing rule:
+	//   - build authoritative data under mu first if needed
+	//   - release mu
+	//   - then emit/update UI projections under uiMu
 	uiMu               sync.Mutex
 	uiSequence         uint64
 	uiEvents           []UIEventEnvelope
 	uiSubscribers      map[int]uiEventSubscriber
 	nextUISubscriberID int
 
+	// claudeHookSessionsMu protects repo-local hook session caches used by the
+	// Claude harness integration.
+	//
+	// Why this lock exists:
+	//   - hook-session bookkeeping is harness-side metadata, not control-plane authority
+	//   - it should not contend with control-session/auth tables in mu
 	claudeHookSessionsMu sync.Mutex
 
+	// connectionsMu protects persisted connection credential metadata loaded from
+	// runtime state (provider/subject/grant status), not live provider access tokens.
+	//
+	// Why this lock exists:
+	//   - connection records mutate under operator actions like store/rotate/delete
+	//   - they are independent from control-session state and audit sequencing
 	connectionsMu sync.Mutex
 	connections   map[string]connectionRecord
 
+	// modelConnectionsMu protects model endpoint connection records and their
+	// persistence path. This is separate from connectionsMu because model-provider
+	// credentials and generic integration credentials evolve on different paths.
 	modelConnectionsMu sync.Mutex
 	modelConnections   map[string]modelConnectionRecord
 
+	// hostAccessPlansMu protects temporary host-access planning state:
+	//   - pending host.plan.apply plans
+	//   - applied-plan tombstones used for duplicate detection/recovery
+	//
+	// Why this lock exists:
+	//   - host access plans have their own TTL/pruning behavior
+	//   - they are intentionally decoupled from approvals in mu so plan drafting
+	//     and plan-apply recovery do not inflate the control-plane critical section
 	hostAccessPlansMu sync.Mutex
 	hostAccessPlans   map[string]*hostAccessStoredPlan
 	// hostAccessAppliedPlanAt records plan IDs that completed host.plan.apply
@@ -120,6 +196,18 @@ type Server struct {
 
 	configStateDir string
 
+	// providerTokenMu protects live provider/integration runtime state:
+	//   - providerTokens
+	//   - configuredConnections
+	//   - configuredCapabilities
+	//
+	// Why this lock exists:
+	//   - these maps back outbound integration execution and runtime config reloads
+	//   - separating them from mu keeps network/provider churn away from session/auth state
+	//
+	// Sequencing rule:
+	//   - snapshot configured/provider state under providerTokenMu
+	//   - release it before policy evaluation, HTTP calls, or audit emission
 	providerTokenMu        sync.Mutex
 	providerTokens         map[string]providerAccessToken
 	configuredConnections  map[string]configuredConnection
@@ -127,11 +215,53 @@ type Server struct {
 	httpClient             *http.Client
 	policyRuntime          serverPolicyRuntime
 	policyContentSHA256    string
-	policyRuntimeMu        sync.RWMutex
 
+	// policyRuntimeMu protects the immutable-ish serverPolicyRuntime snapshot used
+	// by request paths. Reads are far more common than writes, so this is the one
+	// RWMutex in the package.
+	//
+	// Why this lock exists:
+	//   - hot policy reloads need a coherent runtime bundle (policy + checker +
+	//     registry + manifests + HTTP client)
+	//   - request handlers need cheap concurrent read access to that bundle
+	//
+	// Sequencing rule:
+	//   - read/copy the runtime snapshot under policyRuntimeMu, then release it
+	//   - never hold policyRuntimeMu across capability execution or audit append
+	policyRuntimeMu sync.RWMutex
+
+	// pkceMu protects short-lived PKCE/OAuth browser handoff sessions.
+	//
+	// Why this lock exists:
+	//   - PKCE state is time-bounded, independent from normal control-session state,
+	//     and frequently pruned/consumed by connection-specific flows
+	//   - keeping it separate avoids polluting mu with OAuth handoff bookkeeping
 	pkceMu       sync.Mutex
 	pkceSessions map[string]pendingPKCESession
 
+	// mu is the primary authoritative control-plane lock.
+	//
+	// Protected fields:
+	//   - sessions
+	//   - tokens
+	//   - approvals
+	//   - seenRequests
+	//   - seenAuthNonces
+	//   - usedTokens
+	//   - sessionOpenByUID
+	//   - approvalTokenIndex
+	//   - sessionReadCounts
+	//   - expiry scheduling / caps / session MAC rotation master
+	//
+	// Why this lock exists:
+	//   - these maps participate in auth, replay prevention, approval state, and
+	//     session lifecycle invariants
+	//   - mutations across them must be reasoned about as one authoritative state machine
+	//
+	// Sequencing rule:
+	//   - capture a single now() snapshot while holding mu for auth/expiry decisions
+	//   - do not split a logical state transition across multiple mu lock/unlock pairs
+	//   - prefer: gather authoritative state under mu -> unlock -> audit/UI/IO work
 	mu                 sync.Mutex
 	sessions           map[string]controlSession
 	tokens             map[string]capabilityToken
