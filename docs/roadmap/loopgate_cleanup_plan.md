@@ -118,6 +118,7 @@ Completed in this phase so far:
 - copied the remaining local `core/memory` residue into the sibling `continuity` repo under a clearly labeled runtime-residue snapshot
 - copied the leftover local `cmd/memorybench` residue into the sibling `memBench` repo under a clearly labeled runtime-residue snapshot
 - copied the current live `internal/tcl` and `internal/relationhints` source into the sibling `continuity` repo so extraction work can continue there without rebuilding from stale snapshots
+- confirmed that `internal/tcl` and `internal/relationhints` are currently self-contained package islands in Loopgate and are not imported by the active governance runtime, which makes them good next extraction targets once we are ready to remove in-tree copies
 - tightened ignore coverage for memory ledger/distillate backup artifacts
 - moved tracked runtime sandbox/state artifacts out of source control and made `runtime/` fully gitignored
 - sanitized remaining hardcoded local paths in active docs and tests
