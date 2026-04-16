@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,16 +85,25 @@ func TestBuildSessionMACKeysResponse_slots(t *testing.T) {
 	if resp.Previous.EpochIndex != 4 || resp.Next.EpochIndex != 6 {
 		t.Fatalf("prev/next epoch: %d %d", resp.Previous.EpochIndex, resp.Next.EpochIndex)
 	}
-	if len(resp.Current.EpochKeyMaterialHex) != 64 {
-		t.Fatalf("epoch key hex: %q", resp.Current.EpochKeyMaterialHex)
-	}
-	mat, err := hex.DecodeString(resp.Current.EpochKeyMaterialHex)
-	if err != nil || len(mat) != 32 {
-		t.Fatalf("decode epoch key: %v", err)
-	}
-	wantDerived := derivedSessionMACKeyString(mat, "abc123")
+	wantDerived := server.sessionMACKeyForControlSessionAtEpoch("abc123", resp.CurrentEpochIndex)
 	if resp.Current.DerivedSessionMACKey != wantDerived {
 		t.Fatalf("derived mismatch: %q vs %q", resp.Current.DerivedSessionMACKey, wantDerived)
+	}
+}
+
+func TestBuildSessionMACKeysResponse_doesNotExposeEpochKeyMaterial(t *testing.T) {
+	server := &Server{
+		repoRoot:                 t.TempDir(),
+		sessionMACRotationMaster: bytesRepeat32(5),
+		now:                      func() time.Time { return time.Unix(43200*2, 0).UTC() },
+	}
+
+	responseBytes, err := json.Marshal(server.buildSessionMACKeysResponse("control-session"))
+	if err != nil {
+		t.Fatalf("marshal session mac response: %v", err)
+	}
+	if strings.Contains(string(responseBytes), "epoch_key_material_hex") {
+		t.Fatalf("response leaked epoch key material field: %s", responseBytes)
 	}
 }
 

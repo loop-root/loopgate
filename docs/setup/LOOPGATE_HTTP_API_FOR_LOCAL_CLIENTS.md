@@ -156,7 +156,7 @@ product surface or route namespace.
 - `rotation_period_seconds` — always **43200** (12 hours).
 - `derived_key_schema` — **`loopgate-session-mac-v1`** (stable identifier for the derivation rule).
 - `current_epoch_index` — non-negative epoch counter.
-- **`previous`**, **`current`**, **`next`** — each has `slot`, `epoch_index`, `valid_from_utc`, `valid_until_utc`, `epoch_key_material_hex` (32-byte key as 64 hex chars), and `derived_session_mac_key` (the **64-hex-character** string to use as `session_mac_key` UTF-8 for HMAC, same shape as session open).
+- **`previous`**, **`current`**, **`next`** — each has `slot`, `epoch_index`, `valid_from_utc`, `valid_until_utc`, and `derived_session_mac_key` (the **64-hex-character** string to use as `session_mac_key` UTF-8 for HMAC, same shape as session open).
 
 Long-lived processes should **refresh** the in-memory signing key from **`current.derived_session_mac_key`** periodically (or call **`GET /v1/session/mac-keys`** after each epoch), because verification only overlaps **three** epochs (~36 hours of slack, depending on where the session started).
 

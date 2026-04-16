@@ -2,6 +2,9 @@ package loopgate
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -45,5 +48,42 @@ func TestClientRefreshSessionMACKeyFromServer_alignsWithMacKeysCurrentSlot(t *te
 	}
 	if resp.Status != ResponseStatusSuccess {
 		t.Fatalf("expected success after refresh, got %#v", resp)
+	}
+}
+
+func TestSessionMACKeysRoute_DoesNotExposeEpochKeyMaterial(t *testing.T) {
+	ctx := context.Background()
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, client.baseURL+"/v1/session/mac-keys", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+capabilityToken)
+	if err := client.attachRequestSignature(request, "/v1/session/mac-keys", nil); err != nil {
+		t.Fatalf("attach request signature: %v", err)
+	}
+
+	httpResponse, err := client.httpClient.Do(request)
+	if err != nil {
+		t.Fatalf("session mac keys request: %v", err)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", httpResponse.StatusCode)
+	}
+
+	responseBytes, err := io.ReadAll(httpResponse.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	if strings.Contains(string(responseBytes), "epoch_key_material_hex") {
+		t.Fatalf("session mac route leaked epoch key material: %s", responseBytes)
 	}
 }

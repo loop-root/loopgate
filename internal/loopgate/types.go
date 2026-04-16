@@ -237,7 +237,6 @@ type SessionMACKeySlotInfo struct {
 	EpochIndex           int64  `json:"epoch_index"`
 	ValidFromUTC         string `json:"valid_from_utc"`
 	ValidUntilUTC        string `json:"valid_until_utc"`
-	EpochKeyMaterialHex  string `json:"epoch_key_material_hex"`
 	DerivedSessionMACKey string `json:"derived_session_mac_key"`
 }
 

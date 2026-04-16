@@ -195,7 +195,6 @@ func (server *Server) buildSessionMACKeysResponse(controlSessionID string) Sessi
 			EpochIndex:           epochIndex,
 			ValidFromUTC:         validFrom.Format(time.RFC3339Nano),
 			ValidUntilUTC:        validUntil.Format(time.RFC3339Nano),
-			EpochKeyMaterialHex:  hex.EncodeToString(mat),
 			DerivedSessionMACKey: derivedSessionMACKeyString(mat, controlSessionID),
 		}
 	}

@@ -224,7 +224,7 @@ Completed in this phase:
 
 ## Phase E: Session MAC Response Minimization
 
-Status: **pending**
+Status: **completed**
 
 Focus:
 - stop sending epoch derivation material to clients
@@ -244,6 +244,12 @@ Acceptance criteria:
 
 Rollback:
 - response field can be restored temporarily if an unexpected client dependency appears
+
+Completed in this phase:
+- removed `EpochKeyMaterialHex` from `SessionMACKeysResponse`
+- verified the live client refresh path only depends on `current.derived_session_mac_key`
+- added route and response-shape regression tests to keep epoch derivation material off the wire
+- updated the local HTTP API doc to match the narrower response contract
 
 ## Phase F: Nonce Replay Persistence Redesign
 
@@ -408,8 +414,8 @@ Rollback:
 
 Start with:
 
-1. Phase E session MAC response minimization
-2. then Phase F nonce replay persistence redesign
+1. Phase F nonce replay persistence redesign
+2. then Phase G replay-window and saturation review
 
-That keeps the remaining wire-exposure cleanup ahead of the larger replay
-persistence redesign.
+That keeps the highest-risk hot-path storage work ahead of the follow-on
+retention and saturation review.
