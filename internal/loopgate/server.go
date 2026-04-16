@@ -68,6 +68,7 @@ type Server struct {
 	resolveUserHomeDir         func() (string, error)
 	expectedClientPath         string
 	newModelClientFromConfig   func(modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error)
+	nonceReplayStore           authNonceReplayStore
 	server                     *http.Server
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
 	diagnostic *loopdiag.Manager
@@ -314,6 +315,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		hostAccessPlans:                      make(map[string]*hostAccessStoredPlan),
 		hostAccessAppliedPlanAt:              make(map[string]time.Time),
 	}
+	server.nonceReplayStore = snapshotNonceReplayStore{path: server.noncePath}
 	if pin := normalizeSessionExecutablePinPath(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); pin != "" {
 		server.expectedClientPath = pin
 	}

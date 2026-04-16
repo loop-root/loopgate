@@ -260,6 +260,8 @@ Focus:
 
 ### Phase E1: Introduce a persistence seam
 
+Status: **completed**
+
 Planned work:
 - isolate nonce persistence behind a narrow internal abstraction
 - keep current behavior temporarily behind that seam
@@ -269,7 +271,15 @@ Acceptance criteria:
 - auth flow no longer depends directly on one storage format
 - persistence behavior is testable in isolation
 
+Completed in this subphase:
+- introduced a narrow nonce replay store abstraction for load/save behavior
+- kept the existing snapshot-on-write persistence semantics behind the new seam
+- rewired startup, shutdown, and `recordAuthNonce(...)` through the store instead of direct file marshaling
+- added store round-trip, pruning, and rollback-on-save-failure tests
+
 ### Phase E2: Replace snapshot-per-request persistence
+
+Status: **pending**
 
 Preferred design:
 - append-only nonce log
@@ -414,8 +424,8 @@ Rollback:
 
 Start with:
 
-1. Phase F nonce replay persistence redesign
+1. Phase F2 append-only nonce persistence
 2. then Phase G replay-window and saturation review
 
-That keeps the highest-risk hot-path storage work ahead of the follow-on
-retention and saturation review.
+That keeps the remaining hot-path write fix ahead of the follow-on retention
+and saturation review.

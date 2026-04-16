@@ -154,19 +154,28 @@ type nonceReplayFile struct {
 	Nonces map[string]persistedNonce `json:"nonces"`
 }
 
-func (server *Server) loadNonceReplayState() error {
-	rawBytes, err := os.ReadFile(server.noncePath)
+type authNonceReplayStore interface {
+	Load(nowUTC time.Time) (map[string]seenRequest, error)
+	Save(seenAuthNonces map[string]seenRequest) error
+}
+
+type snapshotNonceReplayStore struct {
+	path string
+}
+
+func (store snapshotNonceReplayStore) Load(nowUTC time.Time) (map[string]seenRequest, error) {
+	rawBytes, err := os.ReadFile(store.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return map[string]seenRequest{}, nil
 		}
-		return fmt.Errorf("read nonce replay state: %w", err)
+		return nil, fmt.Errorf("read nonce replay state: %w", err)
 	}
 	var stateFile nonceReplayFile
 	if err := json.Unmarshal(rawBytes, &stateFile); err != nil {
-		return fmt.Errorf("decode nonce replay state: %w", err)
+		return nil, fmt.Errorf("decode nonce replay state: %w", err)
 	}
-	nowUTC := server.now().UTC()
+	loadedNonces := make(map[string]seenRequest, len(stateFile.Nonces))
 	for nonceKey, entry := range stateFile.Nonces {
 		seenAt, parseErr := time.Parse(time.RFC3339Nano, entry.SeenAt)
 		if parseErr != nil {
@@ -175,10 +184,48 @@ func (server *Server) loadNonceReplayState() error {
 		if nowUTC.Sub(seenAt) > requestReplayWindow {
 			continue
 		}
-		server.seenAuthNonces[nonceKey] = seenRequest{
+		loadedNonces[nonceKey] = seenRequest{
 			ControlSessionID: entry.ControlSessionID,
 			SeenAt:           seenAt,
 		}
+	}
+	return loadedNonces, nil
+}
+
+func (store snapshotNonceReplayStore) Save(seenAuthNonces map[string]seenRequest) error {
+	stateFile := nonceReplaySnapshot(seenAuthNonces)
+	jsonBytes, err := json.Marshal(stateFile)
+	if err != nil {
+		return fmt.Errorf("marshal nonce replay state: %w", err)
+	}
+	if err := atomicWritePrivateJSON(store.path, jsonBytes); err != nil {
+		return fmt.Errorf("persist nonce replay state: %w", err)
+	}
+	return nil
+}
+
+func (server *Server) currentNonceReplayStore() authNonceReplayStore {
+	if server.nonceReplayStore != nil {
+		return server.nonceReplayStore
+	}
+	return snapshotNonceReplayStore{path: server.noncePath}
+}
+
+func copySeenRequests(source map[string]seenRequest) map[string]seenRequest {
+	copied := make(map[string]seenRequest, len(source))
+	for key, seen := range source {
+		copied[key] = seen
+	}
+	return copied
+}
+
+func (server *Server) loadNonceReplayState() error {
+	loadedNonces, err := server.currentNonceReplayStore().Load(server.now().UTC())
+	if err != nil {
+		return err
+	}
+	for nonceKey, seenNonce := range loadedNonces {
+		server.seenAuthNonces[nonceKey] = seenNonce
 	}
 	return nil
 }
@@ -236,17 +283,9 @@ func atomicWritePrivateJSON(path string, jsonBytes []byte) error {
 
 func (server *Server) saveNonceReplayState() error {
 	server.mu.Lock()
-	stateFile := nonceReplaySnapshot(server.seenAuthNonces)
+	stateSnapshot := copySeenRequests(server.seenAuthNonces)
 	server.mu.Unlock()
-
-	jsonBytes, err := json.Marshal(stateFile)
-	if err != nil {
-		return fmt.Errorf("marshal nonce replay state: %w", err)
-	}
-	if err := atomicWritePrivateJSON(server.noncePath, jsonBytes); err != nil {
-		return fmt.Errorf("persist nonce replay state: %w", err)
-	}
-	return nil
+	return server.currentNonceReplayStore().Save(stateSnapshot)
 }
 
 func (server *Server) countPendingApprovalsForSessionLocked(controlSessionID string) int {
@@ -379,21 +418,10 @@ func (server *Server) recordAuthNonce(controlSessionID string, requestNonce stri
 		SeenAt:           server.now().UTC(),
 	}
 	server.noteReplayWindowCandidateLocked(server.seenAuthNonces[nonceKey].SeenAt)
-	stateFile := nonceReplaySnapshot(server.seenAuthNonces)
+	stateSnapshot := copySeenRequests(server.seenAuthNonces)
 	server.mu.Unlock()
 
-	jsonBytes, err := json.Marshal(stateFile)
-	if err != nil {
-		server.mu.Lock()
-		delete(server.seenAuthNonces, nonceKey)
-		server.mu.Unlock()
-		return &CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialReason: "nonce replay state is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
-		}
-	}
-	if err := atomicWritePrivateJSON(server.noncePath, jsonBytes); err != nil {
+	if err := server.currentNonceReplayStore().Save(stateSnapshot); err != nil {
 		server.mu.Lock()
 		delete(server.seenAuthNonces, nonceKey)
 		server.mu.Unlock()

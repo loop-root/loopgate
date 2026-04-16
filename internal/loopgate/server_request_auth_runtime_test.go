@@ -165,6 +165,7 @@ func TestSignedRequestFailsClosedWhenNonceReplayPersistenceUnavailable(t *testin
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	server.noncePath = filepath.Join(repoRoot, "runtime", "state")
+	server.nonceReplayStore = snapshotNonceReplayStore{path: server.noncePath}
 
 	_, err := client.Status(context.Background())
 	if err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
