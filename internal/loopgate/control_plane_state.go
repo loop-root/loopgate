@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -156,7 +157,8 @@ type nonceReplayFile struct {
 
 type authNonceReplayStore interface {
 	Load(nowUTC time.Time) (map[string]seenRequest, error)
-	Save(seenAuthNonces map[string]seenRequest) error
+	Record(nonceKey string, seenNonce seenRequest) error
+	Compact(seenAuthNonces map[string]seenRequest) error
 }
 
 type snapshotNonceReplayStore struct {
@@ -192,7 +194,16 @@ func (store snapshotNonceReplayStore) Load(nowUTC time.Time) (map[string]seenReq
 	return loadedNonces, nil
 }
 
-func (store snapshotNonceReplayStore) Save(seenAuthNonces map[string]seenRequest) error {
+func (store snapshotNonceReplayStore) Record(nonceKey string, seenNonce seenRequest) error {
+	seenAuthNonces, err := store.Load(seenNonce.SeenAt.UTC())
+	if err != nil {
+		return err
+	}
+	seenAuthNonces[nonceKey] = seenNonce
+	return store.Compact(seenAuthNonces)
+}
+
+func (store snapshotNonceReplayStore) Compact(seenAuthNonces map[string]seenRequest) error {
 	stateFile := nonceReplaySnapshot(seenAuthNonces)
 	jsonBytes, err := json.Marshal(stateFile)
 	if err != nil {
@@ -201,6 +212,47 @@ func (store snapshotNonceReplayStore) Save(seenAuthNonces map[string]seenRequest
 	if err := atomicWritePrivateJSON(store.path, jsonBytes); err != nil {
 		return fmt.Errorf("persist nonce replay state: %w", err)
 	}
+	return nil
+}
+
+type nonceReplayLogRecord struct {
+	NonceKey         string `json:"nonce_key"`
+	ControlSessionID string `json:"control_session_id"`
+	SeenAt           string `json:"seen_at"`
+}
+
+type appendOnlyNonceReplayStore struct {
+	path               string
+	legacySnapshotPath string
+}
+
+func (store appendOnlyNonceReplayStore) Load(nowUTC time.Time) (map[string]seenRequest, error) {
+	if _, err := os.Stat(store.path); err == nil {
+		return loadAppendOnlyNonceReplayLog(store.path, nowUTC)
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("stat nonce replay log: %w", err)
+	}
+	if strings.TrimSpace(store.legacySnapshotPath) != "" {
+		return snapshotNonceReplayStore{path: store.legacySnapshotPath}.Load(nowUTC)
+	}
+	return map[string]seenRequest{}, nil
+}
+
+func (store appendOnlyNonceReplayStore) Record(nonceKey string, seenNonce seenRequest) error {
+	record := nonceReplayLogRecord{
+		NonceKey:         nonceKey,
+		ControlSessionID: seenNonce.ControlSessionID,
+		SeenAt:           seenNonce.SeenAt.UTC().Format(time.RFC3339Nano),
+	}
+	recordBytes, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("marshal nonce replay log record: %w", err)
+	}
+	recordBytes = append(recordBytes, '\n')
+	return appendPrivateStateLine(store.path, recordBytes)
+}
+
+func (store appendOnlyNonceReplayStore) Compact(seenAuthNonces map[string]seenRequest) error {
 	return nil
 }
 
@@ -239,6 +291,51 @@ func nonceReplaySnapshot(seenAuthNonces map[string]seenRequest) nonceReplayFile 
 		}
 	}
 	return nonceReplayFile{Nonces: entries}
+}
+
+func loadAppendOnlyNonceReplayLog(path string, nowUTC time.Time) (map[string]seenRequest, error) {
+	rawBytes, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]seenRequest{}, nil
+		}
+		return nil, fmt.Errorf("read nonce replay log: %w", err)
+	}
+	if len(rawBytes) == 0 {
+		return map[string]seenRequest{}, nil
+	}
+
+	lines := bytes.Split(rawBytes, []byte{'\n'})
+	hasTrailingNewline := len(rawBytes) > 0 && rawBytes[len(rawBytes)-1] == '\n'
+	loadedNonces := make(map[string]seenRequest)
+	for lineIndex, line := range lines {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		isLastLine := lineIndex == len(lines)-1
+		var record nonceReplayLogRecord
+		if err := json.Unmarshal(line, &record); err != nil {
+			if isLastLine && !hasTrailingNewline {
+				continue
+			}
+			return nil, fmt.Errorf("decode nonce replay log line %d: %w", lineIndex+1, err)
+		}
+		seenAt, err := time.Parse(time.RFC3339Nano, record.SeenAt)
+		if err != nil {
+			if isLastLine && !hasTrailingNewline {
+				continue
+			}
+			return nil, fmt.Errorf("parse nonce replay log timestamp on line %d: %w", lineIndex+1, err)
+		}
+		if nowUTC.Sub(seenAt) > requestReplayWindow {
+			continue
+		}
+		loadedNonces[record.NonceKey] = seenRequest{
+			ControlSessionID: record.ControlSessionID,
+			SeenAt:           seenAt.UTC(),
+		}
+	}
+	return loadedNonces, nil
 }
 
 func atomicWritePrivateJSON(path string, jsonBytes []byte) error {
@@ -281,11 +378,45 @@ func atomicWritePrivateJSON(path string, jsonBytes []byte) error {
 	return nil
 }
 
+func appendPrivateStateLine(path string, line []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create state dir: %w", err)
+	}
+	createdFile := false
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		createdFile = true
+	} else if err != nil {
+		return fmt.Errorf("stat state file: %w", err)
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("open state file for append: %w", err)
+	}
+	if _, err := file.Write(line); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("append state file: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("sync state file append: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close state file append: %w", err)
+	}
+	if createdFile {
+		if stateDir, err := os.Open(filepath.Dir(path)); err == nil {
+			_ = stateDir.Sync()
+			_ = stateDir.Close()
+		}
+	}
+	return nil
+}
+
 func (server *Server) saveNonceReplayState() error {
 	server.mu.Lock()
 	stateSnapshot := copySeenRequests(server.seenAuthNonces)
 	server.mu.Unlock()
-	return server.currentNonceReplayStore().Save(stateSnapshot)
+	return server.currentNonceReplayStore().Compact(stateSnapshot)
 }
 
 func (server *Server) countPendingApprovalsForSessionLocked(controlSessionID string) int {
@@ -417,11 +548,11 @@ func (server *Server) recordAuthNonce(controlSessionID string, requestNonce stri
 		ControlSessionID: controlSessionID,
 		SeenAt:           server.now().UTC(),
 	}
-	server.noteReplayWindowCandidateLocked(server.seenAuthNonces[nonceKey].SeenAt)
-	stateSnapshot := copySeenRequests(server.seenAuthNonces)
+	recordedNonce := server.seenAuthNonces[nonceKey]
+	server.noteReplayWindowCandidateLocked(recordedNonce.SeenAt)
 	server.mu.Unlock()
 
-	if err := server.currentNonceReplayStore().Save(stateSnapshot); err != nil {
+	if err := server.currentNonceReplayStore().Record(nonceKey, recordedNonce); err != nil {
 		server.mu.Lock()
 		delete(server.seenAuthNonces, nonceKey)
 		server.mu.Unlock()

@@ -262,7 +262,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		configStateDir:             configStateDir,
 		auditPath:                  filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
 		auditExportStatePath:       filepath.Join(repoRoot, runtimeConfig.Logging.AuditExport.StatePath),
-		noncePath:                  filepath.Join(repoRoot, "runtime", "state", "nonce_replay.json"),
+		noncePath:                  filepath.Join(repoRoot, "runtime", "state", "nonce_replay.jsonl"),
 		quarantineDir:              filepath.Join(repoRoot, "runtime", "state", "quarantine"),
 		derivedArtifactDir:         filepath.Join(repoRoot, "runtime", "state", "derived_artifacts"),
 		connectionPath:             filepath.Join(repoRoot, "runtime", "state", "loopgate_connections.json"),
@@ -315,7 +315,10 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		hostAccessPlans:                      make(map[string]*hostAccessStoredPlan),
 		hostAccessAppliedPlanAt:              make(map[string]time.Time),
 	}
-	server.nonceReplayStore = snapshotNonceReplayStore{path: server.noncePath}
+	server.nonceReplayStore = appendOnlyNonceReplayStore{
+		path:               server.noncePath,
+		legacySnapshotPath: filepath.Join(repoRoot, "runtime", "state", "nonce_replay.json"),
+	}
 	if pin := normalizeSessionExecutablePinPath(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); pin != "" {
 		server.expectedClientPath = pin
 	}
@@ -522,7 +525,7 @@ func (server *Server) Serve(ctx context.Context) error {
 	}()
 
 	serveErr := server.server.Serve(listener)
-	// Persist nonce replay state on shutdown for cross-restart replay protection.
+	// Give the nonce replay store a chance to compact or checkpoint durable state on shutdown.
 	_ = server.saveNonceReplayState()
 	if serveErr == nil || serveErr == http.ErrServerClosed {
 		return nil

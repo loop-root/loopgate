@@ -253,7 +253,7 @@ Completed in this phase:
 
 ## Phase F: Nonce Replay Persistence Redesign
 
-Status: **pending**
+Status: **completed**
 
 Focus:
 - remove the per-request full-map fsync bottleneck without weakening replay protection
@@ -279,7 +279,7 @@ Completed in this subphase:
 
 ### Phase E2: Replace snapshot-per-request persistence
 
-Status: **pending**
+Status: **completed**
 
 Preferred design:
 - append-only nonce log
@@ -305,6 +305,13 @@ Acceptance criteria:
 
 Rollback:
 - switch back to the old persistence implementation behind the seam if needed
+
+Completed in this subphase:
+- switched the default nonce replay store to an append-only JSONL log
+- made startup load the append log first, with legacy snapshot loading as a compatibility fallback when the new log is absent
+- made the loader tolerate a truncated malformed tail record while failing closed on malformed middle records
+- kept append failures explicit and fail-closed with in-memory rollback of the just-recorded nonce
+- left shutdown compaction as a no-op for the append-only store so the hot path no longer rewrites the full nonce map
 
 ## Phase G: Replay-Window And Saturation Review
 
@@ -424,8 +431,8 @@ Rollback:
 
 Start with:
 
-1. Phase F2 append-only nonce persistence
-2. then Phase G replay-window and saturation review
+1. Phase G replay-window and saturation review
+2. then Phase H audit integrity posture surfacing
 
-That keeps the remaining hot-path write fix ahead of the follow-on retention
-and saturation review.
+That keeps the now-unblocked retention/saturation review ahead of the next
+operator-facing integrity posture pass.
