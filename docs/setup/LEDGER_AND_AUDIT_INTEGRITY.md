@@ -30,9 +30,26 @@ So:
 - Treat these logs as **strong evidence of ordering and integrity while the file remains under Loopgate’s control**, not as **unforgeable proof** against a compromised local user or offline disk editing.
 - **File permissions** (`0600` on sensitive paths), **full-disk encryption**, and **least-privilege** on the Mac account remain part of the real-world boundary.
 
-## Optional HMAC checkpoints
+## HMAC checkpoints
 
-When `logging.audit_ledger.hmac_checkpoint` is **enabled** in `config/runtime.yaml`, Loopgate appends `audit.ledger.hmac_checkpoint` after every **N** ordinary audit events. Each line carries **HMAC-SHA256** over a canonical v1 message that includes the **through** `audit_sequence`, **through** prior `event_hash`, and a **checkpoint timestamp**; the **signing key** is loaded via **`secret_ref`** (for example macOS Keychain), not embedded in the JSONL.
+In the shipped macOS-first runtime config, `logging.audit_ledger.hmac_checkpoint`
+is **enabled by default**. Loopgate appends `audit.ledger.hmac_checkpoint`
+after every **N** ordinary audit events. Each line carries **HMAC-SHA256** over
+a canonical v1 message that includes the **through** `audit_sequence`, **through**
+prior `event_hash`, and a **checkpoint timestamp**; the **signing key** is
+loaded via **`secret_ref`** (for example macOS Keychain), not embedded in the
+JSONL.
+
+For the default local config, the checkpoint secret ref is:
+
+- `id: audit_ledger_hmac`
+- `backend: macos_keychain`
+- `account_name: loopgate.audit_ledger_hmac`
+- `scope: local`
+
+If that default keychain item does not exist yet, the first successful Loopgate
+server start bootstraps a new 32-byte checkpoint key into Keychain. Before that
+first start, `loopgate-doctor report` may show `bootstrap_pending`.
 
 Checkpoint lines still participate in the same **append-only hash chain** as
 other events. Verification helpers live in **`internal/ledger`**
@@ -45,8 +62,8 @@ Current operator verification path:
 
 - `go run ./cmd/loopgate-ledger verify`
   - verifies the append-only chain across the active JSONL plus sealed segments
-  - verifies HMAC checkpoints too when `logging.audit_ledger.hmac_checkpoint`
-    is enabled and the configured `secret_ref` resolves successfully
+  - verifies HMAC checkpoints too when the configured `secret_ref` resolves
+    successfully
 - `go run ./cmd/loopgate-doctor report`
   - includes a derived `ledger_verify.hmac_checkpoints` status block so
     operators can see whether checkpoints are disabled, verified, or failing

@@ -50,6 +50,26 @@ func TestVerifyAuditLedgerCheckpoints_Verified(t *testing.T) {
 	}
 }
 
+func TestVerifyAuditLedgerCheckpoints_DefaultKeyBootstrapPendingWhenLedgerMissing(t *testing.T) {
+	repoRoot := t.TempDir()
+	runtimeConfig := config.DefaultRuntimeConfig()
+	runtimeConfig.Logging.AuditLedger.HMACCheckpoint = config.DefaultAuditLedgerHMACCheckpoint()
+
+	report, err := VerifyAuditLedgerCheckpoints(repoRoot, runtimeConfig)
+	if err != nil {
+		t.Fatalf("verify audit ledger checkpoints: %v", err)
+	}
+	if !report.OK {
+		t.Fatalf("expected bootstrap-pending report to remain operator-readable, got %#v", report)
+	}
+	if report.Status != "bootstrap_pending" {
+		t.Fatalf("expected bootstrap_pending status, got %#v", report)
+	}
+	if report.Error == "" {
+		t.Fatalf("expected bootstrap-pending guidance, got %#v", report)
+	}
+}
+
 func appendAuditEventForCheckpointTest(t *testing.T, activeAuditPath string, timestamp string, eventType string, auditSequence int64, data map[string]interface{}) {
 	t.Helper()
 	copied := map[string]interface{}{}

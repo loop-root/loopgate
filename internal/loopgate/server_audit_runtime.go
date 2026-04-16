@@ -2,15 +2,19 @@ package loopgate
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"loopgate/internal/audit"
+	"loopgate/internal/config"
 	"loopgate/internal/ledger"
 	"loopgate/internal/secrets"
 )
@@ -42,6 +46,51 @@ func (server *Server) loadAuditChainState() error {
 		return fmt.Errorf("inspect audit hmac checkpoints: %w", err)
 	}
 	server.auditEventsSinceCheckpoint = checkpointInspection.OrdinaryEventsSinceLastCheckpoint
+	return nil
+}
+
+func (server *Server) ensureDefaultAuditLedgerCheckpointSecret(ctx context.Context) error {
+	if server == nil {
+		return nil
+	}
+	hmacCheckpointConfig := server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint
+	if !hmacCheckpointConfig.Enabled || !config.IsDefaultAuditLedgerHMACSecretRef(hmacCheckpointConfig.SecretRef) {
+		return nil
+	}
+
+	validatedSecretRef := secrets.SecretRef{
+		ID:          strings.TrimSpace(hmacCheckpointConfig.SecretRef.ID),
+		Backend:     strings.TrimSpace(hmacCheckpointConfig.SecretRef.Backend),
+		AccountName: strings.TrimSpace(hmacCheckpointConfig.SecretRef.AccountName),
+		Scope:       strings.TrimSpace(hmacCheckpointConfig.SecretRef.Scope),
+	}
+	if err := validatedSecretRef.Validate(); err != nil {
+		return fmt.Errorf("validate default audit ledger hmac checkpoint secret ref: %w", err)
+	}
+
+	secretStore, err := server.secretStoreForRef(validatedSecretRef)
+	if err != nil {
+		return fmt.Errorf("resolve default audit ledger hmac checkpoint secret store: %w", err)
+	}
+	rawSecretBytes, _, err := secretStore.Get(ctx, validatedSecretRef)
+	if err == nil {
+		zeroSecretBytes(rawSecretBytes)
+		return nil
+	}
+	if !errors.Is(err, secrets.ErrSecretNotFound) {
+		return fmt.Errorf("load default audit ledger hmac checkpoint secret: %w", err)
+	}
+
+	bootstrapSecretBytes := make([]byte, 32)
+	if _, err := rand.Read(bootstrapSecretBytes); err != nil {
+		return fmt.Errorf("generate default audit ledger hmac checkpoint secret: %w", err)
+	}
+	defer zeroSecretBytes(bootstrapSecretBytes)
+	if _, err := secretStore.Put(ctx, validatedSecretRef, bootstrapSecretBytes); err != nil {
+		return fmt.Errorf("store default audit ledger hmac checkpoint secret: %w", err)
+	}
+
+	fmt.Fprintln(os.Stderr, "Loopgate bootstrapped the default audit HMAC checkpoint key in macOS Keychain.")
 	return nil
 }
 
@@ -302,6 +351,30 @@ func (server *Server) CloseDiagnosticLogs() {
 	}
 	_ = server.diagnostic.Close()
 	server.diagnostic = nil
+}
+
+// AuditIntegrityModeMessage returns a one-line stdout message describing the current
+// audit integrity posture so operators know which mode is active at startup.
+//
+// Two modes exist:
+//   - hash-chain only (default): each event commits a SHA-256 digest of its predecessor;
+//     ordering changes and corruption are detectable on read, but a same-user attacker
+//     who controls the log directory can replace the file with a new consistent chain.
+//   - hash-chain + HMAC checkpoints: additionally binds cumulative chain state to an
+//     out-of-band secret; replacement requires forging a keyed MAC.
+func (server *Server) AuditIntegrityModeMessage() string {
+	if server == nil {
+		return ""
+	}
+	hc := server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint
+	if hc.Enabled {
+		interval := hc.IntervalEvents
+		if interval <= 0 {
+			interval = 256
+		}
+		return fmt.Sprintf("Audit integrity: hash-chain + HMAC checkpoints (every %d events)", interval)
+	}
+	return "Audit integrity: hash-chain only (HMAC checkpoints disabled)"
 }
 
 // DiagnosticLogDirectoryMessage returns a stderr hint when operator diagnostic slog files are active.

@@ -25,6 +25,7 @@ func TestBuildReport_LoopgateWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load effective runtime: %v", err)
 	}
+	rc.Logging.AuditLedger.HMACCheckpoint.Enabled = false
 	rep, err := BuildReport(root, rc)
 	if err != nil {
 		t.Fatalf("build report: %v", err)

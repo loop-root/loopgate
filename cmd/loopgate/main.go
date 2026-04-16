@@ -53,6 +53,7 @@ func main() {
 	defer stop()
 
 	fmt.Printf("Loopgate listening on %s\n", socketPath)
+	fmt.Println(server.AuditIntegrityModeMessage())
 	if err := server.Serve(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR: serve loopgate:", err)
 		exitProcess(1)

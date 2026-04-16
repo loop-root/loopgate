@@ -348,30 +348,28 @@ Completed in this phase:
 
 ## Phase H: Audit Integrity Posture Surfacing
 
-Status: **pending**
+Status: **completed**
 
 Focus:
-- make the current integrity posture legible before changing defaults
+- make the current integrity posture legible and safe by default for the macOS-first product
 
-Planned work:
-- surface HMAC checkpoint status in:
-  - `loopgate-doctor`
-  - setup docs
-  - operator guide
-  - startup/operator messaging if useful
-- clearly distinguish:
-  - hash-chain-only protection
-  - keyed HMAC checkpoint protection
-
-Only after surfacing is clear:
-- decide whether HMAC checkpoints should become default-on
+Completed in this phase:
+- enabled HMAC checkpoints in the shipped `config/runtime.yaml` using the existing macOS Keychain-backed secret-ref convention:
+  - `id: audit_ledger_hmac`
+  - `backend: macos_keychain`
+  - `account_name: loopgate.audit_ledger_hmac`
+  - `scope: local`
+- added a first-start bootstrap path so the default checkpoint key is created in Keychain automatically when the default ref is enabled but missing
+- taught offline diagnostics to report `bootstrap_pending` instead of a vague secret-load failure before the first successful server start
+- updated getting-started, operator, ledger, and doctor docs so the stronger default posture is explicit
+- aligned the tracked GitHub Actions workflow with the macOS-first supported target
 
 Acceptance criteria:
 - operators can tell which integrity mode they are running
 - docs, diagnostics, and runtime messaging agree
 
 Rollback:
-- surfacing changes are low-risk; any default-on decision should be separate
+- config and bootstrap logic can be reverted independently if first-start behavior proves too surprising
 
 ## Phase I: Policy-Sign Trust Path Cleanup And CI Baseline
 
@@ -441,8 +439,7 @@ Rollback:
 
 Start with:
 
-1. Phase H audit integrity posture surfacing
-2. then Phase I policy-sign trust-path cleanup and CI baseline follow-through
+1. Phase I policy-sign trust-path cleanup and CI baseline follow-through
+2. then Phase J readiness closure
 
-That keeps the next operator-facing integrity posture work ahead of the
-remaining signer hardening and release-closure cleanup.
+That keeps the remaining signer hardening ahead of final release-closure cleanup.

@@ -347,6 +347,9 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		return nil, fmt.Errorf("load model connection records: %w", err)
 	}
 	server.modelConnections = loadedModelConnections
+	if err := server.ensureDefaultAuditLedgerCheckpointSecret(context.Background()); err != nil {
+		return nil, fmt.Errorf("ensure default audit checkpoint secret: %w", err)
+	}
 	if err := server.loadAuditChainState(); err != nil {
 		return nil, fmt.Errorf("load audit chain state: %w", err)
 	}

@@ -134,11 +134,66 @@ go run ./cmd/loopgate-doctor report
 ```
 
 `loopgate-ledger verify` checks the append-only chain across the active audit
-file and any sealed segments. If audit HMAC checkpoints are configured, it also
-verifies those checkpoints with the configured secret backend.
+file and any sealed segments. In the shipped macOS-first config, audit HMAC
+checkpoints are enabled by default, so verify also checks those checkpoints
+with the configured Keychain-backed secret.
 
 If you are unsure whether to use `loopgate-ledger` or `loopgate-doctor`, see:
 - [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
+
+### Know your audit integrity mode
+
+Loopgate has two audit integrity modes. Startup prints which one is active:
+
+```
+Audit integrity: hash-chain only (HMAC checkpoints disabled)
+```
+or
+```
+Audit integrity: hash-chain + HMAC checkpoints (every N events)
+```
+
+**Hash-chain only:** each event commits a SHA-256 digest of its
+predecessor. Ordering changes and corruption are detectable on read. A
+same-user attacker who controls the log files can replace the entire file
+with a new internally-consistent chain that passes verification.
+
+**Hash-chain + HMAC checkpoints:** additionally binds cumulative chain state
+to an out-of-band secret stored outside the log. Replacing the file requires
+forging a keyed MAC — detectable by anyone who holds the key.
+
+To check mode without restarting:
+
+```bash
+go run ./cmd/loopgate-doctor report | grep -A6 '"hmac_checkpoints"'
+```
+
+Look for `"enabled": true` and `"status": "verified"` to confirm HMAC mode
+is active and the key is loading correctly. On a fresh repo before the first
+Loopgate start, doctor may report `"status": "bootstrap_pending"`; that means
+the default Keychain-backed checkpoint key has not been created yet.
+
+The shipped runtime config already enables HMAC checkpoints with the default
+macOS Keychain ref:
+
+```yaml
+logging:
+  audit_ledger:
+    hmac_checkpoint:
+      enabled: true
+      interval_events: 256
+      secret_ref:
+        id: audit_ledger_hmac
+        backend: macos_keychain
+        account_name: loopgate.audit_ledger_hmac
+        scope: local
+```
+
+On the first successful Loopgate start, that default key is bootstrapped into
+Keychain automatically if it does not already exist.
+
+See [Ledger and audit integrity](./LEDGER_AND_AUDIT_INTEGRITY.md) for the
+full explanation of what each mode proves and does not prove.
 
 ## Troubleshooting
 

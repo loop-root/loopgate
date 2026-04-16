@@ -13,7 +13,7 @@ They overlap a little, but they answer different questions.
 
 Primary uses:
 - verify the append-only audit chain
-- verify HMAC checkpoints when configured
+- verify HMAC checkpoints in the shipped macOS-first default
 - inspect recent events
 - reset local demo state intentionally
 

@@ -21,6 +21,11 @@ const runtimeConfigVersion = "1"
 
 const DefaultSupersededLineageRetentionWindow = 30 * 24 * time.Hour
 const expectedSessionClientExecutableEnv = "LOOPGATE_EXPECTED_SESSION_CLIENT_EXECUTABLE"
+const DefaultAuditLedgerHMACCheckpointIntervalEvents = 256
+const defaultAuditLedgerHMACSecretID = "audit_ledger_hmac"
+const defaultAuditLedgerHMACSecretBackend = secrets.BackendMacOSKeychain
+const defaultAuditLedgerHMACSecretAccountName = "loopgate.audit_ledger_hmac"
+const defaultAuditLedgerHMACSecretScope = "local"
 
 // DiagnosticLogging configures optional text log files (slog) for local troubleshooting.
 // DefaultLevel: error | warn | info | debug | trace (trace is finer than debug).
@@ -189,6 +194,35 @@ func DefaultRuntimeConfig() RuntimeConfig {
 	return runtimeConfig
 }
 
+func DefaultAuditLedgerHMACSecretRef() AuditLedgerHMACSecretRef {
+	return AuditLedgerHMACSecretRef{
+		ID:          defaultAuditLedgerHMACSecretID,
+		Backend:     defaultAuditLedgerHMACSecretBackend,
+		AccountName: defaultAuditLedgerHMACSecretAccountName,
+		Scope:       defaultAuditLedgerHMACSecretScope,
+	}
+}
+
+func DefaultAuditLedgerHMACCheckpoint() AuditLedgerHMACCheckpoint {
+	secretRef := DefaultAuditLedgerHMACSecretRef()
+	return AuditLedgerHMACCheckpoint{
+		Enabled:        true,
+		IntervalEvents: DefaultAuditLedgerHMACCheckpointIntervalEvents,
+		SecretRef:      &secretRef,
+	}
+}
+
+func IsDefaultAuditLedgerHMACSecretRef(secretRef *AuditLedgerHMACSecretRef) bool {
+	if secretRef == nil {
+		return false
+	}
+	defaultSecretRef := DefaultAuditLedgerHMACSecretRef()
+	return strings.TrimSpace(secretRef.ID) == defaultSecretRef.ID &&
+		strings.TrimSpace(secretRef.Backend) == defaultSecretRef.Backend &&
+		strings.TrimSpace(secretRef.AccountName) == defaultSecretRef.AccountName &&
+		strings.TrimSpace(secretRef.Scope) == defaultSecretRef.Scope
+}
+
 func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	if strings.TrimSpace(runtimeConfig.Version) == "" {
 		runtimeConfig.Version = runtimeConfigVersion
@@ -230,7 +264,7 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	hc := &runtimeConfig.Logging.AuditLedger.HMACCheckpoint
 	// Default only the unset (zero) case so negative values fail validation instead of being coerced.
 	if hc.Enabled && hc.IntervalEvents == 0 {
-		hc.IntervalEvents = 256
+		hc.IntervalEvents = DefaultAuditLedgerHMACCheckpointIntervalEvents
 	}
 	d := &runtimeConfig.Logging.Diagnostic
 	if strings.TrimSpace(d.DefaultLevel) == "" {

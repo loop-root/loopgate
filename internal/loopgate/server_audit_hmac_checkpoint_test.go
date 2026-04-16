@@ -1,13 +1,53 @@
 package loopgate
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
+	"loopgate/internal/secrets"
 )
+
+type inMemorySecretStore struct {
+	secretsByAccount map[string][]byte
+	putCount         int
+}
+
+func (store *inMemorySecretStore) Put(_ context.Context, validatedRef secrets.SecretRef, rawSecret []byte) (secrets.SecretMetadata, error) {
+	if store.secretsByAccount == nil {
+		store.secretsByAccount = map[string][]byte{}
+	}
+	copiedSecretBytes := append([]byte(nil), rawSecret...)
+	store.secretsByAccount[validatedRef.AccountName] = copiedSecretBytes
+	store.putCount++
+	nowUTC := time.Now().UTC()
+	return secrets.SecretMetadata{CreatedAt: nowUTC, LastRotatedAt: nowUTC, Status: "stored", Scope: validatedRef.Scope}, nil
+}
+
+func (store *inMemorySecretStore) Get(_ context.Context, validatedRef secrets.SecretRef) ([]byte, secrets.SecretMetadata, error) {
+	if rawSecretBytes, found := store.secretsByAccount[validatedRef.AccountName]; found {
+		return append([]byte(nil), rawSecretBytes...), secrets.SecretMetadata{Status: "stored", Scope: validatedRef.Scope}, nil
+	}
+	return nil, secrets.SecretMetadata{}, fmt.Errorf("%w: missing secret ref %q", secrets.ErrSecretNotFound, validatedRef.ID)
+}
+
+func (store *inMemorySecretStore) Delete(_ context.Context, validatedRef secrets.SecretRef) error {
+	delete(store.secretsByAccount, validatedRef.AccountName)
+	return nil
+}
+
+func (store *inMemorySecretStore) Metadata(_ context.Context, validatedRef secrets.SecretRef) (secrets.SecretMetadata, error) {
+	if _, found := store.secretsByAccount[validatedRef.AccountName]; !found {
+		return secrets.SecretMetadata{}, fmt.Errorf("%w: missing secret ref %q", secrets.ErrSecretNotFound, validatedRef.ID)
+	}
+	return secrets.SecretMetadata{Status: "stored", Scope: validatedRef.Scope}, nil
+}
 
 func TestLogEvent_AppendsConfiguredAuditHMACCheckpoint(t *testing.T) {
 	repoRoot := t.TempDir()
@@ -133,5 +173,47 @@ func TestNewServer_RestoresAuditCheckpointCadenceFromLedger(t *testing.T) {
 	}
 	if len(activeAuditBytes) == 0 {
 		t.Fatal("expected active audit bytes")
+	}
+}
+
+func TestEnsureDefaultAuditLedgerCheckpointSecret_BootstrapsMissingDefaultKey(t *testing.T) {
+	runtimeConfig := config.DefaultRuntimeConfig()
+	runtimeConfig.Logging.AuditLedger.HMACCheckpoint = config.DefaultAuditLedgerHMACCheckpoint()
+	secretStore := &inMemorySecretStore{}
+	server := &Server{
+		runtimeConfig: runtimeConfig,
+		resolveSecretStore: func(validatedRef secrets.SecretRef) (secrets.SecretStore, error) {
+			if validatedRef.AccountName == "" {
+				return nil, errors.New("missing account name")
+			}
+			return secretStore, nil
+		},
+	}
+
+	if err := server.ensureDefaultAuditLedgerCheckpointSecret(context.Background()); err != nil {
+		t.Fatalf("ensure default audit checkpoint secret: %v", err)
+	}
+	defaultSecretRef := config.DefaultAuditLedgerHMACSecretRef()
+	rawSecretBytes, _, err := secretStore.Get(context.Background(), secrets.SecretRef{
+		ID:          defaultSecretRef.ID,
+		Backend:     defaultSecretRef.Backend,
+		AccountName: defaultSecretRef.AccountName,
+		Scope:       defaultSecretRef.Scope,
+	})
+	if err != nil {
+		t.Fatalf("get bootstrapped audit checkpoint secret: %v", err)
+	}
+	if len(rawSecretBytes) != 32 {
+		t.Fatalf("expected 32-byte bootstrapped secret, got %d", len(rawSecretBytes))
+	}
+	if secretStore.putCount != 1 {
+		t.Fatalf("expected one bootstrap write, got %d", secretStore.putCount)
+	}
+
+	if err := server.ensureDefaultAuditLedgerCheckpointSecret(context.Background()); err != nil {
+		t.Fatalf("ensure existing default audit checkpoint secret: %v", err)
+	}
+	if secretStore.putCount != 1 {
+		t.Fatalf("expected bootstrap to be idempotent, got %d writes", secretStore.putCount)
 	}
 }

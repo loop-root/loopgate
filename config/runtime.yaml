@@ -18,18 +18,17 @@ logging:
     segment_dir: "runtime/state/loopgate_event_segments"
     manifest_path: "runtime/state/loopgate_event_segments/manifest.jsonl"
     verify_closed_segments_on_startup: true
-    # Optional: HMAC-SHA256 checkpoints over the hash-chain head (key from secret store, not the JSONL).
-    # When enabled: true, set interval_events (>0) and secret_ref. Omitted interval_events with enabled
-    # defaults to 256 in config apply. Key: >=32 raw bytes, or exactly 64 hex chars decoded to 32 bytes.
-    # Example (disabled): tests often use backend env and account_name = env var name.
-    # hmac_checkpoint:
-    #   enabled: false
-    #   interval_events: 256
-    #   secret_ref:
-    #     id: "audit_ledger_hmac"
-    #     backend: "macos_keychain"
-    #     account_name: "loopgate.audit_ledger_hmac"
-    #     scope: "local"
+    # Default tamper-evidence posture: HMAC-SHA256 checkpoints over the hash-chain head
+    # with a key stored outside the JSONL. On macOS-first Loopgate, first server start
+    # bootstraps this default key into Keychain if it does not exist yet.
+    hmac_checkpoint:
+      enabled: true
+      interval_events: 256
+      secret_ref:
+        id: "audit_ledger_hmac"
+        backend: "macos_keychain"
+        account_name: "loopgate.audit_ledger_hmac"
+        scope: "local"
   # Optional local-first export cursor for streaming the authoritative audit
   # ledger to a configured downstream sink later. Local append still happens
   # first; this state is only the shipping cursor and retry metadata.

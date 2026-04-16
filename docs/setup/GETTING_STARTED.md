@@ -42,6 +42,10 @@ runtime/state/loopgate.sock
 
 Leave Loopgate running in its own terminal.
 
+On the first successful start, Loopgate also bootstraps the default
+Keychain-backed audit HMAC checkpoint key used for tamper-evident audit
+checkpoints.
+
 ### 3. Validate and sign policy
 
 In another terminal:

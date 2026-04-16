@@ -2,6 +2,7 @@ package troubleshoot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -54,6 +55,16 @@ func VerifyAuditLedgerCheckpoints(repoRoot string, runtimeConfig config.RuntimeC
 	}
 	report.Configured = true
 
+	orderedPaths, err := ledger.OrderedSegmentedPaths(
+		ActiveAuditPath(repoRoot),
+		AuditRotationSettings(repoRoot, runtimeConfig),
+	)
+	if err != nil {
+		report.Status = "error"
+		report.Error = err.Error()
+		return report, fmt.Errorf("ordered audit ledger paths: %w", err)
+	}
+
 	secretStore, err := secrets.NewStoreForRef(validatedSecretRef)
 	if err != nil {
 		report.Status = "error"
@@ -63,6 +74,12 @@ func VerifyAuditLedgerCheckpoints(repoRoot string, runtimeConfig config.RuntimeC
 
 	rawSecretBytes, _, err := secretStore.Get(context.Background(), validatedSecretRef)
 	if err != nil {
+		if errors.Is(err, secrets.ErrSecretNotFound) && config.IsDefaultAuditLedgerHMACSecretRef(hmacSecretRef) && len(orderedPaths) == 0 {
+			report.OK = true
+			report.Status = "bootstrap_pending"
+			report.Error = "default keychain-backed audit checkpoint key will be created on first Loopgate start"
+			return report, nil
+		}
 		report.Status = "error"
 		report.Error = err.Error()
 		return report, fmt.Errorf("load audit ledger hmac checkpoint secret: %w", err)
@@ -74,15 +91,6 @@ func VerifyAuditLedgerCheckpoints(repoRoot string, runtimeConfig config.RuntimeC
 		return report, fmt.Errorf("audit ledger hmac checkpoint secret is empty")
 	}
 
-	orderedPaths, err := ledger.OrderedSegmentedPaths(
-		ActiveAuditPath(repoRoot),
-		AuditRotationSettings(repoRoot, runtimeConfig),
-	)
-	if err != nil {
-		report.Status = "error"
-		report.Error = err.Error()
-		return report, fmt.Errorf("ordered audit ledger paths: %w", err)
-	}
 	inspection, err := ledger.InspectAuditHMACCheckpoints(orderedPaths, rawSecretBytes)
 	if err != nil {
 		report.Status = "error"
