@@ -29,8 +29,9 @@ separate `ARCHIVED` repository.
 
 ## Setup (`docs/setup/`)
 
-- Start with `SETUP.md` and `OPERATOR_GUIDE.md`
+- Start with `GETTING_STARTED.md`, `SETUP.md`, and `OPERATOR_GUIDE.md`
 - `LEDGER_AND_AUDIT_INTEGRITY.md`, `SECRETS.md`, `TOOL_USAGE.md`
+- `DOCTOR_AND_LEDGER.md` — when to use `loopgate-ledger` versus `loopgate-doctor`
 - `LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — HTTP over Unix socket for integrators
 - `POLICY_SIGNING.md` — detached policy signature workflow and signer CLI
 - `POLICY_SIGNING_ROTATION.md` — operator runbook for signer restore, trust-anchor rotation, and emergency replacement

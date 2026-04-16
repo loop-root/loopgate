@@ -104,7 +104,9 @@ Design and behavior notes:
 ## Learn the local operator flow
 
 Start here:
+- [Getting started](./GETTING_STARTED.md)
 - [Operator guide](./OPERATOR_GUIDE.md)
+- [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
 - [Loopgate HTTP API (local clients)](./LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
 
 ## Configuration
@@ -129,7 +131,9 @@ go run ./cmd/loopgate-doctor trust-check
 
 ## Further reading
 
+- [Getting started](./GETTING_STARTED.md)
 - [Operator guide](./OPERATOR_GUIDE.md)
+- [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
 - [Policy signing](./POLICY_SIGNING.md)
 - [Policy signing rotation](./POLICY_SIGNING_ROTATION.md)
 - [Ledger and audit integrity](./LEDGER_AND_AUDIT_INTEGRITY.md)

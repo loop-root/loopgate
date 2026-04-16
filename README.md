@@ -97,8 +97,10 @@ The current practical operator flow is:
 5. hot-apply policy changes without restarting Loopgate
 
 Start here:
+- [Getting started](./docs/setup/GETTING_STARTED.md)
 - [Operator guide](./docs/setup/OPERATOR_GUIDE.md)
 - [Setup](./docs/setup/SETUP.md)
+- [Doctor and ledger tools](./docs/setup/DOCTOR_AND_LEDGER.md)
 - [HTTP API for local clients](./docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
 - [Policy signing](./docs/setup/POLICY_SIGNING.md)
 - [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md)

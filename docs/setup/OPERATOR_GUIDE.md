@@ -6,6 +6,10 @@ This guide is for the current product:
 
 **Loopgate** as a local-first governance layer for AI-assisted engineering work.
 
+If you are setting up Loopgate for the first time, start with:
+- [Getting started](./GETTING_STARTED.md)
+- [Setup](./SETUP.md)
+
 ## What an operator does
 
 In the current product, the operator:
@@ -122,6 +126,9 @@ go run ./cmd/loopgate-doctor report
 `loopgate-ledger verify` checks the append-only chain across the active audit
 file and any sealed segments. If audit HMAC checkpoints are configured, it also
 verifies those checkpoints with the configured secret backend.
+
+If you are unsure whether to use `loopgate-ledger` or `loopgate-doctor`, see:
+- [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
 
 ## Troubleshooting
 

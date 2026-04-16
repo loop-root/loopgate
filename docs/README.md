@@ -20,8 +20,10 @@ repositories.
 
 ## Start here
 
+- [Getting started](./setup/GETTING_STARTED.md)
 - [Operator guide](./setup/OPERATOR_GUIDE.md)
 - [Setup](./setup/SETUP.md)
+- [Doctor and ledger tools](./setup/DOCTOR_AND_LEDGER.md)
 - [Loopgate HTTP API (local clients)](./setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
 - [Policy signing](./setup/POLICY_SIGNING.md)
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
@@ -41,8 +43,10 @@ repositories.
 
 ## Operator and setup docs
 
+- [Getting started](./setup/GETTING_STARTED.md)
 - [Operator guide](./setup/OPERATOR_GUIDE.md)
 - [Setup](./setup/SETUP.md)
+- [Doctor and ledger tools](./setup/DOCTOR_AND_LEDGER.md)
 - [Secrets](./setup/SECRETS.md)
 - [Tool usage](./setup/TOOL_USAGE.md)
 
