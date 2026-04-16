@@ -6,11 +6,25 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-/tmp/loopgate-demo-runs}"
 RUN_STAMP="${RUN_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6333}"
 GOCACHE_DIR="${GOCACHE_DIR:-$REPO_ROOT/.cache/go-build}"
+MEMBENCH_ROOT="${MEMBENCH_ROOT:-$HOME/Dev/memBench/snapshot/loopgate_pre_split}"
 
 mkdir -p "$OUTPUT_ROOT"
 
+if [ ! -f "$MEMBENCH_ROOT/go.mod" ]; then
+  echo "memorybench snapshot not found at: $MEMBENCH_ROOT" >&2
+  echo "Set MEMBENCH_ROOT to the extracted memBench snapshot root before running this demo." >&2
+  exit 1
+fi
+
+run_memorybench() {
+  (
+    cd "$MEMBENCH_ROOT"
+    env GOCACHE="$GOCACHE_DIR" go run ./cmd/memorybench "$@"
+  )
+}
+
 echo "Running Loopgate continuity demo scenarios..."
-env GOCACHE="$GOCACHE_DIR" go run ./cmd/memorybench \
+run_memorybench \
   -output-root "$OUTPUT_ROOT" \
   -run-id "continuity_demo_task_resumption_${RUN_STAMP}" \
   -profile fixtures \
@@ -20,7 +34,7 @@ env GOCACHE="$GOCACHE_DIR" go run ./cmd/memorybench \
   -continuity-benchmark-local-slot-preference=false \
   -scenario-set demo_task_resumption
 
-env GOCACHE="$GOCACHE_DIR" go run ./cmd/memorybench \
+run_memorybench \
   -output-root "$OUTPUT_ROOT" \
   -run-id "continuity_demo_slot_truth_${RUN_STAMP}" \
   -profile fixtures \
@@ -31,7 +45,7 @@ env GOCACHE="$GOCACHE_DIR" go run ./cmd/memorybench \
   -scenario-set demo_slot_truth
 
 echo "Running RAG comparison demo scenarios..."
-env GOCACHE="$GOCACHE_DIR" go run ./cmd/memorybench \
+run_memorybench \
   -output-root "$OUTPUT_ROOT" \
   -run-id "rag_demo_task_resumption_${RUN_STAMP}" \
   -profile fixtures \
@@ -42,7 +56,7 @@ env GOCACHE="$GOCACHE_DIR" go run ./cmd/memorybench \
   -rag-seed-fixtures \
   -scenario-set demo_task_resumption
 
-env GOCACHE="$GOCACHE_DIR" go run ./cmd/memorybench \
+run_memorybench \
   -output-root "$OUTPUT_ROOT" \
   -run-id "rag_demo_slot_truth_${RUN_STAMP}" \
   -profile fixtures \
