@@ -133,6 +133,7 @@ Completed in this phase so far:
 - tightened remaining internal setup/prompt map language so the active repo no longer implies an in-tree TUI surface or a live durable memory path inside Loopgate
 - removed dead no-op morphling-class fixture helpers from integration, server, and CLI tests so the test tree no longer implies the retired class-policy path still affects active Loopgate behavior
 - trimmed stale Haven-era demo-reset targets from the troubleshoot layer and renamed the remaining workspace report test to Loopgate language
+- tightened `cmd/` and docs index maps so they no longer imply leftover legacy shells and now describe `ARCHIVED` versus `continuity` ownership more explicitly
 
 ## Phase 5: Security hardening pass on the local-first core
 

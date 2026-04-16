@@ -10,7 +10,7 @@ Timestamped decisions (context, tradeoff, escape hatch). **Index:** `docs/adr/RE
 
 ## Historical archive
 
-Historical reports, legacy product RFCs, AMP/TCL material, and extracted continuity design docs have been moved to the separate `ARCHIVED` repository.
+Historical reports, legacy product RFCs, and archived planning material have been moved to the separate `ARCHIVED` repository. Extracted continuity design docs now live in the sibling `continuity` repository.
 
 ## Archived planning
 
@@ -47,7 +47,7 @@ separate `ARCHIVED` repository.
 
 ## Benchmarks and extracted subsystems
 
-Historical benchmark and extracted-subsystem notes now live in the separate `ARCHIVED` repository.
+Historical benchmark notes live in the separate `ARCHIVED` repository. Extracted continuity subsystem material now lives in the sibling `continuity` repository.
 
 ## Archived planning and reports
 

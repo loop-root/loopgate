@@ -1,6 +1,6 @@
 # Cmd Map
 
-This file maps **`cmd/`** Go **main** entrypoints. **`cmd/loopgate/`** is the primary server binary. Any remaining legacy shells under `cmd/` are deletion candidates, not active product surfaces.
+This file maps **`cmd/`** Go **main** entrypoints. **`cmd/loopgate/`** is the primary server binary, and the remaining binaries are support tools for the active local Loopgate workflow.
 
 Use it when changing:
 
