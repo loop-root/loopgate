@@ -115,6 +115,8 @@ Known current issues:
 Completed in this phase so far:
 - removed tracked legacy memory ledger history from `core/memory/ledger/`
 - preserved the benchmark harness by seeding a sibling `memBench` repo from the extracted continuity snapshot instead of forcing a later rebuild
+- copied the remaining local `core/memory` residue into the sibling `continuity` repo under a clearly labeled runtime-residue snapshot
+- copied the leftover local `cmd/memorybench` residue into the sibling `memBench` repo under a clearly labeled runtime-residue snapshot
 - tightened ignore coverage for memory ledger/distillate backup artifacts
 - moved tracked runtime sandbox/state artifacts out of source control and made `runtime/` fully gitignored
 - sanitized remaining hardcoded local paths in active docs and tests
