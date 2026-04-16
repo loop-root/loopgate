@@ -124,8 +124,8 @@ Special note for `UserPromptSubmit`:
 
 - it may inject bounded historical recall context based on the submitted prompt
 - it remains a content-only lane, not an approval or policy lane
-- retrieval must stay server-side and use Loopgate's local memory backend rather
-  than a client-managed memory source
+- retrieval must stay server-side and use Loopgate's bounded remembered-context
+  and local session-history paths rather than a client-managed history source
 - the continuity target is durable, high-signal facts rather than transcript
   retention or arbitrary prose replay
 
@@ -188,43 +188,43 @@ Residual risk:
 - built-in tools remain Claude-executed, not Loopgate-executed
 - this is acceptable only as an MVP pre-execution gate, not the end-state authority model
 
-### TM-CC-02B: SessionStart becomes a memory side channel
+### TM-CC-02B: SessionStart becomes a remembered-context side channel
 
 Attack:
 
 1. A local caller triggers the SessionStart hook path repeatedly.
-2. Loopgate returns unbounded or raw memory instead of the bounded remembered-context projection.
-3. Historical memory leaks through a hook path that was supposed to stay narrow.
+2. Loopgate returns unbounded or raw historical context instead of the bounded remembered-context projection.
+3. Historical context leaks through a hook path that was supposed to stay narrow.
 
 Impact:
 
-- unnecessary memory disclosure
-- drift between prompt memory and authoritative remembered-context policy
+- unnecessary historical-context disclosure
+- drift between prompt context and authoritative remembered-context policy
 
 Current control:
 
-- SessionStart uses the same bounded remembered-context formatter as the existing memory
-  prompt path
+- SessionStart uses the same bounded remembered-context formatter as the
+  existing remembered-context prompt path
 - the injected text is explicitly marked historical context and not fresh verification
 
 Residual risk:
 
 - same-user local callers remain in scope, so the hook path must stay bounded
-  and avoid raw memory artifacts
+  and avoid raw historical-context artifacts
 
-### TM-CC-02C: UserPromptSubmit turns prompt text into an unbounded memory oracle
+### TM-CC-02C: UserPromptSubmit turns prompt text into an unbounded remembered-context oracle
 
 Attack:
 
-1. A user or local process submits arbitrary prompts crafted to retrieve memory.
-2. Loopgate injects broad or raw memory artifacts rather than bounded recall.
-3. The prompt hook becomes a hidden memory exfiltration lane.
+1. A user or local process submits arbitrary prompts crafted to retrieve historical context.
+2. Loopgate injects broad or raw historical artifacts rather than bounded recall.
+3. The prompt hook becomes a hidden historical-context exfiltration lane.
 
 Impact:
 
-- unnecessary historical memory disclosure
-- repeated injection of irrelevant or oversized memory
-- drift between prompt-context memory and Loopgate's bounded recall semantics
+- unnecessary historical-context disclosure
+- repeated injection of irrelevant or oversized historical context
+- drift between prompt-context recall and Loopgate's bounded recall semantics
 
 Current control:
 
@@ -235,8 +235,8 @@ Current control:
 
 Residual risk:
 
-- same-user local callers can still probe their own local memory surface, so
-  the hook path must stay local-node-only and bounded
+- same-user local callers can still probe their own local remembered-context
+  surface, so the hook path must stay local-node-only and bounded
 
 ### TM-CC-02D: Hook approval becomes fake authority theater
 

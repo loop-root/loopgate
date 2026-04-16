@@ -129,10 +129,10 @@ Current handler posture:
 - `PreToolUse` is an **enforced** authority surface
 - `SessionStart` remains **audit-only** for local lifecycle binding
 - `UserPromptSubmit` remains **audit-only** and does not inject additional
-  memory context on each turn
+  remembered context on each turn
 - `SessionEnd` records a **local session lifecycle boundary** for audit and
   future local session-history rollover work, but does not itself create
-  durable memory
+  durable continuity state
 - other known observability events such as `ConfigChange` may be accepted as
   **audit-only**
 - known governance-relevant non-tool events such as `PermissionRequest` are
@@ -140,15 +140,15 @@ Current handler posture:
 - unknown hook events are **blocked by default**
 
 `UserPromptSubmit` should remain audit-only in the Claude Code harness path.
-Any future memory access should happen through explicit governed memory
-operations rather than hook-time prompt injection.
+Any future remembered-context or continuity access should happen through
+explicit governed retrieval paths rather than hook-time prompt injection.
 
 Local remembered-context lifecycle in the current Claude Code MVP is:
 
 1. `SessionStart` records a local lifecycle boundary and binds Claude
    `session_id` to a local Loopgate-owned session-history record
 2. `UserPromptSubmit` records prompt submission for audit and session-history
-   correlation, but does not add memory recall
+   correlation, but does not add remembered-context recall
 3. `SessionEnd` records the session boundary and exit reason for audit and
    attempts a safe local session-history rollover
 4. durable state, if introduced later, should still come from explicit

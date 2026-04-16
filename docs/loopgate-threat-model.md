@@ -50,7 +50,7 @@ being moved to a separate `continuity` repo.
 - **Loopgate** local control plane:
   - owns policy evaluation, approvals, capability execution, connection auth, provider token exchange, and UI-safe status/event APIs.
   - Evidence: [server.go](../internal/loopgate/server.go), [ui_server.go](../internal/loopgate/ui_server.go), [connections.go](../internal/loopgate/connections.go).
-- Filesystem capability layer, provider-backed capability layer, secrets boundary, audit/state/memory, emerging `morphui` surface — see evidence paths in repository.
+- Filesystem capability layer, provider-backed capability layer, secrets boundary, audit/state/quarantine, and any future browser/bridge UI surface — see evidence paths in repository.
 
 ### Data flows and trust boundaries
 
@@ -95,7 +95,7 @@ being moved to a separate `continuity` repo.
   - Validation/normalization: chain metadata, full prior-chain verification on append/bootstrap, canonical file paths, redacted audit metadata.
   - Gaps: hash chains are **tamper-evident within the file**, not **keyed proof of Loopgate authorship**; a same-user filesystem writer can replace a JSONL file with a new internally consistent chain. Malformed ledger content fails closed, but there is not yet signed checkpoints or remote append-only export in-tree. **Operator-facing detail:** [LEDGER_AND_AUDIT_INTEGRITY.md](setup/LEDGER_AND_AUDIT_INTEGRITY.md).
   - Evidence: [ledger.go](../internal/ledger/ledger.go), [state.go](../internal/state/state.go), [quarantine.go](../internal/loopgate/quarantine.go).
-- Operator client → future `morphui` bridge/browser
+- Operator client → future browser/bridge UI
   - Data: delegated Loopgate credentials, display-safe UI events, approval decisions.
   - Channel: planned launch-bound local channel plus browser HTTP.
   - Security guarantees: documented fail-closed delegated-session contract and UI no-authority rules.
@@ -108,13 +108,11 @@ being moved to a separate `continuity` repo.
 flowchart TD
   User["Local user or same-user process"] --> Client["Operator client (IDE / HTTP / Wails ref)"]
   Client --> Loopgate["Loopgate control plane"]
-  Client --> Model["Model provider"]
   Loopgate --> Files["Filesystem capabilities"]
   Loopgate --> Provider["Provider APIs and token endpoints"]
   Loopgate --> Quarantine["Quarantine store"]
-  Client --> Ledger["Client ledger and state"]
-  Loopgate --> Audit["Loopgate events"]
-  Client --> Bridge["Emerging morphui bridge"]
+  Loopgate --> Audit["Audit ledger and runtime state"]
+  Loopgate --> Bridge["Future browser / bridge UI"]
   Bridge --> Browser["Browser UI"]
 ```
 
@@ -125,10 +123,10 @@ flowchart TD
 | Loopgate control-plane authority | Prevents untrusted model/UI/input paths from executing privileged actions directly | I |
 | Provider credentials and refresh tokens | Grant access to third-party systems that may hold production-sensitive data | C |
 | Provider access tokens in memory | Short-lived but still sufficient for third-party data access or action execution | C |
-| Quarantined remote payloads | May contain production-sensitive third-party data that must not enter prompt/memory paths | C/I |
+| Quarantined remote payloads | May contain production-sensitive third-party data that must not enter prompt or remembered-context paths | C/I |
 | Repo working tree and local files | Primary read/write target of filesystem capabilities | C/I |
 | Approval workflow and operator intent | Protects write and other approval-gated actions from silent execution | I |
-| Client ledger and Loopgate events | Core audit record for security-relevant outcomes and operator review | I/A |
+| Loopgate audit ledger and events | Core audit record for security-relevant outcomes and operator review | I/A |
 | Runtime state and audit/export cursors | Control monotonic session progression and local delivery state | I/A |
 | Session keys and local auth material | Bind local clients and request integrity to the active control plane | C/I |
 | Delegated UI credentials for a future bridge UI | Would grant access to Loopgate UI APIs and approval actions if exposed | C/I |
@@ -148,7 +146,7 @@ flowchart TD
 - There is no current remote internet-facing Loopgate API in this repo; Loopgate listens on a Unix socket by default, not a public TCP port.
 - There is no generic shell tool or generic raw HTTP tool exposed to the model/runtime surface.
 - **Unprivileged clients** do not receive provider credentials, refresh tokens, or raw access tokens through the implemented Loopgate control-plane contracts.
-- The `morphui` browser bridge is not yet the primary runtime path and is only an emerging surface in repo docs/RFCs, not a fully shipped implementation here.
+- Any future browser or bridge UI path is not yet the primary runtime path and remains an emerging surface in repo docs/RFCs rather than a shipped implementation here.
 
 ## Entry points and attack surfaces
 
@@ -178,7 +176,7 @@ flowchart TD
    2. Attacker influences prompts or operator actions to invoke an allowed typed capability.
    3. Structured fields are returned to the client/UI while raw payload remains quarantined.
    4. Impact: production-sensitive data can still cross into local display/audit paths if allowed fields are too broad.
-3. PKCE/browser/bootstrap interception against emerging `morphui` surface
+3. PKCE/browser/bootstrap interception against a future browser/bridge UI surface
    1. Same-user local process races for launch/bootstrap material or inspects stdout/local browser launch state.
    2. It steals or replays delegated Loopgate credentials or a one-time launch token.
    3. It reads UI feeds or submits approval decisions through the bridge/browser path.

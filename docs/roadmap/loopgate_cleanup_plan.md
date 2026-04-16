@@ -134,6 +134,13 @@ Completed in this phase so far:
 - removed dead no-op morphling-class fixture helpers from integration, server, and CLI tests so the test tree no longer implies the retired class-policy path still affects active Loopgate behavior
 - trimmed stale Haven-era demo-reset targets from the troubleshoot layer and renamed the remaining workspace report test to Loopgate language
 - tightened `cmd/` and docs index maps so they no longer imply leftover legacy shells and now describe `ARCHIVED` versus `continuity` ownership more explicitly
+- tightened threat-model and Claude-hooks docs so active visuals and hook-language describe remembered context, current audit/state boundaries, and a future browser/bridge UI more precisely
+- dropped the leftover Charmbracelet/TUI dependency stack from `go.mod` / `go.sum` now that the in-tree UI package is gone
+
+Remaining documentation gaps worth filling:
+- one compact operator-facing sequence diagram for the normal local flow: client -> session open -> signed request -> capability execute -> approval/audit
+- one short doc that explains the relationship between `loopgate-ledger`, `loopgate-doctor`, and the diagnostic bundle/report outputs
+- one public-facing note that distinguishes current local-first Loopgate from future browser/bridge or enterprise directions without making those future paths feel primary
 
 ## Phase 5: Security hardening pass on the local-first core
 
