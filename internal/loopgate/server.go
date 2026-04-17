@@ -778,146 +778,19 @@ func (server *Server) Serve(ctx context.Context) error {
 }
 
 func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims capabilityToken, capabilityRequest CapabilityRequest, allowApprovalCreation bool) CapabilityResponse {
-	if strings.TrimSpace(capabilityRequest.RequestID) == "" {
-		requestID, _ := randomHex(8)
-		capabilityRequest.RequestID = "req_" + requestID
+	normalizedRequest, earlyResponse := server.prepareCapabilityRequestExecution(tokenClaims, capabilityRequest, allowApprovalCreation)
+	if earlyResponse != nil {
+		return *earlyResponse
 	}
-	if capabilityRequest.Arguments == nil {
-		capabilityRequest.Arguments = make(map[string]string)
-	}
-	capabilityRequest = normalizeCapabilityRequest(capabilityRequest)
-	capabilityRequest.Actor = tokenClaims.ActorLabel
-	capabilityRequest.SessionID = tokenClaims.ControlSessionID
-	if err := capabilityRequest.Validate(); err != nil {
-		return CapabilityResponse{
-			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
-			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
-		}
-	}
-
-	if allowApprovalCreation {
-		if replayDenied := server.recordRequest(tokenClaims.ControlSessionID, capabilityRequest); replayDenied != nil {
-			return *replayDenied
-		}
-	}
+	capabilityRequest = normalizedRequest
 
 	policyRuntime := server.currentPolicyRuntime()
-	tool := policyRuntime.registry.Get(capabilityRequest.Capability)
-	if server.capabilityProhibitsRawSecretExport(tool, capabilityRequest.Capability) {
-		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
-			"request_id":           capabilityRequest.RequestID,
-			"capability":           capabilityRequest.Capability,
-			"reason":               "raw secret export is prohibited",
-			"denial_code":          DenialCodeSecretExportProhibited,
-			"actor_label":          tokenClaims.ActorLabel,
-			"client_session_label": tokenClaims.ClientSessionLabel,
-			"control_session_id":   tokenClaims.ControlSessionID,
-		}); err != nil {
-			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-		}
-		deniedResponse := CapabilityResponse{
-			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
-			DenialReason: "raw secret export is prohibited",
-			DenialCode:   DenialCodeSecretExportProhibited,
-			Redacted:     true,
-		}
-		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
-		return deniedResponse
+	tool, earlyResponse := server.resolveCapabilityExecutionTool(policyRuntime, tokenClaims, capabilityRequest)
+	if earlyResponse != nil {
+		return *earlyResponse
 	}
 
-	if len(tokenClaims.AllowedCapabilities) > 0 {
-		if _, allowed := tokenClaims.AllowedCapabilities[capabilityRequest.Capability]; !allowed {
-			if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
-				"request_id":           capabilityRequest.RequestID,
-				"capability":           capabilityRequest.Capability,
-				"reason":               "capability token scope denied requested capability",
-				"denial_code":          DenialCodeCapabilityTokenScopeDenied,
-				"actor_label":          tokenClaims.ActorLabel,
-				"client_session_label": tokenClaims.ClientSessionLabel,
-				"control_session_id":   tokenClaims.ControlSessionID,
-			}); err != nil {
-				return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-			}
-			deniedResponse := CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusDenied,
-				DenialReason: "capability token scope denied requested capability",
-				DenialCode:   DenialCodeCapabilityTokenScopeDenied,
-			}
-			server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
-			return deniedResponse
-		}
-	}
-
-	if tool == nil {
-		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
-			"request_id":           capabilityRequest.RequestID,
-			"capability":           capabilityRequest.Capability,
-			"reason":               "unknown capability",
-			"denial_code":          DenialCodeUnknownCapability,
-			"actor_label":          tokenClaims.ActorLabel,
-			"client_session_label": tokenClaims.ClientSessionLabel,
-			"control_session_id":   tokenClaims.ControlSessionID,
-		}); err != nil {
-			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-		}
-		deniedResponse := CapabilityResponse{
-			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
-			DenialReason: "unknown capability",
-			DenialCode:   DenialCodeUnknownCapability,
-		}
-		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
-		return deniedResponse
-	}
-
-	if err := tool.Schema().Validate(capabilityRequest.Arguments); err != nil {
-		if auditErr := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
-			"request_id":           capabilityRequest.RequestID,
-			"capability":           capabilityRequest.Capability,
-			"reason":               secrets.RedactText(err.Error()),
-			"denial_code":          DenialCodeInvalidCapabilityArguments,
-			"actor_label":          tokenClaims.ActorLabel,
-			"client_session_label": tokenClaims.ClientSessionLabel,
-			"control_session_id":   tokenClaims.ControlSessionID,
-		}); auditErr != nil {
-			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-		}
-		errorResponse := CapabilityResponse{
-			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
-			DenialReason: err.Error(),
-			DenialCode:   DenialCodeInvalidCapabilityArguments,
-			Redacted:     true,
-		}
-		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, errorResponse.DenialCode, errorResponse.DenialReason)
-		return errorResponse
-	}
-
-	policyDecision := policyRuntime.checker.Check(tool)
-	if argumentValidator, ok := tool.(toolspkg.PolicyArgumentValidator); ok && policyDecision.Decision != policypkg.Deny {
-		if err := argumentValidator.ValidatePolicyArguments(capabilityRequest.Arguments); err != nil {
-			policyDecision = policypkg.CheckResult{
-				Decision: policypkg.Deny,
-				Reason:   err.Error(),
-			}
-		}
-	}
-	originalPolicyDecision := policyDecision
-	lowRiskHostPlanAutoAllowed := false
-	if operatorMountGrant, granted, grantErr := operatorMountWriteGrantForRequest(server, tokenClaims.ControlSessionID, capabilityRequest); grantErr == nil && granted {
-		policyDecision = policypkg.CheckResult{
-			Decision: policypkg.Allow,
-			Reason:   "active operator-mounted write grant for " + operatorMountGrant.root,
-		}
-	}
-	if adjustedDecision, adjusted := server.autoAllowLowRiskHostPlanApply(tokenClaims.ControlSessionID, capabilityRequest, policyDecision); adjusted {
-		policyDecision = adjustedDecision
-		lowRiskHostPlanAutoAllowed = true
-	}
+	originalPolicyDecision, policyDecision, lowRiskHostPlanAutoAllowed := server.evaluateCapabilityPolicyDecision(policyRuntime, tool, tokenClaims, capabilityRequest)
 	if originalPolicyDecision.Decision == policypkg.NeedsApproval && policyDecision.Decision == policypkg.Allow && lowRiskHostPlanAutoAllowed {
 		if err := server.logEvent("capability.low_risk_host_plan_auto_allow", tokenClaims.ControlSessionID, map[string]interface{}{
 			"request_id":           capabilityRequest.RequestID,
@@ -969,155 +842,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 	}
 
 	if policyDecision.Decision == policypkg.NeedsApproval && allowApprovalCreation {
-		approvalID, err := randomHex(8)
-		if err != nil {
-			return CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusError,
-				DenialReason: "failed to create approval request",
-				DenialCode:   DenialCodeApprovalCreationFailed,
-			}
-		}
-
-		decisionNonce, err := randomHex(16)
-		if err != nil {
-			return CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusError,
-				DenialReason: "failed to create approval decision nonce",
-				DenialCode:   DenialCodeApprovalCreationFailed,
-			}
-		}
-
-		metadata := server.approvalMetadata(tokenClaims.ControlSessionID, capabilityRequest)
-		approvalReason := approvalReasonForCapability(policyDecision, metadata, capabilityRequest)
-		expiresAt := server.now().UTC().Add(approvalTTL)
-		manifestSHA256, bodySHA256, manifestErr := buildCapabilityApprovalManifest(capabilityRequest, expiresAt.UnixMilli())
-		if manifestErr != nil {
-			return CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusError,
-				DenialReason: "failed to compute approval manifest",
-				DenialCode:   DenialCodeApprovalCreationFailed,
-			}
-		}
-		server.mu.Lock()
-		server.pruneExpiredLocked()
-		if len(server.approvals) >= server.maxTotalApprovalRecords {
-			server.mu.Unlock()
-			if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
-				"request_id":           capabilityRequest.RequestID,
-				"capability":           capabilityRequest.Capability,
-				"reason":               "control-plane approval store is at capacity",
-				"denial_code":          DenialCodeControlPlaneStateSaturated,
-				"actor_label":          tokenClaims.ActorLabel,
-				"client_session_label": tokenClaims.ClientSessionLabel,
-				"control_session_id":   tokenClaims.ControlSessionID,
-			}); err != nil {
-				return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-			}
-			deniedResponse := CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusDenied,
-				DenialReason: "control-plane approval store is at capacity",
-				DenialCode:   DenialCodeControlPlaneStateSaturated,
-			}
-			server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
-			return deniedResponse
-		}
-		if server.countPendingApprovalsForSessionLocked(tokenClaims.ControlSessionID) >= server.maxPendingApprovalsPerControlSession {
-			server.mu.Unlock()
-			if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
-				"request_id":           capabilityRequest.RequestID,
-				"capability":           capabilityRequest.Capability,
-				"reason":               "pending approval limit reached for control session",
-				"denial_code":          DenialCodePendingApprovalLimitReached,
-				"actor_label":          tokenClaims.ActorLabel,
-				"client_session_label": tokenClaims.ClientSessionLabel,
-				"control_session_id":   tokenClaims.ControlSessionID,
-			}); err != nil {
-				return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-			}
-			deniedResponse := CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusDenied,
-				DenialReason: "pending approval limit reached for control session",
-				DenialCode:   DenialCodePendingApprovalLimitReached,
-			}
-			server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
-			return deniedResponse
-		}
-		createdApproval := pendingApproval{
-			ID:               approvalID,
-			Request:          cloneCapabilityRequest(capabilityRequest),
-			CreatedAt:        server.now().UTC(),
-			ExpiresAt:        expiresAt,
-			Metadata:         metadata,
-			Reason:           approvalReason,
-			ControlSessionID: tokenClaims.ControlSessionID,
-			DecisionNonce:    decisionNonce,
-			ExecutionContext: approvalExecutionContext{
-				ControlSessionID:    tokenClaims.ControlSessionID,
-				ActorLabel:          tokenClaims.ActorLabel,
-				ClientSessionLabel:  tokenClaims.ClientSessionLabel,
-				AllowedCapabilities: copyCapabilitySet(tokenClaims.AllowedCapabilities),
-				TenantID:            tokenClaims.TenantID,
-				UserID:              tokenClaims.UserID,
-			},
-			State:                  approvalStatePending,
-			ApprovalManifestSHA256: manifestSHA256,
-			ExecutionBodySHA256:    bodySHA256,
-		}
-		server.approvals[approvalID] = createdApproval
-		server.noteExpiryCandidateLocked(expiresAt)
-
-		approvalCreatedAuditData := map[string]interface{}{
-			"request_id":               capabilityRequest.RequestID,
-			"approval_request_id":      approvalID,
-			"capability":               capabilityRequest.Capability,
-			"approval_class":           metadata["approval_class"],
-			"approval_state":           approvalStatePending,
-			"actor_label":              tokenClaims.ActorLabel,
-			"client_session_label":     tokenClaims.ClientSessionLabel,
-			"control_session_id":       tokenClaims.ControlSessionID,
-			"approval_manifest_sha256": manifestSHA256,
-			"tenant_id":                tokenClaims.TenantID,
-			"user_id":                  tokenClaims.UserID,
-		}
-		if approvalClass, ok := metadata["approval_class"].(string); ok && strings.TrimSpace(approvalClass) != "" {
-			approvalCreatedAuditData["approval_class"] = approvalClass
-		}
-		if err := server.logEvent("approval.created", tokenClaims.ControlSessionID, approvalCreatedAuditData); err != nil {
-			delete(server.approvals, approvalID)
-			server.mu.Unlock()
-			return CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusError,
-				DenialReason: "control-plane audit is unavailable",
-				DenialCode:   DenialCodeAuditUnavailable,
-			}
-		}
-		server.mu.Unlock()
-
-		metadata["approval_reason"] = approvalReason
-		metadata["approval_expires_at_utc"] = expiresAt.Format(time.RFC3339Nano)
-		metadata["approval_decision_nonce"] = decisionNonce
-		// Include the manifest SHA256 in the response so the operator UI can display and
-		// submit it back with the decision, binding the decision to the exact approved action.
-		metadata["approval_manifest_sha256"] = manifestSHA256
-		pendingResponse := CapabilityResponse{
-			RequestID:              capabilityRequest.RequestID,
-			Status:                 ResponseStatusPendingApproval,
-			DenialCode:             DenialCodeApprovalRequired,
-			ApprovalRequired:       true,
-			ApprovalRequestID:      approvalID,
-			ApprovalManifestSHA256: manifestSHA256,
-			Metadata:               metadata,
-		}
-		createdApproval.Metadata = metadata
-		createdApproval.Reason = approvalReason
-		server.emitUIApprovalPending(createdApproval)
-		return pendingResponse
+		return server.createCapabilityApprovalResponse(tokenClaims, capabilityRequest, policyDecision)
 	}
 	if policyDecision.Decision == policypkg.NeedsApproval && !allowApprovalCreation && !tokenClaims.ApprovedExecution {
 		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
@@ -1355,6 +1080,305 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		server.emitUIToolResult(effectiveTokenClaims.ControlSessionID, capabilityRequest, successResponse)
 	}
 	return successResponse
+}
+
+func (server *Server) prepareCapabilityRequestExecution(tokenClaims capabilityToken, capabilityRequest CapabilityRequest, allowApprovalCreation bool) (CapabilityRequest, *CapabilityResponse) {
+	if strings.TrimSpace(capabilityRequest.RequestID) == "" {
+		requestID, _ := randomHex(8)
+		capabilityRequest.RequestID = "req_" + requestID
+	}
+	if capabilityRequest.Arguments == nil {
+		capabilityRequest.Arguments = make(map[string]string)
+	}
+	capabilityRequest = normalizeCapabilityRequest(capabilityRequest)
+	capabilityRequest.Actor = tokenClaims.ActorLabel
+	capabilityRequest.SessionID = tokenClaims.ControlSessionID
+	if err := capabilityRequest.Validate(); err != nil {
+		return capabilityRequest, &CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeMalformedRequest,
+		}
+	}
+	if allowApprovalCreation {
+		if replayDenied := server.recordRequest(tokenClaims.ControlSessionID, capabilityRequest); replayDenied != nil {
+			return capabilityRequest, replayDenied
+		}
+	}
+	return capabilityRequest, nil
+}
+
+func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyRuntime, tokenClaims capabilityToken, capabilityRequest CapabilityRequest) (toolspkg.Tool, *CapabilityResponse) {
+	tool := policyRuntime.registry.Get(capabilityRequest.Capability)
+	if server.capabilityProhibitsRawSecretExport(tool, capabilityRequest.Capability) {
+		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"reason":               "raw secret export is prohibited",
+			"denial_code":          DenialCodeSecretExportProhibited,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+			return nil, &auditUnavailable
+		}
+		deniedResponse := CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusDenied,
+			DenialReason: "raw secret export is prohibited",
+			DenialCode:   DenialCodeSecretExportProhibited,
+			Redacted:     true,
+		}
+		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
+		return nil, &deniedResponse
+	}
+	if len(tokenClaims.AllowedCapabilities) > 0 {
+		if _, allowed := tokenClaims.AllowedCapabilities[capabilityRequest.Capability]; !allowed {
+			if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+				"request_id":           capabilityRequest.RequestID,
+				"capability":           capabilityRequest.Capability,
+				"reason":               "capability token scope denied requested capability",
+				"denial_code":          DenialCodeCapabilityTokenScopeDenied,
+				"actor_label":          tokenClaims.ActorLabel,
+				"client_session_label": tokenClaims.ClientSessionLabel,
+				"control_session_id":   tokenClaims.ControlSessionID,
+			}); err != nil {
+				auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+				return nil, &auditUnavailable
+			}
+			deniedResponse := CapabilityResponse{
+				RequestID:    capabilityRequest.RequestID,
+				Status:       ResponseStatusDenied,
+				DenialReason: "capability token scope denied requested capability",
+				DenialCode:   DenialCodeCapabilityTokenScopeDenied,
+			}
+			server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
+			return nil, &deniedResponse
+		}
+	}
+	if tool == nil {
+		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"reason":               "unknown capability",
+			"denial_code":          DenialCodeUnknownCapability,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+			return nil, &auditUnavailable
+		}
+		deniedResponse := CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusDenied,
+			DenialReason: "unknown capability",
+			DenialCode:   DenialCodeUnknownCapability,
+		}
+		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
+		return nil, &deniedResponse
+	}
+	if err := tool.Schema().Validate(capabilityRequest.Arguments); err != nil {
+		if auditErr := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"reason":               secrets.RedactText(err.Error()),
+			"denial_code":          DenialCodeInvalidCapabilityArguments,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); auditErr != nil {
+			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+			return nil, &auditUnavailable
+		}
+		errorResponse := CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeInvalidCapabilityArguments,
+			Redacted:     true,
+		}
+		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, errorResponse.DenialCode, errorResponse.DenialReason)
+		return nil, &errorResponse
+	}
+	return tool, nil
+}
+
+func (server *Server) evaluateCapabilityPolicyDecision(policyRuntime serverPolicyRuntime, tool toolspkg.Tool, tokenClaims capabilityToken, capabilityRequest CapabilityRequest) (policypkg.CheckResult, policypkg.CheckResult, bool) {
+	policyDecision := policyRuntime.checker.Check(tool)
+	if argumentValidator, ok := tool.(toolspkg.PolicyArgumentValidator); ok && policyDecision.Decision != policypkg.Deny {
+		if err := argumentValidator.ValidatePolicyArguments(capabilityRequest.Arguments); err != nil {
+			policyDecision = policypkg.CheckResult{
+				Decision: policypkg.Deny,
+				Reason:   err.Error(),
+			}
+		}
+	}
+	originalPolicyDecision := policyDecision
+	lowRiskHostPlanAutoAllowed := false
+	if operatorMountGrant, granted, grantErr := operatorMountWriteGrantForRequest(server, tokenClaims.ControlSessionID, capabilityRequest); grantErr == nil && granted {
+		policyDecision = policypkg.CheckResult{
+			Decision: policypkg.Allow,
+			Reason:   "active operator-mounted write grant for " + operatorMountGrant.root,
+		}
+	}
+	if adjustedDecision, adjusted := server.autoAllowLowRiskHostPlanApply(tokenClaims.ControlSessionID, capabilityRequest, policyDecision); adjusted {
+		policyDecision = adjustedDecision
+		lowRiskHostPlanAutoAllowed = true
+	}
+	return originalPolicyDecision, policyDecision, lowRiskHostPlanAutoAllowed
+}
+
+func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityToken, capabilityRequest CapabilityRequest, policyDecision policypkg.CheckResult) CapabilityResponse {
+	approvalID, err := randomHex(8)
+	if err != nil {
+		return CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: "failed to create approval request",
+			DenialCode:   DenialCodeApprovalCreationFailed,
+		}
+	}
+
+	decisionNonce, err := randomHex(16)
+	if err != nil {
+		return CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: "failed to create approval decision nonce",
+			DenialCode:   DenialCodeApprovalCreationFailed,
+		}
+	}
+
+	metadata := server.approvalMetadata(tokenClaims.ControlSessionID, capabilityRequest)
+	approvalReason := approvalReasonForCapability(policyDecision, metadata, capabilityRequest)
+	expiresAt := server.now().UTC().Add(approvalTTL)
+	manifestSHA256, bodySHA256, manifestErr := buildCapabilityApprovalManifest(capabilityRequest, expiresAt.UnixMilli())
+	if manifestErr != nil {
+		return CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: "failed to compute approval manifest",
+			DenialCode:   DenialCodeApprovalCreationFailed,
+		}
+	}
+	server.mu.Lock()
+	server.pruneExpiredLocked()
+	if len(server.approvals) >= server.maxTotalApprovalRecords {
+		server.mu.Unlock()
+		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"reason":               "control-plane approval store is at capacity",
+			"denial_code":          DenialCodeControlPlaneStateSaturated,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+		}
+		deniedResponse := CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusDenied,
+			DenialReason: "control-plane approval store is at capacity",
+			DenialCode:   DenialCodeControlPlaneStateSaturated,
+		}
+		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
+		return deniedResponse
+	}
+	if server.countPendingApprovalsForSessionLocked(tokenClaims.ControlSessionID) >= server.maxPendingApprovalsPerControlSession {
+		server.mu.Unlock()
+		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"reason":               "pending approval limit reached for control session",
+			"denial_code":          DenialCodePendingApprovalLimitReached,
+			"actor_label":          tokenClaims.ActorLabel,
+			"client_session_label": tokenClaims.ClientSessionLabel,
+			"control_session_id":   tokenClaims.ControlSessionID,
+		}); err != nil {
+			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+		}
+		deniedResponse := CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusDenied,
+			DenialReason: "pending approval limit reached for control session",
+			DenialCode:   DenialCodePendingApprovalLimitReached,
+		}
+		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
+		return deniedResponse
+	}
+	createdApproval := pendingApproval{
+		ID:               approvalID,
+		Request:          cloneCapabilityRequest(capabilityRequest),
+		CreatedAt:        server.now().UTC(),
+		ExpiresAt:        expiresAt,
+		Metadata:         metadata,
+		Reason:           approvalReason,
+		ControlSessionID: tokenClaims.ControlSessionID,
+		DecisionNonce:    decisionNonce,
+		ExecutionContext: approvalExecutionContext{
+			ControlSessionID:    tokenClaims.ControlSessionID,
+			ActorLabel:          tokenClaims.ActorLabel,
+			ClientSessionLabel:  tokenClaims.ClientSessionLabel,
+			AllowedCapabilities: copyCapabilitySet(tokenClaims.AllowedCapabilities),
+			TenantID:            tokenClaims.TenantID,
+			UserID:              tokenClaims.UserID,
+		},
+		State:                  approvalStatePending,
+		ApprovalManifestSHA256: manifestSHA256,
+		ExecutionBodySHA256:    bodySHA256,
+	}
+	server.approvals[approvalID] = createdApproval
+	server.noteExpiryCandidateLocked(expiresAt)
+
+	approvalCreatedAuditData := map[string]interface{}{
+		"request_id":               capabilityRequest.RequestID,
+		"approval_request_id":      approvalID,
+		"capability":               capabilityRequest.Capability,
+		"approval_class":           metadata["approval_class"],
+		"approval_state":           approvalStatePending,
+		"actor_label":              tokenClaims.ActorLabel,
+		"client_session_label":     tokenClaims.ClientSessionLabel,
+		"control_session_id":       tokenClaims.ControlSessionID,
+		"approval_manifest_sha256": manifestSHA256,
+		"tenant_id":                tokenClaims.TenantID,
+		"user_id":                  tokenClaims.UserID,
+	}
+	if approvalClass, ok := metadata["approval_class"].(string); ok && strings.TrimSpace(approvalClass) != "" {
+		approvalCreatedAuditData["approval_class"] = approvalClass
+	}
+	if err := server.logEvent("approval.created", tokenClaims.ControlSessionID, approvalCreatedAuditData); err != nil {
+		delete(server.approvals, approvalID)
+		server.mu.Unlock()
+		return CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: "control-plane audit is unavailable",
+			DenialCode:   DenialCodeAuditUnavailable,
+		}
+	}
+	server.mu.Unlock()
+
+	metadata["approval_reason"] = approvalReason
+	metadata["approval_expires_at_utc"] = expiresAt.Format(time.RFC3339Nano)
+	metadata["approval_decision_nonce"] = decisionNonce
+	metadata["approval_manifest_sha256"] = manifestSHA256
+	pendingResponse := CapabilityResponse{
+		RequestID:              capabilityRequest.RequestID,
+		Status:                 ResponseStatusPendingApproval,
+		DenialCode:             DenialCodeApprovalRequired,
+		ApprovalRequired:       true,
+		ApprovalRequestID:      approvalID,
+		ApprovalManifestSHA256: manifestSHA256,
+		Metadata:               metadata,
+	}
+	createdApproval.Metadata = metadata
+	createdApproval.Reason = approvalReason
+	server.emitUIApprovalPending(createdApproval)
+	return pendingResponse
 }
 
 func (server *Server) capabilitySummaries() []CapabilitySummary {
