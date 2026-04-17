@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -193,5 +194,88 @@ func TestOpenSessionOrphanRecoveryFailsClosedOnAuditFailure(t *testing.T) {
 	}
 	if len(server.sessions) != 1 {
 		t.Fatalf("expected no replacement session after failed orphan recovery, got %d", len(server.sessions))
+	}
+}
+
+func TestCancelPendingApprovalRollbackIsNeverVisibleToReaders(t *testing.T) {
+	repoRoot := t.TempDir()
+	server := newControlSessionRecoveryTestServer(t, repoRoot)
+
+	server.mu.Lock()
+	server.approvals["approval-hidden-rollback"] = pendingApproval{
+		ID:               "approval-hidden-rollback",
+		Request:          CapabilityRequest{Capability: "fs_write"},
+		CreatedAt:        server.now().UTC(),
+		ExpiresAt:        server.now().UTC().Add(time.Minute),
+		ControlSessionID: "session-a",
+		State:            approvalStatePending,
+		Metadata: map[string]interface{}{
+			"approval_class": "filesystem_write",
+		},
+		ExecutionContext: approvalExecutionContext{
+			ControlSessionID:   "session-a",
+			ActorLabel:         "operator",
+			ClientSessionLabel: "operator-launch-a",
+		},
+	}
+	server.mu.Unlock()
+
+	auditStarted := make(chan struct{}, 1)
+	releaseAudit := make(chan struct{})
+	originalAppendAuditEvent := server.appendAuditEvent
+	server.appendAuditEvent = func(ledgerPath string, auditEvent ledger.Event) error {
+		if auditEvent.Type == "approval.cancelled" {
+			select {
+			case auditStarted <- struct{}{}:
+			default:
+			}
+			<-releaseAudit
+			return context.DeadlineExceeded
+		}
+		return originalAppendAuditEvent(ledgerPath, auditEvent)
+	}
+
+	stopReader := make(chan struct{})
+	var sawCancelledApproval atomic.Bool
+	go func() {
+		for {
+			select {
+			case <-stopReader:
+				return
+			default:
+			}
+			server.mu.Lock()
+			if approvalRecord, found := server.approvals["approval-hidden-rollback"]; found && approvalRecord.State == approvalStateCancelled {
+				sawCancelledApproval.Store(true)
+			}
+			server.mu.Unlock()
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.cancelPendingApproval("approval-hidden-rollback", "peer process missing")
+	}()
+
+	<-auditStarted
+	time.Sleep(30 * time.Millisecond)
+	close(releaseAudit)
+
+	err := <-errCh
+	close(stopReader)
+
+	if err == nil || !strings.Contains(err.Error(), "audit unavailable") {
+		t.Fatalf("expected audit unavailable cancellation error, got %v", err)
+	}
+	if sawCancelledApproval.Load() {
+		t.Fatalf("expected readers to never observe rolled-back cancelled approval state")
+	}
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	approvalRecord := server.approvals["approval-hidden-rollback"]
+	if approvalRecord.State != approvalStatePending {
+		t.Fatalf("expected rollback to restore pending state, got %#v", approvalRecord)
 	}
 }

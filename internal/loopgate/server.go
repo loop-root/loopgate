@@ -956,7 +956,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
 			return deniedResponse
 		}
-		server.approvals[approvalID] = pendingApproval{
+		createdApproval := pendingApproval{
 			ID:               approvalID,
 			Request:          cloneCapabilityRequest(capabilityRequest),
 			CreatedAt:        server.now().UTC(),
@@ -977,8 +977,8 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			ApprovalManifestSHA256: manifestSHA256,
 			ExecutionBodySHA256:    bodySHA256,
 		}
+		server.approvals[approvalID] = createdApproval
 		server.noteExpiryCandidateLocked(expiresAt)
-		server.mu.Unlock()
 
 		approvalCreatedAuditData := map[string]interface{}{
 			"request_id":               capabilityRequest.RequestID,
@@ -990,12 +990,13 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			"client_session_label":     tokenClaims.ClientSessionLabel,
 			"control_session_id":       tokenClaims.ControlSessionID,
 			"approval_manifest_sha256": manifestSHA256,
+			"tenant_id":                tokenClaims.TenantID,
+			"user_id":                  tokenClaims.UserID,
 		}
 		if approvalClass, ok := metadata["approval_class"].(string); ok && strings.TrimSpace(approvalClass) != "" {
 			approvalCreatedAuditData["approval_class"] = approvalClass
 		}
 		if err := server.logEvent("approval.created", tokenClaims.ControlSessionID, approvalCreatedAuditData); err != nil {
-			server.mu.Lock()
 			delete(server.approvals, approvalID)
 			server.mu.Unlock()
 			return CapabilityResponse{
@@ -1005,6 +1006,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 				DenialCode:   DenialCodeAuditUnavailable,
 			}
 		}
+		server.mu.Unlock()
 
 		metadata["approval_reason"] = approvalReason
 		metadata["approval_expires_at_utc"] = expiresAt.Format(time.RFC3339Nano)
@@ -1021,14 +1023,9 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			ApprovalManifestSHA256: manifestSHA256,
 			Metadata:               metadata,
 		}
-		server.emitUIApprovalPending(pendingApproval{
-			ID:               approvalID,
-			Request:          cloneCapabilityRequest(capabilityRequest),
-			ExpiresAt:        server.now().UTC().Add(approvalTTL),
-			Metadata:         metadata,
-			Reason:           approvalReason,
-			ControlSessionID: tokenClaims.ControlSessionID,
-		})
+		createdApproval.Metadata = metadata
+		createdApproval.Reason = approvalReason
+		server.emitUIApprovalPending(createdApproval)
 		return pendingResponse
 	}
 	if policyDecision.Decision == policypkg.NeedsApproval && !allowApprovalCreation && !tokenClaims.ApprovedExecution {

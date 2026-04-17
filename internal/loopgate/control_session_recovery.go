@@ -106,7 +106,6 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 	previousApproval := pendingApproval
 	pendingApproval.State = approvalStateCancelled
 	server.approvals[approvalID] = pendingApproval
-	server.mu.Unlock()
 
 	auditData := map[string]interface{}{
 		"approval_request_id":  approvalID,
@@ -117,13 +116,14 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 		"client_session_label": pendingApproval.ExecutionContext.ClientSessionLabel,
 		"cancelled_at_utc":     cancelledAtUTC.Format(time.RFC3339Nano),
 		"cancellation_reason":  strings.TrimSpace(cancellationReason),
+		"tenant_id":            pendingApproval.ExecutionContext.TenantID,
+		"user_id":              pendingApproval.ExecutionContext.UserID,
 	}
 	if approvalClass, ok := pendingApproval.Metadata["approval_class"].(string); ok && strings.TrimSpace(approvalClass) != "" {
 		auditData["approval_class"] = approvalClass
 	}
 
 	if err := server.logEvent("approval.cancelled", pendingApproval.ControlSessionID, auditData); err != nil {
-		server.mu.Lock()
 		currentApproval, currentFound := server.approvals[approvalID]
 		if currentFound && currentApproval.State == approvalStateCancelled {
 			server.approvals[approvalID] = previousApproval
@@ -131,6 +131,7 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 		server.mu.Unlock()
 		return fmt.Errorf("audit unavailable: approval.cancelled audit append failed: %w", err)
 	}
+	server.mu.Unlock()
 
 	return nil
 }

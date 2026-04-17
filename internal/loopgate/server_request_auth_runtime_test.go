@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -527,6 +528,83 @@ func TestExecuteCapabilityRequest_DeniesNeedsApprovalWhenApprovalCreationDisable
 	defer server.mu.Unlock()
 	if len(server.approvals) != 0 {
 		t.Fatalf("expected no pending approvals to be created on fail-closed path, got %#v", server.approvals)
+	}
+}
+
+func TestExecuteCapabilityRequest_ApprovalRollbackIsNeverVisibleToReaders(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
+	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure capability token: %v", err)
+	}
+
+	server.mu.Lock()
+	baseToken := server.tokens[client.capabilityToken]
+	server.mu.Unlock()
+
+	auditStarted := make(chan struct{}, 1)
+	releaseAudit := make(chan struct{})
+	originalAppendAuditEvent := server.appendAuditEvent
+	server.appendAuditEvent = func(ledgerPath string, auditEvent ledger.Event) error {
+		if auditEvent.Type == "approval.created" {
+			select {
+			case auditStarted <- struct{}{}:
+			default:
+			}
+			<-releaseAudit
+			return context.DeadlineExceeded
+		}
+		return originalAppendAuditEvent(ledgerPath, auditEvent)
+	}
+
+	stopReader := make(chan struct{})
+	var sawPendingApproval atomic.Bool
+	go func() {
+		for {
+			select {
+			case <-stopReader:
+				return
+			default:
+			}
+			server.mu.Lock()
+			if len(server.approvals) > 0 {
+				sawPendingApproval.Store(true)
+			}
+			server.mu.Unlock()
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	responseCh := make(chan CapabilityResponse, 1)
+	go func() {
+		responseCh <- server.executeCapabilityRequest(context.Background(), baseToken, CapabilityRequest{
+			RequestID:  "req-approval-rollback-hidden",
+			Capability: "fs_write",
+			Arguments: map[string]string{
+				"path":    "blocked.txt",
+				"content": "approval should roll back invisibly",
+			},
+		}, true)
+	}()
+
+	<-auditStarted
+	time.Sleep(30 * time.Millisecond)
+	close(releaseAudit)
+
+	response := <-responseCh
+	close(stopReader)
+
+	if response.Status != ResponseStatusError || response.DenialCode != DenialCodeAuditUnavailable {
+		t.Fatalf("expected audit unavailable response, got %#v", response)
+	}
+	if sawPendingApproval.Load() {
+		t.Fatalf("expected readers to never observe rolled-back pending approvals")
+	}
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	if len(server.approvals) != 0 {
+		t.Fatalf("expected no pending approvals after rollback, got %#v", server.approvals)
 	}
 }
 
