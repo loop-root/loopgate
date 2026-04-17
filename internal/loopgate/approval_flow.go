@@ -256,6 +256,35 @@ func buildApprovalOperatorDeniedAuditData(approvalID string, pendingApproval pen
 	return auditData
 }
 
+func approvalDecisionValidationResponse(approvalID string, pendingApproval pendingApproval, validationError *approvalpkg.DecisionValidationError) CapabilityResponse {
+	requestID := pendingApproval.Request.RequestID
+	denialCode := DenialCodeApprovalStateInvalid
+	switch validationError.Code {
+	case approvalpkg.DecisionValidationNotFound:
+		requestID = approvalID
+		denialCode = DenialCodeApprovalNotFound
+	case approvalpkg.DecisionValidationOwnerMismatch:
+		denialCode = DenialCodeApprovalOwnerMismatch
+	case approvalpkg.DecisionValidationStateConflict:
+		denialCode = DenialCodeApprovalStateConflict
+	case approvalpkg.DecisionValidationStateInvalid:
+		denialCode = DenialCodeApprovalStateInvalid
+	case approvalpkg.DecisionValidationNonceMissing:
+		denialCode = DenialCodeApprovalDecisionNonceMissing
+	case approvalpkg.DecisionValidationNonceInvalid:
+		denialCode = DenialCodeApprovalDecisionNonceInvalid
+	case approvalpkg.DecisionValidationManifestInvalid:
+		denialCode = DenialCodeApprovalManifestMismatch
+	}
+	return CapabilityResponse{
+		RequestID:         requestID,
+		Status:            ResponseStatusDenied,
+		DenialReason:      validationError.Reason,
+		DenialCode:        denialCode,
+		ApprovalRequestID: approvalID,
+	}
+}
+
 // validatePendingApprovalDecisionLocked performs session, expiry, nonce, and manifest checks
 // for a pending approval without writing audit events or changing approval state.
 // Must be called with server.mu held.
@@ -295,66 +324,6 @@ func (server *Server) loadPendingApprovalForDecisionLocked(approvalID string) (p
 	return pendingApproval, CapabilityResponse{}, true
 }
 
-func validatePendingApprovalDecisionPayload(approvalID string, pendingApproval pendingApproval, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
-	if pendingApproval.State != approvalStatePending {
-		denialCode := DenialCodeApprovalStateInvalid
-		if pendingApproval.State == approvalStateConsumed || pendingApproval.State == approvalStateExecutionFailed {
-			denialCode = DenialCodeApprovalStateConflict
-		}
-		return pendingApproval, CapabilityResponse{
-			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
-			DenialReason:      "approval request is no longer pending",
-			DenialCode:        denialCode,
-			ApprovalRequestID: approvalID,
-		}, false
-	}
-
-	decisionNonce := strings.TrimSpace(decisionRequest.DecisionNonce)
-	if decisionNonce == "" {
-		return pendingApproval, CapabilityResponse{
-			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
-			DenialReason:      "approval decision nonce is required",
-			DenialCode:        DenialCodeApprovalDecisionNonceMissing,
-			ApprovalRequestID: approvalID,
-		}, false
-	}
-	if decisionNonce != pendingApproval.DecisionNonce {
-		return pendingApproval, CapabilityResponse{
-			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
-			DenialReason:      "approval decision nonce is invalid",
-			DenialCode:        DenialCodeApprovalDecisionNonceInvalid,
-			ApprovalRequestID: approvalID,
-		}, false
-	}
-
-	submittedManifest := strings.TrimSpace(decisionRequest.ApprovalManifestSHA256)
-	if decisionRequest.Approved && pendingApproval.ApprovalManifestSHA256 != "" {
-		if submittedManifest == "" {
-			return pendingApproval, CapabilityResponse{
-				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusDenied,
-				DenialReason:      "approval manifest sha256 is required for this approval",
-				DenialCode:        DenialCodeApprovalManifestMismatch,
-				ApprovalRequestID: approvalID,
-			}, false
-		}
-		if submittedManifest != pendingApproval.ApprovalManifestSHA256 {
-			return pendingApproval, CapabilityResponse{
-				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusDenied,
-				DenialReason:      "approval manifest sha256 does not match the pending approval",
-				DenialCode:        DenialCodeApprovalManifestMismatch,
-				ApprovalRequestID: approvalID,
-			}, false
-		}
-	}
-
-	return pendingApproval, CapabilityResponse{}, true
-}
-
 // validatePendingApprovalDecisionLocked performs session, expiry, nonce, and manifest checks
 // for an approval-token decision path. Must be called with server.mu held.
 func (server *Server) validatePendingApprovalDecisionLocked(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
@@ -362,16 +331,13 @@ func (server *Server) validatePendingApprovalDecisionLocked(controlSession contr
 	if !ok {
 		return pendingApproval, denialResponse, false
 	}
-	if controlSession.ID != pendingApproval.ControlSessionID {
-		return pendingApproval, CapabilityResponse{
-			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
-			DenialReason:      "approval token does not match approval owner",
-			DenialCode:        DenialCodeApprovalOwnerMismatch,
-			ApprovalRequestID: approvalID,
-		}, false
+	validationError := approvalpkg.ValidateDecisionRequest(pendingApproval, decisionRequest, approvalpkg.DecisionActor{
+		ControlSessionID: controlSession.ID,
+	})
+	if validationError != nil {
+		return pendingApproval, approvalDecisionValidationResponse(approvalID, pendingApproval, validationError), false
 	}
-	return validatePendingApprovalDecisionPayload(approvalID, pendingApproval, decisionRequest)
+	return pendingApproval, CapabilityResponse{}, true
 }
 
 func (server *Server) validatePendingApprovalDecisionLockedForOperator(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
@@ -379,16 +345,14 @@ func (server *Server) validatePendingApprovalDecisionLockedForOperator(controlSe
 	if !ok {
 		return pendingApproval, denialResponse, false
 	}
-	if strings.TrimSpace(controlSession.TenantID) != "" && strings.TrimSpace(pendingApproval.ExecutionContext.TenantID) != "" && controlSession.TenantID != pendingApproval.ExecutionContext.TenantID {
-		return pendingApproval, CapabilityResponse{
-			RequestID:         approvalID,
-			Status:            ResponseStatusDenied,
-			DenialReason:      "approval request not found",
-			DenialCode:        DenialCodeApprovalNotFound,
-			ApprovalRequestID: approvalID,
-		}, false
+	validationError := approvalpkg.ValidateDecisionRequest(pendingApproval, decisionRequest, approvalpkg.DecisionActor{
+		Operator: true,
+		TenantID: controlSession.TenantID,
+	})
+	if validationError != nil {
+		return pendingApproval, approvalDecisionValidationResponse(approvalID, pendingApproval, validationError), false
 	}
-	return validatePendingApprovalDecisionPayload(approvalID, pendingApproval, decisionRequest)
+	return pendingApproval, CapabilityResponse{}, true
 }
 
 func (server *Server) validatePendingApprovalDecision(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {

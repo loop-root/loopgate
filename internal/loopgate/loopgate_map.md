@@ -47,7 +47,9 @@ For integrators it matters in four ways:
 - `server_response_runtime.go`
   - JSON response writing, audit-unavailable responses, and control-plane denial-to-HTTP status mapping
 - `approval_flow.go`
-  - approval token authentication, approval state transitions, approval manifest verification, and approval metadata / operator-facing reason shaping
+  - approval token authentication, approval audit/state mutation, and operator-facing reason shaping
+- `approval/`
+  - pure approval lifecycle primitives, pending approval model, manifest hashing/backfill, and decision validation rules that do not require `Server`
 - `capability_result_runtime.go`
   - result classification, structured result shaping, and per-field metadata derivation for capability execution and configured remote capabilities
 - `capability_execution_runtime.go`
