@@ -613,40 +613,40 @@ func intMetadataValue(metadata map[string]interface{}, key string) int {
 }
 
 func (server *Server) addUISubscriber(controlSessionID string) uiEventSubscriber {
-	server.uiMu.Lock()
-	defer server.uiMu.Unlock()
+	server.ui.mu.Lock()
+	defer server.ui.mu.Unlock()
 
-	server.nextUISubscriberID++
+	server.ui.nextSubscriberID++
 	subscriber := uiEventSubscriber{
 		controlSessionID: controlSessionID,
-		id:               server.nextUISubscriberID,
+		id:               server.ui.nextSubscriberID,
 		events:           make(chan UIEventEnvelope, 16),
 	}
-	if server.uiSubscribers == nil {
-		server.uiSubscribers = make(map[int]uiEventSubscriber)
+	if server.ui.subscribers == nil {
+		server.ui.subscribers = make(map[int]uiEventSubscriber)
 	}
-	server.uiSubscribers[subscriber.id] = subscriber
+	server.ui.subscribers[subscriber.id] = subscriber
 	return subscriber
 }
 
 func (server *Server) removeUISubscriber(subscriberID int) {
-	server.uiMu.Lock()
-	defer server.uiMu.Unlock()
+	server.ui.mu.Lock()
+	defer server.ui.mu.Unlock()
 
-	delete(server.uiSubscribers, subscriberID)
+	delete(server.ui.subscribers, subscriberID)
 }
 
 func (server *Server) uiReplayEvents(controlSessionID string, lastEventID string) []UIEventEnvelope {
-	server.uiMu.Lock()
-	defer server.uiMu.Unlock()
+	server.ui.mu.Lock()
+	defer server.ui.mu.Unlock()
 
-	if len(server.uiEvents) == 0 {
+	if len(server.ui.events) == 0 {
 		return nil
 	}
 
 	if strings.TrimSpace(lastEventID) == "" {
-		replayedEvents := make([]UIEventEnvelope, 0, len(server.uiEvents))
-		for _, uiEventEnvelope := range server.uiEvents {
+		replayedEvents := make([]UIEventEnvelope, 0, len(server.ui.events))
+		for _, uiEventEnvelope := range server.ui.events {
 			if uiEventBelongsToControlSession(uiEventEnvelope, controlSessionID) {
 				replayedEvents = append(replayedEvents, uiEventEnvelope)
 			}
@@ -659,8 +659,8 @@ func (server *Server) uiReplayEvents(controlSessionID string, lastEventID string
 		return nil
 	}
 
-	replayedEvents := make([]UIEventEnvelope, 0, len(server.uiEvents))
-	for _, uiEventEnvelope := range server.uiEvents {
+	replayedEvents := make([]UIEventEnvelope, 0, len(server.ui.events))
+	for _, uiEventEnvelope := range server.ui.events {
 		eventSequence, err := strconv.ParseUint(uiEventEnvelope.ID, 10, 64)
 		if err != nil || eventSequence <= lastSeenSequence {
 			continue
@@ -688,18 +688,18 @@ func (server *Server) emitUIEvent(controlSessionID string, eventType string, eve
 		return
 	}
 
-	server.uiMu.Lock()
-	server.uiSequence++
-	uiEventEnvelope.ID = strconv.FormatUint(server.uiSequence, 10)
-	server.uiEvents = append(server.uiEvents, uiEventEnvelope)
-	if len(server.uiEvents) > maxUIEventBuffer {
-		server.uiEvents = append([]UIEventEnvelope(nil), server.uiEvents[len(server.uiEvents)-maxUIEventBuffer:]...)
+	server.ui.mu.Lock()
+	server.ui.sequence++
+	uiEventEnvelope.ID = strconv.FormatUint(server.ui.sequence, 10)
+	server.ui.events = append(server.ui.events, uiEventEnvelope)
+	if len(server.ui.events) > maxUIEventBuffer {
+		server.ui.events = append([]UIEventEnvelope(nil), server.ui.events[len(server.ui.events)-maxUIEventBuffer:]...)
 	}
-	subscribers := make([]uiEventSubscriber, 0, len(server.uiSubscribers))
-	for _, subscriber := range server.uiSubscribers {
+	subscribers := make([]uiEventSubscriber, 0, len(server.ui.subscribers))
+	for _, subscriber := range server.ui.subscribers {
 		subscribers = append(subscribers, subscriber)
 	}
-	server.uiMu.Unlock()
+	server.ui.mu.Unlock()
 
 	for _, subscriber := range subscribers {
 		if subscriber.controlSessionID != uiEventEnvelope.ControlSessionID {

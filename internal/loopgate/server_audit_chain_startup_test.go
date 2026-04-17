@@ -50,10 +50,10 @@ func TestNewServerLoadsLegacyHookAuditTailWithoutAuditSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restart server with legacy hook audit tail: %v", err)
 	}
-	if restartedServer.auditSequence != 3 {
-		t.Fatalf("expected audit sequence 3 after legacy hook tail load, got %d", restartedServer.auditSequence)
+	if restartedServer.audit.sequence != 3 {
+		t.Fatalf("expected audit sequence 3 after legacy hook tail load, got %d", restartedServer.audit.sequence)
 	}
-	if strings.TrimSpace(restartedServer.lastAuditHash) == "" {
+	if strings.TrimSpace(restartedServer.audit.lastHash) == "" {
 		t.Fatal("expected last audit hash after legacy hook tail load")
 	}
 
@@ -101,10 +101,10 @@ logging:
 	if err != nil {
 		t.Fatalf("restart server with rotated audit chain: %v", err)
 	}
-	if rotatedAuditServer.auditSequence != 5 {
-		t.Fatalf("expected rotated audit sequence 5, got %d", rotatedAuditServer.auditSequence)
+	if rotatedAuditServer.audit.sequence != 5 {
+		t.Fatalf("expected rotated audit sequence 5, got %d", rotatedAuditServer.audit.sequence)
 	}
-	if strings.TrimSpace(rotatedAuditServer.lastAuditHash) == "" {
+	if strings.TrimSpace(rotatedAuditServer.audit.lastHash) == "" {
 		t.Fatal("expected rotated audit hash after restart")
 	}
 

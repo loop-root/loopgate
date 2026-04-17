@@ -145,8 +145,8 @@ func TestNewServer_RestoresAuditCheckpointCadenceFromLedger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new second server: %v", err)
 	}
-	if serverTwo.auditEventsSinceCheckpoint != 1 {
-		t.Fatalf("expected one ordinary event since last checkpoint after reload, got %d", serverTwo.auditEventsSinceCheckpoint)
+	if serverTwo.audit.eventsSinceCheckpoint != 1 {
+		t.Fatalf("expected one ordinary event since last checkpoint after reload, got %d", serverTwo.audit.eventsSinceCheckpoint)
 	}
 	if err := serverTwo.logEvent("capability.executed", "", map[string]interface{}{"capability": "fs_list", "status": "allow"}); err != nil {
 		t.Fatalf("log post-reload event: %v", err)

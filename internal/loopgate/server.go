@@ -37,18 +37,66 @@ type peerIdentity struct {
 	EPID int
 }
 
+type auditState struct {
+	// mu serializes the authoritative append-only audit chain state.
+	//
+	// Protected fields:
+	//   - sequence
+	//   - lastHash
+	//   - eventsSinceCheckpoint
+	//
+	// Why this lock exists:
+	//   - hash-chain sequencing and disk append must behave like one logical commit
+	//   - two concurrent writers must never assign the same sequence or previous hash
+	//
+	// Sequencing rule:
+	//   - treat audit.mu as a leaf lock
+	//   - resolve any control-session-derived metadata before taking audit.mu
+	//   - never acquire control-plane mu while holding audit.mu
+	mu sync.Mutex
+
+	sequence              uint64
+	lastHash              string
+	eventsSinceCheckpoint int
+}
+
+type uiState struct {
+	// mu protects only derived UI event projection state.
+	//
+	// Protected fields:
+	//   - sequence
+	//   - events
+	//   - subscribers
+	//   - nextSubscriberID
+	//
+	// Why this lock exists:
+	//   - UI replay/event-stream buffers are convenience projections, not source of truth
+	//   - keeping them separate prevents chatty subscribers from contending on the
+	//     primary control-plane lock
+	//
+	// Sequencing rule:
+	//   - build authoritative data first if needed
+	//   - then emit/update UI projections under ui.mu
+	mu sync.Mutex
+
+	sequence         uint64
+	events           []UIEventEnvelope
+	subscribers      map[int]uiEventSubscriber
+	nextSubscriberID int
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
-//   - Current production code treats auditMu, uiMu, connectionsMu,
+//   - Current production code treats audit.mu, ui.mu, connectionsMu,
 //     modelConnectionsMu, hostAccessPlansMu, providerTokenMu, pkceMu, and
 //     policyRuntimeMu as leaf-domain locks. Callers snapshot state under one
 //     lock, release it, and only then cross into another domain.
 //   - mu is the primary state lock for sessions, tokens, approvals, replay
 //     tables, and other authoritative control-plane state.
-//   - auditMu is a strict leaf lock for append-only audit sequencing and disk
-//     persistence. Never acquire mu while holding auditMu. logEvent* helpers
-//     intentionally resolve tenancy before taking auditMu so we never invert
-//     into auditMu -> mu.
+//   - audit.mu is a strict leaf lock for append-only audit sequencing and disk
+//     persistence. Never acquire mu while holding audit.mu. logEvent* helpers
+//     intentionally resolve tenancy before taking audit.mu so we never invert
+//     into audit.mu -> mu.
 //   - If future code truly must hold more than one of these at once, document
 //     the exact acquisition order in the same change before merging. Do not
 //     introduce ad hoc nested locking.
@@ -88,25 +136,9 @@ type Server struct {
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
 	diagnostic *loopdiag.Manager
 
-	// auditMu serializes the authoritative append-only audit chain state.
-	//
-	// Protected fields:
-	//   - auditSequence
-	//   - lastAuditHash
-	//   - auditEventsSinceCheckpoint
-	//
-	// Why this lock exists:
-	//   - hash-chain sequencing and disk append must behave like one logical commit
-	//   - two concurrent writers must never assign the same sequence or previous hash
-	//
-	// Sequencing rule:
-	//   - treat auditMu as a leaf lock
-	//   - resolve any control-session-derived metadata before taking auditMu
-	//   - never acquire mu while holding auditMu
-	auditMu                    sync.Mutex
-	auditSequence              uint64
-	lastAuditHash              string
-	auditEventsSinceCheckpoint int
+	// audit owns the append-only audit chain sequencing state.
+	// See auditState above and docs/design_overview/loopgate_locking.md.
+	audit auditState
 
 	// auditExportMu protects export-side progress state that is derived from the
 	// immutable ledger but persisted independently for batching/retry.
@@ -114,7 +146,7 @@ type Server struct {
 	// Why this lock exists:
 	//   - audit export is not authoritative audit state
 	//   - export cursors and "last exported" bookkeeping can advance independently
-	//     of live request handling without contending on auditMu or mu
+	//     of live request handling without contending on audit.mu or mu
 	//
 	// Sequencing rule:
 	//   - do not hold auditExportMu while calling logEvent
@@ -130,31 +162,13 @@ type Server struct {
 	//     each other and produce duplicate/misaligned derived artifacts
 	//
 	// Sequencing rule:
-	//   - keep promotionMu isolated from mu/auditMu; collect control-plane context
+	//   - keep promotionMu isolated from mu/audit.mu; collect control-plane context
 	//     first, then enter promotion code
 	promotionMu sync.Mutex
 
-	// uiMu protects only derived UI event projection state.
-	//
-	// Protected fields:
-	//   - uiSequence
-	//   - uiEvents
-	//   - uiSubscribers
-	//   - nextUISubscriberID
-	//
-	// Why this lock exists:
-	//   - UI replay/event-stream buffers are convenience projections, not source of truth
-	//   - keeping them separate prevents chatty subscribers from contending on mu
-	//
-	// Sequencing rule:
-	//   - build authoritative data under mu first if needed
-	//   - release mu
-	//   - then emit/update UI projections under uiMu
-	uiMu               sync.Mutex
-	uiSequence         uint64
-	uiEvents           []UIEventEnvelope
-	uiSubscribers      map[int]uiEventSubscriber
-	nextUISubscriberID int
+	// ui owns derived UI event projection state.
+	// See uiState above and docs/design_overview/loopgate_locking.md.
+	ui uiState
 
 	// claudeHookSessionsMu protects repo-local hook session caches used by the
 	// Claude harness integration.

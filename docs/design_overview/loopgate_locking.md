@@ -65,15 +65,15 @@ Common rule:
 - if a mutation changes what the system is authoritative about for a request,
   it probably belongs under `mu`
 
-### `auditMu`
+### `audit.mu`
 
 Purpose:
 - serialize append-only audit sequencing and persistence
 
 Protects:
-- `auditSequence`
-- `lastAuditHash`
-- `auditEventsSinceCheckpoint`
+- `audit.sequence`
+- `audit.lastHash`
+- `audit.eventsSinceCheckpoint`
 
 Why separate:
 - audit writes must behave like one logical commit
@@ -81,11 +81,11 @@ Why separate:
 - this is intentionally isolated from normal request/session state
 
 Critical invariant:
-- never acquire `mu` while holding `auditMu`
+- never acquire `mu` while holding `audit.mu`
 
 Implementation note:
 - `logEvent*` resolves tenancy/session-derived metadata before entering
-  `auditMu`, specifically to avoid `auditMu -> mu`
+  `audit.mu`, specifically to avoid `audit.mu -> mu`
 
 ### `auditExportMu`
 
@@ -95,7 +95,7 @@ Purpose:
 Why separate:
 - export state is derived from the immutable ledger, not part of authoritative
   request handling
-- export retries should not contend with `auditMu` or `mu`
+- export retries should not contend with `audit.mu` or `mu`
 
 ### `promotionMu`
 
@@ -106,23 +106,23 @@ Why separate:
 - promotion side effects are filesystem-centric and should not enlarge the
   control-plane critical section
 
-### `uiMu`
+### `ui.mu`
 
 Purpose:
 - protect derived UI/event-stream projection state
 
 Protects:
-- `uiSequence`
-- `uiEvents`
-- `uiSubscribers`
-- `nextUISubscriberID`
+- `ui.sequence`
+- `ui.events`
+- `ui.subscribers`
+- `ui.nextSubscriberID`
 
 Why separate:
 - UI event feeds are projections, not authority
 - subscriber churn should not contend with auth/session maps
 
 Rule:
-- compute authoritative data first, then emit projection updates under `uiMu`
+- compute authoritative data first, then emit projection updates under `ui.mu`
 
 ### `claudeHookSessionsMu`
 
@@ -248,14 +248,14 @@ Rule:
 
 ## 4. Sequencing rules that matter in practice
 
-### Rule A: `auditMu` is a leaf lock
+### Rule A: `audit.mu` is a leaf lock
 
 Do:
 - gather session/control metadata first
 - then call `logEvent*`
 
 Do not:
-- enter `auditMu` and then look up control-session state under `mu`
+- enter `audit.mu` and then look up control-session state under `mu`
 
 ### Rule B: prefer snapshot -> unlock -> side effect
 
