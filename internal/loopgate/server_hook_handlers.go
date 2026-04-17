@@ -95,6 +95,17 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	hookHandlingMode := hookHandlingModeForClaudeCodeHookEvent(hookEventName)
 	policyRuntime := server.currentPolicyRuntime()
 	includeHookAuditPreviews := policyRuntime.policy.HookAuditProjectionIncludesPreviews()
+	if hookEventName == claudeCodeHookEventPreToolUse && server.checkHookPreValidateRateLimit(peer.UID) {
+		// Fail closed using the normal hook JSON contract. We intentionally avoid emitting
+		// an audit event here so a local hammering loop cannot turn the limiter into an
+		// append-only audit amplification path.
+		server.writeJSON(w, http.StatusOK, HookPreValidateResponse{
+			Decision:   "block",
+			Reason:     "hook pre-validate rate limit exceeded",
+			DenialCode: DenialCodeHookRateLimitExceeded,
+		})
+		return
+	}
 	if hookEventName != claudeCodeHookEventPreToolUse {
 		decision := "allow"
 		reason := "observability-only hook event recorded without policy enforcement"

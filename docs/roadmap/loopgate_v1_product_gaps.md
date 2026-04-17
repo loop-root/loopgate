@@ -374,11 +374,11 @@ Current policy (signed by: loopgate-policy-root-2026-04)
 
 ALLOWED without approval:
   - bash commands matching: git, go test, go build, go run
-  - filesystem reads under: /Users/ada/dev/loopgate
+  - filesystem reads under: /path/to/repo
   - MCP tools: (none configured)
 
 REQUIRES APPROVAL:
-  - filesystem writes under: /Users/ada/dev/loopgate
+  - filesystem writes under: /path/to/repo
   - filesystem mkdir
 
 DENIED:

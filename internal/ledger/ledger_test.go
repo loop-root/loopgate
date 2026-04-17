@@ -154,6 +154,68 @@ func TestAppend_AddsPersistentChainMetadata(t *testing.T) {
 	}
 }
 
+func TestComputeEventHash_DeterministicAcrossMapInsertionOrder(t *testing.T) {
+	firstEventData := map[string]interface{}{}
+	firstEventData["name"] = "deterministic"
+	firstNestedData := map[string]interface{}{}
+	firstNestedData["zeta"] = "tail"
+	firstNestedChild := map[string]interface{}{}
+	firstNestedChild["second"] = "two"
+	firstNestedChild["first"] = "one"
+	firstNestedData["child"] = firstNestedChild
+	firstEventData["nested"] = firstNestedData
+	firstEventData["list"] = []interface{}{
+		map[string]interface{}{
+			"beta":  2,
+			"alpha": 1,
+		},
+		"done",
+	}
+	firstEventData["event_hash"] = "placeholder-one"
+
+	secondEventData := map[string]interface{}{}
+	secondEventData["event_hash"] = "placeholder-two"
+	secondEventData["list"] = []interface{}{
+		map[string]interface{}{
+			"alpha": 1,
+			"beta":  2,
+		},
+		"done",
+	}
+	secondNestedData := map[string]interface{}{}
+	secondNestedChild := map[string]interface{}{}
+	secondNestedChild["first"] = "one"
+	secondNestedChild["second"] = "two"
+	secondNestedData["child"] = secondNestedChild
+	secondNestedData["zeta"] = "tail"
+	secondEventData["nested"] = secondNestedData
+	secondEventData["name"] = "deterministic"
+
+	firstHash, err := ComputeEventHash(Event{
+		TS:      "2026-04-17T00:00:00Z",
+		Type:    "test.event",
+		Session: "session-a",
+		Data:    firstEventData,
+	})
+	if err != nil {
+		t.Fatalf("compute first hash: %v", err)
+	}
+
+	secondHash, err := ComputeEventHash(Event{
+		TS:      "2026-04-17T00:00:00Z",
+		Type:    "test.event",
+		Session: "session-a",
+		Data:    secondEventData,
+	})
+	if err != nil {
+		t.Fatalf("compute second hash: %v", err)
+	}
+
+	if firstHash != secondHash {
+		t.Fatalf("expected deterministic hash across map insertion order, got %q vs %q", firstHash, secondHash)
+	}
+}
+
 func TestAppend_FailsClosedOnMalformedPriorLedgerLine(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "corrupt.jsonl")

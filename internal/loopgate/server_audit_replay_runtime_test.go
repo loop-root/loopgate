@@ -378,6 +378,54 @@ func TestHashAuditEventMatchesStoredLedgerHash(t *testing.T) {
 	}
 }
 
+func TestHashAuditEvent_DeterministicAcrossMapInsertionOrder(t *testing.T) {
+	firstAuditData := map[string]interface{}{}
+	firstAuditData["audit_sequence"] = uint64(1)
+	firstAuditData["ledger_sequence"] = uint64(1)
+	firstAuditData["previous_event_hash"] = ""
+	firstNested := map[string]interface{}{}
+	firstNested["later"] = "value"
+	firstNested["earlier"] = "value"
+	firstAuditData["details"] = firstNested
+	firstAuditData["validated_argument_keys"] = []string{"query", "limit"}
+	firstAuditData["event_hash"] = "placeholder-a"
+
+	secondAuditData := map[string]interface{}{}
+	secondAuditData["event_hash"] = "placeholder-b"
+	secondAuditData["validated_argument_keys"] = []string{"query", "limit"}
+	secondNested := map[string]interface{}{}
+	secondNested["earlier"] = "value"
+	secondNested["later"] = "value"
+	secondAuditData["details"] = secondNested
+	secondAuditData["previous_event_hash"] = ""
+	secondAuditData["ledger_sequence"] = uint64(1)
+	secondAuditData["audit_sequence"] = uint64(1)
+
+	firstHash, err := hashAuditEvent(ledger.Event{
+		TS:      "2026-04-17T00:00:00Z",
+		Type:    "test.audit",
+		Session: "session-a",
+		Data:    firstAuditData,
+	})
+	if err != nil {
+		t.Fatalf("hash first audit event: %v", err)
+	}
+
+	secondHash, err := hashAuditEvent(ledger.Event{
+		TS:      "2026-04-17T00:00:00Z",
+		Type:    "test.audit",
+		Session: "session-a",
+		Data:    secondAuditData,
+	})
+	if err != nil {
+		t.Fatalf("hash second audit event: %v", err)
+	}
+
+	if firstHash != secondHash {
+		t.Fatalf("expected deterministic audit hash across map insertion order, got %q vs %q", firstHash, secondHash)
+	}
+}
+
 func TestLogEventWritesVerifiableAuditChain(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")

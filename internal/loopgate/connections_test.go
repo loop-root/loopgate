@@ -224,6 +224,47 @@ func TestConnectionStatuses_IncludesConfiguredPublicReadConnections(t *testing.T
 	}
 }
 
+func TestSaveConnectionRecords_UsesUniqueTempPath(t *testing.T) {
+	connectionPath := filepath.Join(t.TempDir(), "runtime", "state", "loopgate_connections.json")
+	if err := os.MkdirAll(filepath.Dir(connectionPath), 0o700); err != nil {
+		t.Fatalf("mkdir connection dir: %v", err)
+	}
+	fixedTempPath := connectionPath + ".tmp"
+	if err := os.MkdirAll(fixedTempPath, 0o700); err != nil {
+		t.Fatalf("mkdir fixed temp blocker: %v", err)
+	}
+
+	connectionRecords := map[string]connectionRecord{
+		connectionRecordKey("github", "repo-bot"): {
+			Provider:  "github",
+			GrantType: GrantTypeClientCredentials,
+			Subject:   "repo-bot",
+			Scopes:    []string{"repo.read"},
+			Credential: secrets.SecretRef{
+				ID:          "github-bot-token",
+				Backend:     secrets.BackendEnv,
+				AccountName: "LOOPGATE_GITHUB_TOKEN",
+				Scope:       "github.repo_read",
+			},
+		},
+	}
+
+	if err := saveConnectionRecords(connectionPath, connectionRecords); err != nil {
+		t.Fatalf("save connection records: %v", err)
+	}
+
+	loadedRecords, err := loadConnectionRecords(connectionPath)
+	if err != nil {
+		t.Fatalf("load connection records: %v", err)
+	}
+	if len(loadedRecords) != 1 {
+		t.Fatalf("expected one saved connection record, got %#v", loadedRecords)
+	}
+	if _, err := os.Stat(fixedTempPath); err != nil {
+		t.Fatalf("expected fixed temp blocker to remain untouched, got %v", err)
+	}
+}
+
 func TestUpsertConnectionCredential_PersistsOnlySecretRefMetadata(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

@@ -110,6 +110,7 @@ const (
 	DenialCodeHookUnknownTool         = "hook_unknown_tool"
 	DenialCodeHookUnknownEvent        = "hook_unknown_event"
 	DenialCodeHookEventUnimplemented  = "hook_event_unimplemented"
+	DenialCodeHookRateLimitExceeded   = "hook_rate_limit_exceeded"
 )
 
 type ControlPlaneClient interface {

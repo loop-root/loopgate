@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
@@ -13,6 +14,181 @@ import (
 	"loopgate/internal/config"
 	"loopgate/internal/testutil"
 )
+
+func TestRunPolicySignCLI_SignsPolicyFromWorkingDirectory(t *testing.T) {
+	testSigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new policy test signer: %v", err)
+	}
+	testSigner.ConfigureEnv(t.Setenv)
+
+	repoRoot := t.TempDir()
+	rawPolicyBytes := []byte("version: \"1\"\n")
+	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
+	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(policyPath, rawPolicyBytes, 0o600); err != nil {
+		t.Fatalf("write policy yaml: %v", err)
+	}
+
+	privateKeyPath := filepath.Join(t.TempDir(), testSigner.KeyID+".pem")
+	writePEMEncodedEd25519PrivateKey(t, privateKeyPath, testSigner.PrivateKey, 0o600)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := runPolicySignCLI(
+		[]string{
+			"-private-key-file", privateKeyPath,
+			"-key-id", testSigner.KeyID,
+			"-policy-file", filepath.Join("core", "policy", "policy.yaml"),
+		},
+		&stdout,
+		&stderr,
+		func() (string, error) { return repoRoot, nil },
+		os.Getenv,
+	)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d with stderr %q", exitCode, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	signaturePath := filepath.Join(repoRoot, "core", "policy", "policy.yaml.sig")
+	if !strings.Contains(stdout.String(), "Wrote "+signaturePath) {
+		t.Fatalf("expected stdout to mention %q, got %q", signaturePath, stdout.String())
+	}
+
+	signatureFile, err := config.LoadPolicySignatureFile(repoRoot)
+	if err != nil {
+		t.Fatalf("load policy signature: %v", err)
+	}
+	if err := config.VerifyPolicyDocumentSignature(rawPolicyBytes, signatureFile); err != nil {
+		t.Fatalf("verify signed policy: %v", err)
+	}
+}
+
+func TestRunPolicySignCLI_VerifySetup_PrintsSummary(t *testing.T) {
+	testSigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new policy test signer: %v", err)
+	}
+	testSigner.ConfigureEnv(t.Setenv)
+
+	repoRoot := t.TempDir()
+	if err := testSigner.WriteSignedPolicyYAML(repoRoot, "version: \"1\"\n"); err != nil {
+		t.Fatalf("write signed policy yaml: %v", err)
+	}
+
+	privateKeyPath := filepath.Join(t.TempDir(), testSigner.KeyID+".pem")
+	writePEMEncodedEd25519PrivateKey(t, privateKeyPath, testSigner.PrivateKey, 0o600)
+	t.Setenv(policySigningPrivateKeyFileEnv, privateKeyPath)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := runPolicySignCLI(
+		[]string{
+			"-repo-root", repoRoot,
+			"-verify-setup",
+			"-key-id", testSigner.KeyID,
+		},
+		&stdout,
+		&stderr,
+		func() (string, error) { return "", nil },
+		os.Getenv,
+	)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d with stderr %q", exitCode, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+
+	stdoutText := stdout.String()
+	for _, expectedText := range []string{
+		"Policy signing setup OK",
+		"key_id: " + testSigner.KeyID,
+		"policy_signature_key_id: " + testSigner.KeyID,
+		"signer_key_source: " + policySigningPrivateKeyFileEnv,
+		"signer_key_permissions: 0600",
+	} {
+		if !strings.Contains(stdoutText, expectedText) {
+			t.Fatalf("expected stdout to contain %q, got %q", expectedText, stdoutText)
+		}
+	}
+}
+
+func TestRunPolicySignCLI_MissingDefaultPrivateKeyPrintsGuidance(t *testing.T) {
+	repoRoot := t.TempDir()
+	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
+	if err := os.MkdirAll(filepath.Dir(policyPath), 0o755); err != nil {
+		t.Fatalf("mkdir policy dir: %v", err)
+	}
+	if err := os.WriteFile(policyPath, []byte("version: \"1\"\n"), 0o600); err != nil {
+		t.Fatalf("write policy yaml: %v", err)
+	}
+
+	t.Setenv(policySigningPrivateKeyFileEnv, "")
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	defaultKeyPath, err := defaultPolicySigningPrivateKeyPath(config.PolicySigningTrustAnchorKeyID)
+	if err != nil {
+		t.Fatalf("default private key path: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := runPolicySignCLI(
+		[]string{"-repo-root", repoRoot},
+		&stdout,
+		&stderr,
+		func() (string, error) { return "", nil },
+		os.Getenv,
+	)
+	if exitCode != 1 {
+		t.Fatalf("expected exit code 1, got %d with stderr %q", exitCode, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected empty stdout, got %q", stdout.String())
+	}
+
+	stderrText := stderr.String()
+	if !strings.Contains(stderrText, "ERROR: read private key:") {
+		t.Fatalf("expected read private key error, got %q", stderrText)
+	}
+	if !strings.Contains(stderrText, defaultKeyPath) {
+		t.Fatalf("expected stderr to mention default key path %q, got %q", defaultKeyPath, stderrText)
+	}
+	if !strings.Contains(stderrText, "Create or move the signer key to") {
+		t.Fatalf("expected default-path guidance, got %q", stderrText)
+	}
+	if !strings.Contains(stderrText, policySigningPrivateKeyFileEnv) {
+		t.Fatalf("expected stderr to mention %s, got %q", policySigningPrivateKeyFileEnv, stderrText)
+	}
+}
+
+func TestRunPolicySignCLI_InvalidFlagReturnsUsageError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	exitCode := runPolicySignCLI(
+		[]string{"-definitely-invalid"},
+		&stdout,
+		&stderr,
+		func() (string, error) { return "", nil },
+		os.Getenv,
+	)
+	if exitCode != 2 {
+		t.Fatalf("expected exit code 2, got %d with stderr %q", exitCode, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected empty stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "flag provided but not defined") {
+		t.Fatalf("expected flag parse error, got %q", stderr.String())
+	}
+}
 
 func TestResolvePolicySigningPrivateKeyPath_PrefersFlag(t *testing.T) {
 	resolvedPath, source, err := resolvePolicySigningPrivateKeyPath(" /tmp/operator-key.pem ", "/tmp/env-key.pem", "loopgate-policy-root-2026-04")

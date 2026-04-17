@@ -34,6 +34,7 @@ repositories.
 - [T3 handoff snapshot](./reports/handoffs/2026-04-16_t3_handoff.md)
 - [Active product gaps](./roadmap/loopgate_v1_product_gaps.md)
 - [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
+- [Ship-readiness hardening follow-up](./roadmap/ship_readiness_hardening_followup.md)
 - [Release candidate checklist](./roadmap/release_candidate_checklist.md)
 - [Repository sealing review](./roadmap/repository_sealing_review.md)
 - [Changelog](../CHANGELOG.md)

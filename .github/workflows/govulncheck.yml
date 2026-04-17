@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -18,4 +23,24 @@ jobs:
         with:
           go-version-file: go.mod
       - name: govulncheck
-        run: make vuln
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          make vuln 2>&1 | tee artifacts/govulncheck.log
+      - name: upload govulncheck logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: govulncheck-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          if-no-files-found: ignore
+      - name: summarize govulncheck job
+        if: always()
+        run: |
+          {
+            echo "## govulncheck / govulncheck"
+            echo "- status: ${{ job.status }}"
+            echo "- command: \`make vuln\`"
+            echo "- logs artifact: \`govulncheck-logs-${{ github.run_id }}-${{ github.run_attempt }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

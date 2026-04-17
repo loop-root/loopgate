@@ -9,7 +9,7 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X main.buildVersion=$(VERSION) -X main.buildCommit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
 GOFILES := $(shell find . -type f -name '*.go' -not -path './runtime/*' | sort)
 
-.PHONY: build fmt fmt-check vet test test-race lint policy-check vuln ship-check clean
+.PHONY: build fmt fmt-check vet test test-race test-e2e test-fuzz-smoke lint policy-check policy-sign-coverage-check vuln ship-check clean
 
 build:
 	mkdir -p bin
@@ -31,16 +31,26 @@ test:
 test-race:
 	$(GO) test -race -count=1 ./...
 
+test-e2e:
+	$(GO) test -tags=e2e ./internal/integration -run TestE2EApprovalWriteAuditFlow -count=1
+
+test-fuzz-smoke:
+	$(GO) test ./internal/config -run=^$$ -fuzz=FuzzParsePolicyDocument -fuzztime=5s
+	$(GO) test ./internal/loopgate -run=^$$ -fuzz=FuzzDecodeJSONBytesCapabilityRequest -fuzztime=5s
+
 lint:
 	$(GOLANGCI_LINT) run
 
 policy-check:
 	$(GO) run ./cmd/loopgate-policy-admin validate -repo .
 
+policy-sign-coverage-check:
+	./scripts/policy_sign_coverage_check.sh
+
 vuln:
 	./scripts/govulncheck.sh
 
-ship-check: fmt-check vet test-race lint policy-check vuln
+ship-check: fmt-check vet test-race lint policy-check policy-sign-coverage-check vuln
 
 clean:
 	rm -rf bin

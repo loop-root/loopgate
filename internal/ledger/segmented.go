@@ -544,6 +544,10 @@ func prepareLedgerEventLine(lastSequence int64, lastEventHash string, ledgerEven
 		return Event{}, nil, "", err
 	}
 	preparedEvent.Data["event_hash"] = eventHash
+	preparedEvent, err = canonicalizeEvent(preparedEvent, false)
+	if err != nil {
+		return Event{}, nil, "", err
+	}
 	eventLineBytes, err := json.Marshal(preparedEvent)
 	if err != nil {
 		return Event{}, nil, "", err

@@ -217,30 +217,40 @@ func saveConnectionRecords(path string, connectionRecords map[string]connectionR
 		return fmt.Errorf("create connection state dir: %w", err)
 	}
 
-	tempPath := path + ".tmp"
-	connectionFile, err := os.OpenFile(tempPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	connectionFile, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
 	if err != nil {
-		return fmt.Errorf("open temp connection state: %w", err)
+		return fmt.Errorf("create temp connection state: %w", err)
 	}
-	defer func() { _ = connectionFile.Close() }()
+	tempPath := connectionFile.Name()
+	cleanupTemp := func() {
+		_ = connectionFile.Close()
+		_ = os.Remove(tempPath)
+	}
+	if err := connectionFile.Chmod(0o600); err != nil {
+		cleanupTemp()
+		return fmt.Errorf("chmod temp connection state: %w", err)
+	}
 
 	if _, err := connectionFile.Write(jsonBytes); err != nil {
+		cleanupTemp()
 		return fmt.Errorf("write temp connection state: %w", err)
 	}
 	if err := connectionFile.Sync(); err != nil {
+		cleanupTemp()
 		return fmt.Errorf("sync temp connection state: %w", err)
 	}
 	if err := connectionFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("close temp connection state: %w", err)
 	}
 	if err := os.Rename(tempPath, path); err != nil {
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("rename temp connection state: %w", err)
 	}
 	if connectionDir, err := os.Open(filepath.Dir(path)); err == nil {
 		_ = connectionDir.Sync()
 		_ = connectionDir.Close()
 	}
-	_ = os.Chmod(path, 0o600)
 	return nil
 }
 

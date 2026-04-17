@@ -176,6 +176,8 @@ func TestRedactTextAndStructuredFields(t *testing.T) {
 		"authorization": "Bearer another-secret",
 		"token":         "abc123",
 		"note":          "safe text",
+		"raw_bytes":     []byte("byte-secret"),
+		"raw_message":   json.RawMessage(`{"refresh_token":"raw-message-secret"}`),
 		"nested": map[string]interface{}{
 			"client_secret": "nested-secret",
 			"url":           "https://example.com/profile?refresh_token=nested-refresh",
@@ -187,10 +189,16 @@ func TestRedactTextAndStructuredFields(t *testing.T) {
 		t.Fatalf("marshal redacted fields: %v", err)
 	}
 	encodedString := string(encodedFields)
-	for _, leaked := range []string{"another-secret", "abc123", "nested-secret", "nested-refresh"} {
+	for _, leaked := range []string{"another-secret", "abc123", "nested-secret", "nested-refresh", "byte-secret", "raw-message-secret"} {
 		if strings.Contains(encodedString, leaked) {
 			t.Fatalf("redacted fields leaked secret %q: %s", leaked, encodedString)
 		}
+	}
+	if rawBytesValue, ok := redactedFields["raw_bytes"].(string); !ok || rawBytesValue != redactedPlaceholder {
+		t.Fatalf("expected raw byte field to be redacted, got %#v", redactedFields["raw_bytes"])
+	}
+	if rawMessageValue, ok := redactedFields["raw_message"].(string); !ok || rawMessageValue != redactedPlaceholder {
+		t.Fatalf("expected raw json message field to be redacted, got %#v", redactedFields["raw_message"])
 	}
 }
 

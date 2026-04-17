@@ -25,6 +25,9 @@ Tests spin up `loopgate.Server` with temp policy, exercise HTTP-over-UDS or clie
 - `session_socket_test.go`, `quarantine_lifecycle_test.go`
   - session and quarantine behavior
 
+- `e2e_approval_flow_test.go` (`//go:build e2e`)
+  - opt-in governed approval flow over the real server and Unix socket
+
 ## Relationship Notes
 
 - Implementation under test: `internal/loopgate/`

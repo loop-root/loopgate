@@ -1,0 +1,89 @@
+name: nightly-verification
+
+on:
+  schedule:
+    - cron: '23 8 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-smoke:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: fuzz smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          make test-fuzz-smoke 2>&1 | tee artifacts/test-fuzz-smoke.log
+      - name: upload fuzz smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-fuzz-smoke-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          if-no-files-found: ignore
+      - name: summarize fuzz smoke job
+        if: always()
+        run: |
+          {
+            echo "## nightly-verification / fuzz-smoke"
+            echo "- status: ${{ job.status }}"
+            echo "- command: \`make test-fuzz-smoke\`"
+            echo "- logs artifact: \`nightly-fuzz-smoke-logs-${{ github.run_id }}-${{ github.run_attempt }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  ship-readiness-smoke:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: test-race
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          make test-race 2>&1 | tee artifacts/test-race.log
+      - name: e2e approval flow
+        shell: bash
+        run: |
+          set -o pipefail
+          make test-e2e 2>&1 | tee artifacts/test-e2e.log
+      - name: policy-sign coverage
+        shell: bash
+        run: |
+          set -o pipefail
+          make policy-sign-coverage-check 2>&1 | tee artifacts/policy-sign-coverage.log
+      - name: upload ship-readiness logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-ship-readiness-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          if-no-files-found: ignore
+      - name: summarize ship-readiness job
+        if: always()
+        run: |
+          {
+            echo "## nightly-verification / ship-readiness-smoke"
+            echo "- status: ${{ job.status }}"
+            echo "- commands:"
+            echo "  - \`make test-race\`"
+            echo "  - \`make test-e2e\`"
+            echo "  - \`make policy-sign-coverage-check\`"
+            echo "- logs artifact: \`nightly-ship-readiness-logs-${{ github.run_id }}-${{ github.run_attempt }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

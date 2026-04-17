@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -147,6 +148,11 @@ func (runtime *AppendRuntime) Append(path string, e Event) error {
 		return fmt.Errorf("hash ledger event: %w", err)
 	}
 	e.Data["event_hash"] = eventHash
+	e, err = canonicalizeEvent(e, false)
+	if err != nil {
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
+		return fmt.Errorf("canonicalize ledger event: %w", err)
+	}
 
 	if _, err := f.Seek(0, io.SeekEnd); err != nil {
 		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
@@ -303,18 +309,7 @@ func sequenceValueFromRaw(rawSequence interface{}, sequenceField string) (int64,
 }
 
 func hashStoredChainEvent(event Event) (string, error) {
-	canonicalEvent := event
-	if event.Data != nil {
-		canonicalData := make(map[string]interface{}, len(event.Data))
-		for key, value := range event.Data {
-			if key == "event_hash" {
-				continue
-			}
-			canonicalData[key] = value
-		}
-		canonicalEvent.Data = canonicalData
-	}
-	return hashEvent(canonicalEvent)
+	return hashEvent(event)
 }
 
 // hashEvent returns hex(SHA-256(canonical JSON of event)) with event_hash stripped from Data.
@@ -322,23 +317,130 @@ func hashStoredChainEvent(event Event) (string, error) {
 // a secret-keyed MAC, so a filesystem writer can replace the entire file with a new consistent
 // chain. See docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md for operator-facing semantics.
 func hashEvent(event Event) (string, error) {
-	canonicalEvent := event
-	if event.Data != nil {
-		canonicalData := make(map[string]interface{}, len(event.Data))
-		for key, value := range event.Data {
-			if key == "event_hash" {
-				continue
-			}
-			canonicalData[key] = value
-		}
-		canonicalEvent.Data = canonicalData
-	}
-	payloadBytes, err := json.Marshal(canonicalEvent)
+	payloadBytes, err := marshalCanonicalEventJSON(event, true)
 	if err != nil {
 		return "", err
 	}
 	payloadHash := sha256.Sum256(payloadBytes)
 	return fmt.Sprintf("%x", payloadHash[:]), nil
+}
+
+// ComputeEventHash returns the append-chain hash for event after normalizing it
+// into a JSON-compatible representation. The canonical bytes rely on
+// encoding/json's deterministic ordering of string-keyed map objects.
+func ComputeEventHash(event Event) (string, error) {
+	return hashEvent(event)
+}
+
+func marshalCanonicalEventJSON(event Event, stripEventHash bool) ([]byte, error) {
+	canonicalEvent, err := canonicalizeEvent(event, stripEventHash)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(canonicalEvent)
+}
+
+func canonicalizeEvent(event Event, stripEventHash bool) (Event, error) {
+	canonicalEvent := Event{
+		V:       event.V,
+		TS:      event.TS,
+		Type:    event.Type,
+		Session: event.Session,
+	}
+	if canonicalEvent.V == 0 {
+		canonicalEvent.V = SchemaVersion
+	}
+	if event.Data == nil {
+		return canonicalEvent, nil
+	}
+	canonicalData, err := canonicalizeDataMap(event.Data, stripEventHash)
+	if err != nil {
+		return Event{}, err
+	}
+	canonicalEvent.Data = canonicalData
+	return canonicalEvent, nil
+}
+
+func canonicalizeDataMap(rawData map[string]interface{}, stripEventHash bool) (map[string]interface{}, error) {
+	if rawData == nil {
+		return nil, nil
+	}
+	canonicalData := make(map[string]interface{}, len(rawData))
+	for key, value := range rawData {
+		if stripEventHash && key == "event_hash" {
+			continue
+		}
+		canonicalValue, err := canonicalizeValue(value)
+		if err != nil {
+			return nil, fmt.Errorf("canonicalize data field %q: %w", key, err)
+		}
+		canonicalData[key] = canonicalValue
+	}
+	return canonicalData, nil
+}
+
+func canonicalizeValue(rawValue interface{}) (interface{}, error) {
+	switch typedValue := rawValue.(type) {
+	case nil,
+		string,
+		bool,
+		json.Number,
+		float64,
+		float32,
+		int,
+		int8,
+		int16,
+		int32,
+		int64,
+		uint,
+		uint8,
+		uint16,
+		uint32,
+		uint64:
+		return typedValue, nil
+	case json.RawMessage:
+		return append(json.RawMessage(nil), typedValue...), nil
+	case []byte:
+		return append([]byte(nil), typedValue...), nil
+	case map[string]interface{}:
+		return canonicalizeDataMap(typedValue, false)
+	case map[string]string:
+		canonicalMap := make(map[string]interface{}, len(typedValue))
+		for key, value := range typedValue {
+			canonicalMap[key] = value
+		}
+		return canonicalMap, nil
+	case []interface{}:
+		canonicalSlice := make([]interface{}, 0, len(typedValue))
+		for index, nestedValue := range typedValue {
+			canonicalValue, err := canonicalizeValue(nestedValue)
+			if err != nil {
+				return nil, fmt.Errorf("canonicalize slice index %d: %w", index, err)
+			}
+			canonicalSlice = append(canonicalSlice, canonicalValue)
+		}
+		return canonicalSlice, nil
+	case []string:
+		return append([]string(nil), typedValue...), nil
+	default:
+		payloadBytes, err := json.Marshal(typedValue)
+		if err != nil {
+			return nil, err
+		}
+		decoder := json.NewDecoder(bytes.NewReader(payloadBytes))
+		decoder.UseNumber()
+		var canonicalValue interface{}
+		if err := decoder.Decode(&canonicalValue); err != nil {
+			return nil, err
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			if err == nil {
+				return nil, fmt.Errorf("unexpected trailing JSON value")
+			}
+			return nil, err
+		}
+		return canonicalValue, nil
+	}
 }
 
 func (runtime *AppendRuntime) cacheVerifiedChainStateFromFileHandle(fileHandle *os.File, sequenceField string, lastSequence int64, lastHash string) {

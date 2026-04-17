@@ -1,6 +1,7 @@
 package secrets
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 )
@@ -87,6 +88,10 @@ func redactValue(rawValue interface{}) interface{} {
 	switch typedValue := rawValue.(type) {
 	case string:
 		return RedactText(typedValue)
+	case []byte:
+		return redactedPlaceholder
+	case json.RawMessage:
+		return redactedPlaceholder
 	case map[string]interface{}:
 		return RedactStructuredFields(typedValue)
 	case map[string]string:

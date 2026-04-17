@@ -25,7 +25,9 @@ separate `ARCHIVED` repository.
 
 ## CI (`.github/workflows/`)
 
+- `test.yml` — macOS-first CI for `go test -race`, policy-sign coverage, and the tagged e2e approval flow; lint runs separately on Ubuntu.
 - `govulncheck.yml` — module vulnerability scan (`govulncheck`).
+- `nightly-verification.yml` — scheduled/manual fuzz smoke plus macOS ship-readiness smoke (`test-race`, `test-e2e`, policy-sign coverage).
 
 ## Setup (`docs/setup/`)
 

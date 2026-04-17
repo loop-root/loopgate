@@ -1,9 +1,10 @@
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-17
 
 # Loopgate Release Candidate Checklist
 
 This checklist is for deciding whether the current Loopgate tree is ready to
-cut a release candidate from `main`.
+cut a release candidate from the public stabilization branch (`release` in the
+current local branch model).
 
 It is intentionally conservative. A release candidate should be a judgment that
 the current local-first macOS product is coherent, supportable, and honest
@@ -49,8 +50,16 @@ It does **not** certify:
 ## Verification
 
 - [ ] `go test ./...`
+- [ ] `go test -race -count=1 ./...`
 - [ ] `go vet ./...`
+- [ ] `./scripts/policy_sign_coverage_check.sh`
+- [ ] `make test-e2e`
 - [ ] tracked CI matches the supported product target closely enough to catch regressions
+- [ ] required GitHub checks are configured in repo settings
+- [ ] required check name is `test / test`
+- [ ] required check name is `test / e2e`
+- [ ] required check name is `test / lint`
+- [ ] required check name is `govulncheck / govulncheck`
 
 Recommended spot checks before tagging:
 

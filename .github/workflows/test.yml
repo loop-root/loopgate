@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -18,13 +23,83 @@ jobs:
         with:
           go-version-file: go.mod
       - name: policy-check
-        run: make policy-check
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          make policy-check 2>&1 | tee artifacts/policy-check.log
       - name: fmt-check
-        run: make fmt-check
+        shell: bash
+        run: |
+          set -o pipefail
+          make fmt-check 2>&1 | tee artifacts/fmt-check.log
       - name: vet
-        run: make vet
+        shell: bash
+        run: |
+          set -o pipefail
+          make vet 2>&1 | tee artifacts/vet.log
       - name: test
-        run: make test-race
+        shell: bash
+        run: |
+          set -o pipefail
+          make test-race 2>&1 | tee artifacts/test-race.log
+      - name: policy-sign coverage
+        shell: bash
+        run: |
+          set -o pipefail
+          make policy-sign-coverage-check 2>&1 | tee artifacts/policy-sign-coverage.log
+      - name: upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          if-no-files-found: ignore
+      - name: summarize test job
+        if: always()
+        run: |
+          {
+            echo "## test / test"
+            echo "- status: ${{ job.status }}"
+            echo "- commands:"
+            echo "  - \`make policy-check\`"
+            echo "  - \`make fmt-check\`"
+            echo "  - \`make vet\`"
+            echo "  - \`make test-race\`"
+            echo "  - \`make policy-sign-coverage-check\`"
+            echo "- logs artifact: \`test-logs-${{ github.run_id }}-${{ github.run_attempt }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: e2e approval flow
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          make test-e2e 2>&1 | tee artifacts/test-e2e.log
+      - name: upload e2e logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          if-no-files-found: ignore
+      - name: summarize e2e job
+        if: always()
+        run: |
+          {
+            echo "## test / e2e"
+            echo "- status: ${{ job.status }}"
+            echo "- command: \`make test-e2e\`"
+            echo "- logs artifact: \`e2e-logs-${{ github.run_id }}-${{ github.run_attempt }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   lint:
     runs-on: ubuntu-latest
@@ -37,3 +112,11 @@ jobs:
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.11.4
+      - name: summarize lint job
+        if: always()
+        run: |
+          {
+            echo "## test / lint"
+            echo "- status: ${{ job.status }}"
+            echo "- command: \`golangci-lint-action@v9\`"
+          } >> "$GITHUB_STEP_SUMMARY"

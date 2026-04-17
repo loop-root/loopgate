@@ -96,6 +96,50 @@ func TestClientExecuteCapability_FsReadRateLimitUsesDedicatedDenialCode(t *testi
 	}
 }
 
+func TestCheckFsReadRateLimit_DoesNotMutateCallerSliceBackingArray(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	controlSessionID := "session-rate-limit"
+	nowUTC := server.now().UTC()
+	expiredTimestamp := nowUTC.Add(-fsReadRateWindow - time.Second)
+	recentTimestampOne := nowUTC.Add(-30 * time.Second)
+	recentTimestampTwo := nowUTC.Add(-15 * time.Second)
+	preloadedReads := []time.Time{expiredTimestamp, recentTimestampOne, recentTimestampTwo}
+	expectedOriginalReads := append([]time.Time(nil), preloadedReads...)
+
+	server.mu.Lock()
+	server.replayState.sessionReadCounts[controlSessionID] = preloadedReads
+	server.mu.Unlock()
+
+	if denied := server.checkFsReadRateLimit(controlSessionID); denied {
+		t.Fatal("expected fs_read rate limit check to allow when below the limit")
+	}
+
+	for index, expectedTimestamp := range expectedOriginalReads {
+		if !preloadedReads[index].Equal(expectedTimestamp) {
+			t.Fatalf("expected original caller slice to remain unchanged at index %d: want %s got %s", index, expectedTimestamp, preloadedReads[index])
+		}
+	}
+}
+
+func TestCheckHookPreValidateRateLimit_IsPerUID(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	server.hookPreValidateRateLimit = 1
+	server.hookPreValidateRateWindow = time.Hour
+
+	if denied := server.checkHookPreValidateRateLimit(1001); denied {
+		t.Fatal("expected first hook pre-validate check for uid 1001 to allow")
+	}
+	if denied := server.checkHookPreValidateRateLimit(1001); !denied {
+		t.Fatal("expected second hook pre-validate check for uid 1001 to deny")
+	}
+	if denied := server.checkHookPreValidateRateLimit(2002); denied {
+		t.Fatal("expected separate peer uid to keep its own rate-limit bucket")
+	}
+}
+
 func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 	repoRoot := t.TempDir()
 	memoryDir := filepath.Join(repoRoot, ".morph", "memory")

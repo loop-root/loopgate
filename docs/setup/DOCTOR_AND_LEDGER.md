@@ -57,7 +57,8 @@ go run ./cmd/loopgate-doctor trust-check
 
 What each one is for:
 - `report`
-  - offline JSON summary of runtime config, diagnostics, and ledger verification state
+  - offline JSON summary of runtime config, diagnostics, ledger verification
+    state, and nonce replay persistence/utilization warnings
 - `bundle`
   - `report.json` plus diagnostic log tails for sharing or later inspection
 - `trust-check`

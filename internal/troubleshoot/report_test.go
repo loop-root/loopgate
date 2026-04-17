@@ -1,10 +1,12 @@
 package troubleshoot
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
@@ -38,6 +40,9 @@ func TestBuildReport_LoopgateWorkspace(t *testing.T) {
 	}
 	if rep.Diagnostics.Enabled != rc.Logging.Diagnostic.Enabled {
 		t.Fatalf("diagnostic enabled mismatch")
+	}
+	if rep.NonceReplay.Capacity != defaultNonceReplayCapacity {
+		t.Fatalf("expected nonce replay capacity %d, got %#v", defaultNonceReplayCapacity, rep.NonceReplay)
 	}
 }
 
@@ -100,4 +105,125 @@ func TestBuildReport_IncludesHMACCheckpointStatus(t *testing.T) {
 	if report.LedgerVerify.HMACCheckpoints.CheckpointCount != 1 {
 		t.Fatalf("expected one checkpoint, got %#v", report.LedgerVerify.HMACCheckpoints)
 	}
+}
+
+func TestBuildNonceReplayReport_WarnsOnHighUtilization(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "runtime", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(stateDir, "nonce_replay.jsonl")
+	nowUTC := time.Date(2026, time.April, 17, 12, 0, 0, 0, time.UTC)
+
+	for index := 0; index < 4; index++ {
+		appendNonceReplayLogRecordForReportTest(t, logPath, nonceReplayLogRecord{
+			NonceKey:         "session:nonce-" + string(rune('a'+index)),
+			ControlSessionID: "session",
+			SeenAt:           nowUTC.Add(-time.Duration(index) * time.Minute).Format(time.RFC3339Nano),
+		})
+	}
+
+	report := buildNonceReplayReport(dir, nowUTC, 4, 80, 10, 4)
+	if report.Status != "warning" {
+		t.Fatalf("expected warning status, got %#v", report)
+	}
+	if !containsString(report.Warnings, "active_entries_high_utilization") {
+		t.Fatalf("expected high utilization warning, got %#v", report.Warnings)
+	}
+	if report.ActiveEntries != 4 || report.UtilizationPercent != 100 {
+		t.Fatalf("expected saturated active entries, got %#v", report)
+	}
+}
+
+func TestBuildNonceReplayReport_WarnsOnAppendOnlyLogGrowth(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "runtime", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(stateDir, "nonce_replay.jsonl")
+	nowUTC := time.Date(2026, time.April, 17, 12, 0, 0, 0, time.UTC)
+
+	for index := 0; index < 11; index++ {
+		appendNonceReplayLogRecordForReportTest(t, logPath, nonceReplayLogRecord{
+			NonceKey:         "session:nonce-stable",
+			ControlSessionID: "session",
+			SeenAt:           nowUTC.Add(-time.Duration(index) * time.Second).Format(time.RFC3339Nano),
+		})
+	}
+
+	report := buildNonceReplayReport(dir, nowUTC, 100, 80, 10, 4)
+	if report.Status != "warning" {
+		t.Fatalf("expected warning status, got %#v", report)
+	}
+	if !containsString(report.Warnings, "append_only_log_growth_visible") {
+		t.Fatalf("expected append-only log growth warning, got %#v", report.Warnings)
+	}
+	if report.ActiveEntries != 1 || report.PersistedLineCount != 11 {
+		t.Fatalf("expected one active entry backed by eleven persisted lines, got %#v", report)
+	}
+}
+
+func TestBuildNonceReplayReport_UsesLegacySnapshotFallback(t *testing.T) {
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "runtime", "state")
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(stateDir, "nonce_replay.json")
+	nowUTC := time.Date(2026, time.April, 17, 12, 0, 0, 0, time.UTC)
+
+	rawSnapshot, err := json.Marshal(nonceReplaySnapshotFile{
+		Nonces: map[string]nonceReplayPersistedNonce{
+			"legacy:nonce": {
+				ControlSessionID: "legacy",
+				SeenAt:           nowUTC.Add(-5 * time.Minute).Format(time.RFC3339Nano),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, rawSnapshot, 0o600); err != nil {
+		t.Fatalf("write legacy snapshot: %v", err)
+	}
+
+	report := buildNonceReplayReport(dir, nowUTC, 100, 80, 10, 4)
+	if report.StoreKind != "legacy_snapshot" {
+		t.Fatalf("expected legacy snapshot store kind, got %#v", report)
+	}
+	if !containsString(report.Warnings, "legacy_snapshot_fallback_active") {
+		t.Fatalf("expected legacy snapshot warning, got %#v", report.Warnings)
+	}
+	if report.ActiveEntries != 1 {
+		t.Fatalf("expected one active legacy nonce entry, got %#v", report)
+	}
+}
+
+func appendNonceReplayLogRecordForReportTest(t *testing.T, path string, record nonceReplayLogRecord) {
+	t.Helper()
+
+	recordBytes, err := json.Marshal(record)
+	if err != nil {
+		t.Fatalf("marshal nonce replay record: %v", err)
+	}
+	recordBytes = append(recordBytes, '\n')
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatalf("open nonce replay log: %v", err)
+	}
+	defer file.Close()
+	if _, err := file.Write(recordBytes); err != nil {
+		t.Fatalf("append nonce replay record: %v", err)
+	}
+}
+
+func containsString(items []string, wanted string) bool {
+	for _, item := range items {
+		if item == wanted {
+			return true
+		}
+	}
+	return false
 }

@@ -3,9 +3,7 @@ package loopgate
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -184,11 +182,6 @@ func (server *Server) logEventWithHash(eventType string, sessionID string, data 
 	// final stored bytes by setting the mirrored sequence value up front.
 	safeData["ledger_sequence"] = nextSequence
 	safeData["previous_event_hash"] = server.audit.lastHash
-	canonicalData, err := canonicalizeAuditData(safeData)
-	if err != nil {
-		return "", fmt.Errorf("canonicalize audit event data: %w", err)
-	}
-	safeData = canonicalData
 
 	auditEvent := ledger.Event{
 		TS:      server.now().UTC().Format(time.RFC3339Nano),
@@ -251,11 +244,6 @@ func (server *Server) appendAuditHMACCheckpointIfDueLocked() error {
 	checkpointData["audit_sequence"] = nextSequence
 	checkpointData["ledger_sequence"] = nextSequence
 	checkpointData["previous_event_hash"] = server.audit.lastHash
-	canonicalData, err := canonicalizeAuditData(checkpointData)
-	if err != nil {
-		return fmt.Errorf("canonicalize audit checkpoint data: %w", err)
-	}
-	checkpointData = canonicalData
 
 	checkpointEvent := ledger.Event{
 		TS:      checkpointTimestampUTC,
@@ -417,26 +405,6 @@ func copyInterfaceMap(input map[string]interface{}) map[string]interface{} {
 	return copied
 }
 
-func canonicalizeAuditData(input map[string]interface{}) (map[string]interface{}, error) {
-	payloadBytes, err := json.Marshal(input)
-	if err != nil {
-		return nil, err
-	}
-	var canonicalData map[string]interface{}
-	if err := json.Unmarshal(payloadBytes, &canonicalData); err != nil {
-		return nil, err
-	}
-	return canonicalData, nil
-}
-
 func hashAuditEvent(auditEvent ledger.Event) (string, error) {
-	if auditEvent.V == 0 {
-		auditEvent.V = ledger.SchemaVersion
-	}
-	payloadBytes, err := json.Marshal(auditEvent)
-	if err != nil {
-		return "", err
-	}
-	payloadHash := sha256.Sum256(payloadBytes)
-	return hex.EncodeToString(payloadHash[:]), nil
+	return ledger.ComputeEventHash(auditEvent)
 }

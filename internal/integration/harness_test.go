@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +29,9 @@ type loopgateHarness struct {
 	socketPath string
 	server     *loopgate.Server
 	httpClient *http.Client
+	cancel     context.CancelFunc
+	serverDone chan struct{}
+	stopOnce   sync.Once
 }
 
 type sessionCredentials struct {
@@ -108,9 +112,27 @@ func newLoopgateHarnessWithSetup(t *testing.T, policyYAML string, setupRepo func
 		socketPath: socketPath,
 		server:     server,
 		httpClient: httpClient,
+		cancel:     cancel,
+		serverDone: serverDone,
 	}
+	t.Cleanup(func() {
+		harness.stop(t)
+	})
 	harness.waitForHealth(t)
 	return harness
+}
+
+func (harness *loopgateHarness) stop(t *testing.T) {
+	t.Helper()
+
+	harness.stopOnce.Do(func() {
+		if harness.cancel != nil {
+			harness.cancel()
+		}
+		if harness.serverDone != nil {
+			<-harness.serverDone
+		}
+	})
 }
 
 func (harness *loopgateHarness) newClient(actor string, sessionID string, requestedCapabilities []string) *loopgate.Client {

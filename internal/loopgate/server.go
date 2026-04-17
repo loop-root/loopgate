@@ -198,6 +198,8 @@ type replayControlState struct {
 	usedTokens map[string]usedToken
 	// sessionReadCounts tracks fs_read timestamps per control session under server.mu.
 	sessionReadCounts map[string][]time.Time
+	// hookPreValidateCounts tracks PreToolUse hook timestamps per peer UID under server.mu.
+	hookPreValidateCounts map[uint32][]time.Time
 }
 
 type sessionControlState struct {
@@ -378,10 +380,12 @@ type Server struct {
 	approvalState approvalControlState
 	replayState   replayControlState
 
-	sessionOpenMinInterval  time.Duration
-	maxActiveSessionsPerUID int
-	expirySweepMaxInterval  time.Duration
-	nextExpirySweepAt       time.Time
+	sessionOpenMinInterval    time.Duration
+	maxActiveSessionsPerUID   int
+	expirySweepMaxInterval    time.Duration
+	hookPreValidateRateLimit  int
+	hookPreValidateRateWindow time.Duration
+	nextExpirySweepAt         time.Time
 	// maxPendingApprovalsPerControlSession limits pending (state=pending) approvals per session.
 	maxPendingApprovalsPerControlSession int
 	maxSeenRequestReplayEntries          int
@@ -444,17 +448,19 @@ const (
 	// Replay-tracked request IDs, auth nonces, used single-use tokens, and terminal approval
 	// rows only need to outlive the authoritative session lifetime. Keeping them longer than the
 	// 1-hour control-session TTL inflates in-memory state without adding meaningful protection.
-	requestReplayWindow            = sessionTTL
-	requestSignatureSkew           = 2 * time.Minute
-	maxOpenSessionBodyBytes        = 16 * 1024
-	maxCapabilityBodyBytes         = 512 * 1024
-	maxApprovalBodyBytes           = 8 * 1024
-	maxHeaderBytes                 = 8 * 1024
-	defaultSessionOpenMinInterval  = 500 * time.Millisecond
-	defaultMaxActiveSessionsPerUID = 8
-	defaultExpirySweepMaxInterval  = 250 * time.Millisecond
-	defaultFsReadRateLimit         = 60 // reads per minute per session
-	fsReadRateWindow               = 1 * time.Minute
+	requestReplayWindow             = sessionTTL
+	requestSignatureSkew            = 2 * time.Minute
+	maxOpenSessionBodyBytes         = 16 * 1024
+	maxCapabilityBodyBytes          = 512 * 1024
+	maxApprovalBodyBytes            = 8 * 1024
+	maxHeaderBytes                  = 8 * 1024
+	defaultSessionOpenMinInterval   = 500 * time.Millisecond
+	defaultMaxActiveSessionsPerUID  = 8
+	defaultExpirySweepMaxInterval   = 250 * time.Millisecond
+	defaultFsReadRateLimit          = 60 // reads per minute per session
+	fsReadRateWindow                = 1 * time.Minute
+	defaultHookPreValidateRateLimit = 600 // hook checks per minute per peer UID
+	hookPreValidateRateWindow       = 1 * time.Minute
 	// In-memory bounds (DoS): single-session pending approvals, replay maps, and global tables.
 	defaultMaxPendingApprovalsPerControlSession = 64
 	defaultMaxSeenRequestReplayEntries          = 65536
@@ -561,14 +567,17 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 			tokenIndex: make(map[string]string),
 		},
 		replayState: replayControlState{
-			seenRequests:      make(map[string]seenRequest),
-			seenAuthNonces:    make(map[string]seenRequest),
-			usedTokens:        make(map[string]usedToken),
-			sessionReadCounts: make(map[string][]time.Time),
+			seenRequests:          make(map[string]seenRequest),
+			seenAuthNonces:        make(map[string]seenRequest),
+			usedTokens:            make(map[string]usedToken),
+			sessionReadCounts:     make(map[string][]time.Time),
+			hookPreValidateCounts: make(map[uint32][]time.Time),
 		},
 		sessionOpenMinInterval:               defaultSessionOpenMinInterval,
 		maxActiveSessionsPerUID:              defaultMaxActiveSessionsPerUID,
 		expirySweepMaxInterval:               defaultExpirySweepMaxInterval,
+		hookPreValidateRateLimit:             defaultHookPreValidateRateLimit,
+		hookPreValidateRateWindow:            hookPreValidateRateWindow,
 		maxPendingApprovalsPerControlSession: defaultMaxPendingApprovalsPerControlSession,
 		maxSeenRequestReplayEntries:          defaultMaxSeenRequestReplayEntries,
 		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,
@@ -763,13 +772,9 @@ func (server *Server) Serve(ctx context.Context) error {
 		return fmt.Errorf("remove stale socket: %w", err)
 	}
 
-	listener, err := net.Listen("unix", server.socketPath)
+	listener, err := listenPrivateUnixSocket(server.socketPath)
 	if err != nil {
 		return fmt.Errorf("listen unix socket: %w", err)
-	}
-	if err := os.Chmod(server.socketPath, 0o600); err != nil {
-		_ = listener.Close()
-		return fmt.Errorf("chmod socket: %w", err)
 	}
 	if server.diagnostic != nil {
 		if server.diagnostic.Socket != nil {
@@ -1462,7 +1467,7 @@ func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
 
 	timestamps := server.replayState.sessionReadCounts[controlSessionID]
 	// Prune old entries.
-	pruned := timestamps[:0]
+	pruned := make([]time.Time, 0, len(timestamps))
 	for _, ts := range timestamps {
 		if ts.After(cutoff) {
 			pruned = append(pruned, ts)
@@ -1473,6 +1478,32 @@ func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
 		return true
 	}
 	server.replayState.sessionReadCounts[controlSessionID] = append(pruned, nowUTC)
+	return false
+}
+
+func (server *Server) checkHookPreValidateRateLimit(peerUID uint32) bool {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	if server.hookPreValidateRateLimit <= 0 || server.hookPreValidateRateWindow <= 0 {
+		return false
+	}
+
+	nowUTC := server.now().UTC()
+	cutoff := nowUTC.Add(-server.hookPreValidateRateWindow)
+
+	timestamps := server.replayState.hookPreValidateCounts[peerUID]
+	pruned := make([]time.Time, 0, len(timestamps))
+	for _, timestamp := range timestamps {
+		if timestamp.After(cutoff) {
+			pruned = append(pruned, timestamp)
+		}
+	}
+	if len(pruned) >= server.hookPreValidateRateLimit {
+		server.replayState.hookPreValidateCounts[peerUID] = pruned
+		return true
+	}
+	server.replayState.hookPreValidateCounts[peerUID] = append(pruned, nowUTC)
 	return false
 }
 

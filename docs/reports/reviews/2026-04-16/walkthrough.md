@@ -33,7 +33,7 @@ That said, there are real findings that would bite you under load, at 2 AM, or d
 
 ### What's correct and impressive
 
-**Layered authentication** — The auth stack in [request_auth.go](file:///Users/adalaide/dev/loopgate/internal/loopgate/request_auth.go) is textbook defense-in-depth:
+**Layered authentication** — The auth stack in [request_auth.go](../../../../internal/loopgate/request_auth.go) is textbook defense-in-depth:
 
 1. Unix socket peer credential binding (UID/PID/EPID)
 2. Bearer token with peer-identity pinning
@@ -42,29 +42,29 @@ That said, there are real findings that would bite you under load, at 2 AM, or d
 5. Nonce replay detection with fail-closed saturation behavior
 6. Timestamp skew enforcement (±2 minutes)
 
-The TOCTOU fix at [request_auth.go:88-109](file:///Users/adalaide/dev/loopgate/internal/loopgate/request_auth.go#L88-L109) — taking a `now()` snapshot under the lock and performing all expiry checks inside a single critical section — is exactly correct.
+The TOCTOU fix at [request_auth.go:88-109](../../../../internal/loopgate/request_auth.go#L88-L109) — taking a `now()` snapshot under the lock and performing all expiry checks inside a single critical section — is exactly correct.
 
-**Path safety** — [safepath.go](file:///Users/adalaide/dev/loopgate/internal/safety/safepath.go) resolves symlinks before allow/deny checks, rejects null bytes, handles macOS NFC/NFD normalization and case-insensitive comparisons, and fails closed on unresolvable deny rules. The `resolvePathStrict` function correctly refuses to walk above the immediate parent.
+**Path safety** — [safepath.go](../../../../internal/safety/safepath.go) resolves symlinks before allow/deny checks, rejects null bytes, handles macOS NFC/NFD normalization and case-insensitive comparisons, and fails closed on unresolvable deny rules. The `resolvePathStrict` function correctly refuses to walk above the immediate parent.
 
-**Sandbox `O_NOFOLLOW` / `openat(2)` walking** — [sandbox.go:546-584](file:///Users/adalaide/dev/loopgate/internal/sandbox/sandbox.go#L546-L584) does component-by-component directory descent using `unix.Openat` with `O_NOFOLLOW | O_CLOEXEC`, which is the correct POSIX way to prevent symlink-following TOCTOU races. This is significantly more careful than most Go codebases.
+**Sandbox `O_NOFOLLOW` / `openat(2)` walking** — [sandbox.go:546-584](../../../../internal/sandbox/sandbox.go#L546-L584) does component-by-component directory descent using `unix.Openat` with `O_NOFOLLOW | O_CLOEXEC`, which is the correct POSIX way to prevent symlink-following TOCTOU races. This is significantly more careful than most Go codebases.
 
-**Audit ledger integrity** — The [ledger](file:///Users/adalaide/dev/loopgate/internal/ledger/ledger.go) is append-only with hash-chain linking (`SHA-256(event sans event_hash)`), monotonic sequence enforcement, and file-level `flock` serialization. The segmented rotation in [segmented.go](file:///Users/adalaide/dev/loopgate/internal/ledger/segmented.go) maintains manifest-level hash chains across segment boundaries.
+**Audit ledger integrity** — The [ledger](../../../../internal/ledger/ledger.go) is append-only with hash-chain linking (`SHA-256(event sans event_hash)`), monotonic sequence enforcement, and file-level `flock` serialization. The segmented rotation in [segmented.go](../../../../internal/ledger/segmented.go) maintains manifest-level hash chains across segment boundaries.
 
-**Secret redaction** — [redact.go](file:///Users/adalaide/dev/loopgate/internal/secrets/redact.go) covers bearer tokens, basic auth, JWT patterns, URL query parameters, and structured field keys. The `CapabilityRequest.MarshalJSON` defense-in-depth at [types.go:278-295](file:///Users/adalaide/dev/loopgate/internal/loopgate/types.go#L278-L295) strips provider-echo metadata on serialization — nice touch.
+**Secret redaction** — [redact.go](../../../../internal/secrets/redact.go) covers bearer tokens, basic auth, JWT patterns, URL query parameters, and structured field keys. The `CapabilityRequest.MarshalJSON` defense-in-depth at [types.go:278-295](../../../../internal/loopgate/types.go#L278-L295) strips provider-echo metadata on serialization — nice touch.
 
 ### Security findings to address
 
 #### Finding S-1: `verifySignedRequest` duplicates header parsing (Medium)
 
-[request_auth.go:234-287](file:///Users/adalaide/dev/loopgate/internal/loopgate/request_auth.go#L234-L287) re-parses all four signed headers, re-checks timestamp skew, and re-validates control session binding — all of which `parseSignedControlPlaneHeaders` already does. Then `verifySignedRequestWithMACKey` (line 289) does it a **third time**. Three separate timestamp parses of the same string in one call chain is a maintenance hazard. A future editor will fix a bug in one copy and miss the other two.
+[request_auth.go:234-287](../../../../internal/loopgate/request_auth.go#L234-L287) re-parses all four signed headers, re-checks timestamp skew, and re-validates control session binding — all of which `parseSignedControlPlaneHeaders` already does. Then `verifySignedRequestWithMACKey` (line 289) does it a **third time**. Three separate timestamp parses of the same string in one call chain is a maintenance hazard. A future editor will fix a bug in one copy and miss the other two.
 
 #### Finding S-2: `secretExportCapabilityNameHeuristic` is a brittle heuristic (Low)
 
-[secret_export.go:10-33](file:///Users/adalaide/dev/loopgate/internal/loopgate/secret_export.go#L10-L33) uses prefix/substring matching like `"secret."`, `"token."`, `"key."`. The AGENTS.md correctly notes this is a defense-in-depth guard, not the primary boundary. But `"key."` is overly broad — any capability named `key.view`, `keyboard.send`, or `monkey.wrench` would be caught. Consider migrating to an explicit allowlist against the registered capability set as the AGENTS.md suggests.
+[secret_export.go:10-33](../../../../internal/loopgate/secret_export.go#L10-L33) uses prefix/substring matching like `"secret."`, `"token."`, `"key."`. The AGENTS.md correctly notes this is a defense-in-depth guard, not the primary boundary. But `"key."` is overly broad — any capability named `key.view`, `keyboard.send`, or `monkey.wrench` would be caught. Consider migrating to an explicit allowlist against the registered capability set as the AGENTS.md suggests.
 
 #### Finding S-3: `hmac.Equal` vs `subtle.ConstantTimeCompare` inconsistency (Low)
 
-[request_auth.go:343](file:///Users/adalaide/dev/loopgate/internal/loopgate/request_auth.go#L343) uses `hmac.Equal`. [session_mac_rotation.go:227](file:///Users/adalaide/dev/loopgate/internal/loopgate/session_mac_rotation.go#L227) uses `subtle.ConstantTimeCompare`. Both are constant-time, but `hmac.Equal` internally calls `subtle.ConstantTimeCompare` and also checks lengths. Pick one pattern.
+[request_auth.go:343](../../../../internal/loopgate/request_auth.go#L343) uses `hmac.Equal`. [session_mac_rotation.go:227](../../../../internal/loopgate/session_mac_rotation.go#L227) uses `subtle.ConstantTimeCompare`. Both are constant-time, but `hmac.Equal` internally calls `subtle.ConstantTimeCompare` and also checks lengths. Pick one pattern.
 
 ---
 
@@ -72,7 +72,7 @@ The TOCTOU fix at [request_auth.go:88-109](file:///Users/adalaide/dev/loopgate/i
 
 ### Finding L-1: `pruneExpiredLocked` is O(n) over all maps on every request (High)
 
-[control_plane_state.go:27-130](file:///Users/adalaide/dev/loopgate/internal/loopgate/control_plane_state.go#L27-L130) sweeps through `tokens`, `sessions`, `approvals`, `mcpGatewayApprovalRequests`, `seenRequests`, `seenAuthNonces`, and `usedTokens` on every auth check. With `maxSeenRequestReplayEntries = 65536` and `maxAuthNonceReplayEntries = 65536`, a saturated server will iterate ~131K entries while holding `server.mu`. The 250ms sweep interval throttle helps, but under burst load, the first request after the interval pays the full O(n) cost.
+[control_plane_state.go:27-130](../../../../internal/loopgate/control_plane_state.go#L27-L130) sweeps through `tokens`, `sessions`, `approvals`, `mcpGatewayApprovalRequests`, `seenRequests`, `seenAuthNonces`, and `usedTokens` on every auth check. With `maxSeenRequestReplayEntries = 65536` and `maxAuthNonceReplayEntries = 65536`, a saturated server will iterate ~131K entries while holding `server.mu`. The 250ms sweep interval throttle helps, but under burst load, the first request after the interval pays the full O(n) cost.
 
 **Impact:** At high request volume, every authenticated request that touches `server.mu` will compete for lock time with expiry sweeps iterating 100K+ map entries.
 
@@ -80,11 +80,11 @@ The TOCTOU fix at [request_auth.go:88-109](file:///Users/adalaide/dev/loopgate/i
 
 ### Finding L-2: `countPendingApprovalsForSessionLocked` is O(total approvals) (Medium)
 
-[control_plane_state.go:422-433](file:///Users/adalaide/dev/loopgate/internal/loopgate/control_plane_state.go#L422-L433) linearly scans all approvals to count those belonging to one session. With `maxTotalApprovalRecords = 4096`, this is fine. But it's called from the approval-creation path, which already holds `server.mu`. If approval limits are ever raised, this becomes a hot path.
+[control_plane_state.go:422-433](../../../../internal/loopgate/control_plane_state.go#L422-L433) linearly scans all approvals to count those belonging to one session. With `maxTotalApprovalRecords = 4096`, this is fine. But it's called from the approval-creation path, which already holds `server.mu`. If approval limits are ever raised, this becomes a hot path.
 
 ### Finding L-3: Audit ledger `flock` serialization is a throughput bottleneck (Medium)
 
-Every event append acquires an exclusive file lock ([ledger.go:94](file:///Users/adalaide/dev/loopgate/internal/ledger/ledger.go#L94), [segmented.go:627-638](file:///Users/adalaide/dev/loopgate/internal/ledger/segmented.go#L627-L638)), reads the entire file to verify chain state (if cache misses), seeks to end, writes, and fsyncs. Under high event volume:
+Every event append acquires an exclusive file lock ([ledger.go:94](../../../../internal/ledger/ledger.go#L94), [segmented.go:627-638](../../../../internal/ledger/segmented.go#L627-L638)), reads the entire file to verify chain state (if cache misses), seeks to end, writes, and fsyncs. Under high event volume:
 
 - Cache misses (after rotation or restart) require a full file scan
 - `fsync` on every event is durable but expensive
@@ -93,7 +93,7 @@ For a local single-user system this is perfectly acceptable. For enterprise mult
 
 ### Finding L-4: `sessionReadCounts` slice grows unbounded within the rate window (Low)
 
-[server.go:1168-1189](file:///Users/adalaide/dev/loopgate/internal/loopgate/server.go#L1168-L1189) stores timestamps as a slice and prunes in-place. In the worst case, 60 timestamps per minute per session — fine. But if `defaultFsReadRateLimit` were ever raised significantly, this would allocate more than necessary since pruning only happens at check time.
+[server.go:1168-1189](../../../../internal/loopgate/server.go#L1168-L1189) stores timestamps as a slice and prunes in-place. In the worst case, 60 timestamps per minute per session — fine. But if `defaultFsReadRateLimit` were ever raised significantly, this would allocate more than necessary since pruning only happens at check time.
 
 ---
 
@@ -101,13 +101,13 @@ For a local single-user system this is perfectly acceptable. For enterprise mult
 
 ### Finding D-1: The `Server` struct is 146 lines of fields (High)
 
-[server.go:40-146](file:///Users/adalaide/dev/loopgate/internal/loopgate/server.go#L40-L146) is a 106-field struct with 11 separate mutexes (`mu`, `auditMu`, `auditExportMu`, `promotionMu`, `uiMu`, `claudeHookSessionsMu`, `connectionsMu`, `modelConnectionsMu`, `hostAccessPlansMu`, `policyRuntimeMu`, `pkceMu`, `providerTokenMu`). At 2 AM, the question "which mutex protects which field?" requires cross-referencing dozens of files.
+[server.go:40-146](../../../../internal/loopgate/server.go#L40-L146) is a 106-field struct with 11 separate mutexes (`mu`, `auditMu`, `auditExportMu`, `promotionMu`, `uiMu`, `claudeHookSessionsMu`, `connectionsMu`, `modelConnectionsMu`, `hostAccessPlansMu`, `policyRuntimeMu`, `pkceMu`, `providerTokenMu`). At 2 AM, the question "which mutex protects which field?" requires cross-referencing dozens of files.
 
 **What would help:** Document the mutex-to-field mapping with comments directly on the struct, or extract sub-structs with their own locks (e.g., `type sessionState struct { mu sync.Mutex; sessions map[...]; tokens map[...]; ... }`).
 
 ### Finding D-2: `executeCapabilityRequest` is a 580-line function (High)
 
-[server.go:544-1125](file:///Users/adalaide/dev/loopgate/internal/loopgate/server.go#L544-L1125) handles validation, replay detection, secret-export prohibition, capability-token scope, tool lookup, schema validation, policy evaluation, operator-mount grant override, low-risk auto-allow, approval creation, execution token consumption, rate limiting, host-folder dispatching, capability execution, quarantine, result classification, and audit logging — all in one method. This is the single hardest function to debug in the codebase.
+[server.go:544-1125](../../../../internal/loopgate/server.go#L544-L1125) handles validation, replay detection, secret-export prohibition, capability-token scope, tool lookup, schema validation, policy evaluation, operator-mount grant override, low-risk auto-allow, approval creation, execution token consumption, rate limiting, host-folder dispatching, capability execution, quarantine, result classification, and audit logging — all in one method. This is the single hardest function to debug in the codebase.
 
 ### Finding D-3: Approval state machine is implicit (Medium)
 
@@ -115,7 +115,7 @@ Approval states (`pending`, `expired`, `granted`, `denied`, `consumed`) are stri
 
 ### Finding D-4: `normalizeCapabilityRequest` silently strips echoed fields (Low)
 
-[types.go:267-273](file:///Users/adalaide/dev/loopgate/internal/loopgate/types.go#L267-L273) accepts optional echoed provider-native fields (`ToolName`, `tool_name`, `toolName`, `ToolUseID`, etc.) and silently strips them. This is documented as defense-in-depth, which is correct. But if a bug ever causes the wrong field to be used as the capability name, the silent stripping means you'll never see it in the audit trail.
+[types.go:267-273](../../../../internal/loopgate/types.go#L267-L273) accepts optional echoed provider-native fields (`ToolName`, `tool_name`, `toolName`, `ToolUseID`, etc.) and silently strips them. This is documented as defense-in-depth, which is correct. But if a bug ever causes the wrong field to be used as the capability name, the silent stripping means you'll never see it in the audit trail.
 
 ---
 
@@ -125,7 +125,7 @@ Approval states (`pending`, `expired`, `granted`, `denied`, `consumed`) are stri
 
 The root directory contains an 8.3MB compiled Mach-O binary (`loopgate-admin`). While `.gitignore` has `/loopgate-admin`, the file exists in the repo. Binary artifacts should not be committed — they balloon `.git` history and won't run on other architectures.
 
-### Finding R-2: `runtime/sandbox/root/home/workspace/haven_cli/affirmation_tui/stats.go` (Medium)
+### Finding R-2: [`runtime/sandbox/root/home/workspace/haven_cli/affirmation_tui/stats.go`](../../../../runtime/sandbox/root/home/workspace/haven_cli/affirmation_tui/stats.go) (Medium)
 
 This file sits inside the sandbox root directory and appears to be a remnant from a prior project (`haven_cli`). It's a working Go file with its own package declaration. It shouldn't be in the repo — it gets included in `find` results and potentially confuses tooling.
 
@@ -140,7 +140,7 @@ These should be factored into a single parse-and-validate step with the MAC veri
 
 ### Finding R-4: `snapshotNonceReplayStore` is legacy but still reachable (Low)
 
-[control_plane_state.go:164-216](file:///Users/adalaide/dev/loopgate/internal/loopgate/control_plane_state.go#L164-L216) — The `snapshotNonceReplayStore` exists as a fallback for the legacy JSON snapshot format. The `appendOnlyNonceReplayStore` (the current default) falls back to it when the JSONL file doesn't exist. Consider whether this migration path is still needed or can be removed.
+[control_plane_state.go:164-216](../../../../internal/loopgate/control_plane_state.go#L164-L216) — The `snapshotNonceReplayStore` exists as a fallback for the legacy JSON snapshot format. The `appendOnlyNonceReplayStore` (the current default) falls back to it when the JSONL file doesn't exist. Consider whether this migration path is still needed or can be removed.
 
 ### Finding R-5: The `output/` and `bin/` directories are present but gitignored and empty (Low)
 
@@ -162,7 +162,7 @@ These appear to be build artifact directories that shouldn't be in the repo tree
 
 ### What could be better
 
-**Global mutable state in `ledger` package** — The `appendChainStateCache` at [ledger.go:33-38](file:///Users/adalaide/dev/loopgate/internal/ledger/ledger.go#L33-L38) and `syncLedgerFileHandle` at [ledger.go:42-44](file:///Users/adalaide/dev/loopgate/internal/ledger/ledger.go#L42-L44) are package-level mutable variables. The cache is fine for performance, but the `syncLedgerFileHandle` variable used as a test seam means any test that overrides it affects all tests in the same process if not properly restored. The cleanup function (`useLedgerFileSyncForTest`) mitigates this, but it's fragile under `t.Parallel()`.
+**Global mutable state in `ledger` package** — The `appendChainStateCache` at [ledger.go:33-38](../../../../internal/ledger/ledger.go#L33-L38) and `syncLedgerFileHandle` at [ledger.go:42-44](../../../../internal/ledger/ledger.go#L42-L44) are package-level mutable variables. The cache is fine for performance, but the `syncLedgerFileHandle` variable used as a test seam means any test that overrides it affects all tests in the same process if not properly restored. The cleanup function (`useLedgerFileSyncForTest`) mitigates this, but it's fragile under `t.Parallel()`.
 
 **`internal/loopgate/` is a God package** — 106 files, ~40K lines in one package. This makes code navigation hard and compilation slow. The handler files are well-named (`server_*_handlers.go`, `server_*_runtime_test.go`), but they all share the same namespace and all access the `Server` struct directly.
 
@@ -202,8 +202,8 @@ No web frameworks, no ORM, no logging libraries, no dependency injection framewo
 
 ### Strengths
 
-- **38KB HTTP API reference** at [LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md](file:///Users/adalaide/dev/loopgate/docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) — comprehensive
-- **26KB threat model** at [loopgate-threat-model.md](file:///Users/adalaide/dev/loopgate/docs/loopgate-threat-model.md) — real threat model, not marketing
+- **38KB HTTP API reference** at [LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md](../../../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) — comprehensive
+- **26KB threat model** at [loopgate-threat-model.md](../../../loopgate-threat-model.md) — real threat model, not marketing
 - **ADR trail** — 5 ADRs documenting key decisions
 - **GETTING_STARTED.md** — 5-step quick path with a Mermaid sequence diagram
 - **Policy signing docs** with rotation procedures

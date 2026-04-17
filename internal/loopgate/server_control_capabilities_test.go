@@ -188,6 +188,9 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 	if err := allowedClient.FetchDiagnosticReport(context.Background(), &allowedReport); err != nil {
 		t.Fatalf("fetch diagnostic report with diagnostic.read: %v", err)
 	}
+	if _, found := allowedReport["nonce_replay"]; !found {
+		t.Fatalf("expected diagnostic report to include nonce_replay projection, got %#v", allowedReport)
+	}
 	if _, err := allowedClient.CheckAuditExportTrust(context.Background()); err != nil {
 		t.Fatalf("check audit export trust with diagnostic.read: %v", err)
 	}

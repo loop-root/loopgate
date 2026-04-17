@@ -68,3 +68,8 @@ The repository is in the right shape when:
 2. remove the last unnecessary historical naming from active comments, tests, and maps
 3. harden the local audit integrity story further
 4. keep the operator setup and demo workflows tight and readable
+
+## Implementation roadmaps
+
+- `loopgate_v1_hardening_plan.md` — correctness and security fixes from the 2026-04-15 review
+- `loopgate_v1_product_gaps.md` — product and UX improvements for operator confidence and OSS launch readiness
