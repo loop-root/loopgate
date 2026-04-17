@@ -50,8 +50,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Printf("Loopgate listening on %s\n", socketPath)
-	fmt.Println(server.AuditIntegrityModeMessage())
+	printStartupSummary(os.Stdout, repoRoot, socketPath, server)
 	if err := server.Serve(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR: serve loopgate:", err)
 		exitProcess(1)

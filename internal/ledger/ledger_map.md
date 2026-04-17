@@ -37,6 +37,9 @@ Use it when changing:
 
 - Never mutate past events; ordering and hashes must stay consistent.
 - Partial writes and integrity errors must surface explicitly to callers.
+- Append success is only reported after the file sync step completes; callers
+  should treat append failures as "event not durably committed," not as a
+  warning-only condition.
 - Keep append-chain cache ownership explicit. `AppendRuntime` instances may own
   cache state for a caller such as Loopgate's audit runtime; package-level
   helpers are only convenience delegates to the default runtime.

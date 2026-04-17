@@ -1,6 +1,6 @@
 # Loopgate
 
-**Last updated:** 2026-04-14
+**Last updated:** 2026-04-16
 
 **Loopgate** is a local-first governance layer for AI-assisted engineering work.
 
@@ -101,15 +101,31 @@ Start here:
 - [Getting started](./docs/setup/GETTING_STARTED.md)
 - [Operator guide](./docs/setup/OPERATOR_GUIDE.md)
 - [Setup](./docs/setup/SETUP.md)
+- [Policy reference](./docs/setup/POLICY_REFERENCE.md)
 - [Doctor and ledger tools](./docs/setup/DOCTOR_AND_LEDGER.md)
 - [HTTP API for local clients](./docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
 - [Policy signing](./docs/setup/POLICY_SIGNING.md)
 - [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./docs/loopgate-threat-model.md)
+- [Review closure status](./docs/reports/reviews/2026-04-16/review_status.md)
 - [Release candidate checklist](./docs/roadmap/release_candidate_checklist.md)
 - [Changelog](./CHANGELOG.md)
 - [Support](./SUPPORT.md)
 - [Security reporting](./SECURITY.md)
+
+## Known limitations
+
+Loopgate is publishable, but it is still an experimental local-first alpha.
+
+Current realities to keep in mind:
+- macOS-first, single-node operator flow is the active shipped scope
+- Claude Code hooks and the governed MCP broker path are the practical attachment surface today
+- the policy surface is intentionally strict by default; many teams will want to tune or replace the starter policy before daily use
+- internal package cleanup is in progress, so contributor ergonomics are improving but not yet boring
+
+Current gap tracking lives here:
+- [Active product gaps](./docs/roadmap/loopgate_v1_product_gaps.md)
+- [Review closure status](./docs/reports/reviews/2026-04-16/review_status.md)
 
 ## Repository layout
 

@@ -22,22 +22,16 @@ Checklist status:
   Deferred for post-launch follow-through. State-domain extraction and bounded approval-package extraction are underway, but the full package split is intentionally not treated as a first-public-repo blocker.
 - [x] `P2-4` Delete dead directories and tracked binary
   Closed for the tracked repo shape. Local ignored artifacts may still exist on disk outside git.
-- [ ] `P2-5` Add `Makefile` and `.golangci.yml`
-  Still open.
-- [ ] `P3-1` Surface known gaps in `README`
-  Still open.
-- [ ] `P3-2` Move multi-node language out of `AGENTS.md` into roadmap
-  Still open.
-- [ ] `P3-3` Write `POLICY_REFERENCE.md`
-  Still open.
+- [x] `P2-5` Add `Makefile` and `.golangci.yml`
+- [x] `P3-1` Surface known gaps in `README`
+- [x] `P3-2` Move multi-node language out of `AGENTS.md` into roadmap
+- [x] `P3-3` Write `POLICY_REFERENCE.md`
 - [x] `P3-4` Add `CHANGELOG.md`
 - [x] `P3-5` Resolve `context_map.md` contradiction
 - [ ] `P4-1` Add fuzz tests on JSON parsers
   Deferred.
-- [ ] `P4-2` Tighten `cmd/loopgate/hooks.go` JSON unmarshaling
-  Still open.
-- [ ] `P4-3` Document ledger crash semantics
-  Still open.
+- [x] `P4-2` Tighten `cmd/loopgate/hooks.go` JSON unmarshaling
+- [x] `P4-3` Document ledger crash semantics
 - [ ] `P4-4` Add umask hardening before socket listen
   Deferred for later hardening.
 

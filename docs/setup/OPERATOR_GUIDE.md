@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-14
+**Last updated:** 2026-04-16
 
 # Loopgate Operator Guide
 
@@ -20,6 +20,11 @@ In the current product, the operator:
 - inspects local audit when behavior is surprising
 
 Loopgate is not a chat UI. It is the local authority layer.
+
+The checked-in starter policy is intentionally strict. Use
+[Policy reference](./POLICY_REFERENCE.md) and
+`go run ./cmd/loopgate-policy-admin render-template` when you want to review or
+customize the policy surface before signing and applying it.
 
 ## Basic workflow
 
@@ -46,6 +51,13 @@ Expected local socket:
 ```text
 runtime/state/loopgate.sock
 ```
+
+Current startup summary:
+
+- version
+- socket path
+- signed policy path and `key_id`
+- audit integrity posture
 
 ### 3. Install Claude hooks
 

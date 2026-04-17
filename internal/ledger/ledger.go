@@ -341,10 +341,6 @@ func hashEvent(event Event) (string, error) {
 	return fmt.Sprintf("%x", payloadHash[:]), nil
 }
 
-func cacheVerifiedChainStateFromFileHandle(fileHandle *os.File, sequenceField string, lastSequence int64, lastHash string) {
-	defaultAppendRuntime.cacheVerifiedChainStateFromFileHandle(fileHandle, sequenceField, lastSequence, lastHash)
-}
-
 func (runtime *AppendRuntime) cacheVerifiedChainStateFromFileHandle(fileHandle *os.File, sequenceField string, lastSequence int64, lastHash string) {
 	if fileHandle == nil {
 		return
@@ -396,10 +392,6 @@ func (runtime *AppendRuntime) loadCachedChainState(normalizedPath string, sequen
 		return cachedChainState{}, false
 	}
 	return cachedState, true
-}
-
-func storeCachedChainState(normalizedPath string, sequenceField string, chainState cachedChainState) {
-	defaultAppendRuntime.storeCachedChainState(normalizedPath, sequenceField, chainState)
 }
 
 func (runtime *AppendRuntime) storeCachedChainState(normalizedPath string, sequenceField string, chainState cachedChainState) {

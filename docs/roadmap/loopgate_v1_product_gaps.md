@@ -33,19 +33,14 @@ Checklist status:
   Deferred for after the first public polish pass.
 - [ ] `7` End-to-end integration test
   Deferred for after the first public polish pass.
-- [ ] `8` Version tagging and `CHANGELOG`
-  Partially closed: `v0.1.0` and `CHANGELOG.md` exist, but there is still no `loopgate` version subcommand/flag.
-- [ ] `9` Structured startup output
-  Partially closed: startup prints socket path and audit-integrity mode, but not the fuller summary proposed here.
+- [x] `8` Version tagging and `CHANGELOG`
+- [x] `9` Structured startup output
 - [x] `10` `policy explain` command
 - [x] `11` Flip HMAC checkpoint default to on
-- [ ] `12` Replace `policy.yaml` with a well-commented starter policy
-  Still open.
+- [x] `12` Replace `policy.yaml` with a well-commented starter policy
 - [x] `13` `AGENTS.md` in the repo
-- [ ] `14` `Makefile`
-  Still open.
-- [ ] `15` CI policy signing check
-  Still open.
+- [x] `14` `Makefile`
+- [x] `15` CI policy signing check
 - [ ] `16` Coverage gate on `loopgate-policy-sign`
   Deferred.
 - [ ] `17` Pi agent harness adapter

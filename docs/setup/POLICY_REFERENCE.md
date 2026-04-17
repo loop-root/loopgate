@@ -1,0 +1,207 @@
+# Policy reference
+
+**Last updated:** 2026-04-16
+
+This page is the operator-facing reference for `core/policy/policy.yaml`.
+
+Use it when you need to answer:
+
+- what each policy block controls
+- which fields are strict versus optional
+- which defaults fail closed
+- where the current policy model is intentionally narrow
+
+For the signed-policy workflow, see [POLICY_SIGNING.md](./POLICY_SIGNING.md).
+For a plain-language summary of the active signed policy, use:
+
+```bash
+go run ./cmd/loopgate-policy-admin explain
+```
+
+## Parsing and trust model
+
+- `core/policy/policy.yaml` is the checked-in signed policy source.
+- `core/policy/policy.yaml.sig` is a detached Ed25519 signature file.
+- Loopgate startup fails closed if the signature file is missing, malformed, or does not verify.
+- YAML parsing is strict: unknown fields are rejected.
+- Policy defaults are conservative: enabling a surface without the required allowlist still fails.
+
+## Top-level schema
+
+```yaml
+version: 0.1.0
+tools: ...
+logging: ...
+safety: ...
+```
+
+## `tools.claude_code`
+
+Controls Claude Code built-in tool governance before execution.
+
+Fields:
+
+- `deny_unknown_tools`
+  - `true` means Claude tool names not declared in the builtin support set are denied.
+- `tool_policies`
+  - keyed by supported Claude tool name:
+    - `Bash`
+    - `Read`
+    - `Write`
+    - `Edit`
+    - `MultiEdit`
+    - `Glob`
+    - `Grep`
+    - `WebFetch`
+    - `WebSearch`
+
+Per-tool fields:
+
+- `enabled`
+- `requires_approval`
+- `allowed_roots`
+- `denied_paths`
+- `allowed_domains`
+- `allowed_command_prefixes`
+- `denied_command_prefixes`
+
+Notes:
+
+- `allowed_roots` and `denied_paths` apply to filesystem-shaped Claude tools.
+- `allowed_domains` applies to web-fetch shaped tools.
+- `allowed_command_prefixes` and `denied_command_prefixes` apply only to `Bash`.
+- Tool-specific values narrow or override the category defaults where the current hook surface supports it.
+
+## `tools.mcp_gateway`
+
+Controls the governed MCP broker surface.
+
+Fields:
+
+- `deny_unknown_servers`
+- `servers`
+
+Each `servers.<name>` entry supports:
+
+- `enabled`
+- `requires_approval`
+- `transport`
+  - currently only `stdio`
+- `launch.command`
+- `launch.args`
+- `working_directory`
+- `allowed_environment`
+- `secret_environment`
+- `tool_policies`
+
+Each `tool_policies.<tool>` entry supports:
+
+- `enabled`
+- `requires_approval`
+- `required_arguments`
+- `allowed_arguments`
+- `denied_arguments`
+- `argument_value_kinds`
+
+Current argument-value kinds:
+
+- `string`
+- `number`
+- `boolean`
+- `object`
+- `array`
+- `null`
+
+## `tools.filesystem`
+
+Controls Loopgate filesystem capabilities and the current host-path mediation surface.
+
+Fields:
+
+- `allowed_roots`
+- `denied_paths`
+- `read_enabled`
+- `write_enabled`
+- `write_requires_approval`
+
+Important current limitation:
+
+- host-category tools currently reuse `tools.filesystem.*`
+  enablement and approval flags
+- there is not yet a separate `tools.host` block
+
+That means host-folder access docs must describe the coupling explicitly instead of implying an independent host policy surface.
+
+## `tools.http`
+
+Controls Loopgate-mediated HTTP fetch capability.
+
+Fields:
+
+- `enabled`
+- `allowed_domains`
+- `requires_approval`
+- `timeout_seconds`
+
+Notes:
+
+- an empty `allowed_domains` list means domain fetches deny by default
+- `timeout_seconds <= 0` normalizes to `10`
+
+## `tools.shell`
+
+Controls Loopgate shell execution capability.
+
+Fields:
+
+- `enabled`
+- `allowed_commands`
+- `requires_approval`
+
+Notes:
+
+- `allowed_commands` must be explicitly populated when shell is enabled
+- Loopgate executes argv directly rather than going through a shell parser
+- shell control operators and ambient expansion are intentionally unavailable in the governed path
+
+## `logging`
+
+Controls audit detail level, not whether must-persist security events exist.
+
+Fields:
+
+- `log_commands`
+- `log_tool_calls`
+- `audit_detail.hook_projection_level`
+  - `full`
+  - `minimal`
+
+`minimal` reduces preview noise, but it does not remove mandatory audit events for approvals, denials, execution, or integrity checkpoints.
+
+## `safety`
+
+Explicit high-risk authoring toggles.
+
+Fields:
+
+- `allow_persona_modification`
+- `allow_policy_modification`
+
+These should usually stay `false`.
+
+## Starter policy guidance
+
+The checked-in `core/policy/policy.yaml` is an intentionally strict starter policy for a fresh public checkout:
+
+- Claude filesystem reads are allowed within the repo root
+- writes require approval
+- shell, HTTP, and governed MCP start disabled
+- policy and persona mutation stay denied
+
+If you want a more permissive local-development starting point, render a reviewed template first:
+
+```bash
+go run ./cmd/loopgate-policy-admin render-template -preset developer
+```
+
+Then inspect, sign, and apply it through the normal signed-policy workflow.

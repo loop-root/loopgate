@@ -258,14 +258,14 @@ func validateOrganizePlanOperations(ops []hostOrganizePlanOp) error {
 				return fmt.Errorf("op %d: mkdir requires path", i)
 			}
 			if strings.Contains(op.Path, "..") {
-				return fmt.Errorf("op %d: path must not contain ..", i)
+				return fmt.Errorf("op %d: path must not contain dot-dot segments", i)
 			}
 		case "move":
 			if strings.TrimSpace(op.From) == "" || strings.TrimSpace(op.To) == "" {
 				return fmt.Errorf("op %d: move requires from and to", i)
 			}
 			if strings.Contains(op.From, "..") || strings.Contains(op.To, "..") {
-				return fmt.Errorf("op %d: paths must not contain ..", i)
+				return fmt.Errorf("op %d: paths must not contain dot-dot segments", i)
 			}
 		default:
 			return fmt.Errorf("op %d: unknown kind %q (use mkdir or move)", i, op.Kind)

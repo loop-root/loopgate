@@ -25,8 +25,14 @@ already moved past them.
 - `P2-1` lock ordering and lock-domain reasoning are documented inline and in [`docs/design_overview/loopgate_locking.md`](../../../design_overview/loopgate_locking.md).
 - `P2-2` approval creation / cancellation rollback is now atomic to readers.
 - `P2-4` tracked dead directories and tracked `bin/loopgate` repo-shape issue are closed.
+- `P2-5` `Makefile` and `.golangci.yml` now exist, and the lint gate is wired into CI.
+- `P3-1` `README.md` now has a clear limitations section with links to the active gap list and this closure report.
+- `P3-2` non-shipping multi-node language moved out of `AGENTS.md` into [`docs/roadmap/future_enterprise_direction.md`](../../../roadmap/future_enterprise_direction.md).
+- `P3-3` [`docs/setup/POLICY_REFERENCE.md`](../../../setup/POLICY_REFERENCE.md) now exists.
 - `P3-4` `CHANGELOG.md` exists.
 - `P3-5` `context_map.md` is committed and `CONTRIBUTING.md` points at it correctly.
+- `P4-2` Claude settings hook JSON now rejects unknown nested fields instead of silently accepting them.
+- `P4-3` ledger crash / append-sync semantics are now documented for operators and contributors.
 
 ### Product-gap items
 
@@ -37,7 +43,10 @@ already moved past them.
 - `5` nonce replay retention now matches the 1-hour control-session TTL
 - `10` `loopgate-policy-admin explain`
 - `11` HMAC checkpoints enabled by default on macOS
+- `12` `core/policy/policy.yaml` is now a documented strict starter policy instead of a personal development profile
 - `13` repo `AGENTS.md` exists
+- `14` `Makefile`
+- `15` CI policy signing check
 
 ### Desktop-review findings closed or stale
 
@@ -49,6 +58,8 @@ already moved past them.
 - MCP cleanup holding `server.mu` across process-liveness probe
 - undocumented lock model
 - implicit approval state machine
+- version subcommand / build info gap
+- startup summary gap
 - runtime sandbox residue committed in-tree
 - tracked `bin/loopgate` artifact in git
 - `MORPH_*` runtime namespace drift
@@ -62,27 +73,7 @@ Notes:
 
 ## Still open
 
-These are the items that still materially affect first public impression or
-ongoing contributor ergonomics.
-
-### Public-repo / launch-hygiene open items
-
-- `P2-5` Add `Makefile`
-- `P2-5` Add `.golangci.yml`
-- `P3-1` Add a clear `README` limitations section that points readers at the active gap list and review status
-- `P3-2` Remove non-shipping multi-node enterprise language from `AGENTS.md` and move it into a future-vision doc
-- `P3-3` Add `docs/setup/POLICY_REFERENCE.md`
-- Product gap `12` Replace `core/policy/policy.yaml` with a better-commented starter policy
-- Product gap `15` Add CI policy-sign verification to `.github/workflows/test.yml`
-
-### Still-open lower-level findings
-
-- `P4-2` Tighten `cmd/loopgate/hooks.go` unknown-field handling
-- `P4-3` Document ledger crash/fsync semantics
-- Product gap `8` is only partially closed: tag and changelog exist, but there is still no `loopgate` version subcommand/flag
-- Product gap `9` is only partially closed: startup prints socket path and audit-integrity mode, but not the fuller structured summary proposed in the review
-- `pruneExpiredLocked` is still O(n) over several maps
-- `countPendingApprovalsForSessionLocked` is still a linear scan
+No first-public blockers remain from the current review set.
 
 ### Local-only cleanup worth doing before screenshots or packaging
 
@@ -106,6 +97,8 @@ These are real items, but they are not the best use of pre-announcement time.
 - `P4-4` umask hardening before socket listen
 - Product gap `7` build-tagged end-to-end integration test
 - Product gap `16` policy-sign coverage gate in CI
+- `pruneExpiredLocked` is still O(n) over several maps
+- `countPendingApprovalsForSessionLocked` is still a linear scan
 - audit-chain crash-recovery integration testing beyond the current unit-level coverage
 
 ### Scale / enterprise / future-scope concerns
@@ -120,27 +113,17 @@ These are real items, but they are not the best use of pre-announcement time.
 
 ## Safe to return to product work
 
-Not quite yet for a first public GitHub impression.
+Yes.
 
-The repo is already in good enough shape to stop large hardening work, but one
-short polish pass should happen before shifting attention fully back to product
-features.
-
-### Minimum pre-public polish set
-
-1. Add `Makefile`
-2. Add `.golangci.yml`
-3. Add an honest `README` limitations section with links to the active gap list and this closure report
-4. Move non-shipping multi-node language out of `AGENTS.md`
-5. Add `docs/setup/POLICY_REFERENCE.md`
-6. Add CI policy-sign verification
-7. Replace the current personal/dev-flavored starter policy with a cleaner commented default
+The short first-public polish pass is now landed. The repo is in good enough
+shape to return to product work without carrying misleading public docs or
+missing contributor basics.
 
 ### Decision
 
-- **Safe to return to product work after the short polish set above lands**
-- **Not yet ideal to announce the repo publicly before that pass**
+- **Safe to return to product work**
+- **Safe to announce the repo publicly as an experimental local-first alpha**
 
-That means the repo is no longer blocked by trust-model or major hardening debt.
-It is blocked mainly by documentation honesty, contributor ergonomics, and
-first-impression cleanup.
+That means the repo is no longer blocked by trust-model debt, missing public
+docs, or contributor-basics gaps. Remaining work is now normal product and
+follow-through engineering, not “clean this up before anyone sees it.”

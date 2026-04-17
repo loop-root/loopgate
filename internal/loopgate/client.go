@@ -173,12 +173,7 @@ func (client *Client) StoreModelConnection(ctx context.Context, request ModelCon
 	}
 
 	var response ModelConnectionStatus
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/model/connections/store", capabilityToken, modelConnectionStoreWire{
-		ConnectionID: request.ConnectionID,
-		ProviderName: request.ProviderName,
-		BaseURL:      request.BaseURL,
-		SecretValue:  request.SecretValue,
-	}, &response, nil); err != nil {
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/model/connections/store", capabilityToken, modelConnectionStoreWire(request), &response, nil); err != nil {
 		return ModelConnectionStatus{}, err
 	}
 	return response, nil

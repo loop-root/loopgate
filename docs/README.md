@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-14
+**Last updated:** 2026-04-16
 
 # Docs Index
 
@@ -24,11 +24,13 @@ repositories.
 - [Getting started](./setup/GETTING_STARTED.md)
 - [Operator guide](./setup/OPERATOR_GUIDE.md)
 - [Setup](./setup/SETUP.md)
+- [Policy reference](./setup/POLICY_REFERENCE.md)
 - [Doctor and ledger tools](./setup/DOCTOR_AND_LEDGER.md)
 - [Loopgate HTTP API (local clients)](./setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
 - [Policy signing](./setup/POLICY_SIGNING.md)
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./loopgate-threat-model.md)
+- [Review closure status](./reports/reviews/2026-04-16/review_status.md)
 - [Loopgate cleanup plan](./roadmap/loopgate_cleanup_plan.md)
 - [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
 - [Release candidate checklist](./roadmap/release_candidate_checklist.md)

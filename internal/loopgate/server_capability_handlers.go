@@ -148,10 +148,3 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 	})
 	server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
 }
-
-func ternaryApprovalDecision(approved bool) string {
-	if approved {
-		return "approved"
-	}
-	return "denied"
-}

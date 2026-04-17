@@ -161,15 +161,7 @@ func (server *Server) saveClaudeHookSessionStateLocked(stateBySessionID map[stri
 	}
 	for _, sessionID := range sessionIDs {
 		record := stateBySessionID[sessionID]
-		stateFile.Sessions = append(stateFile.Sessions, claudeHookSessionWire{
-			SessionID:     record.SessionID,
-			StorageKey:    record.StorageKey,
-			State:         record.State,
-			StartedAtUTC:  record.StartedAtUTC,
-			LastSeenAtUTC: record.LastSeenAtUTC,
-			EndedAtUTC:    record.EndedAtUTC,
-			ExitReason:    record.ExitReason,
-		})
+		stateFile.Sessions = append(stateFile.Sessions, claudeHookSessionWire(record))
 	}
 
 	stateBytes, err := json.MarshalIndent(stateFile, "", "  ")

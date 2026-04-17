@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -90,6 +91,10 @@ func handleLoopgateSubcommand(args []string) bool {
 		return false
 	}
 	switch args[0] {
+	case "version", "--version", "-version":
+		printVersion(os.Stdout)
+		exitProcess(0)
+		return true
 	case "init":
 		if err := runInit(args[1:], os.Stdout, os.Stderr); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: init:", err)
@@ -413,12 +418,24 @@ func (settingsConfig *claudeSettings) UnmarshalJSON(rawBytes []byte) error {
 			if len(fieldValue) == 0 || string(fieldValue) == "null" {
 				continue
 			}
-			if err := json.Unmarshal(fieldValue, &settingsConfig.Hooks); err != nil {
+			if err := decodeStrictJSON(fieldValue, &settingsConfig.Hooks); err != nil {
 				return err
 			}
 			continue
 		}
 		settingsConfig.otherFields[fieldName] = fieldValue
+	}
+	return nil
+}
+
+func decodeStrictJSON(rawBytes []byte, target interface{}) error {
+	decoder := json.NewDecoder(bytes.NewReader(rawBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if decoder.More() {
+		return fmt.Errorf("unexpected trailing JSON value")
 	}
 	return nil
 }

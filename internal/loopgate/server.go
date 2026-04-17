@@ -1515,27 +1515,6 @@ func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
 	return false
 }
 
-func loadOrCreateStateKey(keyPath string) ([]byte, error) {
-	keyBytes, err := os.ReadFile(keyPath)
-	if err == nil && len(keyBytes) >= 32 {
-		return keyBytes[:32], nil
-	}
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("read state key: %w", err)
-	}
-	newKey := make([]byte, 32)
-	if _, err := rand.Read(newKey); err != nil {
-		return nil, fmt.Errorf("generate state key: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0o700); err != nil {
-		return nil, fmt.Errorf("create state key dir: %w", err)
-	}
-	if err := os.WriteFile(keyPath, newKey, 0o600); err != nil {
-		return nil, fmt.Errorf("write state key: %w", err)
-	}
-	return newKey, nil
-}
-
 func randomHex(byteCount int) (string, error) {
 	randomBytes := make([]byte, byteCount)
 	if _, err := rand.Read(randomBytes); err != nil {

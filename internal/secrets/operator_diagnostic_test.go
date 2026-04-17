@@ -31,7 +31,7 @@ func TestLoopgateOperatorErrorClass_Deadline(t *testing.T) {
 }
 
 func TestLoopgateOperatorErrorClass_JSON(t *testing.T) {
-	_, err := json.Marshal(make(chan int))
+	_, err := json.Marshal(complex(1, 2))
 	if err == nil {
 		t.Fatal("expected marshal error")
 	}

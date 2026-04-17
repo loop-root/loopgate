@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"loopgate/internal/loopgate"
@@ -810,12 +809,6 @@ func approvalPreview(content string, maxLen int) (string, bool) {
 		return trimmed[:maxLen] + "... (truncated)", false
 	}
 	return trimmed, false
-}
-
-func sortedCopy(values []string) []string {
-	sortedValues := append([]string(nil), values...)
-	sort.Strings(sortedValues)
-	return sortedValues
 }
 
 func formatSiteCommandError(rawSiteURL string, err error) string {

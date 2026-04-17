@@ -22,9 +22,9 @@ func (server *Server) validateModelConfig(ctx context.Context, runtimeConfig mod
 	case "anthropic":
 		if strings.TrimSpace(validatedConfig.ModelConnectionID) == "" {
 			if strings.TrimSpace(validatedConfig.APIKeyEnvVar) != "" {
-				return modelruntime.Config{}, fmt.Errorf("Loopgate-managed anthropic config requires model_connection_id; legacy api_key_env_var is unsupported")
+				return modelruntime.Config{}, fmt.Errorf("loopgate-managed anthropic config requires model_connection_id; legacy api_key_env_var is unsupported")
 			}
-			return modelruntime.Config{}, fmt.Errorf("Loopgate-managed anthropic config requires model_connection_id")
+			return modelruntime.Config{}, fmt.Errorf("loopgate-managed anthropic config requires model_connection_id")
 		}
 	case "openai_compatible":
 		if strings.TrimSpace(validatedConfig.ModelConnectionID) == "" {
@@ -32,9 +32,9 @@ func (server *Server) validateModelConfig(ctx context.Context, runtimeConfig mod
 				return validatedConfig, nil
 			}
 			if strings.TrimSpace(validatedConfig.APIKeyEnvVar) != "" {
-				return modelruntime.Config{}, fmt.Errorf("Loopgate-managed openai_compatible config requires model_connection_id; legacy api_key_env_var is unsupported for non-localhost base url")
+				return modelruntime.Config{}, fmt.Errorf("loopgate-managed openai_compatible config requires model_connection_id; legacy api_key_env_var is unsupported for non-localhost base url")
 			}
-			return modelruntime.Config{}, fmt.Errorf("Loopgate-managed openai_compatible config requires model_connection_id for non-localhost base url")
+			return modelruntime.Config{}, fmt.Errorf("loopgate-managed openai_compatible config requires model_connection_id for non-localhost base url")
 		}
 	default:
 		return validatedConfig, nil

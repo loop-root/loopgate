@@ -1,10 +1,20 @@
 version: 0.1.0
 
-# Loopgate Working Policy
-# This checked-in file is the current local development policy for the active
-# Loopgate harness. It is authoritative for local runtime behavior, but it is
-# not yet a polished open-source-safe default.
-# The policy engine enforces these constraints before any tool executes.
+# Loopgate starter policy
+#
+# This checked-in signed policy is intentionally conservative for a fresh public
+# checkout:
+# - Claude read-oriented hooks are allowed within the repo root
+# - Claude writes require approval
+# - ambient shell, HTTP, and governed MCP stay disabled until an operator opts in
+# - policy and persona mutation remain denied
+#
+# If you want a more permissive local-development starting point, render a
+# reviewed template first:
+#   go run ./cmd/loopgate-policy-admin render-template -preset developer
+#
+# Then sign and apply that reviewed policy through the normal signed-policy
+# workflow.
 
 tools:
 
@@ -12,25 +22,7 @@ tools:
     deny_unknown_tools: true
     tool_policies:
       Bash:
-        enabled: true
-        allowed_command_prefixes:
-          - "ls"
-          - "pwd"
-          - "find "
-          - "rg "
-          - "grep "
-          - "cat "
-          - "sed -n "
-          - "head "
-          - "tail "
-          - "wc "
-          - "sort "
-          - "git status"
-          - "git diff" 
-          - "echo "                   
-        denied_command_prefixes:
-          - "rm "
-          - "curl "
+        enabled: false
       Read:
         enabled: true
         allowed_roots:
@@ -71,8 +63,42 @@ tools:
         allowed_roots:
           - "."
       WebFetch:
-        enabled: true
-        allowed_domains:
-          - "github.com"
+        enabled: false
       WebSearch:
         enabled: false
+
+  mcp_gateway:
+    deny_unknown_servers: true
+    servers: {}
+
+  filesystem:
+    allowed_roots:
+      - "."
+    denied_paths:
+      - "core/policy"
+      - "persona"
+      - "runtime/state"
+    read_enabled: true
+    write_enabled: true
+    write_requires_approval: true
+
+  http:
+    enabled: false
+    allowed_domains: []
+    requires_approval: true
+    timeout_seconds: 10
+
+  shell:
+    enabled: false
+    allowed_commands: []
+    requires_approval: true
+
+logging:
+  log_commands: true
+  log_tool_calls: true
+  audit_detail:
+    hook_projection_level: full
+
+safety:
+  allow_persona_modification: false
+  allow_policy_modification: false

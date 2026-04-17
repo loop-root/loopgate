@@ -379,7 +379,3 @@ func (t operatorMountFSMkdir) Execute(ctx context.Context, args map[string]strin
 	fm := &toolspkg.FSMkdir{RepoRoot: repoRoot, AllowedRoots: mounts, DeniedPaths: nil}
 	return fm.Execute(ctx, args)
 }
-
-func registerOperatorMountTools(server *Server) error {
-	return registerOperatorMountToolsOnRegistry(server, server.currentPolicyRuntime().registry)
-}

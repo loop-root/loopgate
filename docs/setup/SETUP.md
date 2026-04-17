@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-14
+**Last updated:** 2026-04-16
 
 # Loopgate Setup
 
@@ -43,6 +43,10 @@ go run ./cmd/loopgate-policy-admin validate
 `loopgate init` creates a local Ed25519 signer for this operator, installs the
 matching public key in the operator trust directory, and signs the checked-in
 policy.
+
+The checked-in `core/policy/policy.yaml` is an intentionally strict starter
+policy. For field-by-field semantics and template guidance, see
+[Policy reference](./POLICY_REFERENCE.md).
 
 If you later re-sign intentionally with `loopgate-policy-sign`, reuse the
 printed `key_id`.
@@ -131,6 +135,7 @@ Design and behavior notes:
 Start here:
 - [Getting started](./GETTING_STARTED.md)
 - [Operator guide](./OPERATOR_GUIDE.md)
+- [Policy reference](./POLICY_REFERENCE.md)
 - [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
 - [Loopgate HTTP API (local clients)](./LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
 
@@ -162,6 +167,7 @@ go run ./cmd/loopgate-doctor trust-check
 - [Operator guide](./OPERATOR_GUIDE.md)
 - [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
 - [Policy signing](./POLICY_SIGNING.md)
+- [Policy reference](./POLICY_REFERENCE.md)
 - [Policy signing rotation](./POLICY_SIGNING_ROTATION.md)
 - [Ledger and audit integrity](./LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Secrets](./SECRETS.md)

@@ -2,9 +2,11 @@
 # Loopgate policy — EXAMPLE with line-by-line guidance
 # =============================================================================
 #
-# Copy to your deployment's policy seed path only after review. The live file
-# used at runtime is managed under runtime/state/config (see Loopgate docs).
-# This example mirrors core/policy/policy.yaml with extra comments for MVP ops.
+# Copy to your deployment's policy seed path only after review.
+#
+# The checked-in signed starter policy in core/policy/policy.yaml is stricter
+# than this example. This file is a guided operator example that explains the
+# available fields and shows a more development-oriented starting point.
 #
 # PRESETS (mental model):
 #   • STRICT MVP — http.enabled: false, shell.enabled: false, write_requires_approval: true

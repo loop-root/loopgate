@@ -149,15 +149,6 @@ func diagAppendTenantAttrs(attrs []any, data map[string]interface{}) []any {
 	)
 }
 
-// diagnosticSlogTenantUser returns slog key-value pairs for a bound control session.
-// Empty strings are valid in personal mode (deployment tenant unset).
-func diagnosticSlogTenantUser(tenantID, userID string) []any {
-	return []any{
-		"tenant_id", strings.TrimSpace(tenantID),
-		"user_id", strings.TrimSpace(userID),
-	}
-}
-
 func diagOperatorErrorClass(data map[string]interface{}) string {
 	s := strings.TrimSpace(diagDataString(data, "operator_error_class"))
 	if s == "" {

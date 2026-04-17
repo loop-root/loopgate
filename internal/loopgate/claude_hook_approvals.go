@@ -106,68 +106,6 @@ func claudeHookApprovalRequestFingerprint(req HookPreValidateRequest) (string, e
 	return hex.EncodeToString(hashState.Sum(nil)), nil
 }
 
-func (server *Server) ensureClaudeHookApprovalRequest(req HookPreValidateRequest, approvalReason string) (claudeHookApprovalRecord, claudeHookSessionRecord, error) {
-	validatedSessionID := strings.TrimSpace(req.SessionID)
-	validatedToolUseID := strings.TrimSpace(req.ToolUseID)
-	if validatedSessionID == "" {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, fmt.Errorf("approval-tracked hook requires session_id")
-	}
-	if validatedToolUseID == "" {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, fmt.Errorf("approval-tracked hook requires tool_use_id")
-	}
-
-	server.claudeHookRuntime.mu.Lock()
-	defer server.claudeHookRuntime.mu.Unlock()
-
-	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, claudeCodeHookEventPreToolUse, "")
-	if err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, err
-	}
-	approvalRecordsByToolUseID, err := server.loadClaudeHookApprovalStateLocked(sessionRecord.StorageKey)
-	if err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, err
-	}
-
-	fingerprintSHA256, err := claudeHookApprovalFingerprint(req)
-	if err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, err
-	}
-	requestFingerprintSHA256, err := claudeHookApprovalRequestFingerprint(req)
-	if err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, err
-	}
-	if existingRecord, found := approvalRecordsByToolUseID[validatedToolUseID]; found {
-		if existingRecord.ToolFingerprintSHA256 != fingerprintSHA256 {
-			return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, fmt.Errorf("tool_use_id %q was reused with different tool input", validatedToolUseID)
-		}
-		return existingRecord, sessionRecord, nil
-	}
-
-	randomSuffix, err := randomHex(8)
-	if err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, fmt.Errorf("generate hook approval id: %w", err)
-	}
-	nowUTC := server.now().UTC().Format(time.RFC3339Nano)
-	approvalRecord := claudeHookApprovalRecord{
-		ApprovalRequestID:        "hookapr_" + randomSuffix,
-		SessionID:                validatedSessionID,
-		ToolUseID:                validatedToolUseID,
-		ToolName:                 strings.TrimSpace(req.ToolName),
-		ApprovalSurface:          claudeHookApprovalSurfaceInlineClaude,
-		ToolFingerprintSHA256:    fingerprintSHA256,
-		RequestFingerprintSHA256: requestFingerprintSHA256,
-		Reason:                   strings.TrimSpace(approvalReason),
-		State:                    claudeHookApprovalStatePending,
-		CreatedAtUTC:             nowUTC,
-		HookEventName:            claudeCodeHookEventPreToolUse,
-	}
-	approvalRecordsByToolUseID[validatedToolUseID] = approvalRecord
-	if err := server.saveClaudeHookApprovalStateLocked(sessionRecord.StorageKey, approvalRecordsByToolUseID); err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, err
-	}
-	return approvalRecord, sessionRecord, nil
-}
-
 func cloneClaudeHookApprovalRecords(recordsByToolUseID map[string]claudeHookApprovalRecord) map[string]claudeHookApprovalRecord {
 	if recordsByToolUseID == nil {
 		return map[string]claudeHookApprovalRecord{}
@@ -242,55 +180,6 @@ func (server *Server) createClaudeHookApprovalRequest(req HookPreValidateRequest
 	return approvalRecord, sessionRecord, true, previousRecordsByToolUseID, nil
 }
 
-func (server *Server) resolveClaudeHookApproval(req HookPreValidateRequest, resolutionState string, resolutionReason string) (claudeHookApprovalRecord, claudeHookSessionRecord, bool, error) {
-	validatedSessionID := strings.TrimSpace(req.SessionID)
-	validatedToolUseID := strings.TrimSpace(req.ToolUseID)
-	if validatedSessionID == "" || validatedToolUseID == "" {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, nil
-	}
-
-	server.claudeHookRuntime.mu.Lock()
-	defer server.claudeHookRuntime.mu.Unlock()
-
-	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, normalizedClaudeCodeHookEventName(req.HookEventName), req.HookReason)
-	if err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, err
-	}
-	approvalRecordsByToolUseID, err := server.loadClaudeHookApprovalStateLocked(sessionRecord.StorageKey)
-	if err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, err
-	}
-	approvalRecord, found := approvalRecordsByToolUseID[validatedToolUseID]
-	if !found {
-		return claudeHookApprovalRecord{}, sessionRecord, false, nil
-	}
-
-	fingerprintSHA256, err := claudeHookApprovalFingerprint(req)
-	if err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, err
-	}
-	if approvalRecord.ToolFingerprintSHA256 != fingerprintSHA256 {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, fmt.Errorf("hook approval %q tool fingerprint mismatch", approvalRecord.ApprovalRequestID)
-	}
-	if approvalRecord.State == resolutionState {
-		return approvalRecord, sessionRecord, true, nil
-	}
-	if approvalRecord.State != claudeHookApprovalStatePending {
-		return approvalRecord, sessionRecord, true, nil
-	}
-
-	approvalRecord.State = resolutionState
-	approvalRecord.ResolvedAtUTC = server.now().UTC().Format(time.RFC3339Nano)
-	approvalRecord.ResolutionReason = strings.TrimSpace(resolutionReason)
-	approvalRecord.HookEventName = normalizedClaudeCodeHookEventName(req.HookEventName)
-	approvalRecord.HookInterrupted = req.HookInterrupted
-	approvalRecordsByToolUseID[validatedToolUseID] = approvalRecord
-	if err := server.saveClaudeHookApprovalStateLocked(sessionRecord.StorageKey, approvalRecordsByToolUseID); err != nil {
-		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, err
-	}
-	return approvalRecord, sessionRecord, true, nil
-}
-
 func (server *Server) transitionClaudeHookApproval(req HookPreValidateRequest, resolutionState string, resolutionReason string) (claudeHookApprovalRecord, claudeHookSessionRecord, bool, bool, map[string]claudeHookApprovalRecord, error) {
 	validatedSessionID := strings.TrimSpace(req.SessionID)
 	validatedToolUseID := strings.TrimSpace(req.ToolUseID)
@@ -339,46 +228,6 @@ func (server *Server) transitionClaudeHookApproval(req HookPreValidateRequest, r
 		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, false, nil, err
 	}
 	return approvalRecord, sessionRecord, true, true, previousRecordsByToolUseID, nil
-}
-
-func (server *Server) abandonPendingClaudeHookApprovals(rawSessionID string, hookReason string) (int, claudeHookSessionRecord, error) {
-	validatedSessionID := strings.TrimSpace(rawSessionID)
-	if validatedSessionID == "" {
-		return 0, claudeHookSessionRecord{}, nil
-	}
-
-	server.claudeHookRuntime.mu.Lock()
-	defer server.claudeHookRuntime.mu.Unlock()
-
-	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, claudeCodeHookEventSessionEnd, hookReason)
-	if err != nil {
-		return 0, claudeHookSessionRecord{}, err
-	}
-	approvalRecordsByToolUseID, err := server.loadClaudeHookApprovalStateLocked(sessionRecord.StorageKey)
-	if err != nil {
-		return 0, claudeHookSessionRecord{}, err
-	}
-
-	abandonedCount := 0
-	resolvedAtUTC := server.now().UTC().Format(time.RFC3339Nano)
-	for toolUseID, approvalRecord := range approvalRecordsByToolUseID {
-		if approvalRecord.State != claudeHookApprovalStatePending {
-			continue
-		}
-		approvalRecord.State = claudeHookApprovalStateAbandoned
-		approvalRecord.ResolvedAtUTC = resolvedAtUTC
-		approvalRecord.ResolutionReason = strings.TrimSpace(hookReason)
-		approvalRecord.HookEventName = claudeCodeHookEventSessionEnd
-		approvalRecordsByToolUseID[toolUseID] = approvalRecord
-		abandonedCount++
-	}
-	if abandonedCount == 0 {
-		return 0, sessionRecord, nil
-	}
-	if err := server.saveClaudeHookApprovalStateLocked(sessionRecord.StorageKey, approvalRecordsByToolUseID); err != nil {
-		return 0, claudeHookSessionRecord{}, err
-	}
-	return abandonedCount, sessionRecord, nil
 }
 
 func (server *Server) abandonPendingClaudeHookApprovalsWithPrevious(rawSessionID string, hookReason string) (int, claudeHookSessionRecord, map[string]claudeHookApprovalRecord, error) {
@@ -536,22 +385,7 @@ func (server *Server) saveClaudeHookApprovalStateLocked(storageKey string, appro
 	}
 	for _, toolUseID := range toolUseIDs {
 		approvalRecord := approvalsByToolUseID[toolUseID]
-		stateFile.Approvals = append(stateFile.Approvals, claudeHookApprovalWire{
-			ApprovalRequestID:        approvalRecord.ApprovalRequestID,
-			SessionID:                approvalRecord.SessionID,
-			ToolUseID:                approvalRecord.ToolUseID,
-			ToolName:                 approvalRecord.ToolName,
-			ApprovalSurface:          approvalRecord.ApprovalSurface,
-			ToolFingerprintSHA256:    approvalRecord.ToolFingerprintSHA256,
-			RequestFingerprintSHA256: approvalRecord.RequestFingerprintSHA256,
-			Reason:                   approvalRecord.Reason,
-			State:                    approvalRecord.State,
-			CreatedAtUTC:             approvalRecord.CreatedAtUTC,
-			ResolvedAtUTC:            approvalRecord.ResolvedAtUTC,
-			ResolutionReason:         approvalRecord.ResolutionReason,
-			HookEventName:            approvalRecord.HookEventName,
-			HookInterrupted:          approvalRecord.HookInterrupted,
-		})
+		stateFile.Approvals = append(stateFile.Approvals, claudeHookApprovalWire(approvalRecord))
 	}
 
 	stateBytes, err := json.MarshalIndent(stateFile, "", "  ")

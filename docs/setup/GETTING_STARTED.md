@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-15
+**Last updated:** 2026-04-16
 
 # Getting Started
 
@@ -39,6 +39,11 @@ go run ./cmd/loopgate-policy-admin validate
 matching trust anchor under your Loopgate config directory, signs the checked-in
 policy, and prints the `key_id` you should reuse later if you intentionally
 re-sign with `loopgate-policy-sign`.
+
+The checked-in starter policy is deliberately strict. If you want a more
+permissive local-development baseline, review
+[POLICY_REFERENCE.md](./POLICY_REFERENCE.md) and render a template with
+`loopgate-policy-admin render-template` before signing and applying it.
 
 ### 3. Start Loopgate
 
@@ -118,5 +123,6 @@ sequenceDiagram
 
 - [Setup](./SETUP.md)
 - [Operator guide](./OPERATOR_GUIDE.md)
+- [Policy reference](./POLICY_REFERENCE.md)
 - [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
 - [Loopgate HTTP API for local clients](./LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)

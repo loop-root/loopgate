@@ -122,10 +122,6 @@ func wizardSummary(lines []string) string {
 	return renderPanel("SETUP COMPLETE", nil, filtered...)
 }
 
-func commandPrompt(_ int) string {
-	return "> "
-}
-
 func approvalPrompt(label string) string {
 	label = strings.TrimSpace(label)
 	if label == "" {

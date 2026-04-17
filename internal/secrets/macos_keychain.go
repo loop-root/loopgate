@@ -159,7 +159,6 @@ func keychainServiceName(validatedRef SecretRef) string {
 	return "morph.loopgate." + validatedRef.Scope
 }
 
-
 func trimSingleTrailingNewline(rawValue []byte) []byte {
 	trimmedValue := rawValue
 	trimmedValue = bytes.TrimSuffix(trimmedValue, []byte("\r\n"))

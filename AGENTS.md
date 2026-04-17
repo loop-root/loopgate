@@ -1,6 +1,6 @@
 # Claude Code Agent Instructions for Loopgate
 
-**Last updated:** 2026-04-08 (Loopgate-only docs; **HTTP-on-UDS** control plane; **in-tree MCP deprecated/removed** — ADR 0010).
+**Last updated:** 2026-04-16 (Loopgate-only docs; **HTTP-on-UDS** control plane; **in-tree MCP deprecated/removed** — ADR 0010; public local-first scope clarified).
 
 You are working on a security-sensitive Go project for governing and constraining AI agent activity.
 
@@ -30,15 +30,12 @@ Assume hostile prompt content will eventually reach the system.
 
 Loopgate is a policy-governed AI governance engine.
 
-It operates as the enforcement and control plane for AI agent activity — on individual developer machines, and in enterprise deployment as a distributed enforcement network with centralized governance.
+For the current public repo, treat it as a **local-first, single-node**
+enforcement and control plane for AI-assisted engineering work.
 
 Important assumptions:
 
 - Loopgate is the authority boundary and enforcement node.
-- In single-node deployment: Loopgate is both the enforcement and governance authority.
-- In multi-node enterprise deployment: each **local node** enforces policy from an **admin node**. The admin node is the governance authority. Local nodes are full enforcement runtimes — not thin clients.
-- The admin node holds: policy configuration, identity and IDP integration, audit aggregation, and org-level memory. Local nodes enforce that policy, run model calls locally, maintain per-user memory, and stream audit events to the admin node.
-- Tenant isolation is enforced by `tenant_id` namespace across all resources — memory, audit, capability grants, secrets. Cross-tenant access is always a hard denial.
 - Connected developer tools (Claude Code, Cursor, VS Code, Google Anti‑Gravity, OpenAI Codex, and any MCP-compatible IDE) are clients. They are not authority sources.
 - Morphlings are bounded subordinate agent contexts governed by Loopgate, not self-authorizing workers.
 - Agents, model outputs, tool outputs, external files, environment variables, and config loaded from disk are untrusted unless explicitly validated.
@@ -65,8 +62,7 @@ These rules align with the local control-plane design and AMP direction.
 
 ### Transport standards
 
-- **Local client ↔ Loopgate (v1 standard):** HTTP over a Unix domain socket (local control-plane binding). IDE adapters, proxy mode (when shipped), tests, and **out-of-tree** bridges connect this way. **In-tree MCP subprocess host removed** (ADR 0010 — reduced attack surface; **reserved** for future thin forwarder via new ADR). Not Apple XPC.
-- **Local node ↔ admin node (enterprise):** mTLS over TCP. Admin node authority must be cryptographically verified — IP address or hostname alone is not sufficient.
+- **Local client ↔ Loopgate (v1 standard):** HTTP over a Unix domain socket (local control-plane binding). IDE adapters, tests, and **out-of-tree** bridges connect this way. **In-tree MCP subprocess host removed** (ADR 0010 — reduced attack surface; **reserved** for future thin forwarder via new ADR). Not Apple XPC.
 - **Apple XPC hardening** is optional post-launch backlog only (no committed date). See `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`.
 
 For local privileged requests, preserve the existing layered model:
@@ -80,11 +76,11 @@ Bearer possession alone is not enough.
 
 ## Boundary split
 
-### Enterprise integration surface owns (primary)
+### Current integration surface owns (primary)
 
 - **Local HTTP control plane (v1):** normative attachment for developer tools — session open, signed requests, capability execution over **HTTP on the Unix socket** (`docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`). **In-tree MCP server deprecated and removed** (ADR 0010); **out-of-tree** MCP→HTTP forwarders remain an operator choice; a **future ADR** may reserve a thin in-tree forwarder **only** with identical policy/audit invariants.
 - **Proxy mode:** transparent API proxy between developer IDEs and model endpoints — intercepts requests, injects memory context, applies policy, logs to audit.
-- **Admin console:** web UI for IT admins — policy configuration, user/team provisioning, IDP integration, audit log viewer. Not a developer-facing surface.
+- **Future operator/admin surfaces:** explicitly future-facing and not part of the current public product contract.
 
 ### Loopgate owns
 
@@ -111,33 +107,15 @@ Morphlings are internal Loopgate-governed runtime objects.
 
 **Any MCP-shaped or IDE-bridge transport** (in-tree or out-of-tree) **must** apply the same policy evaluation, approval workflows, and audit logging as HTTP handlers — **never** a trust bypass. The removed in-tree server followed this rule; any **future** reintroduction does too (ADR 0010). The proxy mode must not weaken policy or audit. The admin console must require authentication before serving routes.
 
-## Multi-tenancy model
+## Future direction note
 
-In enterprise deployment, Loopgate operates as a distributed enforcement network. These rules govern multi-node operation.
+Some older planning material discusses multi-node, tenant-aware, or admin-node
+deployment. That is **not** the shipped contract for this repo. Treat it as
+future direction only, and keep current code/docs honest about the active
+single-node local product.
 
-### Node roles
-
-- **Local node:** enforces policy from the admin node. Runs model calls locally. Maintains per-user memory. Streams audit events to admin node. Falls back to cached policy when offline.
-- **Admin node:** the governance authority. Holds policy configuration, IDP integration, audit aggregation, org-level memory namespace. Does not run model calls.
-
-### Tenant isolation
-
-- Every resource — memory distillates, capability grants, audit events, secrets — must carry a `tenant_id`.
-- `tenant_id` is set at node initialization and derived from IDP-verified identity. It is not a per-request parameter.
-- Cross-tenant access is always a hard denial. It must not degrade to empty results or a permissive fallback.
-- Org-level memory and user-level memory are separate namespaces within the same tenant.
-
-### Admin node authority
-
-- Admin node authority must be cryptographically verified, not assumed from IP address, hostname, or network segment.
-- A local node must not promote a peer local node to admin authority.
-- Policy pushed from the admin node must be validated before application. Malformed policy is a hard failure, not a fallback to permissive defaults.
-
-### Offline behavior
-
-- A local node without admin node connectivity must continue to enforce the last-cached policy.
-- Cached policy must have a validated signature.
-- Capabilities that require real-time admin node verification must fail closed when the admin node is unreachable, not silently degrade to local-only evaluation.
+If you need the future-looking notes, see
+`docs/roadmap/future_enterprise_direction.md`.
 
 ## Security model
 

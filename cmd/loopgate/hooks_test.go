@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -93,6 +94,22 @@ func TestRunInstallHooks_PreservesOtherSettings(t *testing.T) {
 	}
 	if _, ok := rawFields["permissions"]; !ok {
 		t.Fatalf("expected permissions field to be preserved in settings.json")
+	}
+}
+
+func TestLoadClaudeSettings_RejectsUnknownHookActionField(t *testing.T) {
+	settingsPath := filepath.Join(t.TempDir(), claudeSettingsFilename)
+	rawSettings := []byte("{\"hooks\":{\"PreToolUse\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"python3 /tmp/x.py\",\"surprise\":true}]}]}}\n")
+	if err := os.WriteFile(settingsPath, rawSettings, 0o644); err != nil {
+		t.Fatalf("write raw settings: %v", err)
+	}
+
+	_, err := loadClaudeSettings(settingsPath)
+	if err == nil {
+		t.Fatal("expected unknown hook field to be rejected")
+	}
+	if !strings.Contains(err.Error(), "surprise") {
+		t.Fatalf("expected unknown-field error, got %v", err)
 	}
 }
 

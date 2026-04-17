@@ -19,6 +19,27 @@ Loopgate's control-plane audit uses the shared **`internal/ledger`** machinery: 
 
 Loopgate verifies the chain when appending and on diagnostic paths that scan the active log (see `internal/ledger`).
 
+## Crash and append semantics
+
+Loopgate treats ledger append durability conservatively:
+
+- each append verifies the current chain state before extending it
+- each new event line is written as a single append operation
+- the append path syncs the file before reporting success
+- failures are surfaced to the caller; Loopgate does not silently downgrade to best-effort audit
+
+Operationally, that means:
+
+- a successfully acknowledged security-relevant action has had its audit append path completed first
+- a crash before the append finishes should fail the action rather than leaving an ambiguous "maybe audited" state
+- a torn, truncated, or otherwise malformed tail line is treated as an integrity problem on the next verification or append path, not ignored as normal state
+
+What this does **not** mean:
+
+- it does not promise recovery from arbitrary filesystem or hardware corruption
+- it does not replace off-host retention if you need evidence outside the workstation
+- it does not turn the hash chain into authorship proof without HMAC checkpoints or another out-of-band trust anchor
+
 ## What the hash chain does **not** give you (by itself)
 
 The per-line digest is **public SHA-256** over canonical event bytes. Without a **separate secret**, the chain alone does not prove **Loopgate authorship** to a verifier who assumes the whole file might have been rewritten.
