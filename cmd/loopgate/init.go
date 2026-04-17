@@ -19,10 +19,7 @@ import (
 
 const policySigningTrustDirEnv = "LOOPGATE_POLICY_SIGNING_TRUST_DIR"
 
-const (
-	loopgateRepoRootEnv    = "LOOPGATE_REPO_ROOT"
-	legacyMorphRepoRootEnv = "MORPH_REPO_ROOT"
-)
+const loopgateRepoRootEnv = "LOOPGATE_REPO_ROOT"
 
 func runInit(args []string, stdout io.Writer, stderr io.Writer) error {
 	initFlags := flag.NewFlagSet("init", flag.ContinueOnError)
@@ -148,9 +145,6 @@ func resolveLoopgateRepoRoot(flagValue string) (string, error) {
 
 func resolveLoopgateRepoRootEnv() string {
 	if repoRoot := strings.TrimSpace(os.Getenv(loopgateRepoRootEnv)); repoRoot != "" {
-		return filepath.Clean(repoRoot)
-	}
-	if repoRoot := strings.TrimSpace(os.Getenv(legacyMorphRepoRootEnv)); repoRoot != "" {
 		return filepath.Clean(repoRoot)
 	}
 	return ""

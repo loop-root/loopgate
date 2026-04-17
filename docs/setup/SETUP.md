@@ -175,8 +175,3 @@ go run ./cmd/loopgate-doctor trust-check
 - `LOOPGATE_REPO_ROOT` — override repo root detection for `cmd/loopgate`
 - `LOOPGATE_MODEL_*` — canonical model runtime override namespace
 - `LOOPGATE_ALLOW_NON_DARWIN=1` — allow development on non-macOS
-
-Compatibility note:
-- legacy `MORPH_REPO_ROOT` and `MORPH_MODEL_*` env vars are still accepted as
-  fallback aliases during the cleanup transition, but new operator docs and new
-  local setup should use `LOOPGATE_*`

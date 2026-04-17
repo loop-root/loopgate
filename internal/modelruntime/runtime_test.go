@@ -149,7 +149,7 @@ func TestLoadConfig_MergesPersistedConfigWithEnvOverrides(t *testing.T) {
 	}
 }
 
-func TestLoadConfigFromEnv_AcceptsLegacyMorphEnvFallback(t *testing.T) {
+func TestLoadConfigFromEnv_IgnoresLegacyMorphEnvNames(t *testing.T) {
 	t.Setenv("MORPH_MODEL_PROVIDER", "openai_compatible")
 	t.Setenv("MORPH_MODEL_NAME", "gpt-4o-mini")
 	t.Setenv("MORPH_MODEL_BASE_URL", "https://example.test/v1")
@@ -157,35 +157,13 @@ func TestLoadConfigFromEnv_AcceptsLegacyMorphEnvFallback(t *testing.T) {
 
 	runtimeConfig, err := LoadConfigFromEnv()
 	if err != nil {
-		t.Fatalf("load runtime config from legacy env: %v", err)
+		t.Fatalf("load runtime config with legacy morph env: %v", err)
 	}
-	if runtimeConfig.ProviderName != "openai_compatible" {
-		t.Fatalf("unexpected provider from legacy env: %q", runtimeConfig.ProviderName)
+	if runtimeConfig.ProviderName != "stub" {
+		t.Fatalf("expected legacy morph env to be ignored, got provider %q", runtimeConfig.ProviderName)
 	}
-	if runtimeConfig.APIKeyEnvVar != "EXAMPLE_API_KEY" {
-		t.Fatalf("unexpected api key env var from legacy env: %q", runtimeConfig.APIKeyEnvVar)
-	}
-}
-
-func TestLoadConfigFromEnv_PrefersLoopgateEnvOverLegacyMorphEnv(t *testing.T) {
-	t.Setenv("LOOPGATE_MODEL_PROVIDER", "anthropic")
-	t.Setenv("LOOPGATE_MODEL_NAME", "claude-sonnet-4-5")
-	t.Setenv("LOOPGATE_MODEL_BASE_URL", "https://api.anthropic.com/v1")
-	t.Setenv("LOOPGATE_MODEL_API_KEY_ENV", "ANTHROPIC_API_KEY")
-	t.Setenv("MORPH_MODEL_PROVIDER", "openai_compatible")
-	t.Setenv("MORPH_MODEL_NAME", "gpt-4o-mini")
-	t.Setenv("MORPH_MODEL_BASE_URL", "https://example.test/v1")
-	t.Setenv("MORPH_MODEL_API_KEY_ENV", "EXAMPLE_API_KEY")
-
-	runtimeConfig, err := LoadConfigFromEnv()
-	if err != nil {
-		t.Fatalf("load runtime config with canonical and legacy env: %v", err)
-	}
-	if runtimeConfig.ProviderName != "anthropic" {
-		t.Fatalf("expected LOOPGATE_MODEL_PROVIDER to win, got %q", runtimeConfig.ProviderName)
-	}
-	if runtimeConfig.APIKeyEnvVar != "ANTHROPIC_API_KEY" {
-		t.Fatalf("expected LOOPGATE_MODEL_API_KEY_ENV to win, got %q", runtimeConfig.APIKeyEnvVar)
+	if runtimeConfig.APIKeyEnvVar != "" {
+		t.Fatalf("expected legacy morph api key env to be ignored, got %q", runtimeConfig.APIKeyEnvVar)
 	}
 }
 

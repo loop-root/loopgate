@@ -46,7 +46,7 @@ Practical approaches:
 2. **Operator-configured path** — Settings field or “Choose Loopgate repository…” (`NSOpenPanel`) plus a **security-scoped bookmark** so the sandboxed app can reconnect after relaunch. Store the socket path (or repo root) the user picked.
 3. **Shipped / agreed layout** — For a consumer install, pick one authoritative layout (for example under `~/Library/Application Support/<YourProduct>/…`) and run Loopgate (or a small unsandboxed helper) so it **creates the socket at that path**. The UI app and the daemon must share the same contract; the real user home is only reachable from unsandboxed code or from paths the user has granted.
 
-**`$PATH` does not apply** to Unix socket locations. Use an explicit **`LOOPGATE_SOCKET`** (or app-specific equivalent, e.g. `MORPH_LOOPGATE_SOCKET`) passed by the launcher, plist `LSEnvironment`, or Xcode scheme environment for debug builds.
+**`$PATH` does not apply** to Unix socket locations. Use an explicit **`LOOPGATE_SOCKET`** passed by the launcher, plist `LSEnvironment`, or Xcode scheme environment for debug builds.
 
 **Connecting, not just path resolution:** Even with the correct absolute path, a **sandboxed** GUI app may still fail `connect()` to a socket under an arbitrary checkout such as `~/src/loopgate/...` because the sandbox treats that as access to a file **outside the container**. `com.apple.security.network.client` does **not** grant that. For local development, use a **Debug** build **without** App Sandbox, or ship an **unsandboxed helper** / agreed socket location both processes can access. Wrong-path fixes alone will not unblock sandboxed `connect()`.
 

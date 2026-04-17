@@ -140,9 +140,7 @@ func TestRunInit_ForceRotatesKeyMaterial(t *testing.T) {
 
 func TestResolveLoopgateRepoRoot_PrefersLoopgateEnvOverLegacyMorphEnv(t *testing.T) {
 	loopgateRepoRoot := filepath.Join(t.TempDir(), "loopgate-root")
-	legacyMorphRepoRoot := filepath.Join(t.TempDir(), "legacy-root")
 	t.Setenv(loopgateRepoRootEnv, loopgateRepoRoot)
-	t.Setenv(legacyMorphRepoRootEnv, legacyMorphRepoRoot)
 
 	resolvedRepoRoot, err := resolveLoopgateRepoRoot("")
 	if err != nil {
@@ -151,18 +149,22 @@ func TestResolveLoopgateRepoRoot_PrefersLoopgateEnvOverLegacyMorphEnv(t *testing
 	if resolvedRepoRoot != filepath.Clean(loopgateRepoRoot) {
 		t.Fatalf("expected LOOPGATE_REPO_ROOT to win, got %q", resolvedRepoRoot)
 	}
+	t.Setenv("MORPH_REPO_ROOT", filepath.Join(t.TempDir(), "legacy-root"))
+	resolvedRepoRoot, err = resolveLoopgateRepoRoot("")
+	if err != nil {
+		t.Fatalf("resolve repo root with legacy morph env present: %v", err)
+	}
+	if resolvedRepoRoot != filepath.Clean(loopgateRepoRoot) {
+		t.Fatalf("expected LOOPGATE_REPO_ROOT to remain authoritative, got %q", resolvedRepoRoot)
+	}
 }
 
-func TestResolveLoopgateRepoRoot_AcceptsLegacyMorphEnvFallback(t *testing.T) {
-	legacyMorphRepoRoot := filepath.Join(t.TempDir(), "legacy-root")
-	t.Setenv(legacyMorphRepoRootEnv, legacyMorphRepoRoot)
+func TestResolveLoopgateRepoRoot_IgnoresLegacyMorphEnv(t *testing.T) {
+	t.Setenv("MORPH_REPO_ROOT", filepath.Join(t.TempDir(), "legacy-root"))
 
-	resolvedRepoRoot, err := resolveLoopgateRepoRoot("")
-	if err != nil {
-		t.Fatalf("resolve repo root from legacy env: %v", err)
-	}
-	if resolvedRepoRoot != filepath.Clean(legacyMorphRepoRoot) {
-		t.Fatalf("expected legacy MORPH_REPO_ROOT fallback, got %q", resolvedRepoRoot)
+	resolvedRepoRoot := resolveLoopgateRepoRootEnv()
+	if resolvedRepoRoot != "" {
+		t.Fatalf("expected MORPH_REPO_ROOT to be ignored, got %q", resolvedRepoRoot)
 	}
 }
 

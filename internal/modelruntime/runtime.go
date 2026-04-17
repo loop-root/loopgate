@@ -26,24 +26,15 @@ const runtimeConfigRelativePath = "runtime/state/model_runtime.json"
 var envVarNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 const (
-	loopgateModelProviderEnv        = "LOOPGATE_MODEL_PROVIDER"
-	legacyMorphModelProviderEnv     = "MORPH_MODEL_PROVIDER"
-	loopgateModelProfileEnv         = "LOOPGATE_MODEL_PROFILE"
-	legacyMorphModelProfileEnv      = "MORPH_MODEL_PROFILE"
-	loopgateModelNameEnv            = "LOOPGATE_MODEL_NAME"
-	legacyMorphModelNameEnv         = "MORPH_MODEL_NAME"
-	loopgateModelBaseURLEnv         = "LOOPGATE_MODEL_BASE_URL"
-	legacyMorphModelBaseURLEnv      = "MORPH_MODEL_BASE_URL"
-	loopgateModelConnectionIDEnv    = "LOOPGATE_MODEL_CONNECTION_ID"
-	legacyMorphModelConnectionIDEnv = "MORPH_MODEL_CONNECTION_ID"
-	loopgateModelAPIKeyEnvEnv       = "LOOPGATE_MODEL_API_KEY_ENV"
-	legacyMorphModelAPIKeyEnvEnv    = "MORPH_MODEL_API_KEY_ENV"
-	loopgateModelTemperatureEnv     = "LOOPGATE_MODEL_TEMPERATURE"
-	legacyMorphModelTemperatureEnv  = "MORPH_MODEL_TEMPERATURE"
-	loopgateModelMaxTokensEnv       = "LOOPGATE_MODEL_MAX_OUTPUT_TOKENS"
-	legacyMorphModelMaxTokensEnv    = "MORPH_MODEL_MAX_OUTPUT_TOKENS"
-	loopgateModelTimeoutEnv         = "LOOPGATE_MODEL_TIMEOUT_SECONDS"
-	legacyMorphModelTimeoutEnv      = "MORPH_MODEL_TIMEOUT_SECONDS"
+	loopgateModelProviderEnv     = "LOOPGATE_MODEL_PROVIDER"
+	loopgateModelProfileEnv      = "LOOPGATE_MODEL_PROFILE"
+	loopgateModelNameEnv         = "LOOPGATE_MODEL_NAME"
+	loopgateModelBaseURLEnv      = "LOOPGATE_MODEL_BASE_URL"
+	loopgateModelConnectionIDEnv = "LOOPGATE_MODEL_CONNECTION_ID"
+	loopgateModelAPIKeyEnvEnv    = "LOOPGATE_MODEL_API_KEY_ENV"
+	loopgateModelTemperatureEnv  = "LOOPGATE_MODEL_TEMPERATURE"
+	loopgateModelMaxTokensEnv    = "LOOPGATE_MODEL_MAX_OUTPUT_TOKENS"
+	loopgateModelTimeoutEnv      = "LOOPGATE_MODEL_TIMEOUT_SECONDS"
 )
 
 type Config struct {
@@ -518,26 +509,26 @@ func applyEnvOverrides(baseConfig Config, overrides envOverrides) Config {
 func loadEnvOverrides() (envOverrides, error) {
 	overrides := envOverrides{}
 
-	if value, found := lookupNonEmptyEnvAliases(loopgateModelProviderEnv, legacyMorphModelProviderEnv); found {
+	if value, found := lookupNonEmptyEnv(loopgateModelProviderEnv); found {
 		overrides.ProviderName = &value
 	}
-	if value, found := lookupNonEmptyEnvAliases(loopgateModelProfileEnv, legacyMorphModelProfileEnv); found {
+	if value, found := lookupNonEmptyEnv(loopgateModelProfileEnv); found {
 		overrides.ProfileName = &value
 	}
-	if value, found := lookupNonEmptyEnvAliases(loopgateModelNameEnv, legacyMorphModelNameEnv); found {
+	if value, found := lookupNonEmptyEnv(loopgateModelNameEnv); found {
 		overrides.ModelName = &value
 	}
-	if value, found := lookupNonEmptyEnvAliases(loopgateModelBaseURLEnv, legacyMorphModelBaseURLEnv); found {
+	if value, found := lookupNonEmptyEnv(loopgateModelBaseURLEnv); found {
 		overrides.BaseURL = &value
 	}
-	if value, found := lookupNonEmptyEnvAliases(loopgateModelConnectionIDEnv, legacyMorphModelConnectionIDEnv); found {
+	if value, found := lookupNonEmptyEnv(loopgateModelConnectionIDEnv); found {
 		overrides.ModelConnectionID = &value
 	}
-	if value, found := lookupNonEmptyEnvAliases(loopgateModelAPIKeyEnvEnv, legacyMorphModelAPIKeyEnvEnv); found {
+	if value, found := lookupNonEmptyEnv(loopgateModelAPIKeyEnvEnv); found {
 		overrides.APIKeyEnvVar = &value
 	}
 
-	temperatureValue, temperatureSet, err := parseOptionalFloatEnvAliases(loopgateModelTemperatureEnv, loopgateModelTemperatureEnv, legacyMorphModelTemperatureEnv)
+	temperatureValue, temperatureSet, err := parseOptionalFloatEnv(loopgateModelTemperatureEnv)
 	if err != nil {
 		return envOverrides{}, err
 	}
@@ -545,7 +536,7 @@ func loadEnvOverrides() (envOverrides, error) {
 		overrides.Temperature = &temperatureValue
 	}
 
-	maxOutputTokens, maxOutputTokensSet, err := parseOptionalIntEnvAliases(loopgateModelMaxTokensEnv, loopgateModelMaxTokensEnv, legacyMorphModelMaxTokensEnv)
+	maxOutputTokens, maxOutputTokensSet, err := parseOptionalIntEnv(loopgateModelMaxTokensEnv)
 	if err != nil {
 		return envOverrides{}, err
 	}
@@ -553,7 +544,7 @@ func loadEnvOverrides() (envOverrides, error) {
 		overrides.MaxOutputTokens = &maxOutputTokens
 	}
 
-	timeoutSeconds, timeoutSet, err := parseOptionalIntEnvAliases(loopgateModelTimeoutEnv, loopgateModelTimeoutEnv, legacyMorphModelTimeoutEnv)
+	timeoutSeconds, timeoutSet, err := parseOptionalIntEnv(loopgateModelTimeoutEnv)
 	if err != nil {
 		return envOverrides{}, err
 	}
@@ -577,15 +568,6 @@ func lookupNonEmptyEnv(envName string) (string, bool) {
 	return trimmedValue, true
 }
 
-func lookupNonEmptyEnvAliases(envNames ...string) (string, bool) {
-	for _, envName := range envNames {
-		if value, found := lookupNonEmptyEnv(envName); found {
-			return value, true
-		}
-	}
-	return "", false
-}
-
 func parseOptionalIntEnv(envName string) (int, bool, error) {
 	rawValue, found := os.LookupEnv(envName)
 	if !found || strings.TrimSpace(rawValue) == "" {
@@ -598,18 +580,6 @@ func parseOptionalIntEnv(envName string) (int, bool, error) {
 	return parsedValue, true, nil
 }
 
-func parseOptionalIntEnvAliases(displayEnvName string, envNames ...string) (int, bool, error) {
-	for _, envName := range envNames {
-		if parsedValue, found, err := parseOptionalIntEnvRaw(envName); found || err != nil {
-			if err != nil {
-				return 0, false, fmt.Errorf("parse %s: %w", displayEnvName, err)
-			}
-			return parsedValue, true, nil
-		}
-	}
-	return 0, false, nil
-}
-
 func parseOptionalFloatEnv(envName string) (float64, bool, error) {
 	rawValue, found := os.LookupEnv(envName)
 	if !found || strings.TrimSpace(rawValue) == "" {
@@ -618,42 +588,6 @@ func parseOptionalFloatEnv(envName string) (float64, bool, error) {
 	parsedValue, err := strconv.ParseFloat(strings.TrimSpace(rawValue), 64)
 	if err != nil {
 		return 0, false, fmt.Errorf("parse %s: %w", envName, err)
-	}
-	return parsedValue, true, nil
-}
-
-func parseOptionalFloatEnvAliases(displayEnvName string, envNames ...string) (float64, bool, error) {
-	for _, envName := range envNames {
-		if parsedValue, found, err := parseOptionalFloatEnvRaw(envName); found || err != nil {
-			if err != nil {
-				return 0, false, fmt.Errorf("parse %s: %w", displayEnvName, err)
-			}
-			return parsedValue, true, nil
-		}
-	}
-	return 0, false, nil
-}
-
-func parseOptionalIntEnvRaw(envName string) (int, bool, error) {
-	rawValue, found := os.LookupEnv(envName)
-	if !found || strings.TrimSpace(rawValue) == "" {
-		return 0, false, nil
-	}
-	parsedValue, err := strconv.Atoi(strings.TrimSpace(rawValue))
-	if err != nil {
-		return 0, false, err
-	}
-	return parsedValue, true, nil
-}
-
-func parseOptionalFloatEnvRaw(envName string) (float64, bool, error) {
-	rawValue, found := os.LookupEnv(envName)
-	if !found || strings.TrimSpace(rawValue) == "" {
-		return 0, false, nil
-	}
-	parsedValue, err := strconv.ParseFloat(strings.TrimSpace(rawValue), 64)
-	if err != nil {
-		return 0, false, err
 	}
 	return parsedValue, true, nil
 }
