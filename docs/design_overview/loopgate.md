@@ -64,7 +64,7 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
 - delegated Loopgate client construction for bridge/UI use without calling `/v1/session/open`
 - explicit quarantine metadata and blob-view endpoints for operator inspection
 - explicit site inspection and trust-draft endpoints for narrow runtime onboarding of new `public_read` sources
-- sandbox root abstraction under a private Loopgate-owned runtime directory, with operator-visible workspace rooted at `/morph/home`
+- sandbox root abstraction under a private Loopgate-owned runtime directory, with an operator-visible sandbox home virtual root
 - explicit sandbox mediation endpoints for:
   - import from host into sandbox imports
   - stage sandbox artifacts into sandbox outputs
@@ -194,9 +194,8 @@ Required design:
 
 ## Sandbox boundary
 
-Loopgate now exposes a conceptual operator sandbox (virtual tree) rooted under:
-
-- `/morph/home`
+Loopgate now exposes a conceptual operator sandbox (virtual tree) rooted under
+an operator-visible sandbox home virtual root.
 
 This is the operator-visible mini-filesystem namespace. The current on-disk
 implementation is private to Loopgate; the important boundary is semantic, not
@@ -222,7 +221,7 @@ Current rules:
 - sandbox copy sources are opened with no-follow semantics and copied from the
   opened handles rather than re-opening by path after validation
 - staged outputs receive a first-class artifact record before export
-- export from `/morph/home/outputs/` requires a matching staged artifact record
+- export from sandbox outputs requires a matching staged artifact record
 - export is explicit and review-gated
 - sandbox copy only accepts regular files and directories; symlink entries and
   other special file types are denied

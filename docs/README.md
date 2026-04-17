@@ -31,7 +31,7 @@ repositories.
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./loopgate-threat-model.md)
 - [Review closure status](./reports/reviews/2026-04-16/review_status.md)
-- [Loopgate cleanup plan](./roadmap/loopgate_cleanup_plan.md)
+- [Active product gaps](./roadmap/loopgate_v1_product_gaps.md)
 - [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
 - [Release candidate checklist](./roadmap/release_candidate_checklist.md)
 - [Repository sealing review](./roadmap/repository_sealing_review.md)

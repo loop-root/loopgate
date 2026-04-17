@@ -30,6 +30,6 @@ append-only history, separation between **operator-visible** ledgers and
 
 v1 is **single-user, local transport** (operator clients talk to Loopgate over **HTTP on a Unix domain socket**). Treat any future remote or multi-tenant profile as a **new design**, not a stretched default.
 
-## Why `RFC-MORPH-*` IDs are stable
+## Why older RFC IDs are stable
 
 Older product RFCs, worker/runtime specs, and historical continuity material have been moved to the separate `ARCHIVED` repository. Treat the active Loopgate design docs in this repo as the current source of truth.

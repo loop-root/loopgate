@@ -82,17 +82,24 @@ This is a `.gitignore` failure. The `runtime/` directory should be fully gitigno
 
 ---
 
-### 🟠 HIGH — `MORPH_*` env var namespace is a namespace collision / identity leak
+### 🟠 HIGH — Legacy env var namespace is a namespace collision / identity leak
 
 **Files:** `internal/modelruntime/runtime.go`
 
-The model runtime configuration reads from `MORPH_MODEL_PROVIDER`, `MORPH_MODEL_NAME`, `MORPH_REPO_ROOT`, etc. The prefix `MORPH_` appears to be a legacy product name. This creates several problems:
+The model runtime configuration reads from a legacy environment-variable
+namespace instead of a Loopgate-owned prefix. This creates several problems:
 
-1. **Namespace collision risk:** If another tool named Morph exists in the operator's environment (or if Loopgate is deployed alongside other AI tooling), these env vars will silently stomp each other or leak configuration.
-2. **Product confusion:** The documentation says Loopgate is the product. `MORPH_*` appears in operator-facing configuration paths. This is confusing for new users trying to configure the system.
-3. **Error messages reference it:** `fmt.Errorf("unsupported MORPH_MODEL_PROVIDER %q", ...)` — these surface in production error output.
+1. **Namespace collision risk:** If another tool uses the same prefix in the
+   operator's environment, these env vars will silently stomp each other or
+   leak configuration.
+2. **Product confusion:** The documentation says Loopgate is the product.
+   Legacy-prefixed env vars in operator-facing configuration paths are
+   confusing for new users trying to configure the system.
+3. **Error messages reference it:** legacy-prefixed names surface in
+   production error output.
 
-**Fix:** Either document this as an intentional compatibility alias and name it explicitly, or introduce `LOOPGATE_MODEL_PROVIDER` as the canonical name with a deprecation shim for `MORPH_*`. The transition should be documented in the operator guide.
+**Fix:** Make `LOOPGATE_MODEL_PROVIDER` the canonical name and remove the
+legacy namespace from runtime behavior and operator docs.
 
 ---
 
@@ -377,11 +384,17 @@ The documentation structure is excellent for an opinionated security product:
 
 1. **No API reference.** The HTTP API has 30+ routes. The only documentation is `LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` (which I did not see in the repo but is referenced). Operators connecting custom clients have no machine-readable contract and no comprehensive endpoint list.
 
-2. **`MORPH_*` env vars are not documented anywhere visible.** A new operator who reads `GETTING_STARTED.md` and `OPERATOR_GUIDE.md` has no way to know these exist or what they do. They will discover them only by reading source.
+2. **Legacy env vars are not documented anywhere visible.** A new operator who
+   reads `GETTING_STARTED.md` and `OPERATOR_GUIDE.md` has no way to know they
+   exist or what they do. They will discover them only by reading source.
 
 3. **`CHANGELOG.md` is 1,666 bytes.** For a system with this many architectural decisions (ADR 0010 alone removed an entire transport layer), a changelog this brief is not useful for operators upgrading from older deployments.
 
-4. **The `context_map.md` explicitly warns against several things** (no Haven, no morphlings, no continuity in this repo) suggesting there was historical confusion about what this repo contains. For a new user, this creates a puzzling first impression — why does the orientation document begin with a list of things that aren't here?
+4. **The `context_map.md` explicitly warns against several things** (retired
+   assistant/UI surfaces, continuity in another repo, speculative desktop work)
+   suggesting there was historical confusion about what this repo contains. For
+   a new user, this creates a puzzling first impression — why does the
+   orientation document begin with a list of things that aren't here?
 
 ---
 
@@ -472,4 +485,3 @@ The rough edges are productization rough edges (namespace leakage, UX gaps, one 
 | P3 | `cleanupDeadMCPGatewayServerIfNeeded` lock held across syscall | `mcp_gateway_runtime.go` | 2 hours |
 | P3 | `loopgate-admin` binary — document or remove | repo root | 1 hour |
 | P3 | Operator docs: clarify hook install scope | `docs/setup/` | 2 hours |
-

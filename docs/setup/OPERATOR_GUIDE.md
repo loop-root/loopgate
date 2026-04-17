@@ -310,5 +310,5 @@ Do not widen write roots unless you actually want that authority.
 - There is no stable compatibility promise yet for external clients beyond the
   current documented local-first operator surface.
 
-Tracked cleanup:
-- [Loopgate cleanup plan](../roadmap/loopgate_cleanup_plan.md)
+Tracked status:
+- [Review closure status](../reports/reviews/2026-04-16/review_status.md)

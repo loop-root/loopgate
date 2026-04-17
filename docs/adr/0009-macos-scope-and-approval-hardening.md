@@ -7,7 +7,7 @@
 
 1. **Platform:** v1 Loopgate in this repo is developed and shipped as **macOS-only**. Cross-platform support is a deliberate later phase so we do not spread portability branches across the security-sensitive control plane prematurely.
 2. **Pending approvals:** Store a **deep copy** of `CapabilityRequest` (including the `arguments` map) when recording a pending approval so later mutation cannot change what the operator approved or what hashes bind to.
-3. **Execution binding:** After operator approval, re-check that the stored request still matches `ExecutionBodySHA256` before running the capability. Morphling spawn approvals that do not yet carry a body hash skip this check (empty hash means “no binding” until a future migration).
+3. **Execution binding:** After operator approval, re-check that the stored request still matches `ExecutionBodySHA256` before running the capability. Older approval records that do not yet carry a body hash skip this check (empty hash means “no binding” until a future migration).
 
 ## Tradeoff
 

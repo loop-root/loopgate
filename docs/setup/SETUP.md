@@ -173,7 +173,7 @@ go run ./cmd/loopgate-doctor trust-check
 - [Secrets](./SECRETS.md)
 - [Threat model](../loopgate-threat-model.md)
 - [Docs index](../README.md)
-- [Loopgate cleanup plan](../roadmap/loopgate_cleanup_plan.md)
+- [Review closure status](../reports/reviews/2026-04-16/review_status.md)
 
 ## Environment
 

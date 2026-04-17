@@ -27,7 +27,7 @@ planning and historical product material belongs in `ARCHIVED`.
 This is not the place to add:
 
 - in-tree continuity or memory features
-- retired Haven or morphling surfaces
+- retired legacy assistant or UI surfaces
 - speculative desktop UI product work
 - remote or enterprise deployment assumptions in the local control path
 

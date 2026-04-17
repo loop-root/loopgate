@@ -6,18 +6,17 @@ This document explains how a **local process** (Claude Code hook helper, native 
 
 **Current MVP note:** the active operator harness is **Claude Code + project hooks + Loopgate**. For primary governance, prefer a **command hook** that talks to Loopgate over the Unix socket. Claude's raw HTTP hook mode is not a safe primary enforcement mechanism because non-2xx responses, timeouts, and connection failures are non-blocking in Claude Code's hook model.
 
-**Retired surface note:** older Haven-specific routes such as `/v1/chat`, `/v1/model/settings`, `/v1/settings/*`, `/v1/continuity/inspect-thread`, older `/v1/ui/*` projections, and Haven-only sandbox tools like `journal.*`, `notes.*`, `paint.*`, `note.create`, `desktop.organize`, and `haven.operator_context` are retired from the active Loopgate product. This guide should be read as the Claude hooks / governance / MCP control-plane reference.
+**Retired surface note:** older chat, settings, continuity-inspection, and legacy UI projection routes are retired from the active Loopgate product, along with earlier sandbox helper tools that are no longer part of the current operator contract. This guide should be read as the Claude hooks / governance / MCP control-plane reference.
 
 **Normative details:** [RFC 0001: Loopgate Token and Request Integrity Policy](../rfcs/0001-loopgate-token-policy.md).  
 **Reference implementation:** `internal/loopgate/client.go` (Go) — match its wire behavior byte-for-byte when in doubt.
 
 ### Neutral routes and the `operator` actor
 
-The historical **`/v1/haven/...`** compatibility aliases are removed. The
-current Loopgate operator/session label is **`operator`**. The older actor
-label **`haven`** remains a compatibility alias in a few runtime paths, but it
-is not part of the current product boundary and should not be used by new
-clients.
+Older compatibility route aliases are removed. The current Loopgate
+operator/session label is **`operator`**. Some runtime internals still accept an
+older compatibility actor label, but that is migration debt, not part of the
+current product boundary, and new clients should not rely on it.
 
 ---
 
@@ -102,7 +101,7 @@ Design your Swift app so the **same process** that called `/v1/session/open` per
 
 **Executable path pinning:** When **`control_plane.expected_session_client_executable`** in `config/runtime.yaml` is a non-empty absolute path, Loopgate compares it (after `filepath.Clean`) to the connecting peer’s resolved executable at **`POST /v1/session/open`**. A mismatch, or inability to resolve the connecting executable, returns **403** with `denial_code` **`process_binding_rejected`**. The repository default is **empty** (pinning off). Set this in production desktop bundles where the client path is stable. Operator-mount bindings are rejected unless this pin is configured.
 
-**Legacy compatibility note:** some runtime internals still accept `haven` as a
+**Legacy compatibility note:** some runtime internals still accept an older
 compatibility actor label. Treat that as migration debt, not as an active
 product surface or route namespace.
 

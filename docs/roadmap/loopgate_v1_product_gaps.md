@@ -7,10 +7,9 @@ senior code review. These are distinct from the correctness and security fixes t
 in `loopgate_v1_hardening_plan.md`. Most items here are about closing the gap between
 "this works" and "an operator can confidently run this."
 
-**Operator surface note:** Haven has been deprecated and will not ship in v0 or v1.
-The active operator surfaces are the CLI tools, `loopgate-doctor`, and the Pi agent
-harness adapter described in item 17. All Haven references in earlier drafts of this
-document have been removed.
+**Operator surface note:** The active operator surfaces are the CLI tools,
+`loopgate-doctor`, and the Pi agent harness adapter described in item 17.
+Earlier drafts with retired product naming have been cleaned up.
 
 Items are ordered by impact, not difficulty. Each section includes enough
 implementation detail to hand off to a fresh agent session.
@@ -690,7 +689,7 @@ block with a message directing the operator to the approvals CLI.
 | Hook mechanism | Shell script invoked by harness | TypeScript extension event |
 | Auth | Peer UID binding via `SO_PEERCRED` | Same — runs as local user |
 | Tool payload | `tool_name`, `tool_input`, `cwd` from hook env | `toolName`, `input` from event; `cwd` from `process.cwd()` |
-| Approval UX | Hook blocks; operator sees approval in Haven or CLI | Extension blocks; operator uses approval CLI |
+| Approval UX | Hook blocks; operator uses approval CLI | Extension blocks; operator uses approval CLI |
 | Distribution | Ships as shell scripts in repo | Ships as a `.ts` file or npm package |
 
 ---

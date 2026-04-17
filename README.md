@@ -137,7 +137,7 @@ cmd/loopgate-doctor/       operator diagnostics CLI
 internal/loopgate/         Loopgate control plane and governed runtime
 core/policy/               signed policy files
 config/                    runtime configuration
-docs/                      setup, operator docs, architecture, cleanup plan
+docs/                      setup, operator docs, architecture, reports
 runtime/                   local state and logs (fully gitignored)
 ```
 

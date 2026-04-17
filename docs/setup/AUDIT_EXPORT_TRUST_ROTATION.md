@@ -46,5 +46,5 @@ Longer term, it should either:
 - move under a clearly labeled optional/advanced section
 - or be archived with other non-core surfaces if downstream export is removed from the near-term product
 
-Related cleanup tracking:
-- [Loopgate cleanup plan](../roadmap/loopgate_cleanup_plan.md)
+Related status tracking:
+- [Review closure status](../reports/reviews/2026-04-16/review_status.md)
