@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	approvalpkg "loopgate/internal/loopgate/approval"
 )
 
 const (
@@ -73,7 +75,7 @@ func buildMCPGatewayApprovalManifest(validatedRequest validatedMCPGatewayInvocat
 	if err != nil {
 		return "", "", err
 	}
-	manifestSHA256 = computeApprovalManifestSHA256(
+	manifestSHA256 = approvalpkg.ComputeManifestSHA256(
 		approvalActionClassMCPGatewayInvoke,
 		approvalSubjectClassMCPGatewayTool,
 		validatedRequest.ServerID+"/"+validatedRequest.ToolName,

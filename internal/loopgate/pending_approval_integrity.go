@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	approvalpkg "loopgate/internal/loopgate/approval"
 	"loopgate/internal/secrets"
 	toolspkg "loopgate/internal/tools"
 )
@@ -16,7 +17,7 @@ func (server *Server) verifyPendingApprovalStoredExecutionBody(pending pendingAp
 	if strings.TrimSpace(pending.ExecutionBodySHA256) == "" {
 		return CapabilityResponse{}, true
 	}
-	current, err := capabilityRequestBodySHA256(pending.Request)
+	current, err := approvalpkg.RequestBodySHA256(pending.Request)
 	if err != nil {
 		return CapabilityResponse{
 			RequestID:    pending.Request.RequestID,

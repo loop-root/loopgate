@@ -1,14 +1,13 @@
 package loopgate
 
 import (
-	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	approvalpkg "loopgate/internal/loopgate/approval"
 	policypkg "loopgate/internal/policy"
 	"loopgate/internal/secrets"
 )
@@ -47,22 +46,21 @@ type pendingApproval struct {
 }
 
 const (
-	approvalStatePending   = "pending"
-	approvalStateGranted   = "granted"
-	approvalStateDenied    = "denied"
-	approvalStateExpired   = "expired"
-	approvalStateCancelled = "cancelled"
+	approvalStatePending   = approvalpkg.StatePending
+	approvalStateGranted   = approvalpkg.StateGranted
+	approvalStateDenied    = approvalpkg.StateDenied
+	approvalStateExpired   = approvalpkg.StateExpired
+	approvalStateCancelled = approvalpkg.StateCancelled
 	// approvalStateConsumed is set atomically when an approved decision is recorded, before
 	// execution begins. A concurrent decision that finds this state returns
 	// DenialCodeApprovalStateConflict rather than DenialCodeApprovalStateInvalid to distinguish
 	// a lost execution race from a genuine state violation such as an expired or denied approval.
-	approvalStateConsumed        = "consumed"
-	approvalStateExecutionFailed = "execution_failed"
+	approvalStateConsumed        = approvalpkg.StateConsumed
+	approvalStateExecutionFailed = approvalpkg.StateExecutionFailed
 )
 
 func approvalTokenHash(token string) string {
-	h := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(h[:])
+	return approvalpkg.TokenHash(token)
 }
 
 func (server *Server) authenticateApproval(writer http.ResponseWriter, request *http.Request) (controlSession, bool) {
