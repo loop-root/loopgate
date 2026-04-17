@@ -105,6 +105,21 @@ Purpose:
 Why separate:
 - promotion side effects are filesystem-centric and should not enlarge the
   control-plane critical section
+- duplicate-promotion suppression now uses a lazy in-memory fingerprint index
+  rebuilt from `runtime/state/derived_artifacts`, and that index must stay in
+  lockstep with promotion file writes/rollback
+
+Protects:
+- `promotionDuplicateIndex`
+- `promotionDuplicateIndexLoaded`
+
+Rule:
+- under `promotionMu`, promotion may lazily rebuild the duplicate index from
+  disk once, then use O(1) fingerprint lookups for later duplicate checks
+- if promotion writes a derived artifact file and the required
+  `artifact.promoted` audit append fails, cleanup must remove the index entry
+  only if file cleanup succeeds; otherwise keep the fingerprint reserved and
+  fail closed
 
 ### `ui.mu`
 

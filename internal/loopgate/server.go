@@ -305,13 +305,25 @@ type Server struct {
 	// derived artifact path is promoted exactly once per logical action.
 	//
 	// Why this lock exists:
-	//   - promotion is request-driven but file-system side effects must not race
-	//     each other and produce duplicate/misaligned derived artifacts
+	//   - promotion is request-driven but file-system side effects plus duplicate
+	//     fingerprint indexing must not race each other and produce
+	//     duplicate/misaligned derived artifacts
 	//
 	// Sequencing rule:
 	//   - keep promotionMu isolated from mu/audit.mu; collect control-plane context
 	//     first, then enter promotion code
+	//
+	// Protected fields:
+	//   - promotionDuplicateIndex
+	//   - promotionDuplicateIndexLoaded
 	promotionMu sync.Mutex
+	// promotionDuplicateIndex maps a canonical duplicate fingerprint to the
+	// derived artifact ID that claimed it. Guarded by promotionMu.
+	promotionDuplicateIndex map[string]string
+	// promotionDuplicateIndexLoaded reports whether promotionDuplicateIndex has
+	// been lazily rebuilt from derivedArtifactDir for this process. Guarded by
+	// promotionMu.
+	promotionDuplicateIndexLoaded bool
 
 	// ui owns derived UI event projection state.
 	// See uiState above and docs/design_overview/loopgate_locking.md.

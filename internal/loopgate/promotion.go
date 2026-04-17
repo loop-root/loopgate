@@ -143,7 +143,8 @@ func (server *Server) promoteQuarantinedArtifact(validatedPromotionRequest promo
 		DerivedClassification: validatedPromotionRequest.DerivedClassification,
 	}
 
-	if err := server.ensurePromotionNotDuplicate(candidateRecord); err != nil {
+	candidateFingerprint, err := server.ensurePromotionNotDuplicate(candidateRecord)
+	if err != nil {
 		return derivedArtifactRecord{}, err
 	}
 
@@ -154,9 +155,11 @@ func (server *Server) promoteQuarantinedArtifact(validatedPromotionRequest promo
 	candidateRecord.DerivedArtifactID = derivedArtifactID
 	candidateRecord.PromotedAtUTC = server.now().UTC().Format(time.RFC3339Nano)
 
-	if err := writeDerivedArtifactRecord(server.derivedArtifactPath(derivedArtifactID), candidateRecord); err != nil {
+	derivedArtifactPath := server.derivedArtifactPath(derivedArtifactID)
+	if err := writeDerivedArtifactRecord(derivedArtifactPath, candidateRecord); err != nil {
 		return derivedArtifactRecord{}, err
 	}
+	server.recordPromotionDuplicateFingerprintLocked(candidateFingerprint, derivedArtifactID)
 	if err := server.logEvent("artifact.promoted", "", map[string]interface{}{
 		"source_quarantine_ref":  candidateRecord.SourceQuarantineRef,
 		"source_content_sha256":  candidateRecord.SourceContentSHA256,
@@ -168,7 +171,9 @@ func (server *Server) promoteQuarantinedArtifact(validatedPromotionRequest promo
 		"transformation_type":    candidateRecord.TransformationType,
 		"derived_classification": candidateRecord.DerivedClassification,
 	}); err != nil {
-		_ = os.Remove(server.derivedArtifactPath(derivedArtifactID))
+		if removeErr := os.Remove(derivedArtifactPath); removeErr == nil || os.IsNotExist(removeErr) {
+			server.removePromotionDuplicateFingerprintLocked(candidateFingerprint)
+		}
 		return derivedArtifactRecord{}, err
 	}
 	return candidateRecord, nil
@@ -317,19 +322,36 @@ func canonicalSelectedFieldPaths(selectedFieldPaths []string) ([]string, error) 
 	return canonicalFieldPaths, nil
 }
 
-func (server *Server) ensurePromotionNotDuplicate(candidateRecord derivedArtifactRecord) error {
+func (server *Server) ensurePromotionNotDuplicate(candidateRecord derivedArtifactRecord) (string, error) {
+	if err := server.ensurePromotionDuplicateIndexLoadedLocked(); err != nil {
+		return "", err
+	}
 	candidateFingerprint, err := promotionDuplicateDigest(candidateRecord)
 	if err != nil {
-		return err
+		return "", err
+	}
+	if _, duplicate := server.promotionDuplicateIndex[candidateFingerprint]; duplicate {
+		return "", fmt.Errorf("exact duplicate promotion is denied in v1")
+	}
+	return candidateFingerprint, nil
+}
+
+func (server *Server) ensurePromotionDuplicateIndexLoadedLocked() error {
+	if server.promotionDuplicateIndexLoaded {
+		return nil
 	}
 
 	derivedArtifactEntries, err := os.ReadDir(server.derivedArtifactDir)
 	if err != nil {
 		if os.IsNotExist(err) {
+			server.promotionDuplicateIndex = make(map[string]string)
+			server.promotionDuplicateIndexLoaded = true
 			return nil
 		}
 		return fmt.Errorf("read derived artifact dir: %w", err)
 	}
+
+	loadedDuplicateIndex := make(map[string]string, len(derivedArtifactEntries))
 	for _, derivedArtifactEntry := range derivedArtifactEntries {
 		if derivedArtifactEntry.IsDir() || filepath.Ext(derivedArtifactEntry.Name()) != ".json" {
 			continue
@@ -343,11 +365,33 @@ func (server *Server) ensurePromotionNotDuplicate(candidateRecord derivedArtifac
 		if err != nil {
 			return err
 		}
-		if existingFingerprint == candidateFingerprint {
-			return fmt.Errorf("exact duplicate promotion is denied in v1")
+		existingArtifactID := strings.TrimSpace(existingRecord.DerivedArtifactID)
+		if existingArtifactID == "" {
+			existingArtifactID = strings.TrimSuffix(derivedArtifactEntry.Name(), filepath.Ext(derivedArtifactEntry.Name()))
+		}
+		if _, duplicate := loadedDuplicateIndex[existingFingerprint]; !duplicate {
+			loadedDuplicateIndex[existingFingerprint] = existingArtifactID
 		}
 	}
+
+	server.promotionDuplicateIndex = loadedDuplicateIndex
+	server.promotionDuplicateIndexLoaded = true
 	return nil
+}
+
+func (server *Server) recordPromotionDuplicateFingerprintLocked(fingerprint string, derivedArtifactID string) {
+	if server.promotionDuplicateIndex == nil {
+		server.promotionDuplicateIndex = make(map[string]string)
+	}
+	server.promotionDuplicateIndex[fingerprint] = derivedArtifactID
+	server.promotionDuplicateIndexLoaded = true
+}
+
+func (server *Server) removePromotionDuplicateFingerprintLocked(fingerprint string) {
+	if server.promotionDuplicateIndex == nil {
+		return
+	}
+	delete(server.promotionDuplicateIndex, fingerprint)
 }
 
 func promotionDuplicateDigest(derivedArtifactRecord derivedArtifactRecord) (string, error) {
