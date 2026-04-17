@@ -21,7 +21,7 @@ Body (roughly three sentences, can be a short bullet list if clearer):
 2. **Tradeoff:** What we gave up or what pain we accept.
 3. **Escape hatch:** If the tradeoff bites, what migration path we would take.
 
-Link from code comments when helpful: `See docs/adr/NNNN-....md`.
+Link from code comments when helpful: `See docs/ADR/NNNN-....md`.
 
 ## Index
 

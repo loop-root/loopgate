@@ -10,10 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"loopgate/internal/config"
-	modelpkg "loopgate/internal/model"
-	modelruntime "loopgate/internal/modelruntime"
 )
 
 func TestStatusOmitsConnectionsWithoutConnectionReadScope(t *testing.T) {
@@ -243,89 +239,6 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 	}
 	if _, err := mcpWriteClient.ExecuteMCPGatewayInvocation(context.Background(), MCPGatewayExecutionRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed MCP gateway execute request under mcp_gateway.write, got %v", err)
-	}
-}
-
-func TestModelRoutesRequireScopedCapabilities(t *testing.T) {
-	repoRoot := t.TempDir()
-	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-
-	modelRequest := modelpkg.Request{
-		Persona:     config.Persona{Name: "Loopgate"},
-		Policy:      status.Policy,
-		SessionID:   "model-scope-session",
-		TurnCount:   1,
-		UserMessage: "check security scopes",
-	}
-
-	replyDeniedClient := NewClient(client.socketPath)
-	replyDeniedClient.ConfigureSession("test-actor", "model-reply-denied", []string{controlCapabilityModelValidate})
-	if _, err := replyDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied model.reply token: %v", err)
-	}
-	if _, err := replyDeniedClient.ModelReply(context.Background(), modelRequest); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected model.reply scope denial, got %v", err)
-	}
-
-	replyAllowedClient := NewClient(client.socketPath)
-	replyAllowedClient.ConfigureSession("test-actor", "model-reply-allowed", []string{controlCapabilityModelReply})
-	if _, err := replyAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure model.reply token: %v", err)
-	}
-	if _, err := replyAllowedClient.ModelReply(context.Background(), modelRequest); err != nil {
-		t.Fatalf("model reply with model.reply: %v", err)
-	}
-
-	validateDeniedClient := NewClient(client.socketPath)
-	validateDeniedClient.ConfigureSession("test-actor", "model-validate-denied", []string{controlCapabilityModelReply})
-	if _, err := validateDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied model.validate token: %v", err)
-	}
-	if _, err := validateDeniedClient.ValidateModelConfig(context.Background(), modelruntime.Config{
-		ProviderName: "stub",
-		ModelName:    "stub",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected model.validate scope denial, got %v", err)
-	}
-
-	validateAllowedClient := NewClient(client.socketPath)
-	validateAllowedClient.ConfigureSession("test-actor", "model-validate-allowed", []string{controlCapabilityModelValidate})
-	if _, err := validateAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure model.validate token: %v", err)
-	}
-	if _, err := validateAllowedClient.ValidateModelConfig(context.Background(), modelruntime.Config{
-		ProviderName: "stub",
-		ModelName:    "stub",
-	}); err != nil {
-		t.Fatalf("validate model config with model.validate: %v", err)
-	}
-
-	storeDeniedClient := NewClient(client.socketPath)
-	storeDeniedClient.ConfigureSession("test-actor", "model-connection-store-denied", []string{controlCapabilityModelValidate})
-	if _, err := storeDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure denied connection.write token: %v", err)
-	}
-	if _, err := storeDeniedClient.StoreModelConnection(context.Background(), ModelConnectionStoreRequest{
-		ConnectionID: "scope_test_connection_denied",
-		ProviderName: "openai_compatible",
-		BaseURL:      "https://api.example.test/v1",
-		SecretValue:  "sk-test-denied",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
-		t.Fatalf("expected connection.write scope denial for model connection store, got %v", err)
-	}
-
-	storeAllowedClient := NewClient(client.socketPath)
-	storeAllowedClient.ConfigureSession("test-actor", "model-connection-store-allowed", []string{controlCapabilityConnectionWrite})
-	if _, err := storeAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
-		t.Fatalf("ensure connection.write token: %v", err)
-	}
-	if _, err := storeAllowedClient.StoreModelConnection(context.Background(), ModelConnectionStoreRequest{
-		ConnectionID: "scope_test_connection_allowed",
-		ProviderName: "openai_compatible",
-		BaseURL:      "https://api.example.test/v1",
-		SecretValue:  "sk-test-allowed",
-	}); err != nil {
-		t.Fatalf("store model connection with connection.write: %v", err)
 	}
 }
 

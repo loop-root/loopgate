@@ -14,7 +14,7 @@ Use it when changing:
 
 `internal/loopgate/` is the control plane and authority boundary.
 
-**Planning:** phased roadmap in repo-root `sprints/` (latest dated `*.md`); durable decisions in `docs/adr/`. Update this map when you add or rename primary files here.
+**Planning:** phased roadmap in repo-root `sprints/` (latest dated `*.md`); durable decisions in `docs/ADR/`. Update this map when you add or rename primary files here.
 
 For integrators it matters in four ways:
 

@@ -5,7 +5,7 @@
 
 ## Context + decision
 
-Loopgate v1 is shipped and operated as a **macOS-first** local control plane (Unix socket + `LOCAL_PEERCRED`). The stdio **MCP** bridge (`loopgate mcp-serve`, package `internal/loopgate/mcpserve`) added supply-chain surface (`mcp-go`) and duplicated the authority story already enforced over HTTP on the UDS. We **remove the MCP server from this repository** and document **macOS as the only supported production OS**; non-macOS execution requires an explicit `LOOPGATE_ALLOW_NON_DARWIN=1` escape hatch for development and CI.
+Loopgate v1 is shipped and operated as a **macOS-first** local control plane (Unix socket + `LOCAL_PEERCRED`). The stdio **MCP** bridge (`loopgate mcp-serve`, package `internal/loopgate/mcpserve`) added supply-chain surface (`mcp-go`) and duplicated the authority story already enforced over HTTP on the UDS. We **remove the MCP server from this repository** and document **macOS as the only supported execution target**.
 
 ## Deprecation stance (MCP)
 
@@ -15,11 +15,10 @@ Loopgate v1 is shipped and operated as a **macOS-first** local control plane (Un
 
 ## Tradeoff
 
-Operators lose a bundled MCP stdio adapter; integrations must use the **local HTTP API on the Unix socket** (or an external adapter maintained outside this repo). Linux and other OS users are **unsupported** as production targets until peer-credential and platform stories are revisited.
+Operators lose a bundled MCP stdio adapter; integrations must use the **local HTTP API on the Unix socket** (or an external adapter maintained outside this repo). Linux and other OS users are **unsupported** targets until peer-credential and platform stories are revisited.
 
 ## Escape hatch
 
-- **Development / CI:** set `LOOPGATE_ALLOW_NON_DARWIN=1` to start the daemon or run tests on non-Darwin hosts.
 - **Future MCP:** only via a new ADR, as above.
 
 ## Supersedes

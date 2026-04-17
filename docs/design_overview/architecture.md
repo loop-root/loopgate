@@ -46,7 +46,7 @@ Current client directions:
 - optional out-of-tree MCP forwarders that call the same Loopgate HTTP API
 
 In-tree stdio MCP has been removed. See
-`docs/adr/0010-macos-supported-target-and-mcp-removal.md`.
+`docs/ADR/0010-macos-supported-target-and-mcp-removal.md`.
 
 ## 3) Component ownership
 

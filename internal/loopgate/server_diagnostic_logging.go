@@ -97,49 +97,6 @@ func (server *Server) diagnosticServerControlPlaneFromAuditEvent(ev ledger.Event
 	}
 }
 
-func (server *Server) diagnosticModelFromAuditEvent(ev ledger.Event) {
-	if server.diagnostic == nil || server.diagnostic.Model == nil {
-		return
-	}
-	data := ev.Data
-	switch ev.Type {
-	case "model.error":
-		server.diagnostic.Model.Error("model_provider", diagAppendTenantAttrs([]any{
-			"session", ev.Session,
-			"provider", diagDataString(data, "provider"),
-			"model", diagDataString(data, "model"),
-			"operator_error_class", diagOperatorErrorClass(data),
-			"model_generate_ms", diagDataString(data, "model_generate_ms"),
-		}, data)...)
-	case "model.response":
-		server.diagnostic.Model.Debug("model_provider", diagAppendTenantAttrs([]any{
-			"session", ev.Session,
-			"provider", diagDataString(data, "provider"),
-			"model", diagDataString(data, "model"),
-			"finish_reason", diagDataString(data, "finish_reason"),
-			"total_tokens", diagDataString(data, "total_tokens"),
-			"model_generate_ms", diagDataString(data, "model_generate_ms"),
-		}, data)...)
-	case "model.config_validated":
-		connID := strings.TrimSpace(diagDataString(data, "model_connection_id"))
-		server.diagnostic.Model.Debug("model_provider", diagAppendTenantAttrs([]any{
-			"session", ev.Session,
-			"event", ev.Type,
-			"provider", diagDataString(data, "provider"),
-			"model", diagDataString(data, "model"),
-			"has_model_connection_id", strconv.FormatBool(connID != ""),
-		}, data)...)
-	case "model.connection_validated", "model.connection_stored":
-		server.diagnostic.Model.Debug("model_provider", diagAppendTenantAttrs([]any{
-			"session", ev.Session,
-			"event", ev.Type,
-			"provider", diagDataString(data, "provider"),
-		}, data)...)
-	default:
-		return
-	}
-}
-
 // diagAppendTenantAttrs appends tenant_id/user_id from the audit payload so operators can
 // filter diagnostic text logs the same way they filter structured audit exports.
 func diagAppendTenantAttrs(attrs []any, data map[string]interface{}) []any {

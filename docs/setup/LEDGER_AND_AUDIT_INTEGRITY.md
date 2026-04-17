@@ -1,7 +1,7 @@
 # Ledger and audit log integrity (operator guide)
 
 **Last updated:** 2026-04-14  
-**Scope:** **macOS**, **single Loopgate instance** per machine (see `docs/adr/0009-macos-scope-and-approval-hardening.md`). This page explains what append-only JSONL logs **do and do not** prove so operators set expectations for forensics and compliance.
+**Scope:** **macOS**, **single Loopgate instance** per machine (see `docs/ADR/0009-macos-scope-and-approval-hardening.md`). This page explains what append-only JSONL logs **do and do not** prove so operators set expectations for forensics and compliance.
 
 ## What these files are
 

@@ -19,7 +19,7 @@ being moved to a separate `continuity` repo.
 - In scope:
   - **Operator clients** connecting over HTTP on the Loopgate Unix socket (IDE bridges, reference Wails shell, tests, custom integrators)
   - `cmd/loopgate`, `internal/loopgate`, and supporting packages for policy, tools, audit, and secrets
-  - `internal/shell`, `internal/modelruntime`, `internal/model`, `internal/tools`, `internal/safety`, `internal/config`, `internal/ledger`, `internal/state`, `internal/secrets`
+  - `internal/tools`, `internal/safety`, `internal/config`, `internal/ledger`, `internal/state`, `internal/secrets`
   - `docs/design_overview/claude_code_hooks_mvp.md`, `core/policy/policy.yaml`
 - Out of scope (this revision):
   - ancillary `cmd/` entrypoints outside principal surfaces, except as noted in abuse paths
@@ -45,8 +45,8 @@ being moved to a separate `continuity` repo.
   reference shell):
   - handles prompt/model interaction, local state, and operator UX on the
     unprivileged side.
-  - Evidence (reference path): [commands.go](../internal/shell/commands.go),
-    [client.go](../internal/loopgate/client.go).
+  - Evidence (reference path): [client.go](../internal/loopgate/client.go),
+    [claude_code_hooks_mvp.md](design_overview/claude_code_hooks_mvp.md).
 - **Loopgate** local control plane:
   - owns policy evaluation, approvals, capability execution, connection auth, provider token exchange, and UI-safe status/event APIs.
   - Evidence: [server.go](../internal/loopgate/server.go), [ui_server.go](../internal/loopgate/ui_server.go), [connections.go](../internal/loopgate/connections.go).
@@ -60,9 +60,9 @@ being moved to a separate `continuity` repo.
   - Channel: local UI or IDE; command helpers run in-process on the
     unprivileged client side.
   - Security guarantees: local session ownership only; no intrinsic authentication beyond OS session.
-  - Validation/normalization: shell parsing, typed Loopgate request construction, secret redaction before local audit.
-  - Evidence: [commands.go](../internal/shell/commands.go),
-    [client.go](../internal/loopgate/client.go).
+  - Validation/normalization: typed Loopgate request construction, secret redaction before local audit.
+  - Evidence: [client.go](../internal/loopgate/client.go),
+    [claude_code_hooks_mvp.md](design_overview/claude_code_hooks_mvp.md).
 - Operator client → Loopgate
   - Data: session-open requests, capability executions, approval decisions, UI status/event polling, PKCE start/complete, connection validation.
   - Channel: HTTP over Unix socket.
@@ -81,12 +81,6 @@ being moved to a separate `continuity` repo.
   - Security guarantees: host allowlists, scheme validation, timeout-bound HTTP client, typed configured capabilities, secure secret resolution.
   - Validation/normalization: strict YAML config loading, allowed host checks, response-field allowlists, quarantine of raw responses.
   - Evidence: [integration_config.go](../internal/loopgate/integration_config.go), [client_credentials.go](../internal/loopgate/client_credentials.go), [pkce.go](../internal/loopgate/pkce.go), [quarantine.go](../internal/loopgate/quarantine.go).
-- Operator client / model runtime → model provider
-  - Data: compiled prompt, conversation history, tool descriptions, model API key reference.
-  - Channel: HTTPS by default; localhost HTTP exception.
-  - Security guarantees: validated base URL, timeout-bound client, env-backed secret reference.
-  - Validation/normalization: runtime config validation, strict JSON handling, 2 MB response cap.
-  - Evidence: [runtime.go](../internal/modelruntime/runtime.go), [provider.go](../internal/model/openai/provider.go), [compiler.go](../internal/prompt/compiler.go).
 - **Prompt efficiency:** Model-facing payloads are kept compact where it does not weaken policy or auditability: bounded conversation windows, caps on tool output echoed into the chat loop, **Anthropic** ephemeral `cache_control` on stable system/tool blocks, **OpenAI-compatible** `prompt_cache_key` (plus automatic OpenAI prefix caching when supported), HTTP **429** backoff, and orchestration metrics for diagnosis. This is **not** a substitute for policy or for treating model output as untrusted.
 - Operator client / Loopgate → local persistent artifacts
   - Data: JSONL ledger events, Loopgate audit events, runtime state, distillates, session keys, quarantined payloads.
@@ -160,8 +154,7 @@ flowchart TD
 | `/v1/ui/status`, `/v1/ui/events`, `/v1/ui/approvals`, `/v1/ui/approvals/{id}/decision` | Signed UI client | Loopgate -> future UI/bridge surface | Display-safe UI APIs and approval surface | [ui_server.go](../internal/loopgate/ui_server.go) |
 | PKCE start/complete endpoints | Operator flow or future UI path | Local process -> Loopgate -> provider OAuth flow | Bootstrap for refresh-token storage and access-token issuance | [pkce.go](../internal/loopgate/pkce.go) |
 | YAML connection definitions | Repo config | Repo content -> Loopgate trusted config | Controls provider hosts, grant type, capability path, response fields | [integration_config.go](../internal/loopgate/integration_config.go) |
-| Model runtime config and env refs | Runtime config / environment | Operator/env -> model runtime | Controls outbound model base URL and API-key ref | [runtime.go](../internal/modelruntime/runtime.go) |
-| Slash commands and native tool-use shaping | Local user / model output | Untrusted content -> client -> Loopgate | Operator command and governed-capability intent surface | [commands.go](../internal/shell/commands.go), [toolschema.go](../internal/model/toolschema.go), [compiler.go](../internal/prompt/compiler.go) |
+| Operator client request shaping | Local user / model output | Untrusted content -> client -> Loopgate | Shapes governed capability requests before they cross the control-plane boundary | [client.go](../internal/loopgate/client.go), [claude_code_hooks_mvp.md](design_overview/claude_code_hooks_mvp.md) |
 | Audit/state/quarantine files | Local filesystem | Runtime -> persistent local artifacts | Same-user tampering target if integrity protections are weak | [ledger.go](../internal/ledger/ledger.go), [quarantine.go](../internal/loopgate/quarantine.go) |
 
 ## Top abuse paths
@@ -206,7 +199,7 @@ flowchart TD
 | TM-03 | Same-user local process / emerging browser-local attacker | Future browser or bridge bootstrap becomes available | Race or intercept bridge bootstrap, delegated credentials, or browser session establishment | UI feed exposure or approval misuse through browser path | Delegated UI credentials, approvals, UI event stream | Current harness boundary note plus fail-closed delegated-session handling in the remaining helper path ([claude_code_hooks_mvp.md](design_overview/claude_code_hooks_mvp.md)) | Browser/bridge bootstrap not fully implemented in code | Launch-bound bootstrap, one-time token exchange, strict browser session handling | Log bridge bootstrap attempts and delegated-session refresh failures | Medium | High | High |
 | TM-04 | Malicious or mistaken repo/operator config | Ability to edit policy or connection YAML | Broaden allowed roots, destinations, redirect policy, or capability schemas | Expansion of trusted read/write or provider reach | Filesystem scope, provider connections, auth flow integrity | Strict YAML decoding, detached Ed25519 policy signatures, host allowlists, path/query validation, deny-by-default policy ([policy.go](../internal/config/policy.go), [integration_config.go](../internal/loopgate/integration_config.go), [checker.go](../internal/policy/checker.go)) | Explicit signed config can still broaden real scope if the operator signs an unsafe change | Reviewable signed-policy workflow and tighter shell/tool policy layers for less-trusted repos | Warn on broad roots or unusual redirect schemes at startup | Medium | High | High |
 | TM-05 | Same-user local process with filesystem access | Access to runtime/audit files | Tamper with ledger, Loopgate events, state, or quarantine records | Audit and local state integrity degradation | Ledger, Loopgate telemetry, runtime state | Append-only ledger, chained metadata, prior-chain verification, atomic rename, quarantine permissions ([ledger.go](../internal/ledger/ledger.go), [state.go](../internal/state/state.go), [quarantine.go](../internal/loopgate/quarantine.go)) | No external tamper evidence; corruption can become availability issue | Stronger checkpointing/signing if forensic trust required | Startup integrity checks, malformed-line counters | High | Medium | Medium |
-| TM-06 | Malicious prompt or repo content | Model runtime enabled and native tool definitions attached | Induce governed-capability requests, read sensitive local data, or spam approval workflows | Read amplification, approval fatigue, local sensitive-data exposure within allowed scope | Repo files, operator attention, prompt integrity | Untrusted model output, typed capability path, approval gating ([toolschema.go](../internal/model/toolschema.go), [render.go](../internal/loopgateresult/render.go), [server.go](../internal/loopgate/server.go)) | Overly broad native tool exposure or prompt/tool-surface drift | Keep native tool definitions explicit, file-sensitivity policy on reads, and prompt/runtime truth aligned | Track repeated model-emitted reads/writes and approval churn | Medium | Medium | Medium |
+| TM-06 | Malicious prompt or repo content | Operator client can still shape governed capability requests from untrusted content | Induce governed-capability requests, read sensitive local data, or spam approval workflows | Read amplification, approval fatigue, local sensitive-data exposure within allowed scope | Repo files, operator attention, prompt integrity | Untrusted model output, typed capability path, approval gating ([render.go](../internal/loopgateresult/render.go), [server.go](../internal/loopgate/server.go), [client.go](../internal/loopgate/client.go)) | Overly broad client-side request shaping or prompt/tool-surface drift | Keep capability surfaces explicit, file-sensitivity policy on reads, and prompt/runtime truth aligned | Track repeated model-emitted reads/writes and approval churn | Medium | Medium | Medium |
 
 ## Mitigations and recommendations
 

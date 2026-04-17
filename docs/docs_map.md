@@ -4,9 +4,9 @@
 
 This file maps **`docs/`** — design intent, setup, RFCs, and benchmarks. Use with `context_map.md` (repo-wide index) when present locally.
 
-## Architecture Decision Records (`docs/adr/`)
+## Architecture Decision Records (`docs/ADR/`)
 
-Timestamped decisions (context, tradeoff, escape hatch). **Index:** `docs/adr/README.md`.
+Timestamped decisions (context, tradeoff, escape hatch). **Index:** `docs/ADR/README.md`.
 
 ## Historical archive
 

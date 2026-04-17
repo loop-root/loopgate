@@ -120,14 +120,13 @@ Use these when working on:
 Secret storage, lookup, and redaction. Changes here must preserve the project’s
 secret-handling invariants.
 
-### `internal/model/`, `internal/modelruntime/`, `internal/tools/`, `internal/prompt/`
+### `internal/tools/`
 
-These packages define:
+This package defines:
 
-- provider adapters
-- runtime model configuration
-- typed tool schemas and registry behavior
-- prompt compilation for the current governed runtime
+- typed capability schemas and registry behavior
+- filesystem, host-folder, and shell tool implementations
+- the current governed execution surface used by Loopgate
 
 ## Docs map
 

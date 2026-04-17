@@ -17,8 +17,6 @@ import (
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
 	"loopgate/internal/loopdiag"
-	modelpkg "loopgate/internal/model"
-	modelruntime "loopgate/internal/modelruntime"
 	policypkg "loopgate/internal/policy"
 	"loopgate/internal/sandbox"
 	"loopgate/internal/secrets"
@@ -169,26 +167,6 @@ type connectionRuntimeState struct {
 	records map[string]connectionRecord
 }
 
-type modelConnectionRuntimeState struct {
-	// mu protects persisted model endpoint connection records.
-	//
-	// Protected fields:
-	//   - records
-	//
-	// Why this lock exists:
-	//   - model endpoint credentials use a different persistence path and lifecycle
-	//     than generic integration connections
-	//   - separating them keeps model-provider setup changes independent from the
-	//     general connection record domain
-	//
-	// Sequencing rule:
-	//   - clone/mutate model connection records under modelConnectionRuntime.mu
-	//   - release it before audit emission or secret-store I/O where possible
-	mu sync.Mutex
-
-	records map[string]modelConnectionRecord
-}
-
 type claudeHookRuntimeState struct {
 	// mu protects repo-local Claude hook session and approval cache state.
 	//
@@ -234,7 +212,7 @@ type sessionControlState struct {
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
 //   - Current production code treats audit.mu, ui.mu, claudeHookRuntime.mu, connectionRuntime.mu,
-//     modelConnectionRuntime.mu, hostAccessRuntime.mu, providerRuntime.mu,
+//     hostAccessRuntime.mu, providerRuntime.mu,
 //     pkceRuntime.mu, and policyRuntimeMu as leaf-domain locks. Callers
 //     snapshot state under one lock, release it, and only then cross into
 //     another domain.
@@ -256,7 +234,6 @@ type Server struct {
 	quarantineDir              string
 	derivedArtifactDir         string
 	connectionPath             string
-	modelConnectionPath        string
 	claudeHookSessionsPath     string
 	claudeHookSessionsRoot     string
 	mcpGatewayManifests        map[string]mcpGatewayServerManifest
@@ -280,7 +257,6 @@ type Server struct {
 	processExists            func(int) (bool, error)
 	resolveUserHomeDir       func() (string, error)
 	expectedClientPath       string
-	newModelClientFromConfig func(modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error)
 	nonceReplayStore         authNonceReplayStore
 	server                   *http.Server
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
@@ -340,10 +316,6 @@ type Server struct {
 	// connectionRuntime owns persisted integration connection records.
 	// See connectionRuntimeState above and docs/design_overview/loopgate_locking.md.
 	connectionRuntime connectionRuntimeState
-
-	// modelConnectionRuntime owns persisted model endpoint connection records.
-	// See modelConnectionRuntimeState above and docs/design_overview/loopgate_locking.md.
-	modelConnectionRuntime modelConnectionRuntimeState
 
 	// hostAccessRuntime owns temporary host-access planning state and
 	// applied-plan tombstones used for duplicate recovery.
@@ -477,7 +449,6 @@ const (
 	maxOpenSessionBodyBytes        = 16 * 1024
 	maxCapabilityBodyBytes         = 512 * 1024
 	maxApprovalBodyBytes           = 8 * 1024
-	maxModelReplyBodyBytes         = 1024 * 1024
 	maxHeaderBytes                 = 8 * 1024
 	defaultSessionOpenMinInterval  = 500 * time.Millisecond
 	defaultMaxActiveSessionsPerUID = 8
@@ -547,7 +518,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		quarantineDir:              filepath.Join(repoRoot, "runtime", "state", "quarantine"),
 		derivedArtifactDir:         filepath.Join(repoRoot, "runtime", "state", "derived_artifacts"),
 		connectionPath:             filepath.Join(repoRoot, "runtime", "state", "loopgate_connections.json"),
-		modelConnectionPath:        filepath.Join(repoRoot, "runtime", "state", "loopgate_model_connections.json"),
 		claudeHookSessionsPath:     filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions.json"),
 		claudeHookSessionsRoot:     filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions"),
 		mcpGatewayManifests:        map[string]mcpGatewayServerManifest{},
@@ -627,7 +597,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		}
 		return ledger.AppendWithRotation(path, auditEvent, server.auditLedgerRotationSettings())
 	}
-	server.newModelClientFromConfig = server.newModelClientFromRuntimeConfig
 	if err := server.sandboxPaths.Ensure(); err != nil {
 		return nil, fmt.Errorf("ensure sandbox paths: %w", err)
 	}
@@ -636,11 +605,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		return nil, fmt.Errorf("load connection records: %w", err)
 	}
 	server.connectionRuntime.records = loadedConnections
-	loadedModelConnections, err := loadModelConnectionRecords(server.modelConnectionPath)
-	if err != nil {
-		return nil, fmt.Errorf("load model connection records: %w", err)
-	}
-	server.modelConnectionRuntime.records = loadedModelConnections
 	if err := server.ensureDefaultAuditLedgerCheckpointSecret(context.Background()); err != nil {
 		return nil, fmt.Errorf("ensure default audit checkpoint secret: %w", err)
 	}
@@ -688,9 +652,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	mux.HandleFunc("/v1/session/open", server.handleSessionOpen)
 	mux.HandleFunc("/v1/session/close", server.handleSessionClose)
 	mux.HandleFunc("/v1/session/mac-keys", server.handleSessionMACKeys)
-	mux.HandleFunc("/v1/model/reply", server.handleModelReply)
-	mux.HandleFunc("/v1/model/validate", server.handleModelValidate)
-	mux.HandleFunc("/v1/model/connections/store", server.handleModelConnectionStore)
 	mux.HandleFunc("/v1/capabilities/execute", server.handleCapabilityExecute)
 	mux.HandleFunc("/v1/connections/status", server.handleConnectionsStatus)
 	mux.HandleFunc("/v1/connections/validate", server.handleConnectionValidate)

@@ -239,19 +239,3 @@ func TestCapabilityResponseResultClassification_RejectsExtraFieldMetadata(t *tes
 		t.Fatal("expected extra fields_meta entry to be rejected")
 	}
 }
-
-func TestModelConnectionStoreRequest_MarshalJSON_RedactsSecretValue(t *testing.T) {
-	req := ModelConnectionStoreRequest{
-		ConnectionID: "conn_1",
-		ProviderName: "openai",
-		BaseURL:      "https://api.example.com",
-		SecretValue:  "super-secret-key-must-not-appear",
-	}
-	out, err := json.Marshal(req)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	if bytes.Contains(out, []byte("super-secret-key-must-not-appear")) {
-		t.Fatalf("marshaled json leaks secret: %s", string(out))
-	}
-}

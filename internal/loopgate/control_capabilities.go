@@ -14,10 +14,6 @@ const (
 	controlCapabilityFolderAccessRead        = "folder_access.read"
 	controlCapabilityFolderAccessWrite       = "folder_access.write"
 	controlCapabilityMCPGatewayWrite         = "mcp_gateway.write"
-	controlCapabilityModelReply              = "model.reply"
-	controlCapabilityModelSettingsRead       = "model.settings.read"
-	controlCapabilityModelSettingsWrite      = "model.settings.write"
-	controlCapabilityModelValidate           = "model.validate"
 	controlCapabilityOperatorMountWriteGrant = "operator_mount.write_grant"
 	controlCapabilityQuarantineRead          = "quarantine.read"
 	controlCapabilityQuarantineWrite         = "quarantine.write"
@@ -93,30 +89,6 @@ var internalControlCapabilityCatalog = map[string]CapabilitySummary{
 		Category:    "mcp_gateway",
 		Operation:   "write",
 		Description: "Prepare governed MCP approvals, launch or stop declared MCP servers, and execute approved MCP tool calls through the local control plane.",
-	},
-	controlCapabilityModelReply: {
-		Name:        controlCapabilityModelReply,
-		Category:    "model",
-		Operation:   "execute",
-		Description: "Run a model round-trip through the Loopgate-governed local control plane.",
-	},
-	controlCapabilityModelSettingsRead: {
-		Name:        controlCapabilityModelSettingsRead,
-		Category:    "model",
-		Operation:   "read",
-		Description: "Read operator-facing model settings through the local control plane.",
-	},
-	controlCapabilityModelSettingsWrite: {
-		Name:        controlCapabilityModelSettingsWrite,
-		Category:    "model",
-		Operation:   "write",
-		Description: "Update operator-facing model settings through the local control plane.",
-	},
-	controlCapabilityModelValidate: {
-		Name:        controlCapabilityModelValidate,
-		Category:    "model",
-		Operation:   "validate",
-		Description: "Validate runtime model configuration through the local control plane without executing a model round-trip.",
 	},
 	controlCapabilityOperatorMountWriteGrant: {
 		Name:        controlCapabilityOperatorMountWriteGrant,

@@ -355,7 +355,6 @@ func (server *Server) diagnosticTextAfterAuditEvent(auditEvent ledger.Event) {
 		)
 	}
 	server.diagnosticServerControlPlaneFromAuditEvent(auditEvent)
-	server.diagnosticModelFromAuditEvent(auditEvent)
 }
 
 // CloseDiagnosticLogs closes optional text log files. Safe to call multiple times.

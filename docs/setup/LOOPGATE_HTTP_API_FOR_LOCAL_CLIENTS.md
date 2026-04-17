@@ -2,7 +2,7 @@
 
 # Loopgate local HTTP API — guide for HTTP-native clients
 
-This document explains how a **local process** (Claude Code hook helper, native app, test harness, or bridge) talks to **Loopgate** over **HTTP on a Unix domain socket**. It is the **only supported in-tree v1 transport** for privileged control-plane calls. **In-tree MCP is removed** ([ADR 0010](../adr/0010-macos-supported-target-and-mcp-removal.md)); use this HTTP API directly or an **out-of-tree** MCP→HTTP forwarder if needed.
+This document explains how a **local process** (Claude Code hook helper, native app, test harness, or bridge) talks to **Loopgate** over **HTTP on a Unix domain socket**. It is the **only supported in-tree v1 transport** for privileged control-plane calls. **In-tree MCP is removed** ([ADR 0010](../ADR/0010-macos-supported-target-and-mcp-removal.md)); use this HTTP API directly or an **out-of-tree** MCP→HTTP forwarder if needed.
 
 **Current MVP note:** the active operator harness is **Claude Code + project hooks + Loopgate**. For primary governance, prefer a **command hook** that talks to Loopgate over the Unix socket. Claude's raw HTTP hook mode is not a safe primary enforcement mechanism because non-2xx responses, timeouts, and connection failures are non-blocking in Claude Code's hook model.
 
@@ -242,9 +242,6 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/audit/export/flush` | Trigger one local-first audit export flush to the configured downstream sink — **`audit.export`** + **signed POST with empty body**. Delivery to a configured downstream sink uses the server-side `logging.audit_export.authorization.secret_ref` and, for non-loopback TLS sinks, `logging.audit_export.tls.*` client material; the client does not supply downstream credentials on this route. |
 | `POST /v1/session/open` | Obtain tokens and MAC key |
 | `POST /v1/session/close` | Retire the current idle control session — **Bearer + signed POST** |
-| `POST /v1/model/reply` | Model round-trip through Loopgate — **`model.reply`** |
-| `POST /v1/model/validate` | Validate runtime model config — **`model.validate`** |
-| `POST /v1/model/connections/store` | Store provider credentials (secret handled server-side) — **`connection.write`** |
 | `POST /v1/capabilities/execute` | Execute a registered capability |
 | `POST /v1/connections/validate` | Validate a configured connection — **`connection.write`** |
 | `POST /v1/connections/pkce/start` / `complete` | OAuth PKCE helper flows — **`connection.write`** |
@@ -407,27 +404,6 @@ explicitly needs the connection surface.
 - **Response:** typed JSON including approval/session identity, process pid, and either `tool_result` plus `tool_result_sha256` or `remote_error_code` / `remote_error_message`.
 - **Go client:** `(*loopgate.Client).ExecuteMCPGatewayInvocation(ctx, request)`.
 
-### 7.5 Model control routes
-
-Loopgate-managed remote model runtime follows a stricter secret rule than the
-generic `internal/modelruntime` package:
-
-- remote `openai_compatible` and `anthropic` configs must use
-  **`model_connection_id`**
-- the older `api_key_env_var` compatibility field is rejected on Loopgate's
-  remote validate/inference path
-- loopback `openai_compatible` remains the narrow exception for local no-auth
-  model servers
-
-- `POST /v1/model/reply`
-  - requires **`model.reply`**
-  - runs a model round-trip through Loopgate’s runtime and audit path
-- `POST /v1/model/validate`
-  - requires **`model.validate`**
-  - validates runtime model configuration without executing a model round-trip
-- `POST /v1/model/connections/store`
-  - requires **`connection.write`**
-  - stores provider credentials through Loopgate’s secure connection path
 ### 7.4 Sandbox and host filesystem routes
 
 - `POST /v1/sandbox/import`, `POST /v1/sandbox/stage`, and `POST /v1/sandbox/export`

@@ -8,8 +8,6 @@ import (
 	"loopgate/internal/config"
 	"loopgate/internal/identifiers"
 	protocolpkg "loopgate/internal/loopgate/protocol"
-	modelpkg "loopgate/internal/model"
-	modelruntime "loopgate/internal/modelruntime"
 )
 
 const (
@@ -131,9 +129,6 @@ type ControlPlaneClient interface {
 	DecideMCPGatewayInvocationApproval(ctx context.Context, request MCPGatewayApprovalDecisionRequest) (MCPGatewayApprovalDecisionResponse, error)
 	ValidateMCPGatewayExecution(ctx context.Context, request MCPGatewayExecutionRequest) (MCPGatewayExecutionValidationResponse, error)
 	ExecuteMCPGatewayInvocation(ctx context.Context, request MCPGatewayExecutionRequest) (MCPGatewayExecutionResponse, error)
-	ModelReply(ctx context.Context, request modelpkg.Request) (modelpkg.Response, error)
-	ValidateModelConfig(ctx context.Context, runtimeConfig modelruntime.Config) (modelruntime.Config, error)
-	StoreModelConnection(ctx context.Context, request ModelConnectionStoreRequest) (ModelConnectionStatus, error)
 	ConnectionsStatus(ctx context.Context) ([]ConnectionStatus, error)
 	ValidateConnection(ctx context.Context, provider string, subject string) (ConnectionStatus, error)
 	StartPKCEConnection(ctx context.Context, request PKCEStartRequest) (PKCEStartResponse, error)
@@ -160,14 +155,6 @@ type ControlPlaneClient interface {
 	FolderAccessStatus(ctx context.Context) (FolderAccessStatusResponse, error)
 	SyncFolderAccess(ctx context.Context) (FolderAccessSyncResponse, error)
 	UpdateFolderAccess(ctx context.Context, request FolderAccessUpdateRequest) (FolderAccessStatusResponse, error)
-}
-
-type ModelValidateRequest struct {
-	RuntimeConfig modelruntime.Config `json:"runtime_config"`
-}
-
-type ModelValidateResponse struct {
-	RuntimeConfig modelruntime.Config `json:"runtime_config"`
 }
 
 type CapabilitySummary struct {

@@ -6,7 +6,7 @@
 ## Decision
 
 We require **why-oriented comments** at non-obvious decision points (about two
-sentences), keep durable architecture choices in **`docs/adr/`**, and preserve
+sentences), keep durable architecture choices in **`docs/ADR/`**, and preserve
 longer-lived planning notes in documentation rather than relying on chat
 history or blame.
 

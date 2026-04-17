@@ -16,14 +16,6 @@ It reflects the current product boundary:
 - Go (see `go.mod`)
 - macOS for supported production use
 
-Non-macOS hosts require:
-
-```bash
-LOOPGATE_ALLOW_NON_DARWIN=1
-```
-
-for development and CI only.
-
 ## Validate the checkout
 
 ```bash
@@ -179,5 +171,3 @@ go run ./cmd/loopgate-doctor trust-check
 
 - `LOOPGATE_SOCKET` — override local socket path
 - `LOOPGATE_REPO_ROOT` — override repo root detection for `cmd/loopgate`
-- `LOOPGATE_MODEL_*` — canonical model runtime override namespace
-- `LOOPGATE_ALLOW_NON_DARWIN=1` — allow development on non-macOS

@@ -8,9 +8,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	modelpkg "loopgate/internal/model"
-	modelruntime "loopgate/internal/modelruntime"
 )
 
 type RequestDeniedError struct {
@@ -31,7 +28,6 @@ type Client struct {
 	baseURL    string
 
 	defaultRequestTimeout time.Duration
-	modelReplyTimeout     time.Duration
 
 	// mu protects the mutable delegated/open-session credentials cached on the
 	// client side. This is transport convenience state only; the server remains
@@ -85,7 +81,6 @@ func NewClient(socketPath string) *Client {
 		httpClient:             &http.Client{Transport: transport},
 		baseURL:                "http://loopgate",
 		defaultRequestTimeout:  10 * time.Second,
-		modelReplyTimeout:      2 * time.Minute,
 		approvalDecisionNonce:  make(map[string]string),
 		approvalManifestSHA256: make(map[string]string),
 	}
@@ -129,54 +124,6 @@ func (client *Client) FetchDiagnosticReport(ctx context.Context, responseBody in
 		return err
 	}
 	return client.doJSON(ctx, http.MethodGet, "/v1/diagnostic/report", capabilityToken, nil, responseBody, nil)
-}
-
-func (client *Client) ModelReply(ctx context.Context, request modelpkg.Request) (modelpkg.Response, error) {
-	capabilityToken, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return modelpkg.Response{}, err
-	}
-
-	var response modelpkg.Response
-	if err := client.doJSONWithTimeout(ctx, client.modelReplyTimeout, http.MethodPost, "/v1/model/reply", capabilityToken, request, &response, nil); err != nil {
-		return modelpkg.Response{}, err
-	}
-	return response, nil
-}
-
-func (client *Client) ValidateModelConfig(ctx context.Context, runtimeConfig modelruntime.Config) (modelruntime.Config, error) {
-	capabilityToken, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return modelruntime.Config{}, err
-	}
-
-	var response ModelValidateResponse
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/model/validate", capabilityToken, ModelValidateRequest{
-		RuntimeConfig: runtimeConfig,
-	}, &response, nil); err != nil {
-		return modelruntime.Config{}, err
-	}
-	return response.RuntimeConfig, nil
-}
-
-func (client *Client) StoreModelConnection(ctx context.Context, request ModelConnectionStoreRequest) (ModelConnectionStatus, error) {
-	capabilityToken, err := client.ensureCapabilityToken(ctx)
-	if err != nil {
-		return ModelConnectionStatus{}, err
-	}
-
-	type modelConnectionStoreWire struct {
-		ConnectionID string `json:"connection_id"`
-		ProviderName string `json:"provider_name"`
-		BaseURL      string `json:"base_url"`
-		SecretValue  string `json:"secret_value"`
-	}
-
-	var response ModelConnectionStatus
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/model/connections/store", capabilityToken, modelConnectionStoreWire(request), &response, nil); err != nil {
-		return ModelConnectionStatus{}, err
-	}
-	return response, nil
 }
 
 func (client *Client) ConnectionsStatus(ctx context.Context) ([]ConnectionStatus, error) {

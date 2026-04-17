@@ -7,7 +7,7 @@ Loopgate is the policy-governed control plane and enforcement runtime in this re
 It is not just a reverse proxy.
 It is the enforcement point for capabilities, approvals, integration auth, and outbound execution.
 
-**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — Claude Code hook helpers, IDE bridges, tests, and custom integrators attach this way. (An in-tree stdio MCP server was **removed**; see `docs/adr/0010-macos-supported-target-and-mcp-removal.md`.) **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`.
+**v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — Claude Code hook helpers, IDE bridges, tests, and custom integrators attach this way. (An in-tree stdio MCP server was **removed**; see `docs/ADR/0010-macos-supported-target-and-mcp-removal.md`.) **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`.
 
 **Primary integrators:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list). MCP-shaped hosts should use an **external forwarder**. In-tree MCP remains removed; ADR 0010 is the historical record and constraint on any future reintroduction.
 
@@ -70,7 +70,6 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
   - stage sandbox artifacts into sandbox outputs
   - inspect staged artifact metadata before export
   - export staged sandbox outputs back to a host destination
-- local model inference endpoint for the operator client, with Loopgate-owned live secret resolution
 - append-only quarantine lifecycle with `artifact.viewed`, `artifact.promoted`, and `artifact.blob_pruned` events
 - append-only hash-linked audit for governance-relevant local actions
 Implemented endpoints:
@@ -95,8 +94,6 @@ Implemented endpoints:
 - `POST /v1/sandbox/metadata`
 - `POST /v1/sandbox/export` (`fs_write`; host destination must match a bound operator mount from a pinned expected client session and an active write grant)
 - `POST /v1/session/open`
-- `POST /v1/model/validate`
-- `POST /v1/model/reply`
 - `POST /v1/capabilities/execute`
 - `POST /v1/approvals/{id}/decision`
 

@@ -24,7 +24,8 @@ Use it when changing:
 ## Relationship Notes
 
 - Types: `internal/loopgate` (`CapabilityResponse`, status enums)
-- Used by: `internal/shell` (`HandleCommand` and related), and similar call paths that surface capability output
+- Used by: local operator surfaces that render governed capability output,
+  including current CLI and HTTP-adjacent display paths
 
 ## Important Watchouts
 

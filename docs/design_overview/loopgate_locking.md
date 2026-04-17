@@ -160,18 +160,6 @@ Why separate:
 - provider/subject credential metadata evolves independently from control
   sessions and approvals
 
-### `modelConnectionRuntime.mu`
-
-Purpose:
-- protect model-provider connection records
-
-Protects:
-- `modelConnectionRuntime.records`
-
-Why separate:
-- model endpoint credentials and generic integration credentials are distinct
-  subsystems with separate lifecycles
-
 ### `hostAccessRuntime.mu`
 
 Purpose:

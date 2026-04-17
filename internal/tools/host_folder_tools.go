@@ -57,7 +57,7 @@ func (t *HostOrganizePlan) Operation() string { return OpRead }
 
 func (t *HostOrganizePlan) Schema() Schema {
 	return Schema{
-		Description: "Submit a plan of move/mkdir operations relative to a granted host folder. Returns a plan_id for host.plan.apply after operator approval. plan_json is a JSON array of {\"kind\":\"mkdir\",\"path\":\"rel\"} or {\"kind\":\"move\",\"from\":\"rel\",\"to\":\"rel\"} (paths relative to folder root). You may pass that array directly inside invoke_capability's arguments_json object, or as a string containing the same JSON array.",
+		Description: "Submit a plan of move/mkdir operations relative to a granted host folder. Returns a plan_id for host.plan.apply after operator approval. plan_json is a JSON array of {\"kind\":\"mkdir\",\"path\":\"rel\"} or {\"kind\":\"move\",\"from\":\"rel\",\"to\":\"rel\"} (paths relative to folder root).",
 		Args: []ArgDef{
 			{Name: "folder_name", Description: "Folder preset id or display name (e.g. downloads, desktop)", Required: true, Type: "string", MaxLen: 64},
 			{Name: "plan_json", Description: "JSON array of organize operations (or stringified JSON array of those objects)", Required: true, Type: "string", MaxLen: 65536},

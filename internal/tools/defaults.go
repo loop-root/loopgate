@@ -82,9 +82,5 @@ func newRegistryWithRoot(root string, allowedRoots []string, deniedPaths []strin
 		}
 	}
 
-	if err := reg.TryRegister(&InvokeCapability{}); err != nil {
-		return nil, err
-	}
-
 	return reg, nil
 }

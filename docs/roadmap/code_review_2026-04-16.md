@@ -12,6 +12,13 @@
 Canonical closure report:
 - [`docs/reports/reviews/2026-04-16/review_status.md`](../reports/reviews/2026-04-16/review_status.md)
 
+Latest validated follow-up after that original pass:
+
+- [x] removed the non-Darwin escape hatch; unsupported platforms now fail closed
+- [x] removed the Loopgate-mediated model runtime / model connection surface and the dead `internal/model*`, `internal/prompt`, `internal/shell`, and `internal/setup` packages
+- [ ] fix host-folder symlink escape in `internal/loopgate/server_host_access_handlers.go`
+- [ ] fix `shell_exec` PATH trust in `internal/tools/shell_exec.go`
+
 Checklist status:
 
 - [x] `P1-1` Build `loopgate init` command

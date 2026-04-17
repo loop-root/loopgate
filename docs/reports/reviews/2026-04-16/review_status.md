@@ -63,6 +63,9 @@ already moved past them.
 - runtime sandbox residue committed in-tree
 - tracked `bin/loopgate` artifact in git
 - `MORPH_*` runtime namespace drift
+- non-Darwin escape hatch removed; unsupported platforms now fail closed at startup
+- Loopgate-mediated model runtime / model connection surface removed from the control plane
+- dead `internal/model`, `internal/modelruntime`, `internal/prompt`, `internal/shell`, and `internal/setup` packages removed
 - unbounded UI event buffer claim
 
 Notes:
@@ -73,7 +76,17 @@ Notes:
 
 ## Still open
 
-No first-public blockers remain from the current review set.
+These are the current first-public blockers from the latest validated desktop
+review round.
+
+### Security / runtime blockers
+
+- host-folder symlink escape in `internal/loopgate/server_host_access_handlers.go`
+  - current granted-folder path checks are lexical before later filesystem operations
+  - symlinks inside a granted folder can still escape the granted root
+- `shell_exec` PATH trust issue in `internal/tools/shell_exec.go`
+  - allowlists are based on the command name rather than the resolved executable path
+  - PATH shadowing can bypass the intended command allowlist if `shell_exec` is enabled
 
 ### Local-only cleanup worth doing before screenshots or packaging
 
@@ -113,7 +126,7 @@ These are real items, but they are not the best use of pre-announcement time.
 
 ## Safe to return to product work
 
-Yes.
+Not yet.
 
 The short first-public polish pass is now landed. The repo is in good enough
 shape to return to product work without carrying misleading public docs or
@@ -121,9 +134,9 @@ missing contributor basics.
 
 ### Decision
 
-- **Safe to return to product work**
-- **Safe to announce the repo publicly as an experimental local-first alpha**
+- **Not yet safe to return to product work**
+- **Not yet safe to announce the repo publicly**
 
-That means the repo is no longer blocked by trust-model debt, missing public
-docs, or contributor-basics gaps. Remaining work is now normal product and
-follow-through engineering, not “clean this up before anyone sees it.”
+The repo is much closer, and the retired model/runtime surface is now gone, but
+the two validated security findings above should be fixed before we treat the
+repo as ready for first public release.

@@ -1,45 +1,11 @@
 package loopgate
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"loopgate/internal/identifiers"
 )
-
-type ModelConnectionStoreRequest struct {
-	ConnectionID string `json:"connection_id"`
-	ProviderName string `json:"provider_name"`
-	BaseURL      string `json:"base_url"`
-	SecretValue  string `json:"secret_value"`
-}
-
-// MarshalJSON omits raw secret material so accidental json.Marshal of this request
-// (logging, debug echoes) cannot leak credentials — mirrors CapabilityRequest.
-func (request ModelConnectionStoreRequest) MarshalJSON() ([]byte, error) {
-	type modelConnectionStoreWire struct {
-		ConnectionID string `json:"connection_id"`
-		ProviderName string `json:"provider_name"`
-		BaseURL      string `json:"base_url"`
-	}
-	return json.Marshal(modelConnectionStoreWire{
-		ConnectionID: request.ConnectionID,
-		ProviderName: request.ProviderName,
-		BaseURL:      request.BaseURL,
-	})
-}
-
-type ModelConnectionStatus struct {
-	ConnectionID       string `json:"connection_id"`
-	ProviderName       string `json:"provider_name"`
-	BaseURL            string `json:"base_url"`
-	Status             string `json:"status"`
-	SecureStoreRefID   string `json:"secure_store_ref_id"`
-	LastValidatedAtUTC string `json:"last_validated_at_utc,omitempty"`
-	LastUsedAtUTC      string `json:"last_used_at_utc,omitempty"`
-	LastRotatedAtUTC   string `json:"last_rotated_at_utc,omitempty"`
-}
 
 type ConnectionStatus struct {
 	Provider           string   `json:"provider"`
