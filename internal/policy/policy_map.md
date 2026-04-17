@@ -36,3 +36,7 @@ It does not execute tools or mint capabilities; Loopgate calls this after resolv
 
 - Unknown categories should deny, not pass through.
 - Keep policy evaluation deterministic; avoid environment-dependent “helpful” defaults.
+- Host-category tools currently reuse `tools.filesystem.*` enablement flags.
+  There is not yet a separate `tools.host` policy block, so docs and operator
+  guidance must say that explicitly rather than implying independent host
+  policy toggles.

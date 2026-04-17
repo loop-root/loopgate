@@ -105,6 +105,10 @@ func (c *Checker) checkFilesystem(tool ToolInfo) CheckResult {
 }
 
 func (c *Checker) checkHost(tool ToolInfo) CheckResult {
+	// The current product intentionally reuses tools.filesystem.* toggles for
+	// host-category tools. We have not introduced a separate tools.host policy
+	// surface yet, so host.folder.* and host.plan.apply are governed by the
+	// same read/write enablement flags as filesystem tools.
 	fsCfg := c.Policy.Tools.Filesystem
 	switch tool.Operation() {
 	case OpRead:

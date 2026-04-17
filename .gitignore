@@ -38,6 +38,7 @@ cmd/haven/frontend/dist/
 /tmp/
 tmp/
 output/
+/bin/
 
 # Operator-generated runtime (logs, sockets, ledger, sandbox state, imports, local fixtures)
 runtime/

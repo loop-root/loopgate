@@ -142,6 +142,8 @@ Start here:
 Important current note:
 - some compatibility-oriented names and future-facing fields still exist in the repo as cleanup debt
 - those are not the current product center
+- host-category tools currently reuse `tools.filesystem.*` policy enablement;
+  there is not yet a separate `tools.host` policy block
 
 ## Current operator commands
 

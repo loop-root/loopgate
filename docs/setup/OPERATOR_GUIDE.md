@@ -104,6 +104,12 @@ Typical examples:
 
 Do not reduce friction by broadly widening shell or write authority.
 
+Current policy model note:
+- `host.folder.*` and `host.plan.apply` currently reuse `tools.filesystem.*`
+  enablement flags.
+- there is not yet a separate `tools.host` policy block, so host reads/writes
+  are not independently toggled from filesystem reads/writes
+
 ### When Loopgate asks for approval
 
 List pending approvals from the local control plane:

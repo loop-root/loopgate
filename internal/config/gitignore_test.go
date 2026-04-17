@@ -26,6 +26,7 @@ func TestGitignore_ContainsRuntimeAndBuildArtifactRules(t *testing.T) {
 		"core/memory/keys/",
 		"core/memory/keys_old/",
 		"output/",
+		"/bin/",
 		"tmp/",
 		".claude/",
 		"morph",
