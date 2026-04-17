@@ -225,6 +225,58 @@ func TestShellExec_RejectsShellControlOperators(t *testing.T) {
 	}
 }
 
+func TestShellExec_UsesHermeticPathForBareAllowedCommand(t *testing.T) {
+	tmpDir := t.TempDir()
+	attackerBinDir := filepath.Join(tmpDir, "attacker-bin")
+	if err := os.MkdirAll(attackerBinDir, 0o755); err != nil {
+		t.Fatalf("mkdir attacker bin: %v", err)
+	}
+	attackerCommandPath := filepath.Join(attackerBinDir, "env")
+	if err := os.WriteFile(attackerCommandPath, []byte("#!/bin/sh\necho attacker-shadowed-env\n"), 0o755); err != nil {
+		t.Fatalf("write attacker command: %v", err)
+	}
+	t.Setenv("PATH", attackerBinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	tool := &ShellExec{
+		WorkDir:         tmpDir,
+		AllowedCommands: []string{"env"},
+	}
+	result, err := tool.Execute(context.Background(), map[string]string{
+		"command": "env",
+	})
+	if err != nil {
+		t.Fatalf("execute shell command: %v", err)
+	}
+	if strings.Contains(result, "attacker-shadowed-env") {
+		t.Fatalf("expected bare command to ignore ambient PATH shadowing, got %q", result)
+	}
+	if !strings.Contains(result, "HOME="+tmpDir) {
+		t.Fatalf("expected HOME to be sandbox workdir %q, got %q", tmpDir, result)
+	}
+}
+
+func TestShellExec_AllowsExactExecutablePath(t *testing.T) {
+	tmpDir := t.TempDir()
+	exactCommandPath := filepath.Join(tmpDir, "print-tool")
+	if err := os.WriteFile(exactCommandPath, []byte("#!/bin/sh\necho exact-path-ok\n"), 0o755); err != nil {
+		t.Fatalf("write exact-path command: %v", err)
+	}
+
+	tool := &ShellExec{
+		WorkDir:         tmpDir,
+		AllowedCommands: []string{exactCommandPath},
+	}
+	result, err := tool.Execute(context.Background(), map[string]string{
+		"command": exactCommandPath,
+	})
+	if err != nil {
+		t.Fatalf("execute exact-path shell command: %v", err)
+	}
+	if !strings.Contains(result, "exact-path-ok") {
+		t.Fatalf("expected exact-path command output, got %q", result)
+	}
+}
+
 // TestFSWrite_WritesToExistingParent confirms that writing a new file inside an
 // already-existing parent directory is allowed. SafePath requires the parent to
 // exist and resolve before the write is permitted.

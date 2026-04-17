@@ -17,6 +17,18 @@ const (
 	maxOutputBytes      = 256 * 1024 // 256 KB
 )
 
+var hermeticShellPATHEntries = []string{
+	// Bare allowlisted command names resolve only through this fixed PATH so an
+	// attacker-controlled ambient PATH cannot shadow a permitted executable.
+	"/opt/homebrew/bin",
+	"/usr/local/bin",
+	"/usr/local/go/bin",
+	"/usr/bin",
+	"/bin",
+	"/usr/sbin",
+	"/sbin",
+}
+
 // ShellExec runs shell commands in the sandbox workspace.
 type ShellExec struct {
 	WorkDir         string   // working directory for commands (sandbox root)
@@ -43,12 +55,12 @@ func (t *ShellExec) Schema() Schema {
 }
 
 func (t *ShellExec) ValidatePolicyArguments(args map[string]string) error {
-	_, _, err := t.prepareCommand(args)
+	_, _, _, err := t.prepareCommand(args)
 	return err
 }
 
 func (t *ShellExec) Execute(ctx context.Context, args map[string]string) (string, error) {
-	commandLine, argv, err := t.prepareCommand(args)
+	commandLine, executablePath, argv, err := t.prepareCommand(args)
 	if err != nil {
 		return "", err
 	}
@@ -56,11 +68,12 @@ func (t *ShellExec) Execute(ctx context.Context, args map[string]string) (string
 	execCtx, cancel := context.WithTimeout(ctx, defaultShellTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(execCtx, argv[0], argv[1:]...)
+	cmd := exec.CommandContext(execCtx, executablePath, argv[1:]...)
+	cmd.Args = append([]string(nil), argv...)
 	if t.WorkDir != "" {
 		cmd.Dir = t.WorkDir
 	}
-	cmd.Env = minimalShellEnvironment(t.WorkDir)
+	cmd.Env = minimalShellEnvironment(t.WorkDir, hermeticShellPATH())
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -113,33 +126,34 @@ func (t *ShellExec) Execute(ctx context.Context, args map[string]string) (string
 	return result.String(), nil
 }
 
-func (t *ShellExec) prepareCommand(args map[string]string) (string, []string, error) {
+func (t *ShellExec) prepareCommand(args map[string]string) (string, string, []string, error) {
 	commandLine := strings.TrimSpace(args["command"])
 	if commandLine == "" {
-		return "", nil, fmt.Errorf("empty command")
+		return "", "", nil, fmt.Errorf("empty command")
 	}
 
 	argv, err := splitDirectCommandLine(commandLine)
 	if err != nil {
-		return commandLine, nil, err
+		return commandLine, "", nil, err
 	}
-	if err := t.validateAllowedCommand(argv[0]); err != nil {
-		return commandLine, nil, err
+	executablePath, err := t.resolveAllowedCommandPath(argv[0])
+	if err != nil {
+		return commandLine, "", nil, err
 	}
-	return commandLine, argv, nil
+	return commandLine, executablePath, argv, nil
 }
 
-func (t *ShellExec) validateAllowedCommand(commandName string) error {
+func (t *ShellExec) resolveAllowedCommandPath(commandName string) (string, error) {
 	if len(t.AllowedCommands) == 0 {
-		return fmt.Errorf("shell allowed_commands is empty; configure a direct-command allowlist before enabling shell")
+		return "", fmt.Errorf("shell allowed_commands is empty; configure a direct-command allowlist before enabling shell")
 	}
 
 	trimmedCommandName := strings.TrimSpace(commandName)
 	if trimmedCommandName == "" {
-		return fmt.Errorf("shell command name is required")
+		return "", fmt.Errorf("shell command name is required")
 	}
 	if strings.HasPrefix(trimmedCommandName, "-") {
-		return fmt.Errorf("shell command name %q is invalid", trimmedCommandName)
+		return "", fmt.Errorf("shell command name %q is invalid", trimmedCommandName)
 	}
 
 	hasPathSeparator := strings.ContainsAny(trimmedCommandName, `/\`)
@@ -155,16 +169,45 @@ func (t *ShellExec) validateAllowedCommand(commandName string) error {
 		}
 		if strings.ContainsAny(trimmedAllowedCommand, `/\`) {
 			if hasPathSeparator && filepath.Clean(trimmedAllowedCommand) == normalizedCommandName {
-				return nil
+				return normalizedCommandName, nil
 			}
 			continue
 		}
 		if !hasPathSeparator && trimmedAllowedCommand == trimmedCommandName {
-			return nil
+			resolvedCommandPath, err := resolveHermeticAllowedCommandPath(trimmedCommandName)
+			if err != nil {
+				return "", err
+			}
+			return resolvedCommandPath, nil
 		}
 	}
 
-	return fmt.Errorf("shell command %q is not allowed by policy", trimmedCommandName)
+	return "", fmt.Errorf("shell command %q is not allowed by policy", trimmedCommandName)
+}
+
+func resolveHermeticAllowedCommandPath(commandName string) (string, error) {
+	for _, searchDir := range hermeticShellPATHEntries {
+		candidatePath := filepath.Join(searchDir, commandName)
+		candidateInfo, err := os.Stat(candidatePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return "", fmt.Errorf("resolve shell command %q in %q: %w", commandName, searchDir, err)
+		}
+		if candidateInfo.IsDir() {
+			continue
+		}
+		if candidateInfo.Mode()&0o111 == 0 {
+			continue
+		}
+		return candidatePath, nil
+	}
+	return "", fmt.Errorf("shell command %q is allowed by policy but not found in Loopgate's fixed PATH", commandName)
+}
+
+func hermeticShellPATH() string {
+	return strings.Join(hermeticShellPATHEntries, string(os.PathListSeparator))
 }
 
 func splitDirectCommandLine(rawCommand string) ([]string, error) {
@@ -245,7 +288,7 @@ func splitDirectCommandLine(rawCommand string) ([]string, error) {
 	return arguments, nil
 }
 
-func minimalShellEnvironment(workDir string) []string {
+func minimalShellEnvironment(workDir string, searchPath string) []string {
 	envVars := make([]string, 0, 6)
 	appendIfPresent := func(key string, value string) {
 		if strings.TrimSpace(value) == "" {
@@ -254,7 +297,7 @@ func minimalShellEnvironment(workDir string) []string {
 		envVars = append(envVars, key+"="+value)
 	}
 
-	appendIfPresent("PATH", os.Getenv("PATH"))
+	appendIfPresent("PATH", searchPath)
 	appendIfPresent("TMPDIR", os.Getenv("TMPDIR"))
 	appendIfPresent("LANG", os.Getenv("LANG"))
 	appendIfPresent("LC_ALL", os.Getenv("LC_ALL"))

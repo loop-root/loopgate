@@ -107,6 +107,85 @@ func TestExecuteHostPlanApply_DuplicateApplyAfterSuccessHintsAlreadyUsed(t *test
 	}
 }
 
+func TestExecuteHostFolderRead_DeniesSymlinkEscape(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := filepath.Join(repoRoot, "home")
+	downloadsDir := filepath.Join(homeDir, "Downloads")
+	outsideDir := filepath.Join(repoRoot, "outside")
+	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
+		t.Fatalf("mkdir downloads: %v", err)
+	}
+	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
+		t.Fatalf("mkdir outside: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte("nope"), 0o644); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(outsideDir, "secret.txt"), filepath.Join(downloadsDir, "escape.txt")); err != nil {
+		t.Skipf("symlink not available: %v", err)
+	}
+
+	server := newHostPlanApplyPolicyTestServer(t, repoRoot, homeDir)
+	seedGrantedDownloadsFolderAccess(t, server)
+
+	resp := server.executeHostFolderReadCapability(
+		capabilityToken{ControlSessionID: "cs-downloads", ActorLabel: "operator", ClientSessionLabel: "operator-session"},
+		CapabilityRequest{
+			RequestID:  "req-host-read-symlink",
+			Capability: "host.folder.read",
+			Arguments: map[string]string{
+				"folder_name": folderAccessDownloadsID,
+				"path":        "escape.txt",
+			},
+		},
+	)
+
+	if resp.Status != ResponseStatusError {
+		t.Fatalf("expected read denial, got %#v", resp)
+	}
+	if resp.DenialCode != DenialCodeInvalidCapabilityArguments {
+		t.Fatalf("expected invalid-arguments denial, got %#v", resp)
+	}
+}
+
+func TestExecuteHostFolderList_DeniesSymlinkDirectoryEscape(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := filepath.Join(repoRoot, "home")
+	downloadsDir := filepath.Join(homeDir, "Downloads")
+	outsideDir := filepath.Join(repoRoot, "outside")
+	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
+		t.Fatalf("mkdir downloads: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(outsideDir, "nested"), 0o755); err != nil {
+		t.Fatalf("mkdir outside nested: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(outsideDir, "nested"), filepath.Join(downloadsDir, "escape")); err != nil {
+		t.Skipf("symlink not available: %v", err)
+	}
+
+	server := newHostPlanApplyPolicyTestServer(t, repoRoot, homeDir)
+	seedGrantedDownloadsFolderAccess(t, server)
+
+	resp := server.executeHostFolderListCapability(
+		capabilityToken{ControlSessionID: "cs-downloads", ActorLabel: "operator", ClientSessionLabel: "operator-session"},
+		CapabilityRequest{
+			RequestID:  "req-host-list-symlink",
+			Capability: "host.folder.list",
+			Arguments: map[string]string{
+				"folder_name": folderAccessDownloadsID,
+				"path":        "escape",
+			},
+		},
+	)
+
+	if resp.Status != ResponseStatusError {
+		t.Fatalf("expected list denial, got %#v", resp)
+	}
+	if resp.DenialCode != DenialCodeInvalidCapabilityArguments {
+		t.Fatalf("expected invalid-arguments denial, got %#v", resp)
+	}
+}
+
 func TestExecuteCapabilityRequest_HostPlanApplyMoveOnlyWithinGrantedDownloadsBypassesApproval(t *testing.T) {
 	repoRoot := t.TempDir()
 	homeDir := filepath.Join(repoRoot, "home")
@@ -215,6 +294,65 @@ func TestExecuteCapabilityRequest_HostPlanApplyOverwriteRiskStillRequiresApprova
 
 	if !resp.ApprovalRequired {
 		t.Fatalf("expected overwrite-risk host plan apply to require approval, got %#v", resp)
+	}
+	if resp.Status != ResponseStatusPendingApproval {
+		t.Fatalf("expected pending approval, got %#v", resp)
+	}
+}
+
+func TestExecuteCapabilityRequest_HostPlanApplySymlinkDestinationStillRequiresApproval(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := filepath.Join(repoRoot, "home")
+	downloadsDir := filepath.Join(homeDir, "Downloads")
+	outsideDir := filepath.Join(repoRoot, "outside")
+	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
+		t.Fatalf("mkdir downloads: %v", err)
+	}
+	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
+		t.Fatalf("mkdir outside: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(downloadsDir, "report.pdf"), []byte("pdf"), 0o644); err != nil {
+		t.Fatalf("seed source file: %v", err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(downloadsDir, "escape")); err != nil {
+		t.Skipf("symlink not available: %v", err)
+	}
+
+	server := newHostPlanApplyPolicyTestServer(t, repoRoot, homeDir)
+	seedGrantedDownloadsFolderAccess(t, server)
+
+	planID := "dddddddddddddddddddddddddddddddd"
+	server.hostAccessRuntime.mu.Lock()
+	server.hostAccessRuntime.plans[planID] = &hostAccessStoredPlan{
+		ControlSessionID: "cs-downloads",
+		FolderPresetID:   folderAccessDownloadsID,
+		Operations: []hostOrganizePlanOp{
+			{Kind: "move", From: "report.pdf", To: "escape/report.pdf"},
+		},
+		CreatedAt: server.now().UTC(),
+	}
+	server.hostAccessRuntime.mu.Unlock()
+
+	resp := server.executeCapabilityRequest(
+		contextBackgroundWithOperatorMount("cs-downloads"),
+		capabilityToken{
+			TokenID:             "tok-downloads-symlink",
+			ControlSessionID:    "cs-downloads",
+			ActorLabel:          "operator",
+			ClientSessionLabel:  "operator-session",
+			AllowedCapabilities: capabilitySet([]string{"host.plan.apply"}),
+			ExpiresAt:           server.now().UTC().Add(time.Hour),
+		},
+		CapabilityRequest{
+			RequestID:  "req-downloads-symlink",
+			Capability: "host.plan.apply",
+			Arguments:  map[string]string{"plan_id": planID},
+		},
+		true,
+	)
+
+	if !resp.ApprovalRequired {
+		t.Fatalf("expected symlink destination host plan apply to require approval, got %#v", resp)
 	}
 	if resp.Status != ResponseStatusPendingApproval {
 		t.Fatalf("expected pending approval, got %#v", resp)

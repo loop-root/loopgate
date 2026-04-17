@@ -3,11 +3,13 @@
 # Review Closure Status — 2026-04-16
 
 This document is the concrete closure pass for the current public-release prep.
-It consolidates the three review sources now archived together under this folder:
+It consolidates the review sources now archived together under this folder:
 
 - [Claude Opus handoff review](./claude_opus_code_review.md)
 - [Senior readiness walkthrough](./walkthrough.md)
 - [Senior engineering code review](./loopgate_code_review.md)
+- [Claude 4.7 follow-up review](./claude_4_7_review.md)
+- [Gemini 3.1 production-readiness audit](./gemini_3_1_pro_production_readiness_audit.md)
 
 Use this file as the current truth for what is closed, what is still open, what
 is intentionally deferred, and whether the repo is safe to return to product
@@ -66,27 +68,22 @@ already moved past them.
 - non-Darwin escape hatch removed; unsupported platforms now fail closed at startup
 - Loopgate-mediated model runtime / model connection surface removed from the control plane
 - dead `internal/model`, `internal/modelruntime`, `internal/prompt`, `internal/shell`, and `internal/setup` packages removed
+- host-folder symlink escape in `internal/loopgate/server_host_access_handlers.go`
+- `shell_exec` now resolves bare allowlisted commands through a fixed Loopgate-owned PATH and executes the resolved binary path
 - unbounded UI event buffer claim
 
 Notes:
 - The `go 1.25.0 does not exist` finding is treated as stale for this pass. The
   local toolchain is newer and the repo currently tests green under it.
+- The Gemini `O_APPEND` concern is treated as stale for this pass. The current
+  ledger path already owns append runtime state explicitly and the repo now
+  passes the full test and vet sweep at this revision.
 - The `loopgate-admin` binary is still present locally on disk, but it is no
   longer tracked by git. That makes it local hygiene, not a repo-history issue.
 
 ## Still open
 
-These are the current first-public blockers from the latest validated desktop
-review round.
-
-### Security / runtime blockers
-
-- host-folder symlink escape in `internal/loopgate/server_host_access_handlers.go`
-  - current granted-folder path checks are lexical before later filesystem operations
-  - symlinks inside a granted folder can still escape the granted root
-- `shell_exec` PATH trust issue in `internal/tools/shell_exec.go`
-  - allowlists are based on the command name rather than the resolved executable path
-  - PATH shadowing can bypass the intended command allowlist if `shell_exec` is enabled
+No validated first-public blockers remain from the current review set.
 
 ### Local-only cleanup worth doing before screenshots or packaging
 
@@ -134,9 +131,8 @@ missing contributor basics.
 
 ### Decision
 
-- **Not yet safe to return to product work**
-- **Not yet safe to announce the repo publicly**
+- **Safe to return to product work**
+- **Safe to announce the repo publicly as an experimental local-first alpha**
 
-The repo is much closer, and the retired model/runtime surface is now gone, but
-the two validated security findings above should be fixed before we treat the
-repo as ready for first public release.
+The remaining work is optional cleanup and longer-horizon hardening, not a
+first-public blocker list.
