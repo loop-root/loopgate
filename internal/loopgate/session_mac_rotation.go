@@ -75,9 +75,13 @@ func (server *Server) currentSessionMACEpochIndex() int64 {
 	return sessionMACEpochIndexAt(server.now().UTC())
 }
 
-func (server *Server) sessionMACKeyForControlSessionAtEpoch(controlSessionID string, epochIndex int64) string {
-	mat := deriveEpochKeyMaterial(server.sessionMACRotationMaster, epochIndex)
+func derivedSessionMACKeyForControlSessionAtEpoch(sessionMACRotationMaster []byte, controlSessionID string, epochIndex int64) string {
+	mat := deriveEpochKeyMaterial(sessionMACRotationMaster, epochIndex)
 	return derivedSessionMACKeyString(mat, controlSessionID)
+}
+
+func (server *Server) sessionMACKeyForControlSessionAtEpoch(controlSessionID string, epochIndex int64) string {
+	return derivedSessionMACKeyForControlSessionAtEpoch(server.sessionMACRotationMaster, controlSessionID, epochIndex)
 }
 
 func (server *Server) loadOrCreateSessionMACRotationMaster() error {
@@ -230,8 +234,8 @@ func requestSignatureBytesMatchMACKey(requestSignatureHex string, method string,
 // verifySignedRequestAgainstRotatingSessionMAC tries HMAC keys derived from previous, current, and next
 // 12-hour epochs so clients can cross rotation boundaries without immediately refreshing session_mac_key.
 // boundControlSessionID must match X-Loopgate-Control-Session and is used for both derivation and signing_payload.
-func (server *Server) verifySignedRequestAgainstRotatingSessionMAC(request *http.Request, requestBodyBytes []byte, boundControlSessionID string, requestTimestamp string, requestNonce string, requestSignature string) (CapabilityResponse, bool) {
-	if len(server.sessionMACRotationMaster) == 0 {
+func (server *Server) verifySignedRequestAgainstRotatingSessionMAC(request *http.Request, requestBodyBytes []byte, headers signedControlPlaneHeaders, sessionMACRotationMaster []byte) (CapabilityResponse, bool) {
+	if len(sessionMACRotationMaster) == 0 {
 		return CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "session mac rotation is not initialized",
@@ -240,12 +244,12 @@ func (server *Server) verifySignedRequestAgainstRotatingSessionMAC(request *http
 	}
 	cur := server.currentSessionMACEpochIndex()
 	for _, epochIndex := range []int64{cur - 1, cur, cur + 1} {
-		keyStr := server.sessionMACKeyForControlSessionAtEpoch(boundControlSessionID, epochIndex)
+		keyStr := derivedSessionMACKeyForControlSessionAtEpoch(sessionMACRotationMaster, headers.ControlSessionID, epochIndex)
 		if keyStr == "" {
 			continue
 		}
-		if requestSignatureBytesMatchMACKey(requestSignature, request.Method, request.URL.Path, boundControlSessionID, requestTimestamp, requestNonce, requestBodyBytes, keyStr) {
-			if nonceDenial := server.recordAuthNonce(boundControlSessionID, requestNonce); nonceDenial != nil {
+		if requestSignatureBytesMatchMACKey(headers.RequestSignature, request.Method, request.URL.Path, headers.ControlSessionID, headers.RequestTimestamp, headers.RequestNonce, requestBodyBytes, keyStr) {
+			if nonceDenial := server.recordAuthNonce(headers.ControlSessionID, headers.RequestNonce); nonceDenial != nil {
 				return *nonceDenial, false
 			}
 			return CapabilityResponse{}, true

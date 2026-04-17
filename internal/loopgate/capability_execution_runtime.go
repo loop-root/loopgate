@@ -118,31 +118,6 @@ func normalizedCapabilityList(capabilities []string) []string {
 	return normalized
 }
 
-func isSecretExportCapabilityHeuristic(capability string) bool {
-	lowerCapability := strings.ToLower(strings.TrimSpace(capability))
-	if lowerCapability == "" {
-		return false
-	}
-
-	sensitivePrefixes := []string{
-		"secret.",
-		"token.",
-		"credential.",
-		"credentials.",
-		"key.",
-	}
-	for _, sensitivePrefix := range sensitivePrefixes {
-		if strings.HasPrefix(lowerCapability, sensitivePrefix) {
-			return true
-		}
-	}
-
-	if strings.Contains(lowerCapability, "export") && (strings.Contains(lowerCapability, "token") || strings.Contains(lowerCapability, "secret") || strings.Contains(lowerCapability, "credential") || strings.Contains(lowerCapability, "key")) {
-		return true
-	}
-	return false
-}
-
 func copyCapabilitySet(input map[string]struct{}) map[string]struct{} {
 	if len(input) == 0 {
 		return map[string]struct{}{}

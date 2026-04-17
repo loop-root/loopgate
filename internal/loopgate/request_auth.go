@@ -22,6 +22,13 @@ type authDeniedAuditOptions struct {
 	requestPeer        *peerIdentity
 }
 
+type signedControlPlaneHeaders struct {
+	ControlSessionID string
+	RequestTimestamp string
+	RequestNonce     string
+	RequestSignature string
+}
+
 func (server *Server) writeAuditedAuthDenial(writer http.ResponseWriter, request *http.Request, denial CapabilityResponse, options authDeniedAuditOptions) bool {
 	auditData := map[string]interface{}{
 		"auth_kind":      options.authKind,
@@ -191,86 +198,59 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 // It does not verify the HMAC. Callers supply expectedControlSessionID (for
 // example, a scoped worker session id from a compatibility table); those ids
 // are not necessarily rows in server.sessionState.sessions.
-func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expectedControlSessionID string) (requestTimestamp string, requestNonce string, requestSignature string, denial CapabilityResponse, ok bool) {
-	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
-	requestTimestamp = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
-	requestNonce = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))
-	requestSignature = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature"))
+func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expectedControlSessionID string) (signedControlPlaneHeaders, CapabilityResponse, bool) {
+	headers := signedControlPlaneHeaders{
+		ControlSessionID: strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session")),
+		RequestTimestamp: strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp")),
+		RequestNonce:     strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce")),
+		RequestSignature: strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature")),
+	}
 
-	if controlSessionID == "" || requestTimestamp == "" || requestNonce == "" || requestSignature == "" {
-		return "", "", "", CapabilityResponse{
+	if headers.ControlSessionID == "" || headers.RequestTimestamp == "" || headers.RequestNonce == "" || headers.RequestSignature == "" {
+		return signedControlPlaneHeaders{}, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "signed control-plane headers are required",
 			DenialCode:   DenialCodeRequestSignatureMissing,
 		}, false
 	}
-	if controlSessionID != expectedControlSessionID {
-		return "", "", "", CapabilityResponse{
+	if headers.ControlSessionID != expectedControlSessionID {
+		return signedControlPlaneHeaders{}, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "control session binding is invalid",
 			DenialCode:   DenialCodeControlSessionBindingInvalid,
 		}, false
 	}
 
-	parsedTimestamp, err := time.Parse(time.RFC3339Nano, requestTimestamp)
+	parsedTimestamp, err := time.Parse(time.RFC3339Nano, headers.RequestTimestamp)
 	if err != nil {
-		return "", "", "", CapabilityResponse{
+		return signedControlPlaneHeaders{}, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "request timestamp is invalid",
 			DenialCode:   DenialCodeRequestTimestampInvalid,
 		}, false
 	}
-	if parsedTimestamp.Before(server.now().UTC().Add(-requestSignatureSkew)) || parsedTimestamp.After(server.now().UTC().Add(requestSignatureSkew)) {
-		return "", "", "", CapabilityResponse{
+	nowUTC := server.now().UTC()
+	if parsedTimestamp.Before(nowUTC.Add(-requestSignatureSkew)) || parsedTimestamp.After(nowUTC.Add(requestSignatureSkew)) {
+		return signedControlPlaneHeaders{}, CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "request timestamp is outside the allowed skew window",
 			DenialCode:   DenialCodeRequestTimestampInvalid,
 		}, false
 	}
 
-	return requestTimestamp, requestNonce, requestSignature, CapabilityResponse{}, true
+	return headers, CapabilityResponse{}, true
 }
 
 func (server *Server) verifySignedRequest(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string) (CapabilityResponse, bool) {
-	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
-	requestTimestamp := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
-	requestNonce := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))
-	requestSignature := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature"))
-
-	if controlSessionID == "" || requestTimestamp == "" || requestNonce == "" || requestSignature == "" {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "signed control-plane headers are required",
-			DenialCode:   DenialCodeRequestSignatureMissing,
-		}, false
-	}
-	if controlSessionID != expectedControlSessionID {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "control session binding is invalid",
-			DenialCode:   DenialCodeControlSessionBindingInvalid,
-		}, false
-	}
-
-	parsedTimestamp, err := time.Parse(time.RFC3339Nano, requestTimestamp)
-	if err != nil {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request timestamp is invalid",
-			DenialCode:   DenialCodeRequestTimestampInvalid,
-		}, false
-	}
-	if parsedTimestamp.Before(server.now().UTC().Add(-requestSignatureSkew)) || parsedTimestamp.After(server.now().UTC().Add(requestSignatureSkew)) {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request timestamp is outside the allowed skew window",
-			DenialCode:   DenialCodeRequestTimestampInvalid,
-		}, false
+	headers, denial, ok := server.parseSignedControlPlaneHeaders(request, expectedControlSessionID)
+	if !ok {
+		return denial, false
 	}
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	activeSession, found := server.sessionState.sessions[controlSessionID]
+	activeSession, found := server.sessionState.sessions[headers.ControlSessionID]
+	sessionMACRotationMaster := append([]byte(nil), server.sessionMACRotationMaster...)
 	server.mu.Unlock()
 	if !found || strings.TrimSpace(activeSession.SessionMACKey) == "" {
 		return CapabilityResponse{
@@ -280,67 +260,14 @@ func (server *Server) verifySignedRequest(request *http.Request, requestBodyByte
 		}, false
 	}
 
-	if len(server.sessionMACRotationMaster) > 0 {
-		return server.verifySignedRequestAgainstRotatingSessionMAC(request, requestBodyBytes, expectedControlSessionID, requestTimestamp, requestNonce, requestSignature)
+	if len(sessionMACRotationMaster) > 0 {
+		return server.verifySignedRequestAgainstRotatingSessionMAC(request, requestBodyBytes, headers, sessionMACRotationMaster)
 	}
-	return server.verifySignedRequestWithMACKey(request, requestBodyBytes, expectedControlSessionID, activeSession.SessionMACKey)
+	return server.verifySignedRequestWithMACKey(request, requestBodyBytes, headers, activeSession.SessionMACKey)
 }
 
-func (server *Server) verifySignedRequestWithMACKey(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string, sessionMACKey string) (CapabilityResponse, bool) {
-	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
-	requestTimestamp := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
-	requestNonce := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce"))
-	requestSignature := strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature"))
-
-	if controlSessionID == "" || requestTimestamp == "" || requestNonce == "" || requestSignature == "" {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "signed control-plane headers are required",
-			DenialCode:   DenialCodeRequestSignatureMissing,
-		}, false
-	}
-	if controlSessionID != expectedControlSessionID {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "control session binding is invalid",
-			DenialCode:   DenialCodeControlSessionBindingInvalid,
-		}, false
-	}
-
-	parsedTimestamp, err := time.Parse(time.RFC3339Nano, requestTimestamp)
-	if err != nil {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request timestamp is invalid",
-			DenialCode:   DenialCodeRequestTimestampInvalid,
-		}, false
-	}
-	if parsedTimestamp.Before(server.now().UTC().Add(-requestSignatureSkew)) || parsedTimestamp.After(server.now().UTC().Add(requestSignatureSkew)) {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request timestamp is outside the allowed skew window",
-			DenialCode:   DenialCodeRequestTimestampInvalid,
-		}, false
-	}
-
-	expectedSignature := signRequest(sessionMACKey, request.Method, request.URL.Path, controlSessionID, requestTimestamp, requestNonce, requestBodyBytes)
-	decodedRequestSignature, err := hex.DecodeString(requestSignature)
-	if err != nil {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request signature is invalid",
-			DenialCode:   DenialCodeRequestSignatureInvalid,
-		}, false
-	}
-	decodedExpectedSignature, err := hex.DecodeString(expectedSignature)
-	if err != nil {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "request signature is invalid",
-			DenialCode:   DenialCodeRequestSignatureInvalid,
-		}, false
-	}
-	if !hmac.Equal(decodedExpectedSignature, decodedRequestSignature) {
+func (server *Server) verifySignedRequestWithMACKey(request *http.Request, requestBodyBytes []byte, headers signedControlPlaneHeaders, sessionMACKey string) (CapabilityResponse, bool) {
+	if !requestSignatureBytesMatchMACKey(headers.RequestSignature, request.Method, request.URL.Path, headers.ControlSessionID, headers.RequestTimestamp, headers.RequestNonce, requestBodyBytes, sessionMACKey) {
 		return CapabilityResponse{
 			Status:       ResponseStatusDenied,
 			DenialReason: "request signature is invalid",
@@ -348,7 +275,7 @@ func (server *Server) verifySignedRequestWithMACKey(request *http.Request, reque
 		}, false
 	}
 
-	if nonceDenial := server.recordAuthNonce(controlSessionID, requestNonce); nonceDenial != nil {
+	if nonceDenial := server.recordAuthNonce(headers.ControlSessionID, headers.RequestNonce); nonceDenial != nil {
 		return *nonceDenial, false
 	}
 

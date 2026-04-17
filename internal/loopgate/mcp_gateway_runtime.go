@@ -228,8 +228,17 @@ func (server *Server) cleanupDeadMCPGatewayServerIfNeeded(serverID string) {
 		server.mu.Unlock()
 		return
 	}
-	processStillAlive, err := server.processExists(launchedServer.PID)
+	launchedServerPID := launchedServer.PID
+	server.mu.Unlock()
+
+	processStillAlive, err := server.processExists(launchedServerPID)
 	if err != nil || processStillAlive {
+		return
+	}
+
+	server.mu.Lock()
+	currentLaunchedServer, found := server.mcpGatewayLaunchedServers[serverID]
+	if !found || currentLaunchedServer != launchedServer || currentLaunchedServer.LaunchState != mcpGatewayServerStateLaunched || currentLaunchedServer.PID != launchedServerPID {
 		server.mu.Unlock()
 		return
 	}
