@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -18,6 +19,46 @@ const (
 	StateExecutionFailed = "execution_failed"
 	ScopeSingleUse       = "single-use"
 )
+
+var allowedStateTransitions = map[string]map[string]struct{}{
+	StatePending: {
+		StateGranted:   {},
+		StateDenied:    {},
+		StateExpired:   {},
+		StateCancelled: {},
+		StateConsumed:  {},
+	},
+	StateGranted: {
+		StateConsumed: {},
+	},
+	StateConsumed: {
+		StateExecutionFailed: {},
+	},
+}
+
+// ValidateStateTransition returns an error when an approval lifecycle change
+// would violate the canonical approval state machine.
+func ValidateStateTransition(currentState string, nextState string) error {
+	currentState = strings.TrimSpace(currentState)
+	nextState = strings.TrimSpace(nextState)
+	if currentState == "" {
+		return fmt.Errorf("approval state transition requires a current state")
+	}
+	if nextState == "" {
+		return fmt.Errorf("approval state transition requires a next state")
+	}
+	if currentState == nextState {
+		return nil
+	}
+	allowedNextStates, found := allowedStateTransitions[currentState]
+	if !found {
+		return fmt.Errorf("approval state transition %q -> %q is invalid", currentState, nextState)
+	}
+	if _, allowed := allowedNextStates[nextState]; !allowed {
+		return fmt.Errorf("approval state transition %q -> %q is invalid", currentState, nextState)
+	}
+	return nil
+}
 
 // TokenHash returns the SHA-256 hex digest used for approval-token indexing.
 func TokenHash(token string) string {

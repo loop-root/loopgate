@@ -34,6 +34,15 @@ func approvalTokenHash(token string) string {
 	return approvalpkg.TokenHash(token)
 }
 
+func setApprovalStateLocked(approvalRecords map[string]pendingApproval, approvalID string, approval pendingApproval, nextState string) (pendingApproval, error) {
+	if err := approvalpkg.ValidateStateTransition(approval.State, nextState); err != nil {
+		return approval, err
+	}
+	approval.State = nextState
+	approvalRecords[approvalID] = approval
+	return approval, nil
+}
+
 func (server *Server) authenticateApproval(writer http.ResponseWriter, request *http.Request) (controlSession, bool) {
 	requestPeerIdentity, ok := peerIdentityFromContext(request.Context())
 	if !ok {
@@ -263,9 +272,17 @@ func (server *Server) loadPendingApprovalForDecisionLocked(approvalID string) (p
 	}
 
 	if pendingApproval.ExpiresAt.Before(server.now().UTC()) {
-		pendingApproval.State = approvalStateExpired
-		server.approvalState.records[approvalID] = pendingApproval
-		return pendingApproval, CapabilityResponse{
+		expiredApproval, transitionErr := setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateExpired)
+		if transitionErr != nil {
+			return pendingApproval, CapabilityResponse{
+				RequestID:         pendingApproval.Request.RequestID,
+				Status:            ResponseStatusDenied,
+				DenialReason:      "approval request is in an invalid state",
+				DenialCode:        DenialCodeApprovalStateInvalid,
+				ApprovalRequestID: approvalID,
+			}, false
+		}
+		return expiredApproval, CapabilityResponse{
 			RequestID:         pendingApproval.Request.RequestID,
 			Status:            ResponseStatusDenied,
 			DenialReason:      "approval request expired",
@@ -428,7 +445,10 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 		controlSession.OperatorMountWriteGrants[grantRoot] = grantExpiresAt
 		server.sessionState.sessions[pendingApproval.ControlSessionID] = controlSession
 	}
-	pendingApproval.State = approvalStateConsumed
+	pendingApproval, err = setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateConsumed)
+	if err != nil {
+		return "", err
+	}
 	pendingApproval.DecisionSubmittedAt = server.now().UTC()
 	pendingApproval.DecisionNonce = ""
 	server.approvalState.records[approvalID] = pendingApproval
@@ -449,7 +469,16 @@ func (server *Server) recordPendingApprovalDecisionLocked(controlSession control
 				ApprovalRequestID: approvalID,
 			}, "", false
 		}
-		pendingApproval.State = approvalStateConsumed
+		pendingApproval, err = setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateConsumed)
+		if err != nil {
+			return pendingApproval, CapabilityResponse{
+				RequestID:         pendingApproval.Request.RequestID,
+				Status:            ResponseStatusDenied,
+				DenialReason:      "approval request is in an invalid state",
+				DenialCode:        DenialCodeApprovalStateInvalid,
+				ApprovalRequestID: approvalID,
+			}, "", false
+		}
 		pendingApproval.DecisionSubmittedAt = server.now().UTC()
 		pendingApproval.DecisionNonce = ""
 		server.approvalState.records[approvalID] = pendingApproval
@@ -468,7 +497,16 @@ func (server *Server) recordPendingApprovalDecisionLocked(controlSession control
 			ApprovalRequestID: approvalID,
 		}, "", false
 	}
-	pendingApproval.State = approvalStateDenied
+	pendingApproval, err = setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateDenied)
+	if err != nil {
+		return pendingApproval, CapabilityResponse{
+			RequestID:         pendingApproval.Request.RequestID,
+			Status:            ResponseStatusDenied,
+			DenialReason:      "approval request is in an invalid state",
+			DenialCode:        DenialCodeApprovalStateInvalid,
+			ApprovalRequestID: approvalID,
+		}, "", false
+	}
 	pendingApproval.DecisionSubmittedAt = server.now().UTC()
 	pendingApproval.DecisionNonce = ""
 	server.approvalState.records[approvalID] = pendingApproval
@@ -564,7 +602,14 @@ func (server *Server) markApprovalExecutionResult(approvalID string, executionSt
 		return
 	}
 	if executionStatus != ResponseStatusSuccess {
-		pendingApproval.State = approvalStateExecutionFailed
+		updatedApproval, err := setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateExecutionFailed)
+		if err != nil {
+			if server.reportSecurityWarning != nil {
+				server.reportSecurityWarning("approval_state_transition_invalid", err)
+			}
+		} else {
+			pendingApproval = updatedApproval
+		}
 	}
 	pendingApproval.ExecutedAt = server.now().UTC()
 	server.approvalState.records[approvalID] = pendingApproval

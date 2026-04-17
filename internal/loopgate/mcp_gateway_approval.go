@@ -47,6 +47,15 @@ type pendingMCPGatewayApprovalRequest struct {
 	State                  string
 }
 
+func setMCPGatewayApprovalStateLocked(approvalRequests map[string]pendingMCPGatewayApprovalRequest, approvalRequestID string, approvalRequest pendingMCPGatewayApprovalRequest, nextState string) (pendingMCPGatewayApprovalRequest, error) {
+	if err := approvalpkg.ValidateStateTransition(approvalRequest.State, nextState); err != nil {
+		return approvalRequest, err
+	}
+	approvalRequest.State = nextState
+	approvalRequests[approvalRequestID] = approvalRequest
+	return approvalRequest, nil
+}
+
 func mcpGatewayInvocationRequestBodySHA256(validatedRequest validatedMCPGatewayInvocationRequest) (string, error) {
 	type canonicalInvocationRequest struct {
 		ServerID  string                     `json:"server_id"`
@@ -400,8 +409,17 @@ func (server *Server) validatePendingMCPGatewayApprovalDecisionLocked(tokenClaim
 	}
 
 	if approvalRequest.ExpiresAt.Before(server.now().UTC()) {
-		approvalRequest.State = approvalStateExpired
-		server.mcpGatewayApprovalRequests[approvalRequestID] = approvalRequest
+		expiredApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequestID, approvalRequest, approvalStateExpired)
+		if transitionErr != nil {
+			return approvalRequest, CapabilityResponse{
+				RequestID:         approvalRequestID,
+				Status:            ResponseStatusDenied,
+				DenialReason:      "approval request is in an invalid state",
+				DenialCode:        DenialCodeApprovalStateInvalid,
+				ApprovalRequestID: approvalRequestID,
+			}, false
+		}
+		approvalRequest = expiredApprovalRequest
 		return approvalRequest, CapabilityResponse{
 			RequestID:         approvalRequestID,
 			Status:            ResponseStatusDenied,
@@ -499,7 +517,17 @@ func (server *Server) validateAndRecordMCPGatewayApprovalDecision(tokenClaims ca
 				ApprovalRequestID: approvalRequest.ID,
 			}, false
 		}
-		approvalRequest.State = approvalStateGranted
+		updatedApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequest.ID, approvalRequest, approvalStateGranted)
+		if transitionErr != nil {
+			return approvalRequest, CapabilityResponse{
+				RequestID:         approvalRequest.ID,
+				Status:            ResponseStatusDenied,
+				DenialReason:      "approval request is in an invalid state",
+				DenialCode:        DenialCodeApprovalStateInvalid,
+				ApprovalRequestID: approvalRequest.ID,
+			}, false
+		}
+		approvalRequest = updatedApprovalRequest
 	} else {
 		auditData = buildMCPGatewayApprovalDeniedAuditData(approvalRequest, DenialCodeApprovalDenied, "approval denied")
 		if err := server.logEvent("approval.denied", approvalRequest.ControlSessionID, auditData); err != nil {
@@ -511,7 +539,17 @@ func (server *Server) validateAndRecordMCPGatewayApprovalDecision(tokenClaims ca
 				ApprovalRequestID: approvalRequest.ID,
 			}, false
 		}
-		approvalRequest.State = approvalStateDenied
+		updatedApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequest.ID, approvalRequest, approvalStateDenied)
+		if transitionErr != nil {
+			return approvalRequest, CapabilityResponse{
+				RequestID:         approvalRequest.ID,
+				Status:            ResponseStatusDenied,
+				DenialReason:      "approval request is in an invalid state",
+				DenialCode:        DenialCodeApprovalStateInvalid,
+				ApprovalRequestID: approvalRequest.ID,
+			}, false
+		}
+		approvalRequest = updatedApprovalRequest
 	}
 	approvalRequest.DecisionSubmittedAt = server.now().UTC()
 	approvalRequest.DecisionNonce = ""
@@ -566,8 +604,17 @@ func (server *Server) validateMCPGatewayExecutionRequestWithApproval(tokenClaims
 		}, false
 	}
 	if approvalRequest.ExpiresAt.Before(server.now().UTC()) {
-		approvalRequest.State = approvalStateExpired
-		server.mcpGatewayApprovalRequests[approvalRequestID] = approvalRequest
+		expiredApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequestID, approvalRequest, approvalStateExpired)
+		if transitionErr != nil {
+			return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+				RequestID:         approvalRequestID,
+				Status:            ResponseStatusDenied,
+				DenialReason:      "approval request is in an invalid state",
+				DenialCode:        DenialCodeApprovalStateInvalid,
+				ApprovalRequestID: approvalRequestID,
+			}, false
+		}
+		approvalRequest = expiredApprovalRequest
 		return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
 			RequestID:         approvalRequestID,
 			Status:            ResponseStatusDenied,
@@ -671,8 +718,17 @@ func (server *Server) consumeGrantedMCPGatewayApprovalForExecution(tokenClaims c
 		}, false
 	}
 	if approvalRequest.ExpiresAt.Before(server.now().UTC()) {
-		approvalRequest.State = approvalStateExpired
-		server.mcpGatewayApprovalRequests[approvalRequestID] = approvalRequest
+		expiredApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequestID, approvalRequest, approvalStateExpired)
+		if transitionErr != nil {
+			return approvalRequest, CapabilityResponse{
+				RequestID:         approvalRequestID,
+				Status:            ResponseStatusDenied,
+				DenialReason:      "approval request is in an invalid state",
+				DenialCode:        DenialCodeApprovalStateInvalid,
+				ApprovalRequestID: approvalRequestID,
+			}, false
+		}
+		approvalRequest = expiredApprovalRequest
 		return approvalRequest, CapabilityResponse{
 			RequestID:         approvalRequestID,
 			Status:            ResponseStatusDenied,
@@ -731,7 +787,16 @@ func (server *Server) consumeGrantedMCPGatewayApprovalForExecution(tokenClaims c
 		}, false
 	}
 
-	approvalRequest.State = approvalStateConsumed
+	approvalRequest, err = setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequest.ID, approvalRequest, approvalStateConsumed)
+	if err != nil {
+		return approvalRequest, CapabilityResponse{
+			RequestID:         approvalRequestID,
+			Status:            ResponseStatusDenied,
+			DenialReason:      "approval request is in an invalid state",
+			DenialCode:        DenialCodeApprovalStateInvalid,
+			ApprovalRequestID: approvalRequestID,
+		}, false
+	}
 	approvalRequest.ExecutedAt = server.now().UTC()
 	server.mcpGatewayApprovalRequests[approvalRequest.ID] = approvalRequest
 	return approvalRequest, CapabilityResponse{}, true
@@ -751,6 +816,13 @@ func (server *Server) markMCPGatewayApprovalExecutionFailed(approvalRequestID st
 	if approvalRequest.State != approvalStateConsumed {
 		return
 	}
-	approvalRequest.State = approvalStateExecutionFailed
+	updatedApprovalRequest, err := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequest.ID, approvalRequest, approvalStateExecutionFailed)
+	if err != nil {
+		if server.reportSecurityWarning != nil {
+			server.reportSecurityWarning("approval_state_transition_invalid", err)
+		}
+		return
+	}
+	approvalRequest = updatedApprovalRequest
 	server.mcpGatewayApprovalRequests[approvalRequest.ID] = approvalRequest
 }

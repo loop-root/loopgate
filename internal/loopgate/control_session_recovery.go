@@ -104,8 +104,11 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 	}
 
 	previousApproval := pendingApproval
-	pendingApproval.State = approvalStateCancelled
-	server.approvalState.records[approvalID] = pendingApproval
+	pendingApproval, transitionErr := setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateCancelled)
+	if transitionErr != nil {
+		server.mu.Unlock()
+		return fmt.Errorf("cancel pending approval: %w", transitionErr)
+	}
 
 	auditData := map[string]interface{}{
 		"approval_request_id":  approvalID,

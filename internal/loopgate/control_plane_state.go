@@ -59,8 +59,12 @@ func (server *Server) pruneExpiredLocked() {
 	for approvalID, pendingApproval := range server.approvalState.records {
 		if nowUTC.After(pendingApproval.ExpiresAt) {
 			if pendingApproval.State == approvalStatePending {
-				pendingApproval.State = approvalStateExpired
-				server.approvalState.records[approvalID] = pendingApproval
+				expiredApproval, transitionErr := setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateExpired)
+				if transitionErr != nil {
+					noteNextSweepCandidate(pendingApproval.ExpiresAt)
+					continue
+				}
+				pendingApproval = expiredApproval
 				noteNextSweepCandidate(pendingApproval.ExpiresAt.Add(requestReplayWindow))
 				continue
 			}
@@ -76,8 +80,12 @@ func (server *Server) pruneExpiredLocked() {
 	for approvalRequestID, approvalRequest := range server.mcpGatewayApprovalRequests {
 		if nowUTC.After(approvalRequest.ExpiresAt) {
 			if approvalRequest.State == approvalStatePending {
-				approvalRequest.State = approvalStateExpired
-				server.mcpGatewayApprovalRequests[approvalRequestID] = approvalRequest
+				expiredApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequestID, approvalRequest, approvalStateExpired)
+				if transitionErr != nil {
+					noteNextSweepCandidate(approvalRequest.ExpiresAt)
+					continue
+				}
+				approvalRequest = expiredApprovalRequest
 				noteNextSweepCandidate(approvalRequest.ExpiresAt.Add(requestReplayWindow))
 				continue
 			}
