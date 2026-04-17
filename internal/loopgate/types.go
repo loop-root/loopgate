@@ -2,12 +2,12 @@ package loopgate
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"loopgate/internal/config"
 	"loopgate/internal/identifiers"
+	protocolpkg "loopgate/internal/loopgate/protocol"
 	modelpkg "loopgate/internal/model"
 	modelruntime "loopgate/internal/modelruntime"
 )
@@ -254,45 +254,7 @@ type SessionMACKeysResponse struct {
 	Next                  SessionMACKeySlotInfo `json:"next"`
 }
 
-type CapabilityRequest struct {
-	RequestID     string            `json:"request_id"`
-	SessionID     string            `json:"session_id"`
-	Actor         string            `json:"actor"`
-	Capability    string            `json:"capability"`
-	Arguments     map[string]string `json:"arguments"`
-	CorrelationID string            `json:"correlation_id"`
-	// The following fields accept mistaken copies of provider-native tool metadata
-	// (OpenAI/Kimi/Moonshot shapes) into this envelope. They are stripped in
-	// normalizeCapabilityRequest and must never influence policy — Capability is canonical.
-	EchoedNativeToolName       string `json:"ToolName,omitempty"`
-	EchoedNativeToolNameSnake  string `json:"tool_name,omitempty"`
-	EchoedNativeToolNameCamel  string `json:"toolName,omitempty"`
-	EchoedNativeToolUseID      string `json:"ToolUseID,omitempty"`
-	EchoedNativeToolUseIDSnake string `json:"tool_use_id,omitempty"`
-	EchoedNativeToolCallID     string `json:"tool_call_id,omitempty"`
-	EchoedNativeToolCallIDAlt  string `json:"ToolCallID,omitempty"`
-}
-
-// MarshalJSON emits only the canonical capability-execute fields so provider-echo
-// metadata decoded into the struct is never sent back on the wire (defense in depth).
-func (r CapabilityRequest) MarshalJSON() ([]byte, error) {
-	type capabilityRequestWire struct {
-		RequestID     string            `json:"request_id"`
-		SessionID     string            `json:"session_id"`
-		Actor         string            `json:"actor"`
-		Capability    string            `json:"capability"`
-		Arguments     map[string]string `json:"arguments"`
-		CorrelationID string            `json:"correlation_id"`
-	}
-	return json.Marshal(capabilityRequestWire{
-		RequestID:     r.RequestID,
-		SessionID:     r.SessionID,
-		Actor:         r.Actor,
-		Capability:    r.Capability,
-		Arguments:     r.Arguments,
-		CorrelationID: r.CorrelationID,
-	})
-}
+type CapabilityRequest = protocolpkg.CapabilityRequest
 
 type CapabilityResponse struct {
 	RequestID         string                         `json:"request_id"`
@@ -354,18 +316,7 @@ type ResultFieldMetadata struct {
 	PromptEligible bool   `json:"prompt_eligible"`
 }
 
-type ApprovalDecisionRequest struct {
-	Approved bool   `json:"approved"`
-	Reason   string `json:"reason,omitempty"`
-	// DecisionNonce is the single-use nonce issued at approval creation time. Required.
-	DecisionNonce string `json:"decision_nonce"`
-	// ApprovalManifestSHA256 is the canonical approval manifest hash per AMP RFC 0005 §6.
-	// When provided, the server verifies it matches the manifest computed at approval creation
-	// time, binding the decision to the exact method, path, and request body that was approved.
-	// The server computes the manifest from the stored approval; the operator obtains this value
-	// from the pending approval response and must include it to prove they reviewed the manifest.
-	ApprovalManifestSHA256 string `json:"approval_manifest_sha256,omitempty"`
-}
+type ApprovalDecisionRequest = protocolpkg.ApprovalDecisionRequest
 
 func ValidateGrantType(rawGrantType string) error {
 	normalizedGrantType := strings.TrimSpace(rawGrantType)
@@ -399,45 +350,6 @@ func (openSessionRequest OpenSessionRequest) Validate() error {
 		}
 	}
 	return nil
-}
-
-func (capabilityRequest CapabilityRequest) Validate() error {
-	if strings.TrimSpace(capabilityRequest.RequestID) != "" {
-		if err := identifiers.ValidateSafeIdentifier("request_id", capabilityRequest.RequestID); err != nil {
-			return err
-		}
-	}
-	if strings.TrimSpace(capabilityRequest.SessionID) != "" {
-		if err := identifiers.ValidateSafeIdentifier("session_id", capabilityRequest.SessionID); err != nil {
-			return err
-		}
-	}
-	if strings.TrimSpace(capabilityRequest.Actor) != "" {
-		if err := identifiers.ValidateSafeIdentifier("actor", capabilityRequest.Actor); err != nil {
-			return err
-		}
-	}
-	if err := identifiers.ValidateSafeIdentifier("capability", capabilityRequest.Capability); err != nil {
-		return err
-	}
-	if strings.TrimSpace(capabilityRequest.CorrelationID) != "" {
-		if err := identifiers.ValidateSafeIdentifier("correlation_id", capabilityRequest.CorrelationID); err != nil {
-			return err
-		}
-	}
-	for argumentKey := range capabilityRequest.Arguments {
-		if err := identifiers.ValidateSafeIdentifier("capability argument name", argumentKey); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (approvalDecisionRequest ApprovalDecisionRequest) Validate() error {
-	if strings.TrimSpace(approvalDecisionRequest.DecisionNonce) == "" {
-		return nil
-	}
-	return identifiers.ValidateSafeIdentifier("approval decision nonce", approvalDecisionRequest.DecisionNonce)
 }
 
 const (

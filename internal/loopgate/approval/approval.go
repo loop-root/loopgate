@@ -16,6 +16,7 @@ const (
 	StateCancelled       = "cancelled"
 	StateConsumed        = "consumed"
 	StateExecutionFailed = "execution_failed"
+	ScopeSingleUse       = "single-use"
 )
 
 // TokenHash returns the SHA-256 hex digest used for approval-token indexing.

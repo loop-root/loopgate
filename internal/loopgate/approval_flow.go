@@ -12,38 +12,9 @@ import (
 	"loopgate/internal/secrets"
 )
 
-type approvalExecutionContext struct {
-	ControlSessionID    string
-	ActorLabel          string
-	ClientSessionLabel  string
-	AllowedCapabilities map[string]struct{}
-	TenantID            string
-	UserID              string
-}
+type approvalExecutionContext = approvalpkg.ExecutionContext
 
-type pendingApproval struct {
-	ID                  string
-	Request             CapabilityRequest
-	CreatedAt           time.Time
-	ExpiresAt           time.Time
-	Metadata            map[string]interface{}
-	Reason              string
-	ControlSessionID    string
-	DecisionNonce       string
-	DecisionSubmittedAt time.Time
-	ExecutedAt          time.Time
-	ExecutionContext    approvalExecutionContext
-	State               string
-	// ApprovalManifestSHA256 is the canonical approval manifest hash per AMP RFC 0005 §6,
-	// computed at approval creation time from the action class, subject, execution method,
-	// path, request body hash, scope, and expiry. Verified against the operator-submitted
-	// hash at decision time to bind the decision to the exact approved action.
-	ApprovalManifestSHA256 string
-	// ExecutionBodySHA256 is the SHA256 of the serialized CapabilityRequest body, stored at
-	// approval creation time. At execution time (PR 1b), the live request body hash is
-	// verified against this value along with the method and path to confirm exact match.
-	ExecutionBodySHA256 string
-}
+type pendingApproval = approvalpkg.PendingApproval
 
 const (
 	approvalStatePending   = approvalpkg.StatePending
@@ -581,22 +552,7 @@ func (server *Server) auditApprovalDecisionDenial(controlSession controlSession,
 // in-flight approval that was created before the manifest-binding change was deployed.
 // Must be called with server.mu held.
 func backfillApprovalManifestLocked(approvalRecords map[string]pendingApproval, approvalID string, approval pendingApproval) pendingApproval {
-	if strings.TrimSpace(approval.ApprovalManifestSHA256) != "" {
-		return approval
-	}
-	if strings.TrimSpace(approval.Request.Capability) == "" || approval.ExpiresAt.IsZero() {
-		return approval
-	}
-	manifestSHA256, bodySHA256, err := buildCapabilityApprovalManifest(approval.Request, approval.ExpiresAt.UTC().UnixMilli())
-	if err != nil {
-		return approval
-	}
-	approval.ApprovalManifestSHA256 = manifestSHA256
-	if strings.TrimSpace(approval.ExecutionBodySHA256) == "" {
-		approval.ExecutionBodySHA256 = bodySHA256
-	}
-	approvalRecords[approvalID] = approval
-	return approval
+	return approvalpkg.BackfillPendingApprovalManifest(approvalRecords, approvalID, approval)
 }
 
 func (server *Server) markApprovalExecutionResult(approvalID string, executionStatus string) {

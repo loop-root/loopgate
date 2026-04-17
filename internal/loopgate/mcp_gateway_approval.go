@@ -83,7 +83,7 @@ func buildMCPGatewayApprovalManifest(validatedRequest validatedMCPGatewayInvocat
 		approvalExecutionMethodMCPGateway,
 		approvalExecutionPathMCPGateway,
 		bodySHA256,
-		approvalScopeSingleUse,
+		approvalpkg.ScopeSingleUse,
 		expiresAtUTC.UTC().UnixMilli(),
 	)
 	return manifestSHA256, bodySHA256, nil
