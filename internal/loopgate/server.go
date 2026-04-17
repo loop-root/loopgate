@@ -85,10 +85,33 @@ type uiState struct {
 	nextSubscriberID int
 }
 
+type providerRuntimeState struct {
+	// mu protects live provider/integration runtime state.
+	//
+	// Protected fields:
+	//   - tokens
+	//   - configuredConnections
+	//   - configuredCapabilities
+	//
+	// Why this lock exists:
+	//   - these maps back outbound integration execution and runtime config reloads
+	//   - separating them from the primary control-plane lock keeps provider churn
+	//     away from sessions, approvals, and replay state
+	//
+	// Sequencing rule:
+	//   - snapshot provider/configured state under providerRuntime.mu
+	//   - release it before policy evaluation, HTTP calls, or audit emission
+	mu sync.Mutex
+
+	tokens                 map[string]providerAccessToken
+	configuredConnections  map[string]configuredConnection
+	configuredCapabilities map[string]configuredCapability
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
 //   - Current production code treats audit.mu, ui.mu, connectionsMu,
-//     modelConnectionsMu, hostAccessPlansMu, providerTokenMu, pkceMu, and
+//     modelConnectionsMu, hostAccessPlansMu, providerRuntime.mu, pkceMu, and
 //     policyRuntimeMu as leaf-domain locks. Callers snapshot state under one
 //     lock, release it, and only then cross into another domain.
 //   - mu is the primary state lock for sessions, tokens, approvals, replay
@@ -210,25 +233,13 @@ type Server struct {
 
 	configStateDir string
 
-	// providerTokenMu protects live provider/integration runtime state:
-	//   - providerTokens
-	//   - configuredConnections
-	//   - configuredCapabilities
-	//
-	// Why this lock exists:
-	//   - these maps back outbound integration execution and runtime config reloads
-	//   - separating them from mu keeps network/provider churn away from session/auth state
-	//
-	// Sequencing rule:
-	//   - snapshot configured/provider state under providerTokenMu
-	//   - release it before policy evaluation, HTTP calls, or audit emission
-	providerTokenMu        sync.Mutex
-	providerTokens         map[string]providerAccessToken
-	configuredConnections  map[string]configuredConnection
-	configuredCapabilities map[string]configuredCapability
-	httpClient             *http.Client
-	policyRuntime          serverPolicyRuntime
-	policyContentSHA256    string
+	// providerRuntime owns live provider token state plus configured connection and
+	// configured capability maps.
+	// See providerRuntimeState above and docs/design_overview/loopgate_locking.md.
+	providerRuntime     providerRuntimeState
+	httpClient          *http.Client
+	policyRuntime       serverPolicyRuntime
+	policyContentSHA256 string
 
 	// policyRuntimeMu protects the immutable-ish serverPolicyRuntime snapshot used
 	// by request paths. Reads are far more common than writes, so this is the one
@@ -448,13 +459,15 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		reportSecurityWarning: func(eventCode string, cause error) {
 			fmt.Fprintf(os.Stderr, "WARN: security event=%s class=%s\n", eventCode, secrets.LoopgateOperatorErrorClass(cause))
 		},
-		resolvePeerIdentity:                  peerIdentityFromConn,
-		resolveExePath:                       resolveExecutablePath,
-		processExists:                        processExists,
-		resolveUserHomeDir:                   os.UserHomeDir,
-		providerTokens:                       make(map[string]providerAccessToken),
-		configuredConnections:                configuredConnections,
-		configuredCapabilities:               configuredCapabilities,
+		resolvePeerIdentity: peerIdentityFromConn,
+		resolveExePath:      resolveExecutablePath,
+		processExists:       processExists,
+		resolveUserHomeDir:  os.UserHomeDir,
+		providerRuntime: providerRuntimeState{
+			tokens:                 make(map[string]providerAccessToken),
+			configuredConnections:  configuredConnections,
+			configuredCapabilities: configuredCapabilities,
+		},
 		httpClient:                           &http.Client{Timeout: time.Duration(policy.Tools.HTTP.TimeoutSeconds) * time.Second},
 		pkceSessions:                         make(map[string]pendingPKCESession),
 		sessions:                             make(map[string]controlSession),
@@ -1160,7 +1173,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 	}
 
 	var quarantineRef string
-	if _, configuredCapability := server.configuredCapabilities[capabilityRequest.Capability]; configuredCapability {
+	if _, configuredCapability := server.providerRuntime.configuredCapabilities[capabilityRequest.Capability]; configuredCapability {
 		quarantineRef, err = server.storeQuarantinedPayload(capabilityRequest, output)
 		if err != nil {
 			qErr := fmt.Errorf("quarantine persistence failed: %w", err)

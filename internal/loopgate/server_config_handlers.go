@@ -63,10 +63,10 @@ func (server *Server) handleConfigGet(w http.ResponseWriter, section string) {
 	case "runtime":
 		result = server.runtimeConfig
 	case "connections":
-		server.providerTokenMu.Lock()
-		conns := server.configuredConnections
-		caps := server.configuredCapabilities
-		server.providerTokenMu.Unlock()
+		server.providerRuntime.mu.Lock()
+		conns := server.providerRuntime.configuredConnections
+		caps := server.providerRuntime.configuredCapabilities
+		server.providerRuntime.mu.Unlock()
 		result = connectionsToConfigFiles(conns, caps)
 	}
 
@@ -191,10 +191,10 @@ func (server *Server) handleConfigPutConnections(w http.ResponseWriter, body []b
 		return
 	}
 
-	server.providerTokenMu.Lock()
-	server.configuredConnections = conns
-	server.configuredCapabilities = caps
-	server.providerTokenMu.Unlock()
+	server.providerRuntime.mu.Lock()
+	server.providerRuntime.configuredConnections = conns
+	server.providerRuntime.configuredCapabilities = caps
+	server.providerRuntime.mu.Unlock()
 
 	// Re-register capabilities.
 	if err := server.registerConfiguredCapabilities(); err != nil {

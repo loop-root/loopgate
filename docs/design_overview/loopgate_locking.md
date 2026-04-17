@@ -171,22 +171,22 @@ Why separate:
   semantics
 - those semantics should not enlarge `mu`
 
-### `providerTokenMu`
+### `providerRuntime.mu`
 
 Purpose:
 - protect live provider-token and configured connection/capability runtime data
 
 Protects:
-- `providerTokens`
-- `configuredConnections`
-- `configuredCapabilities`
+- `providerRuntime.tokens`
+- `providerRuntime.configuredConnections`
+- `providerRuntime.configuredCapabilities`
 
 Why separate:
 - operator config reloads and provider token churn are not the same domain as
   sessions/approvals/replay protection
 
 Rule:
-- snapshot the runtime data under `providerTokenMu`, then release it before
+- snapshot the runtime data under `providerRuntime.mu`, then release it before
   network calls or audit emission
 
 ### `policyRuntimeMu`

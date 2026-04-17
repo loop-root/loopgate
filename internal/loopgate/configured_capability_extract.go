@@ -14,7 +14,7 @@ import (
 func (server *Server) buildCapabilityResult(capabilityRequest CapabilityRequest, output string, sourceQuarantineRef string) (map[string]interface{}, map[string]ResultFieldMetadata, ResultClassification, string, error) {
 	capability := capabilityRequest.Capability
 	arguments := capabilityRequest.Arguments
-	if configuredCapabilityDefinition, found := server.configuredCapabilities[capability]; found {
+	if configuredCapabilityDefinition, found := server.providerRuntime.configuredCapabilities[capability]; found {
 		structuredResult := map[string]interface{}{
 			"capability": capability,
 		}

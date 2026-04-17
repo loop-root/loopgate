@@ -1372,12 +1372,12 @@ func TestConfiguredPKCECapability_ExchangesAndRefreshesInsideLoopgate(t *testing
 		t.Fatalf("expected derived quarantine ref to match response quarantine ref, got %#v", firstResponse.Metadata)
 	}
 
-	server.providerTokenMu.Lock()
+	server.providerRuntime.mu.Lock()
 	connectionKey := connectionRecordKey("examplepkce", "workspace-user")
-	cachedToken := server.providerTokens[connectionKey]
+	cachedToken := server.providerRuntime.tokens[connectionKey]
 	cachedToken.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute)
-	server.providerTokens[connectionKey] = cachedToken
-	server.providerTokenMu.Unlock()
+	server.providerRuntime.tokens[connectionKey] = cachedToken
+	server.providerRuntime.mu.Unlock()
 
 	secondResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
 		RequestID:  "req-pkce-2",

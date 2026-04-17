@@ -248,11 +248,11 @@ func (server *Server) connectionStatuses() []ConnectionStatus {
 	server.connectionsMu.Lock()
 	defer server.connectionsMu.Unlock()
 
-	connectionStatuses := make([]ConnectionStatus, 0, len(server.connections)+len(server.configuredConnections))
+	connectionStatuses := make([]ConnectionStatus, 0, len(server.connections)+len(server.providerRuntime.configuredConnections))
 	for _, connectionRecord := range server.connections {
 		connectionStatuses = append(connectionStatuses, connectionRecord.statusSummary())
 	}
-	for connectionKey, configuredConnectionDefinition := range server.configuredConnections {
+	for connectionKey, configuredConnectionDefinition := range server.providerRuntime.configuredConnections {
 		if !isPublicReadGrantType(configuredConnectionDefinition.Registration.GrantType) {
 			continue
 		}
@@ -580,7 +580,7 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 	connectionRecord, found := server.connections[connectionRecordKey(trimmedProvider, trimmedSubject)]
 	server.connectionsMu.Unlock()
 	if !found {
-		configuredConnectionDefinition, configuredFound := server.configuredConnections[connectionRecordKey(trimmedProvider, trimmedSubject)]
+		configuredConnectionDefinition, configuredFound := server.providerRuntime.configuredConnections[connectionRecordKey(trimmedProvider, trimmedSubject)]
 		if configuredFound && isPublicReadGrantType(configuredConnectionDefinition.Registration.GrantType) {
 			return ConnectionStatus{
 				Provider:           configuredConnectionDefinition.Registration.Provider,
@@ -695,7 +695,7 @@ func deleteConnectionSecretForRollback(ctx context.Context, secretStore secrets.
 }
 
 func (server *Server) invalidateProviderAccessToken(connectionKey string) {
-	server.providerTokenMu.Lock()
-	delete(server.providerTokens, connectionKey)
-	server.providerTokenMu.Unlock()
+	server.providerRuntime.mu.Lock()
+	delete(server.providerRuntime.tokens, connectionKey)
+	server.providerRuntime.mu.Unlock()
 }

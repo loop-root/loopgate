@@ -137,14 +137,14 @@ func (server *Server) completePKCEConnection(ctx context.Context, tokenClaims ca
 		return ConnectionStatus{}, err
 	}
 	expiresAt := server.now().UTC().Add(time.Duration(defaultInt(tokenResponse.ExpiresIn, 300)) * time.Second)
-	server.providerTokenMu.Lock()
-	server.providerTokens[connectionKey] = providerAccessToken{
+	server.providerRuntime.mu.Lock()
+	server.providerRuntime.tokens[connectionKey] = providerAccessToken{
 		ConnectionKey: connectionKey,
 		AccessToken:   tokenResponse.AccessToken,
 		TokenType:     defaultString(tokenResponse.TokenType, "Bearer"),
 		ExpiresAt:     expiresAt,
 	}
-	server.providerTokenMu.Unlock()
+	server.providerRuntime.mu.Unlock()
 
 	server.pkceMu.Lock()
 	delete(server.pkceSessions, request.State)
@@ -231,7 +231,7 @@ func (server *Server) pruneExpiredPKCESessionsLocked() {
 
 func (server *Server) lookupConfiguredConnection(provider string, subject string, expectedGrantType string) (configuredConnection, string, error) {
 	connectionKey := connectionRecordKey(strings.TrimSpace(provider), strings.TrimSpace(subject))
-	configuredConnectionDefinition, found := server.configuredConnections[connectionKey]
+	configuredConnectionDefinition, found := server.providerRuntime.configuredConnections[connectionKey]
 	if !found {
 		return configuredConnection{}, "", fmt.Errorf("configured connection not found for provider %q subject %q", provider, subject)
 	}

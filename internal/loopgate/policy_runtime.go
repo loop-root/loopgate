@@ -162,9 +162,9 @@ func (server *Server) buildPolicyRuntime(policyLoadResult config.PolicyLoadResul
 }
 
 func (server *Server) currentConfiguredCapabilitiesSnapshot() map[string]configuredCapability {
-	server.providerTokenMu.Lock()
-	defer server.providerTokenMu.Unlock()
-	return cloneConfiguredCapabilities(server.configuredCapabilities)
+	server.providerRuntime.mu.Lock()
+	defer server.providerRuntime.mu.Unlock()
+	return cloneConfiguredCapabilities(server.providerRuntime.configuredCapabilities)
 }
 
 func (server *Server) reloadPolicyRuntimeFromDisk() (serverPolicyRuntime, error) {

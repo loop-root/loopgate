@@ -39,11 +39,11 @@ const (
 func (server *Server) executeConfiguredCapability(ctx context.Context, capabilityName string, arguments map[string]string) (string, error) {
 	_ = arguments
 
-	configuredCapabilityDefinition, found := server.configuredCapabilities[capabilityName]
+	configuredCapabilityDefinition, found := server.providerRuntime.configuredCapabilities[capabilityName]
 	if !found {
 		return "", fmt.Errorf("configured capability %q not found", capabilityName)
 	}
-	configuredConnectionDefinition, found := server.configuredConnections[configuredCapabilityDefinition.ConnectionKey]
+	configuredConnectionDefinition, found := server.providerRuntime.configuredConnections[configuredCapabilityDefinition.ConnectionKey]
 	if !found {
 		return "", fmt.Errorf("configured connection for capability %q not found", capabilityName)
 	}
@@ -97,14 +97,14 @@ func (server *Server) executeConfiguredCapability(ctx context.Context, capabilit
 func (server *Server) accessTokenForConfiguredConnection(ctx context.Context, configuredConnectionDefinition configuredConnection) (string, error) {
 	connectionKey := connectionRecordKey(configuredConnectionDefinition.Registration.Provider, configuredConnectionDefinition.Registration.Subject)
 
-	server.providerTokenMu.Lock()
-	cachedToken, found := server.providerTokens[connectionKey]
+	server.providerRuntime.mu.Lock()
+	cachedToken, found := server.providerRuntime.tokens[connectionKey]
 	if found && strings.EqualFold(cachedToken.TokenType, "bearer") && server.now().UTC().Before(cachedToken.ExpiresAt.Add(-30*time.Second)) {
 		accessToken := cachedToken.AccessToken
-		server.providerTokenMu.Unlock()
+		server.providerRuntime.mu.Unlock()
 		return accessToken, nil
 	}
-	server.providerTokenMu.Unlock()
+	server.providerRuntime.mu.Unlock()
 
 	oauthToken, err := server.issueConnectionAccessToken(ctx, configuredConnectionDefinition)
 	if err != nil {
@@ -122,14 +122,14 @@ func (server *Server) accessTokenForConfiguredConnection(ctx context.Context, co
 		return "", err
 	}
 
-	server.providerTokenMu.Lock()
-	server.providerTokens[connectionKey] = providerAccessToken{
+	server.providerRuntime.mu.Lock()
+	server.providerRuntime.tokens[connectionKey] = providerAccessToken{
 		ConnectionKey: connectionKey,
 		AccessToken:   oauthToken.AccessToken,
 		TokenType:     defaultString(oauthToken.TokenType, "Bearer"),
 		ExpiresAt:     expiresAt,
 	}
-	server.providerTokenMu.Unlock()
+	server.providerRuntime.mu.Unlock()
 	return oauthToken.AccessToken, nil
 }
 
@@ -171,7 +171,7 @@ func (server *Server) issueConnectionAccessToken(ctx context.Context, configured
 }
 
 func (server *Server) capabilityProvenanceMetadata(capabilityName string, quarantineRef string) map[string]interface{} {
-	configuredCapabilityDefinition, found := server.configuredCapabilities[capabilityName]
+	configuredCapabilityDefinition, found := server.providerRuntime.configuredCapabilities[capabilityName]
 	if !found {
 		return nil
 	}

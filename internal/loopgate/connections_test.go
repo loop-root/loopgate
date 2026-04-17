@@ -438,22 +438,22 @@ func TestRotateConnectionCredential_InvalidatesCachedProviderToken(t *testing.T)
 	}
 
 	connectionKey := connectionRecordKey("github", "repo-bot")
-	server.providerTokenMu.Lock()
-	server.providerTokens[connectionKey] = providerAccessToken{
+	server.providerRuntime.mu.Lock()
+	server.providerRuntime.tokens[connectionKey] = providerAccessToken{
 		ConnectionKey: connectionKey,
 		AccessToken:   "cached-access-token",
 		TokenType:     "Bearer",
 		ExpiresAt:     time.Now().UTC().Add(5 * time.Minute),
 	}
-	server.providerTokenMu.Unlock()
+	server.providerRuntime.mu.Unlock()
 
 	if _, err := server.RotateConnectionCredential(context.Background(), registration, []byte("ghp-rotated-secret")); err != nil {
 		t.Fatalf("rotate connection credential: %v", err)
 	}
 
-	server.providerTokenMu.Lock()
-	_, foundCachedToken := server.providerTokens[connectionKey]
-	server.providerTokenMu.Unlock()
+	server.providerRuntime.mu.Lock()
+	_, foundCachedToken := server.providerRuntime.tokens[connectionKey]
+	server.providerRuntime.mu.Unlock()
 	if foundCachedToken {
 		t.Fatal("expected cached provider token to be invalidated after credential rotation")
 	}
