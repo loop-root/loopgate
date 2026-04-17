@@ -245,18 +245,18 @@ func saveConnectionRecords(path string, connectionRecords map[string]connectionR
 }
 
 func (server *Server) connectionStatuses() []ConnectionStatus {
-	server.connectionsMu.Lock()
-	defer server.connectionsMu.Unlock()
+	server.connectionRuntime.mu.Lock()
+	defer server.connectionRuntime.mu.Unlock()
 
-	connectionStatuses := make([]ConnectionStatus, 0, len(server.connections)+len(server.providerRuntime.configuredConnections))
-	for _, connectionRecord := range server.connections {
+	connectionStatuses := make([]ConnectionStatus, 0, len(server.connectionRuntime.records)+len(server.providerRuntime.configuredConnections))
+	for _, connectionRecord := range server.connectionRuntime.records {
 		connectionStatuses = append(connectionStatuses, connectionRecord.statusSummary())
 	}
 	for connectionKey, configuredConnectionDefinition := range server.providerRuntime.configuredConnections {
 		if !isPublicReadGrantType(configuredConnectionDefinition.Registration.GrantType) {
 			continue
 		}
-		if _, found := server.connections[connectionKey]; found {
+		if _, found := server.connectionRuntime.records[connectionKey]; found {
 			continue
 		}
 		connectionStatuses = append(connectionStatuses, ConnectionStatus{
@@ -315,8 +315,8 @@ func (server *Server) RegisterConnection(ctx context.Context, registration conne
 		record.LastRotatedAtUTC = secretMetadata.LastRotatedAt.UTC().Format(time.RFC3339Nano)
 	}
 
-	server.connectionsMu.Lock()
-	existingRecord, found := server.connections[connectionRecordKey(record.Provider, record.Subject)]
+	server.connectionRuntime.mu.Lock()
+	existingRecord, found := server.connectionRuntime.records[connectionRecordKey(record.Provider, record.Subject)]
 	if found {
 		record.CreatedAtUTC = existingRecord.CreatedAtUTC
 		if existingRecord.LastUsedAtUTC != "" && record.LastUsedAtUTC == "" {
@@ -326,14 +326,14 @@ func (server *Server) RegisterConnection(ctx context.Context, registration conne
 			record.LastRotatedAtUTC = existingRecord.LastRotatedAtUTC
 		}
 	}
-	updatedConnections := cloneConnectionRecords(server.connections)
+	updatedConnections := cloneConnectionRecords(server.connectionRuntime.records)
 	updatedConnections[connectionRecordKey(record.Provider, record.Subject)] = record
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
-		server.connectionsMu.Unlock()
+		server.connectionRuntime.mu.Unlock()
 		return ConnectionStatus{}, err
 	}
-	server.connections = updatedConnections
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.records = updatedConnections
+	server.connectionRuntime.mu.Unlock()
 	server.invalidateProviderAccessToken(connectionRecordKey(record.Provider, record.Subject))
 
 	return record.statusSummary(), nil
@@ -350,9 +350,9 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 
 	connectionKey := connectionRecordKey(normalizedRegistration.Provider, normalizedRegistration.Subject)
 
-	server.connectionsMu.Lock()
-	_, foundExistingRecord := server.connections[connectionKey]
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.mu.Lock()
+	_, foundExistingRecord := server.connectionRuntime.records[connectionKey]
+	server.connectionRuntime.mu.Unlock()
 	if foundExistingRecord {
 		return ConnectionStatus{}, fmt.Errorf("connection credential already exists for provider %q subject %q; explicit rotation flow required", normalizedRegistration.Provider, normalizedRegistration.Subject)
 	}
@@ -386,16 +386,16 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 		record.LastRotatedAtUTC = nowUTC.Format(time.RFC3339Nano)
 	}
 
-	server.connectionsMu.Lock()
-	updatedConnections := cloneConnectionRecords(server.connections)
+	server.connectionRuntime.mu.Lock()
+	updatedConnections := cloneConnectionRecords(server.connectionRuntime.records)
 	updatedConnections[connectionKey] = record
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
-		server.connectionsMu.Unlock()
+		server.connectionRuntime.mu.Unlock()
 		cleanupErr := deleteConnectionSecretForRollback(ctx, secretStore, normalizedRegistration.Credential)
 		return ConnectionStatus{}, errors.Join(err, cleanupErr)
 	}
-	server.connections = updatedConnections
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.records = updatedConnections
+	server.connectionRuntime.mu.Unlock()
 
 	if err := server.logEvent("connection.credential_upserted", "", map[string]interface{}{
 		"provider":            record.Provider,
@@ -405,14 +405,14 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 		"secure_store_ref_id": record.Credential.ID,
 		"status":              record.Status,
 	}); err != nil {
-		server.connectionsMu.Lock()
-		rollbackConnections := cloneConnectionRecords(server.connections)
+		server.connectionRuntime.mu.Lock()
+		rollbackConnections := cloneConnectionRecords(server.connectionRuntime.records)
 		delete(rollbackConnections, connectionKey)
 		saveErr := saveConnectionRecords(server.connectionPath, rollbackConnections)
 		if saveErr == nil {
-			server.connections = rollbackConnections
+			server.connectionRuntime.records = rollbackConnections
 		}
-		server.connectionsMu.Unlock()
+		server.connectionRuntime.mu.Unlock()
 		cleanupErr := deleteConnectionSecretForRollback(ctx, secretStore, normalizedRegistration.Credential)
 		return ConnectionStatus{}, errors.Join(err, saveErr, cleanupErr)
 	}
@@ -432,9 +432,9 @@ func (server *Server) RotateConnectionCredential(ctx context.Context, registrati
 
 	connectionKey := connectionRecordKey(normalizedRegistration.Provider, normalizedRegistration.Subject)
 
-	server.connectionsMu.Lock()
-	existingRecord, foundExistingRecord := server.connections[connectionKey]
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.mu.Lock()
+	existingRecord, foundExistingRecord := server.connectionRuntime.records[connectionKey]
+	server.connectionRuntime.mu.Unlock()
 	if !foundExistingRecord {
 		return ConnectionStatus{}, fmt.Errorf("connection credential not found for provider %q subject %q", normalizedRegistration.Provider, normalizedRegistration.Subject)
 	}
@@ -476,18 +476,18 @@ func (server *Server) RotateConnectionCredential(ctx context.Context, registrati
 		updatedRecord.LastRotatedAtUTC = nowUTC.Format(time.RFC3339Nano)
 	}
 
-	server.connectionsMu.Lock()
-	updatedConnections := cloneConnectionRecords(server.connections)
+	server.connectionRuntime.mu.Lock()
+	updatedConnections := cloneConnectionRecords(server.connectionRuntime.records)
 	updatedConnections[connectionKey] = updatedRecord
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
-		server.connectionsMu.Unlock()
+		server.connectionRuntime.mu.Unlock()
 		if restoreErr := server.restoreConnectionSecret(ctx, secretStore, normalizedRegistration.Credential, previousSecretBytes); restoreErr != nil {
 			return ConnectionStatus{}, errors.Join(err, restoreErr)
 		}
 		return ConnectionStatus{}, err
 	}
-	server.connections = updatedConnections
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.records = updatedConnections
+	server.connectionRuntime.mu.Unlock()
 
 	if err := server.logEvent("connection.credential_rotated", "", map[string]interface{}{
 		"provider":            updatedRecord.Provider,
@@ -497,14 +497,14 @@ func (server *Server) RotateConnectionCredential(ctx context.Context, registrati
 		"secure_store_ref_id": updatedRecord.Credential.ID,
 		"status":              updatedRecord.Status,
 	}); err != nil {
-		server.connectionsMu.Lock()
-		rollbackConnections := cloneConnectionRecords(server.connections)
+		server.connectionRuntime.mu.Lock()
+		rollbackConnections := cloneConnectionRecords(server.connectionRuntime.records)
 		rollbackConnections[connectionKey] = existingRecord
 		saveErr := saveConnectionRecords(server.connectionPath, rollbackConnections)
 		if saveErr == nil {
-			server.connections = rollbackConnections
+			server.connectionRuntime.records = rollbackConnections
 		}
-		server.connectionsMu.Unlock()
+		server.connectionRuntime.mu.Unlock()
 		restoreErr := server.restoreConnectionSecret(ctx, secretStore, normalizedRegistration.Credential, previousSecretBytes)
 		return ConnectionStatus{}, errors.Join(err, saveErr, restoreErr)
 	}
@@ -525,9 +525,9 @@ func (server *Server) ResolveConnectionSecret(ctx context.Context, provider stri
 		}
 	}
 
-	server.connectionsMu.Lock()
-	connectionRecord, found := server.connections[connectionRecordKey(trimmedProvider, trimmedSubject)]
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.mu.Lock()
+	connectionRecord, found := server.connectionRuntime.records[connectionRecordKey(trimmedProvider, trimmedSubject)]
+	server.connectionRuntime.mu.Unlock()
 	if !found {
 		return nil, secrets.SecretMetadata{}, ConnectionStatus{}, fmt.Errorf("connection not found for provider %q", trimmedProvider)
 	}
@@ -542,8 +542,8 @@ func (server *Server) ResolveConnectionSecret(ctx context.Context, provider stri
 	}
 
 	nowUTC := server.now().UTC().Format(time.RFC3339Nano)
-	server.connectionsMu.Lock()
-	updatedConnections := cloneConnectionRecords(server.connections)
+	server.connectionRuntime.mu.Lock()
+	updatedConnections := cloneConnectionRecords(server.connectionRuntime.records)
 	updatedRecord := updatedConnections[connectionRecordKey(trimmedProvider, trimmedSubject)]
 	if !secretMetadata.LastUsedAt.IsZero() {
 		updatedRecord.LastUsedAtUTC = secretMetadata.LastUsedAt.UTC().Format(time.RFC3339Nano)
@@ -555,11 +555,11 @@ func (server *Server) ResolveConnectionSecret(ctx context.Context, provider stri
 	}
 	updatedConnections[connectionRecordKey(trimmedProvider, trimmedSubject)] = updatedRecord
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
-		server.connectionsMu.Unlock()
+		server.connectionRuntime.mu.Unlock()
 		return nil, secrets.SecretMetadata{}, ConnectionStatus{}, err
 	}
-	server.connections = updatedConnections
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.records = updatedConnections
+	server.connectionRuntime.mu.Unlock()
 
 	return rawSecretBytes, secretMetadata, updatedRecord.statusSummary(), nil
 }
@@ -576,9 +576,9 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 		}
 	}
 
-	server.connectionsMu.Lock()
-	connectionRecord, found := server.connections[connectionRecordKey(trimmedProvider, trimmedSubject)]
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.mu.Lock()
+	connectionRecord, found := server.connectionRuntime.records[connectionRecordKey(trimmedProvider, trimmedSubject)]
+	server.connectionRuntime.mu.Unlock()
 	if !found {
 		configuredConnectionDefinition, configuredFound := server.providerRuntime.configuredConnections[connectionRecordKey(trimmedProvider, trimmedSubject)]
 		if configuredFound && isPublicReadGrantType(configuredConnectionDefinition.Registration.GrantType) {
@@ -599,17 +599,17 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 
 	if isPublicReadGrantType(connectionRecord.GrantType) {
 		nowUTC := server.now().UTC().Format(time.RFC3339Nano)
-		server.connectionsMu.Lock()
-		updatedConnections := cloneConnectionRecords(server.connections)
+		server.connectionRuntime.mu.Lock()
+		updatedConnections := cloneConnectionRecords(server.connectionRuntime.records)
 		updatedRecord := updatedConnections[connectionRecordKey(trimmedProvider, trimmedSubject)]
 		updatedRecord.LastValidatedAtUTC = nowUTC
 		updatedRecord.Status = defaultLabel(updatedRecord.Status, "public_configured")
 		if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
-			server.connectionsMu.Unlock()
+			server.connectionRuntime.mu.Unlock()
 			return ConnectionStatus{}, err
 		}
-		server.connections = updatedConnections
-		server.connectionsMu.Unlock()
+		server.connectionRuntime.records = updatedConnections
+		server.connectionRuntime.mu.Unlock()
 		if err := server.logEvent("connection.validated", "", map[string]interface{}{
 			"provider":            updatedRecord.Provider,
 			"subject":             updatedRecord.Subject,
@@ -633,8 +633,8 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 	}
 
 	nowUTC := server.now().UTC()
-	server.connectionsMu.Lock()
-	updatedConnections := cloneConnectionRecords(server.connections)
+	server.connectionRuntime.mu.Lock()
+	updatedConnections := cloneConnectionRecords(server.connectionRuntime.records)
 	updatedRecord := updatedConnections[connectionRecordKey(trimmedProvider, trimmedSubject)]
 	updatedRecord.LastValidatedAtUTC = nowUTC.Format(time.RFC3339Nano)
 	updatedRecord.Status = defaultLabel(secretMetadata.Status, "validated")
@@ -645,11 +645,11 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 		updatedRecord.LastRotatedAtUTC = secretMetadata.LastRotatedAt.UTC().Format(time.RFC3339Nano)
 	}
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
-		server.connectionsMu.Unlock()
+		server.connectionRuntime.mu.Unlock()
 		return ConnectionStatus{}, err
 	}
-	server.connections = updatedConnections
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.records = updatedConnections
+	server.connectionRuntime.mu.Unlock()
 
 	if err := server.logEvent("connection.validated", "", map[string]interface{}{
 		"provider":            updatedRecord.Provider,

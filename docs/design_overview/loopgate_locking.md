@@ -133,13 +133,13 @@ Why separate:
 - hook-session bookkeeping is harness metadata, not core control-plane
   authority
 
-### `connectionsMu`
+### `connectionRuntime.mu`
 
 Purpose:
 - protect persisted integration connection records
 
 Protects:
-- `connections`
+- `connectionRuntime.records`
 
 Why separate:
 - provider/subject credential metadata evolves independently from control

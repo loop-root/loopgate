@@ -359,9 +359,9 @@ func TestValidateConnection_UpdatesStatusAndValidationTimestamp(t *testing.T) {
 		t.Fatalf("expected rotation timestamp in status summary, got %#v", connectionStatus)
 	}
 
-	server.connectionsMu.Lock()
-	updatedRecord := server.connections[connectionRecordKey("slack", "workspace-bot")]
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.mu.Lock()
+	updatedRecord := server.connectionRuntime.records[connectionRecordKey("slack", "workspace-bot")]
+	server.connectionRuntime.mu.Unlock()
 	if strings.TrimSpace(updatedRecord.LastValidatedAtUTC) == "" {
 		t.Fatalf("expected validation timestamp to be recorded, got %#v", updatedRecord)
 	}
@@ -501,9 +501,9 @@ func TestRotateConnectionCredential_RestoresPreviousSecretOnAuditFailure(t *test
 		t.Fatalf("expected original secret to be restored after failed rotation, got %q", storedSecret)
 	}
 
-	server.connectionsMu.Lock()
-	rolledBackRecord := server.connections[connectionRecordKey("github", "repo-bot")]
-	server.connectionsMu.Unlock()
+	server.connectionRuntime.mu.Lock()
+	rolledBackRecord := server.connectionRuntime.records[connectionRecordKey("github", "repo-bot")]
+	server.connectionRuntime.mu.Unlock()
 	if rolledBackRecord.LastRotatedAtUTC == "" {
 		t.Fatalf("expected original connection record to remain intact, got %#v", rolledBackRecord)
 	}

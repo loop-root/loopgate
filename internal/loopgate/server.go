@@ -149,9 +149,29 @@ type hostAccessRuntimeState struct {
 	appliedPlanAt map[string]time.Time
 }
 
+type connectionRuntimeState struct {
+	// mu protects persisted integration connection records loaded from runtime state.
+	//
+	// Protected fields:
+	//   - records
+	//
+	// Why this lock exists:
+	//   - operator store/rotate/validate/delete flows rewrite the persisted
+	//     connection-record snapshot
+	//   - this state is separate from control-session authority and from the live
+	//     provider token/configured capability runtime
+	//
+	// Sequencing rule:
+	//   - clone/mutate connection records under connectionRuntime.mu
+	//   - release it before audit emission or secret-store I/O where possible
+	mu sync.Mutex
+
+	records map[string]connectionRecord
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
-//   - Current production code treats audit.mu, ui.mu, connectionsMu,
+//   - Current production code treats audit.mu, ui.mu, connectionRuntime.mu,
 //     modelConnectionsMu, hostAccessRuntime.mu, providerRuntime.mu,
 //     pkceRuntime.mu, and policyRuntimeMu as leaf-domain locks. Callers
 //     snapshot state under one lock, release it, and only then cross into
@@ -243,17 +263,12 @@ type Server struct {
 	//   - it should not contend with control-session/auth tables in mu
 	claudeHookSessionsMu sync.Mutex
 
-	// connectionsMu protects persisted connection credential metadata loaded from
-	// runtime state (provider/subject/grant status), not live provider access tokens.
-	//
-	// Why this lock exists:
-	//   - connection records mutate under operator actions like store/rotate/delete
-	//   - they are independent from control-session state and audit sequencing
-	connectionsMu sync.Mutex
-	connections   map[string]connectionRecord
+	// connectionRuntime owns persisted integration connection records.
+	// See connectionRuntimeState above and docs/design_overview/loopgate_locking.md.
+	connectionRuntime connectionRuntimeState
 
 	// modelConnectionsMu protects model endpoint connection records and their
-	// persistence path. This is separate from connectionsMu because model-provider
+	// persistence path. This is separate from connectionRuntime.mu because model-provider
 	// credentials and generic integration credentials evolve on different paths.
 	modelConnectionsMu sync.Mutex
 	modelConnections   map[string]modelConnectionRecord
@@ -544,7 +559,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load connection records: %w", err)
 	}
-	server.connections = loadedConnections
+	server.connectionRuntime.records = loadedConnections
 	loadedModelConnections, err := loadModelConnectionRecords(server.modelConnectionPath)
 	if err != nil {
 		return nil, fmt.Errorf("load model connection records: %w", err)
