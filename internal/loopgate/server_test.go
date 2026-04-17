@@ -75,7 +75,7 @@ func TestClientExecuteCapability_FsReadRateLimitUsesDedicatedDenialCode(t *testi
 	for i := 0; i < defaultFsReadRateLimit; i++ {
 		preloadedReads = append(preloadedReads, nowUTC)
 	}
-	server.sessionReadCounts[client.controlSessionID] = preloadedReads
+	server.replayState.sessionReadCounts[client.controlSessionID] = preloadedReads
 	server.mu.Unlock()
 
 	deniedResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{

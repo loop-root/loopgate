@@ -211,6 +211,17 @@ type approvalControlState struct {
 	tokenIndex map[string]string
 }
 
+type replayControlState struct {
+	// seenRequests tracks accepted request IDs for duplicate suppression under server.mu.
+	seenRequests map[string]seenRequest
+	// seenAuthNonces tracks accepted signed-request nonces for replay suppression under server.mu.
+	seenAuthNonces map[string]seenRequest
+	// usedTokens tracks consumed single-use capability tokens under server.mu.
+	usedTokens map[string]usedToken
+	// sessionReadCounts tracks fs_read timestamps per control session under server.mu.
+	sessionReadCounts map[string][]time.Time
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
 //   - Current production code treats audit.mu, ui.mu, claudeHookRuntime.mu, connectionRuntime.mu,
@@ -349,12 +360,12 @@ type Server struct {
 	//   - sessions
 	//   - tokens
 	//   - approvalState.records
-	//   - seenRequests
-	//   - seenAuthNonces
-	//   - usedTokens
+	//   - replayState.seenRequests
+	//   - replayState.seenAuthNonces
+	//   - replayState.usedTokens
 	//   - sessionOpenByUID
 	//   - approvalState.tokenIndex
-	//   - sessionReadCounts
+	//   - replayState.sessionReadCounts
 	//   - expiry scheduling / caps / session MAC rotation master
 	//
 	// Why this lock exists:
@@ -366,15 +377,12 @@ type Server struct {
 	//   - capture a single now() snapshot while holding mu for auth/expiry decisions
 	//   - do not split a logical state transition across multiple mu lock/unlock pairs
 	//   - prefer: gather authoritative state under mu -> unlock -> audit/UI/IO work
-	mu                sync.Mutex
-	sessions          map[string]controlSession
-	tokens            map[string]capabilityToken
-	approvalState     approvalControlState
-	seenRequests      map[string]seenRequest
-	seenAuthNonces    map[string]seenRequest
-	usedTokens        map[string]usedToken
-	sessionOpenByUID  map[uint32]time.Time
-	sessionReadCounts map[string][]time.Time // control session ID → timestamps of fs_read executions
+	mu               sync.Mutex
+	sessions         map[string]controlSession
+	tokens           map[string]capabilityToken
+	approvalState    approvalControlState
+	replayState      replayControlState
+	sessionOpenByUID map[uint32]time.Time
 
 	sessionOpenMinInterval  time.Duration
 	maxActiveSessionsPerUID int
@@ -556,11 +564,13 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 			records:    make(map[string]pendingApproval),
 			tokenIndex: make(map[string]string),
 		},
-		seenRequests:                         make(map[string]seenRequest),
-		seenAuthNonces:                       make(map[string]seenRequest),
-		usedTokens:                           make(map[string]usedToken),
+		replayState: replayControlState{
+			seenRequests:      make(map[string]seenRequest),
+			seenAuthNonces:    make(map[string]seenRequest),
+			usedTokens:        make(map[string]usedToken),
+			sessionReadCounts: make(map[string][]time.Time),
+		},
 		sessionOpenByUID:                     make(map[uint32]time.Time),
-		sessionReadCounts:                    make(map[string][]time.Time),
 		sessionOpenMinInterval:               defaultSessionOpenMinInterval,
 		maxActiveSessionsPerUID:              defaultMaxActiveSessionsPerUID,
 		expirySweepMaxInterval:               defaultExpirySweepMaxInterval,
@@ -1461,7 +1471,7 @@ func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
 	nowUTC := server.now().UTC()
 	cutoff := nowUTC.Add(-fsReadRateWindow)
 
-	timestamps := server.sessionReadCounts[controlSessionID]
+	timestamps := server.replayState.sessionReadCounts[controlSessionID]
 	// Prune old entries.
 	pruned := timestamps[:0]
 	for _, ts := range timestamps {
@@ -1470,10 +1480,10 @@ func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
 		}
 	}
 	if len(pruned) >= defaultFsReadRateLimit {
-		server.sessionReadCounts[controlSessionID] = pruned
+		server.replayState.sessionReadCounts[controlSessionID] = pruned
 		return true
 	}
-	server.sessionReadCounts[controlSessionID] = append(pruned, nowUTC)
+	server.replayState.sessionReadCounts[controlSessionID] = append(pruned, nowUTC)
 	return false
 }
 

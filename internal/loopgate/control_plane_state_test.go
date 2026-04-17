@@ -92,8 +92,10 @@ func TestSnapshotNonceReplayStore_LoadPrunesExpiredAndMalformedEntries(t *testin
 
 func TestRecordAuthNonce_RollsBackWhenReplayPersistenceFails(t *testing.T) {
 	server := &Server{
-		now:                       func() time.Time { return time.Date(2026, time.April, 16, 12, 0, 0, 0, time.UTC) },
-		seenAuthNonces:            make(map[string]seenRequest),
+		now: func() time.Time { return time.Date(2026, time.April, 16, 12, 0, 0, 0, time.UTC) },
+		replayState: replayControlState{
+			seenAuthNonces: make(map[string]seenRequest),
+		},
 		maxAuthNonceReplayEntries: defaultMaxAuthNonceReplayEntries,
 		nonceReplayStore:          failingNonceReplayStore{saveErr: errors.New("persist failed")},
 	}
@@ -105,8 +107,8 @@ func TestRecordAuthNonce_RollsBackWhenReplayPersistenceFails(t *testing.T) {
 	if denial.Status != ResponseStatusError || denial.DenialCode != DenialCodeAuditUnavailable {
 		t.Fatalf("expected audit unavailable denial, got %#v", denial)
 	}
-	if len(server.seenAuthNonces) != 0 {
-		t.Fatalf("expected nonce map rollback after persistence failure, got %#v", server.seenAuthNonces)
+	if len(server.replayState.seenAuthNonces) != 0 {
+		t.Fatalf("expected nonce map rollback after persistence failure, got %#v", server.replayState.seenAuthNonces)
 	}
 }
 

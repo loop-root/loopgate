@@ -89,39 +89,39 @@ func TestPruneExpiredLocked_PrunesReplayStateAfterSessionTTL(t *testing.T) {
 
 	server.mu.Lock()
 	server.expirySweepMaxInterval = 0
-	server.seenRequests["expired-request"] = seenRequest{
+	server.replayState.seenRequests["expired-request"] = seenRequest{
 		ControlSessionID: "session-expired",
 		SeenAt:           expiredSeenAtUTC,
 	}
-	server.seenRequests["retained-request"] = seenRequest{
+	server.replayState.seenRequests["retained-request"] = seenRequest{
 		ControlSessionID: "session-retained",
 		SeenAt:           retainedSeenAtUTC,
 	}
-	server.seenAuthNonces["expired-nonce"] = seenRequest{
+	server.replayState.seenAuthNonces["expired-nonce"] = seenRequest{
 		ControlSessionID: "session-expired",
 		SeenAt:           expiredSeenAtUTC,
 	}
-	server.seenAuthNonces["retained-nonce"] = seenRequest{
+	server.replayState.seenAuthNonces["retained-nonce"] = seenRequest{
 		ControlSessionID: "session-retained",
 		SeenAt:           retainedSeenAtUTC,
 	}
-	server.usedTokens["expired-token"] = usedToken{
+	server.replayState.usedTokens["expired-token"] = usedToken{
 		TokenID:          "expired-token",
 		ControlSessionID: "session-expired",
 		ConsumedAt:       expiredSeenAtUTC,
 	}
-	server.usedTokens["retained-token"] = usedToken{
+	server.replayState.usedTokens["retained-token"] = usedToken{
 		TokenID:          "retained-token",
 		ControlSessionID: "session-retained",
 		ConsumedAt:       retainedSeenAtUTC,
 	}
 	server.pruneExpiredLocked()
-	_, expiredRequestFound := server.seenRequests["expired-request"]
-	_, retainedRequestFound := server.seenRequests["retained-request"]
-	_, expiredNonceFound := server.seenAuthNonces["expired-nonce"]
-	_, retainedNonceFound := server.seenAuthNonces["retained-nonce"]
-	_, expiredTokenFound := server.usedTokens["expired-token"]
-	_, retainedTokenFound := server.usedTokens["retained-token"]
+	_, expiredRequestFound := server.replayState.seenRequests["expired-request"]
+	_, retainedRequestFound := server.replayState.seenRequests["retained-request"]
+	_, expiredNonceFound := server.replayState.seenAuthNonces["expired-nonce"]
+	_, retainedNonceFound := server.replayState.seenAuthNonces["retained-nonce"]
+	_, expiredTokenFound := server.replayState.usedTokens["expired-token"]
+	_, retainedTokenFound := server.replayState.usedTokens["retained-token"]
 	server.mu.Unlock()
 
 	if expiredRequestFound || expiredNonceFound || expiredTokenFound {

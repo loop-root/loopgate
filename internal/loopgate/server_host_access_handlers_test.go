@@ -243,15 +243,19 @@ func newHostPlanApplyPolicyTestServer(t *testing.T, repoRoot string, homeDir str
 			records:    make(map[string]pendingApproval),
 			tokenIndex: make(map[string]string),
 		},
-		seenRequests:       make(map[string]seenRequest),
-		seenAuthNonces:     make(map[string]seenRequest),
-		usedTokens:         make(map[string]usedToken),
-		now:                func() time.Time { return now },
-		appendAuditEvent:   func(string, ledger.Event) error { return nil },
-		auditPath:          filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
-		configStateDir:     filepath.Join(repoRoot, "runtime", "state"),
-		resolveUserHomeDir: func() (string, error) { return homeDir, nil },
-		checker:            policypkg.NewChecker(policy),
+		replayState: replayControlState{
+			seenRequests:   make(map[string]seenRequest),
+			seenAuthNonces: make(map[string]seenRequest),
+			usedTokens:     make(map[string]usedToken),
+		},
+		now:              func() time.Time { return now },
+		appendAuditEvent: func(string, ledger.Event) error { return nil },
+		auditPath:        filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
+		configStateDir:   filepath.Join(repoRoot, "runtime", "state"),
+		resolveUserHomeDir: func() (string, error) {
+			return homeDir, nil
+		},
+		checker: policypkg.NewChecker(policy),
 		providerRuntime: providerRuntimeState{
 			configuredCapabilities: map[string]configuredCapability{},
 		},

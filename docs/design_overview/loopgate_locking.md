@@ -46,12 +46,12 @@ Protects:
 - `sessions`
 - `tokens`
 - `approvalState.records`
-- `seenRequests`
-- `seenAuthNonces`
-- `usedTokens`
+- `replayState.seenRequests`
+- `replayState.seenAuthNonces`
+- `replayState.usedTokens`
 - `sessionOpenByUID`
 - `approvalState.tokenIndex`
-- `sessionReadCounts`
+- `replayState.sessionReadCounts`
 - expiry scheduling fields
 - capacity counters/caps coupled to those maps
 - `sessionMACRotationMaster`

@@ -116,7 +116,7 @@ func TestSingleUseExecutionTokenIsDeniedOnReuse(t *testing.T) {
 		t.Fatalf("expected first single-use execution to succeed, got %#v", firstResponse)
 	}
 	server.mu.Lock()
-	consumedToken, found := server.usedTokens[executionToken.TokenID]
+	consumedToken, found := server.replayState.usedTokens[executionToken.TokenID]
 	server.mu.Unlock()
 	if !found {
 		t.Fatal("expected single-use execution token to be recorded in used token registry")

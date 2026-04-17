@@ -151,11 +151,11 @@ func (server *Server) retireControlSession(controlSessionID string, closedAtUTC 
 		}
 	}
 	approvalTokenHashValue := approvalTokenHash(activeSession.ApprovalToken)
-	sessionReadCounts, hadSessionReadCounts := server.sessionReadCounts[controlSessionID]
+	sessionReadCounts, hadSessionReadCounts := server.replayState.sessionReadCounts[controlSessionID]
 
 	delete(server.sessions, controlSessionID)
 	delete(server.approvalState.tokenIndex, approvalTokenHashValue)
-	delete(server.sessionReadCounts, controlSessionID)
+	delete(server.replayState.sessionReadCounts, controlSessionID)
 	for tokenString := range sessionTokens {
 		delete(server.tokens, tokenString)
 	}
@@ -185,7 +185,7 @@ func (server *Server) retireControlSession(controlSessionID string, closedAtUTC 
 		server.sessions[controlSessionID] = activeSession
 		server.approvalState.tokenIndex[approvalTokenHashValue] = controlSessionID
 		if hadSessionReadCounts {
-			server.sessionReadCounts[controlSessionID] = sessionReadCounts
+			server.replayState.sessionReadCounts[controlSessionID] = sessionReadCounts
 		}
 		for tokenString, sessionTokenClaims := range sessionTokens {
 			server.tokens[tokenString] = sessionTokenClaims

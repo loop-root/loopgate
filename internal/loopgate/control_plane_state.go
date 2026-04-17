@@ -90,23 +90,23 @@ func (server *Server) pruneExpiredLocked() {
 		}
 		noteNextSweepCandidate(approvalRequest.ExpiresAt)
 	}
-	for requestKey, seenRequest := range server.seenRequests {
+	for requestKey, seenRequest := range server.replayState.seenRequests {
 		if nowUTC.Sub(seenRequest.SeenAt) > requestReplayWindow {
-			delete(server.seenRequests, requestKey)
+			delete(server.replayState.seenRequests, requestKey)
 			continue
 		}
 		noteNextSweepCandidate(seenRequest.SeenAt.Add(requestReplayWindow))
 	}
-	for nonceKey, seenNonce := range server.seenAuthNonces {
+	for nonceKey, seenNonce := range server.replayState.seenAuthNonces {
 		if nowUTC.Sub(seenNonce.SeenAt) > requestReplayWindow {
-			delete(server.seenAuthNonces, nonceKey)
+			delete(server.replayState.seenAuthNonces, nonceKey)
 			continue
 		}
 		noteNextSweepCandidate(seenNonce.SeenAt.Add(requestReplayWindow))
 	}
-	for tokenID, consumedToken := range server.usedTokens {
+	for tokenID, consumedToken := range server.replayState.usedTokens {
 		if nowUTC.Sub(consumedToken.ConsumedAt) > requestReplayWindow {
-			delete(server.usedTokens, tokenID)
+			delete(server.replayState.usedTokens, tokenID)
 			continue
 		}
 		noteNextSweepCandidate(consumedToken.ConsumedAt.Add(requestReplayWindow))
@@ -277,7 +277,7 @@ func (server *Server) loadNonceReplayState() error {
 		return err
 	}
 	for nonceKey, seenNonce := range loadedNonces {
-		server.seenAuthNonces[nonceKey] = seenNonce
+		server.replayState.seenAuthNonces[nonceKey] = seenNonce
 	}
 	return nil
 }
@@ -414,7 +414,7 @@ func appendPrivateStateLine(path string, line []byte) error {
 
 func (server *Server) saveNonceReplayState() error {
 	server.mu.Lock()
-	stateSnapshot := copySeenRequests(server.seenAuthNonces)
+	stateSnapshot := copySeenRequests(server.replayState.seenAuthNonces)
 	server.mu.Unlock()
 	return server.currentNonceReplayStore().Compact(stateSnapshot)
 }
@@ -453,7 +453,7 @@ func (server *Server) recordRequest(controlSessionID string, capabilityRequest C
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	server.pruneExpiredLocked()
-	if _, found := server.seenRequests[requestKey]; found {
+	if _, found := server.replayState.seenRequests[requestKey]; found {
 		return &CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
 			Status:       ResponseStatusDenied,
@@ -461,7 +461,7 @@ func (server *Server) recordRequest(controlSessionID string, capabilityRequest C
 			DenialCode:   DenialCodeRequestReplayDetected,
 		}
 	}
-	if len(server.seenRequests) >= server.maxSeenRequestReplayEntries {
+	if len(server.replayState.seenRequests) >= server.maxSeenRequestReplayEntries {
 		return &CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
 			Status:       ResponseStatusDenied,
@@ -469,11 +469,11 @@ func (server *Server) recordRequest(controlSessionID string, capabilityRequest C
 			DenialCode:   DenialCodeReplayStateSaturated,
 		}
 	}
-	server.seenRequests[requestKey] = seenRequest{
+	server.replayState.seenRequests[requestKey] = seenRequest{
 		ControlSessionID: controlSessionID,
 		SeenAt:           server.now().UTC(),
 	}
-	server.noteReplayWindowCandidateLocked(server.seenRequests[requestKey].SeenAt)
+	server.noteReplayWindowCandidateLocked(server.replayState.seenRequests[requestKey].SeenAt)
 	return nil
 }
 
@@ -502,7 +502,7 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 	defer server.mu.Unlock()
 
 	server.pruneExpiredLocked()
-	if _, alreadyUsed := server.usedTokens[tokenClaims.TokenID]; alreadyUsed {
+	if _, alreadyUsed := server.replayState.usedTokens[tokenClaims.TokenID]; alreadyUsed {
 		return CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
 			Status:       ResponseStatusDenied,
@@ -510,7 +510,7 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 			DenialCode:   DenialCodeCapabilityTokenReused,
 		}, true
 	}
-	server.usedTokens[tokenClaims.TokenID] = usedToken{
+	server.replayState.usedTokens[tokenClaims.TokenID] = usedToken{
 		TokenID:           tokenClaims.TokenID,
 		ParentTokenID:     tokenClaims.ParentTokenID,
 		ControlSessionID:  tokenClaims.ControlSessionID,
@@ -518,7 +518,7 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 		NormalizedArgHash: normalizedArgumentHash(capabilityRequest.Arguments),
 		ConsumedAt:        server.now().UTC(),
 	}
-	server.noteReplayWindowCandidateLocked(server.usedTokens[tokenClaims.TokenID].ConsumedAt)
+	server.noteReplayWindowCandidateLocked(server.replayState.usedTokens[tokenClaims.TokenID].ConsumedAt)
 	return CapabilityResponse{}, false
 }
 
@@ -528,7 +528,7 @@ func (server *Server) recordAuthNonce(controlSessionID string, requestNonce stri
 	nonceKey := controlSessionID + ":" + requestNonce
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	if _, found := server.seenAuthNonces[nonceKey]; found {
+	if _, found := server.replayState.seenAuthNonces[nonceKey]; found {
 		server.mu.Unlock()
 		return &CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -536,7 +536,7 @@ func (server *Server) recordAuthNonce(controlSessionID string, requestNonce stri
 			DenialCode:   DenialCodeRequestNonceReplayDetected,
 		}
 	}
-	if len(server.seenAuthNonces) >= server.maxAuthNonceReplayEntries {
+	if len(server.replayState.seenAuthNonces) >= server.maxAuthNonceReplayEntries {
 		server.mu.Unlock()
 		return &CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -544,17 +544,17 @@ func (server *Server) recordAuthNonce(controlSessionID string, requestNonce stri
 			DenialCode:   DenialCodeReplayStateSaturated,
 		}
 	}
-	server.seenAuthNonces[nonceKey] = seenRequest{
+	server.replayState.seenAuthNonces[nonceKey] = seenRequest{
 		ControlSessionID: controlSessionID,
 		SeenAt:           server.now().UTC(),
 	}
-	recordedNonce := server.seenAuthNonces[nonceKey]
+	recordedNonce := server.replayState.seenAuthNonces[nonceKey]
 	server.noteReplayWindowCandidateLocked(recordedNonce.SeenAt)
 	server.mu.Unlock()
 
 	if err := server.currentNonceReplayStore().Record(nonceKey, recordedNonce); err != nil {
 		server.mu.Lock()
-		delete(server.seenAuthNonces, nonceKey)
+		delete(server.replayState.seenAuthNonces, nonceKey)
 		server.mu.Unlock()
 		return &CapabilityResponse{
 			Status:       ResponseStatusError,
