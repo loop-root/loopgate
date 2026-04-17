@@ -49,23 +49,23 @@ func (server *Server) startPKCEConnection(ctx context.Context, tokenClaims capab
 		return PKCEStartResponse{}, fmt.Errorf("generate pkce state: %w", err)
 	}
 
-	server.pkceMu.Lock()
+	server.pkceRuntime.mu.Lock()
 	server.pruneExpiredPKCESessionsLocked()
-	for _, existingSession := range server.pkceSessions {
+	for _, existingSession := range server.pkceRuntime.sessions {
 		if existingSession.ConnectionKey == connectionKey && server.now().UTC().Before(existingSession.ExpiresAt) {
-			server.pkceMu.Unlock()
+			server.pkceRuntime.mu.Unlock()
 			return PKCEStartResponse{}, fmt.Errorf("pkce session already pending for provider %q subject %q", request.Provider, request.Subject)
 		}
 	}
 	expiresAt := server.now().UTC().Add(pkceSessionTTL)
-	server.pkceSessions[state] = pendingPKCESession{
+	server.pkceRuntime.sessions[state] = pendingPKCESession{
 		State:         state,
 		ConnectionKey: connectionKey,
 		CodeVerifier:  codeVerifier,
 		CreatedAt:     server.now().UTC(),
 		ExpiresAt:     expiresAt,
 	}
-	server.pkceMu.Unlock()
+	server.pkceRuntime.mu.Unlock()
 
 	authorizationURL := *configuredConnectionDefinition.AuthorizationURL
 	queryValues := authorizationURL.Query()
@@ -89,9 +89,9 @@ func (server *Server) startPKCEConnection(ctx context.Context, tokenClaims capab
 		"client_session_label": tokenClaims.ClientSessionLabel,
 		"expires_at_utc":       expiresAt.Format(time.RFC3339Nano),
 	}); err != nil {
-		server.pkceMu.Lock()
-		delete(server.pkceSessions, state)
-		server.pkceMu.Unlock()
+		server.pkceRuntime.mu.Lock()
+		delete(server.pkceRuntime.sessions, state)
+		server.pkceRuntime.mu.Unlock()
 		return PKCEStartResponse{}, err
 	}
 
@@ -113,10 +113,10 @@ func (server *Server) completePKCEConnection(ctx context.Context, tokenClaims ca
 		return ConnectionStatus{}, err
 	}
 
-	server.pkceMu.Lock()
+	server.pkceRuntime.mu.Lock()
 	server.pruneExpiredPKCESessionsLocked()
-	pendingSession, found := server.pkceSessions[request.State]
-	server.pkceMu.Unlock()
+	pendingSession, found := server.pkceRuntime.sessions[request.State]
+	server.pkceRuntime.mu.Unlock()
 	if !found {
 		return ConnectionStatus{}, fmt.Errorf("pkce session not found for state %q", request.State)
 	}
@@ -146,9 +146,9 @@ func (server *Server) completePKCEConnection(ctx context.Context, tokenClaims ca
 	}
 	server.providerRuntime.mu.Unlock()
 
-	server.pkceMu.Lock()
-	delete(server.pkceSessions, request.State)
-	server.pkceMu.Unlock()
+	server.pkceRuntime.mu.Lock()
+	delete(server.pkceRuntime.sessions, request.State)
+	server.pkceRuntime.mu.Unlock()
 
 	if err := server.logEvent("connection.pkce_completed", tokenClaims.ControlSessionID, map[string]interface{}{
 		"provider":             request.Provider,
@@ -222,9 +222,9 @@ func (server *Server) exchangeOAuthToken(ctx context.Context, configuredConnecti
 
 func (server *Server) pruneExpiredPKCESessionsLocked() {
 	nowUTC := server.now().UTC()
-	for state, pendingSession := range server.pkceSessions {
+	for state, pendingSession := range server.pkceRuntime.sessions {
 		if nowUTC.After(pendingSession.ExpiresAt) {
-			delete(server.pkceSessions, state)
+			delete(server.pkceRuntime.sessions, state)
 		}
 	}
 }

@@ -211,13 +211,13 @@ Why separate:
 Why `RWMutex`:
 - reads are far more common than writes
 
-### `pkceMu`
+### `pkceRuntime.mu`
 
 Purpose:
 - protect short-lived PKCE/OAuth browser handoff sessions
 
 Protects:
-- `pkceSessions`
+- `pkceRuntime.sessions`
 
 Why separate:
 - PKCE state is independent, ephemeral, and pruned on its own cadence

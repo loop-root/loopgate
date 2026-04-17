@@ -108,12 +108,32 @@ type providerRuntimeState struct {
 	configuredCapabilities map[string]configuredCapability
 }
 
+type pkceRuntimeState struct {
+	// mu protects short-lived PKCE/OAuth browser handoff sessions.
+	//
+	// Protected fields:
+	//   - sessions
+	//
+	// Why this lock exists:
+	//   - PKCE state is time-bounded, independent from normal control-session state,
+	//     and frequently pruned/consumed by connection-specific flows
+	//   - keeping it separate avoids polluting mu with OAuth handoff bookkeeping
+	//
+	// Sequencing rule:
+	//   - prune or snapshot PKCE state under pkceRuntime.mu
+	//   - release it before connection mutation, audit emission, or network I/O
+	mu sync.Mutex
+
+	sessions map[string]pendingPKCESession
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
 //   - Current production code treats audit.mu, ui.mu, connectionsMu,
-//     modelConnectionsMu, hostAccessPlansMu, providerRuntime.mu, pkceMu, and
-//     policyRuntimeMu as leaf-domain locks. Callers snapshot state under one
-//     lock, release it, and only then cross into another domain.
+//     modelConnectionsMu, hostAccessPlansMu, providerRuntime.mu,
+//     pkceRuntime.mu, and policyRuntimeMu as leaf-domain locks. Callers
+//     snapshot state under one lock, release it, and only then cross into
+//     another domain.
 //   - mu is the primary state lock for sessions, tokens, approvals, replay
 //     tables, and other authoritative control-plane state.
 //   - audit.mu is a strict leaf lock for append-only audit sequencing and disk
@@ -255,14 +275,9 @@ type Server struct {
 	//   - never hold policyRuntimeMu across capability execution or audit append
 	policyRuntimeMu sync.RWMutex
 
-	// pkceMu protects short-lived PKCE/OAuth browser handoff sessions.
-	//
-	// Why this lock exists:
-	//   - PKCE state is time-bounded, independent from normal control-session state,
-	//     and frequently pruned/consumed by connection-specific flows
-	//   - keeping it separate avoids polluting mu with OAuth handoff bookkeeping
-	pkceMu       sync.Mutex
-	pkceSessions map[string]pendingPKCESession
+	// pkceRuntime owns short-lived PKCE/OAuth browser handoff sessions.
+	// See pkceRuntimeState above and docs/design_overview/loopgate_locking.md.
+	pkceRuntime pkceRuntimeState
 
 	// mu is the primary authoritative control-plane lock.
 	//
@@ -468,8 +483,10 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 			configuredConnections:  configuredConnections,
 			configuredCapabilities: configuredCapabilities,
 		},
-		httpClient:                           &http.Client{Timeout: time.Duration(policy.Tools.HTTP.TimeoutSeconds) * time.Second},
-		pkceSessions:                         make(map[string]pendingPKCESession),
+		httpClient: &http.Client{Timeout: time.Duration(policy.Tools.HTTP.TimeoutSeconds) * time.Second},
+		pkceRuntime: pkceRuntimeState{
+			sessions: make(map[string]pendingPKCESession),
+		},
 		sessions:                             make(map[string]controlSession),
 		tokens:                               make(map[string]capabilityToken),
 		approvals:                            make(map[string]pendingApproval),
