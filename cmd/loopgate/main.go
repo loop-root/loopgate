@@ -23,16 +23,14 @@ func main() {
 		exitProcess(2)
 	}
 
-	repoRoot := os.Getenv("MORPH_REPO_ROOT")
-	if strings.TrimSpace(repoRoot) == "" {
+	repoRoot := resolveLoopgateRepoRootEnv()
+	if repoRoot == "" {
 		var err error
 		repoRoot, err = os.Getwd()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: determine repo root:", err)
 			exitProcess(1)
 		}
-	} else {
-		repoRoot = filepath.Clean(repoRoot)
 	}
 	socketPath := filepath.Join(repoRoot, "runtime", "state", "loopgate.sock")
 	if envSocket := strings.TrimSpace(os.Getenv("LOOPGATE_SOCKET")); envSocket != "" {

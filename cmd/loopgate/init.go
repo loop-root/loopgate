@@ -19,6 +19,11 @@ import (
 
 const policySigningTrustDirEnv = "LOOPGATE_POLICY_SIGNING_TRUST_DIR"
 
+const (
+	loopgateRepoRootEnv    = "LOOPGATE_REPO_ROOT"
+	legacyMorphRepoRootEnv = "MORPH_REPO_ROOT"
+)
+
 func runInit(args []string, stdout io.Writer, stderr io.Writer) error {
 	initFlags := flag.NewFlagSet("init", flag.ContinueOnError)
 	initFlags.SetOutput(stderr)
@@ -131,14 +136,24 @@ func resolveLoopgateRepoRoot(flagValue string) (string, error) {
 	if trimmedFlagValue := strings.TrimSpace(flagValue); trimmedFlagValue != "" {
 		return filepath.Clean(trimmedFlagValue), nil
 	}
-	if repoRoot := strings.TrimSpace(os.Getenv("MORPH_REPO_ROOT")); repoRoot != "" {
-		return filepath.Clean(repoRoot), nil
+	if repoRoot := resolveLoopgateRepoRootEnv(); repoRoot != "" {
+		return repoRoot, nil
 	}
 	repoRoot, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("determine repo root: %w", err)
 	}
 	return filepath.Clean(repoRoot), nil
+}
+
+func resolveLoopgateRepoRootEnv() string {
+	if repoRoot := strings.TrimSpace(os.Getenv(loopgateRepoRootEnv)); repoRoot != "" {
+		return filepath.Clean(repoRoot)
+	}
+	if repoRoot := strings.TrimSpace(os.Getenv(legacyMorphRepoRootEnv)); repoRoot != "" {
+		return filepath.Clean(repoRoot)
+	}
+	return ""
 }
 
 func resolveLoopgateInitKeyID(flagValue string) (string, error) {
