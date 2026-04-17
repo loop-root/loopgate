@@ -124,7 +124,7 @@ Why separate:
 Rule:
 - compute authoritative data first, then emit projection updates under `ui.mu`
 
-### `claudeHookSessionsMu`
+### `claudeHookRuntime.mu`
 
 Purpose:
 - protect Claude hook harness session caches

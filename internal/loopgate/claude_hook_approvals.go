@@ -116,8 +116,8 @@ func (server *Server) ensureClaudeHookApprovalRequest(req HookPreValidateRequest
 		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, fmt.Errorf("approval-tracked hook requires tool_use_id")
 	}
 
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 
 	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, claudeCodeHookEventPreToolUse, "")
 	if err != nil {
@@ -189,8 +189,8 @@ func (server *Server) createClaudeHookApprovalRequest(req HookPreValidateRequest
 		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, nil, fmt.Errorf("approval-tracked hook requires tool_use_id")
 	}
 
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 
 	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, claudeCodeHookEventPreToolUse, "")
 	if err != nil {
@@ -249,8 +249,8 @@ func (server *Server) resolveClaudeHookApproval(req HookPreValidateRequest, reso
 		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, nil
 	}
 
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 
 	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, normalizedClaudeCodeHookEventName(req.HookEventName), req.HookReason)
 	if err != nil {
@@ -298,8 +298,8 @@ func (server *Server) transitionClaudeHookApproval(req HookPreValidateRequest, r
 		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, false, nil, nil
 	}
 
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 
 	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, normalizedClaudeCodeHookEventName(req.HookEventName), req.HookReason)
 	if err != nil {
@@ -347,8 +347,8 @@ func (server *Server) abandonPendingClaudeHookApprovals(rawSessionID string, hoo
 		return 0, claudeHookSessionRecord{}, nil
 	}
 
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 
 	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, claudeCodeHookEventSessionEnd, hookReason)
 	if err != nil {
@@ -387,8 +387,8 @@ func (server *Server) abandonPendingClaudeHookApprovalsWithPrevious(rawSessionID
 		return 0, claudeHookSessionRecord{}, nil, nil
 	}
 
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 
 	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, claudeCodeHookEventSessionEnd, hookReason)
 	if err != nil {
@@ -428,8 +428,8 @@ func (server *Server) restoreClaudeHookApprovalState(rawSessionID string, previo
 		return nil
 	}
 
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 
 	sessionStateByID, err := server.loadClaudeHookSessionStateLocked()
 	if err != nil {
@@ -449,8 +449,8 @@ func (server *Server) findClaudeHookApprovalByRequest(req HookPreValidateRequest
 		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, nil
 	}
 
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 
 	sessionRecord, err := server.ensureClaudeHookSessionBindingLocked(validatedSessionID, normalizedClaudeCodeHookEventName(req.HookEventName), req.HookReason)
 	if err != nil {

@@ -52,8 +52,8 @@ func claudeHookSessionStorageKey(rawSessionID string) string {
 }
 
 func (server *Server) ensureClaudeHookSessionBinding(rawSessionID string, hookEventName string, hookReason string) (claudeHookSessionRecord, error) {
-	server.claudeHookSessionsMu.Lock()
-	defer server.claudeHookSessionsMu.Unlock()
+	server.claudeHookRuntime.mu.Lock()
+	defer server.claudeHookRuntime.mu.Unlock()
 	return server.ensureClaudeHookSessionBindingLocked(rawSessionID, hookEventName, hookReason)
 }
 

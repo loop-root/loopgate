@@ -189,9 +189,24 @@ type modelConnectionRuntimeState struct {
 	records map[string]modelConnectionRecord
 }
 
+type claudeHookRuntimeState struct {
+	// mu protects repo-local Claude hook session and approval cache state.
+	//
+	// Why this lock exists:
+	//   - hook session/approval bookkeeping is harness-local metadata with its own
+	//     filesystem state and lifecycle
+	//   - keeping it separate prevents hook cache churn from contending with the
+	//     primary control-plane state machine
+	//
+	// Sequencing rule:
+	//   - perform hook state load/save under claudeHookRuntime.mu
+	//   - release it before audit emission or other control-plane work
+	mu sync.Mutex
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
-//   - Current production code treats audit.mu, ui.mu, connectionRuntime.mu,
+//   - Current production code treats audit.mu, ui.mu, claudeHookRuntime.mu, connectionRuntime.mu,
 //     modelConnectionRuntime.mu, hostAccessRuntime.mu, providerRuntime.mu,
 //     pkceRuntime.mu, and policyRuntimeMu as leaf-domain locks. Callers
 //     snapshot state under one lock, release it, and only then cross into
@@ -275,13 +290,10 @@ type Server struct {
 	// See uiState above and docs/design_overview/loopgate_locking.md.
 	ui uiState
 
-	// claudeHookSessionsMu protects repo-local hook session caches used by the
-	// Claude harness integration.
-	//
-	// Why this lock exists:
-	//   - hook-session bookkeeping is harness-side metadata, not control-plane authority
-	//   - it should not contend with control-session/auth tables in mu
-	claudeHookSessionsMu sync.Mutex
+	// claudeHookRuntime owns repo-local hook session caches used by the Claude
+	// harness integration. See claudeHookRuntimeState above and
+	// docs/design_overview/loopgate_locking.md.
+	claudeHookRuntime claudeHookRuntimeState
 
 	// connectionRuntime owns persisted integration connection records.
 	// See connectionRuntimeState above and docs/design_overview/loopgate_locking.md.
