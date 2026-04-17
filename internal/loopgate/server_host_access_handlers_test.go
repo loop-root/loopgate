@@ -43,12 +43,14 @@ func TestExecuteHostPlanApply_UnknownPlanIDExplainsRecovery(t *testing.T) {
 	repoRoot := t.TempDir()
 	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
 	server := &Server{
-		sandboxPaths:            sandbox.PathsForRepo(repoRoot),
-		hostAccessPlans:         make(map[string]*hostAccessStoredPlan),
-		hostAccessAppliedPlanAt: make(map[string]time.Time),
-		now:                     func() time.Time { return now },
-		appendAuditEvent:        func(string, ledger.Event) error { return nil },
-		auditPath:               filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
+		sandboxPaths: sandbox.PathsForRepo(repoRoot),
+		hostAccessRuntime: hostAccessRuntimeState{
+			plans:         make(map[string]*hostAccessStoredPlan),
+			appliedPlanAt: make(map[string]time.Time),
+		},
+		now:              func() time.Time { return now },
+		appendAuditEvent: func(string, ledger.Event) error { return nil },
+		auditPath:        filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
 	}
 
 	tok := capabilityToken{ControlSessionID: "cs-1", ActorLabel: "operator", ClientSessionLabel: "cli-1"}
@@ -76,12 +78,14 @@ func TestExecuteHostPlanApply_DuplicateApplyAfterSuccessHintsAlreadyUsed(t *test
 	planID := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 	server := &Server{
-		sandboxPaths:            sandbox.PathsForRepo(repoRoot),
-		hostAccessPlans:         make(map[string]*hostAccessStoredPlan),
-		hostAccessAppliedPlanAt: map[string]time.Time{planID: now},
-		now:                     func() time.Time { return now },
-		appendAuditEvent:        func(string, ledger.Event) error { return nil },
-		auditPath:               filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
+		sandboxPaths: sandbox.PathsForRepo(repoRoot),
+		hostAccessRuntime: hostAccessRuntimeState{
+			plans:         make(map[string]*hostAccessStoredPlan),
+			appliedPlanAt: map[string]time.Time{planID: now},
+		},
+		now:              func() time.Time { return now },
+		appendAuditEvent: func(string, ledger.Event) error { return nil },
+		auditPath:        filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
 	}
 
 	tok := capabilityToken{ControlSessionID: "cs-1", ActorLabel: "operator", ClientSessionLabel: "cli-1"}
@@ -118,8 +122,8 @@ func TestExecuteCapabilityRequest_HostPlanApplyMoveOnlyWithinGrantedDownloadsByp
 	seedGrantedDownloadsFolderAccess(t, server)
 
 	planID := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	server.hostAccessPlansMu.Lock()
-	server.hostAccessPlans[planID] = &hostAccessStoredPlan{
+	server.hostAccessRuntime.mu.Lock()
+	server.hostAccessRuntime.plans[planID] = &hostAccessStoredPlan{
 		ControlSessionID: "cs-downloads",
 		FolderPresetID:   folderAccessDownloadsID,
 		Operations: []hostOrganizePlanOp{
@@ -128,7 +132,7 @@ func TestExecuteCapabilityRequest_HostPlanApplyMoveOnlyWithinGrantedDownloadsByp
 		},
 		CreatedAt: server.now().UTC(),
 	}
-	server.hostAccessPlansMu.Unlock()
+	server.hostAccessRuntime.mu.Unlock()
 
 	resp := server.executeCapabilityRequest(
 		contextBackgroundWithOperatorMount("cs-downloads"),
@@ -180,8 +184,8 @@ func TestExecuteCapabilityRequest_HostPlanApplyOverwriteRiskStillRequiresApprova
 	seedGrantedDownloadsFolderAccess(t, server)
 
 	planID := "cccccccccccccccccccccccccccccccc"
-	server.hostAccessPlansMu.Lock()
-	server.hostAccessPlans[planID] = &hostAccessStoredPlan{
+	server.hostAccessRuntime.mu.Lock()
+	server.hostAccessRuntime.plans[planID] = &hostAccessStoredPlan{
 		ControlSessionID: "cs-downloads",
 		FolderPresetID:   folderAccessDownloadsID,
 		Operations: []hostOrganizePlanOp{
@@ -189,7 +193,7 @@ func TestExecuteCapabilityRequest_HostPlanApplyOverwriteRiskStillRequiresApprova
 		},
 		CreatedAt: server.now().UTC(),
 	}
-	server.hostAccessPlansMu.Unlock()
+	server.hostAccessRuntime.mu.Unlock()
 
 	resp := server.executeCapabilityRequest(
 		contextBackgroundWithOperatorMount("cs-downloads"),
@@ -228,22 +232,24 @@ func newHostPlanApplyPolicyTestServer(t *testing.T, repoRoot string, homeDir str
 	policy.Tools.Filesystem.AllowedRoots = []string{"."}
 
 	server := &Server{
-		sandboxPaths:            sandbox.PathsForRepo(repoRoot),
-		hostAccessPlans:         make(map[string]*hostAccessStoredPlan),
-		hostAccessAppliedPlanAt: make(map[string]time.Time),
-		sessions:                make(map[string]controlSession),
-		tokens:                  make(map[string]capabilityToken),
-		approvals:               make(map[string]pendingApproval),
-		seenRequests:            make(map[string]seenRequest),
-		seenAuthNonces:          make(map[string]seenRequest),
-		usedTokens:              make(map[string]usedToken),
-		approvalTokenIndex:      make(map[string]string),
-		now:                     func() time.Time { return now },
-		appendAuditEvent:        func(string, ledger.Event) error { return nil },
-		auditPath:               filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
-		configStateDir:          filepath.Join(repoRoot, "runtime", "state"),
-		resolveUserHomeDir:      func() (string, error) { return homeDir, nil },
-		checker:                 policypkg.NewChecker(policy),
+		sandboxPaths: sandbox.PathsForRepo(repoRoot),
+		hostAccessRuntime: hostAccessRuntimeState{
+			plans:         make(map[string]*hostAccessStoredPlan),
+			appliedPlanAt: make(map[string]time.Time),
+		},
+		sessions:           make(map[string]controlSession),
+		tokens:             make(map[string]capabilityToken),
+		approvals:          make(map[string]pendingApproval),
+		seenRequests:       make(map[string]seenRequest),
+		seenAuthNonces:     make(map[string]seenRequest),
+		usedTokens:         make(map[string]usedToken),
+		approvalTokenIndex: make(map[string]string),
+		now:                func() time.Time { return now },
+		appendAuditEvent:   func(string, ledger.Event) error { return nil },
+		auditPath:          filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"),
+		configStateDir:     filepath.Join(repoRoot, "runtime", "state"),
+		resolveUserHomeDir: func() (string, error) { return homeDir, nil },
+		checker:            policypkg.NewChecker(policy),
 		providerRuntime: providerRuntimeState{
 			configuredCapabilities: map[string]configuredCapability{},
 		},

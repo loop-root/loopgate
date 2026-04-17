@@ -157,14 +157,14 @@ Why separate:
 - model endpoint credentials and generic integration credentials are distinct
   subsystems with separate lifecycles
 
-### `hostAccessPlansMu`
+### `hostAccessRuntime.mu`
 
 Purpose:
 - protect temporary host-access planning state
 
 Protects:
-- `hostAccessPlans`
-- `hostAccessAppliedPlanAt`
+- `hostAccessRuntime.plans`
+- `hostAccessRuntime.appliedPlanAt`
 
 Why separate:
 - host plan drafting/application recovery has its own TTL and duplicate-apply

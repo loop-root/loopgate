@@ -127,10 +127,32 @@ type pkceRuntimeState struct {
 	sessions map[string]pendingPKCESession
 }
 
+type hostAccessRuntimeState struct {
+	// mu protects temporary host-access planning state.
+	//
+	// Protected fields:
+	//   - plans
+	//   - appliedPlanAt
+	//
+	// Why this lock exists:
+	//   - host access plan drafting and plan-apply recovery have their own TTL and
+	//     duplicate-detection semantics
+	//   - keeping them separate prevents plan bookkeeping from inflating the
+	//     primary control-plane critical section
+	//
+	// Sequencing rule:
+	//   - mutate plan/tombstone state under hostAccessRuntime.mu
+	//   - release it before filesystem work, audit emission, or capability execution
+	mu sync.Mutex
+
+	plans         map[string]*hostAccessStoredPlan
+	appliedPlanAt map[string]time.Time
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
 //   - Current production code treats audit.mu, ui.mu, connectionsMu,
-//     modelConnectionsMu, hostAccessPlansMu, providerRuntime.mu,
+//     modelConnectionsMu, hostAccessRuntime.mu, providerRuntime.mu,
 //     pkceRuntime.mu, and policyRuntimeMu as leaf-domain locks. Callers
 //     snapshot state under one lock, release it, and only then cross into
 //     another domain.
@@ -236,20 +258,10 @@ type Server struct {
 	modelConnectionsMu sync.Mutex
 	modelConnections   map[string]modelConnectionRecord
 
-	// hostAccessPlansMu protects temporary host-access planning state:
-	//   - pending host.plan.apply plans
-	//   - applied-plan tombstones used for duplicate detection/recovery
-	//
-	// Why this lock exists:
-	//   - host access plans have their own TTL/pruning behavior
-	//   - they are intentionally decoupled from approvals in mu so plan drafting
-	//     and plan-apply recovery do not inflate the control-plane critical section
-	hostAccessPlansMu sync.Mutex
-	hostAccessPlans   map[string]*hostAccessStoredPlan
-	// hostAccessAppliedPlanAt records plan IDs that completed host.plan.apply
-	// successfully so a second apply with the same id returns a clear recovery
-	// message instead of a generic "unknown" error.
-	hostAccessAppliedPlanAt map[string]time.Time
+	// hostAccessRuntime owns temporary host-access planning state and
+	// applied-plan tombstones used for duplicate recovery.
+	// See hostAccessRuntimeState above and docs/design_overview/loopgate_locking.md.
+	hostAccessRuntime hostAccessRuntimeState
 
 	configStateDir string
 
@@ -504,8 +516,10 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,
 		maxTotalControlSessions:              defaultMaxTotalControlSessions,
 		maxTotalApprovalRecords:              defaultMaxTotalApprovalRecords,
-		hostAccessPlans:                      make(map[string]*hostAccessStoredPlan),
-		hostAccessAppliedPlanAt:              make(map[string]time.Time),
+		hostAccessRuntime: hostAccessRuntimeState{
+			plans:         make(map[string]*hostAccessStoredPlan),
+			appliedPlanAt: make(map[string]time.Time),
+		},
 	}
 	server.nonceReplayStore = appendOnlyNonceReplayStore{
 		path:               server.noncePath,

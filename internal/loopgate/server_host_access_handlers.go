@@ -78,9 +78,9 @@ func (server *Server) hostPlanApplyApprovalOperatorFields(planID string) map[str
 	if planID == "" {
 		return nil
 	}
-	server.hostAccessPlansMu.Lock()
-	plan, found := server.hostAccessPlans[planID]
-	server.hostAccessPlansMu.Unlock()
+	server.hostAccessRuntime.mu.Lock()
+	plan, found := server.hostAccessRuntime.plans[planID]
+	server.hostAccessRuntime.mu.Unlock()
 	if !found || plan == nil {
 		return nil
 	}
@@ -204,18 +204,18 @@ func (server *Server) resolveFolderHostPathForAccess(preset folderAccessPreset) 
 }
 
 // pruneExpiredHostAccessPlansLocked drops stale pending plans and applied-plan
-// tombstones. Caller must hold hostAccessPlansMu.
+// tombstones. Caller must hold hostAccessRuntime.mu.
 func (server *Server) pruneExpiredHostAccessPlansLocked() {
 	cutoff := server.now().UTC().Add(-hostAccessPlanTTL)
-	for id, plan := range server.hostAccessPlans {
+	for id, plan := range server.hostAccessRuntime.plans {
 		if plan.CreatedAt.Before(cutoff) {
-			delete(server.hostAccessPlans, id)
+			delete(server.hostAccessRuntime.plans, id)
 		}
 	}
-	for len(server.hostAccessPlans) > hostAccessMaxPlans {
+	for len(server.hostAccessRuntime.plans) > hostAccessMaxPlans {
 		var oldestID string
 		var oldest time.Time
-		for id, plan := range server.hostAccessPlans {
+		for id, plan := range server.hostAccessRuntime.plans {
 			if oldestID == "" || plan.CreatedAt.Before(oldest) {
 				oldestID = id
 				oldest = plan.CreatedAt
@@ -224,13 +224,13 @@ func (server *Server) pruneExpiredHostAccessPlansLocked() {
 		if oldestID == "" {
 			break
 		}
-		delete(server.hostAccessPlans, oldestID)
+		delete(server.hostAccessRuntime.plans, oldestID)
 	}
 
 	appliedCutoff := server.now().UTC().Add(-hostAccessAppliedPlanRetention)
-	for id, appliedAt := range server.hostAccessAppliedPlanAt {
+	for id, appliedAt := range server.hostAccessRuntime.appliedPlanAt {
 		if appliedAt.Before(appliedCutoff) {
-			delete(server.hostAccessAppliedPlanAt, id)
+			delete(server.hostAccessRuntime.appliedPlanAt, id)
 		}
 	}
 }
@@ -441,16 +441,16 @@ func (server *Server) executeHostOrganizePlanCapability(tokenClaims capabilityTo
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "failed to mint plan id", DenialCodeExecutionFailed)
 	}
 
-	server.hostAccessPlansMu.Lock()
+	server.hostAccessRuntime.mu.Lock()
 	server.pruneExpiredHostAccessPlansLocked()
-	server.hostAccessPlans[planID] = &hostAccessStoredPlan{
+	server.hostAccessRuntime.plans[planID] = &hostAccessStoredPlan{
 		ControlSessionID: tokenClaims.ControlSessionID,
 		FolderPresetID:   preset.ID,
 		Operations:       ops,
 		Summary:          capabilityRequest.Arguments["summary"],
 		CreatedAt:        server.now().UTC(),
 	}
-	server.hostAccessPlansMu.Unlock()
+	server.hostAccessRuntime.mu.Unlock()
 
 	structured := map[string]interface{}{
 		"plan_id":     planID,
@@ -468,11 +468,11 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "missing plan_id", DenialCodeInvalidCapabilityArguments)
 	}
 
-	server.hostAccessPlansMu.Lock()
+	server.hostAccessRuntime.mu.Lock()
 	server.pruneExpiredHostAccessPlansLocked()
-	plan, found := server.hostAccessPlans[planID]
-	_, alreadyApplied := server.hostAccessAppliedPlanAt[planID]
-	server.hostAccessPlansMu.Unlock()
+	plan, found := server.hostAccessRuntime.plans[planID]
+	_, alreadyApplied := server.hostAccessRuntime.appliedPlanAt[planID]
+	server.hostAccessRuntime.mu.Unlock()
 	if !found {
 		if alreadyApplied {
 			return hostAccessErrorResponse(server, tokenClaims, capabilityRequest,
@@ -487,9 +487,9 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 		return hostAccessDeniedResponse(server, tokenClaims, capabilityRequest, "plan belongs to a different control session")
 	}
 	if server.now().UTC().Sub(plan.CreatedAt) > hostAccessPlanTTL {
-		server.hostAccessPlansMu.Lock()
-		delete(server.hostAccessPlans, planID)
-		server.hostAccessPlansMu.Unlock()
+		server.hostAccessRuntime.mu.Lock()
+		delete(server.hostAccessRuntime.plans, planID)
+		server.hostAccessRuntime.mu.Unlock()
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "plan has expired", DenialCodeInvalidCapabilityArguments)
 	}
 
@@ -577,14 +577,14 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 		results = append(results, applyResult{Step: step, Kind: "move", Status: "ok"})
 	}
 
-	server.hostAccessPlansMu.Lock()
-	if server.hostAccessAppliedPlanAt == nil {
-		server.hostAccessAppliedPlanAt = make(map[string]time.Time)
+	server.hostAccessRuntime.mu.Lock()
+	if server.hostAccessRuntime.appliedPlanAt == nil {
+		server.hostAccessRuntime.appliedPlanAt = make(map[string]time.Time)
 	}
-	server.hostAccessAppliedPlanAt[planID] = server.now().UTC()
+	server.hostAccessRuntime.appliedPlanAt[planID] = server.now().UTC()
 	server.pruneExpiredHostAccessPlansLocked()
-	delete(server.hostAccessPlans, planID)
-	server.hostAccessPlansMu.Unlock()
+	delete(server.hostAccessRuntime.plans, planID)
+	server.hostAccessRuntime.mu.Unlock()
 
 	structured := map[string]interface{}{
 		"plan_id": planID,
@@ -613,10 +613,10 @@ func (server *Server) isLowRiskHostPlanApply(controlSessionID string, planID str
 		return false
 	}
 
-	server.hostAccessPlansMu.Lock()
+	server.hostAccessRuntime.mu.Lock()
 	server.pruneExpiredHostAccessPlansLocked()
-	plan, found := server.hostAccessPlans[planID]
-	server.hostAccessPlansMu.Unlock()
+	plan, found := server.hostAccessRuntime.plans[planID]
+	server.hostAccessRuntime.mu.Unlock()
 	if !found || plan == nil {
 		return false
 	}
