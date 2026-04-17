@@ -43,13 +43,13 @@ Purpose:
 - primary authoritative control-plane state lock
 
 Protects:
-- `sessions`
-- `tokens`
+- `sessionState.sessions`
+- `sessionState.tokens`
 - `approvalState.records`
 - `replayState.seenRequests`
 - `replayState.seenAuthNonces`
 - `replayState.usedTokens`
-- `sessionOpenByUID`
+- `sessionState.openByUID`
 - `approvalState.tokenIndex`
 - `replayState.sessionReadCounts`
 - expiry scheduling fields

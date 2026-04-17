@@ -15,7 +15,7 @@ func (server *Server) retireDeadPeerSessionsForUID(peerUID uint32) error {
 	server.mu.Lock()
 	server.pruneExpiredLocked()
 	candidateSessions := make([]controlSession, 0)
-	for _, activeSession := range server.sessions {
+	for _, activeSession := range server.sessionState.sessions {
 		if activeSession.PeerIdentity.UID != peerUID {
 			continue
 		}
@@ -138,14 +138,14 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 
 func (server *Server) retireControlSession(controlSessionID string, closedAtUTC time.Time, auditEventType string, extraAuditData map[string]interface{}) error {
 	server.mu.Lock()
-	activeSession, found := server.sessions[controlSessionID]
+	activeSession, found := server.sessionState.sessions[controlSessionID]
 	if !found {
 		server.mu.Unlock()
 		return nil
 	}
 
 	sessionTokens := make(map[string]capabilityToken)
-	for tokenString, activeTokenClaims := range server.tokens {
+	for tokenString, activeTokenClaims := range server.sessionState.tokens {
 		if activeTokenClaims.ControlSessionID == controlSessionID {
 			sessionTokens[tokenString] = activeTokenClaims
 		}
@@ -153,11 +153,11 @@ func (server *Server) retireControlSession(controlSessionID string, closedAtUTC 
 	approvalTokenHashValue := approvalTokenHash(activeSession.ApprovalToken)
 	sessionReadCounts, hadSessionReadCounts := server.replayState.sessionReadCounts[controlSessionID]
 
-	delete(server.sessions, controlSessionID)
+	delete(server.sessionState.sessions, controlSessionID)
 	delete(server.approvalState.tokenIndex, approvalTokenHashValue)
 	delete(server.replayState.sessionReadCounts, controlSessionID)
 	for tokenString := range sessionTokens {
-		delete(server.tokens, tokenString)
+		delete(server.sessionState.tokens, tokenString)
 	}
 	server.mu.Unlock()
 
@@ -182,13 +182,13 @@ func (server *Server) retireControlSession(controlSessionID string, closedAtUTC 
 
 	if err := server.logEvent(auditEventType, controlSessionID, auditData); err != nil {
 		server.mu.Lock()
-		server.sessions[controlSessionID] = activeSession
+		server.sessionState.sessions[controlSessionID] = activeSession
 		server.approvalState.tokenIndex[approvalTokenHashValue] = controlSessionID
 		if hadSessionReadCounts {
 			server.replayState.sessionReadCounts[controlSessionID] = sessionReadCounts
 		}
 		for tokenString, sessionTokenClaims := range sessionTokens {
-			server.tokens[tokenString] = sessionTokenClaims
+			server.sessionState.tokens[tokenString] = sessionTokenClaims
 		}
 		server.mu.Unlock()
 		return err

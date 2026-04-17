@@ -106,7 +106,7 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 		})
 		return controlSession{}, false
 	}
-	activeSession, sessionExists := server.sessions[controlSessionID]
+	activeSession, sessionExists := server.sessionState.sessions[controlSessionID]
 	if !sessionExists {
 		delete(server.approvalState.tokenIndex, tokenHash)
 		server.mu.Unlock()
@@ -142,7 +142,7 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	}
 
 	if server.now().UTC().After(activeSession.ExpiresAt) {
-		delete(server.sessions, controlSessionID)
+		delete(server.sessionState.sessions, controlSessionID)
 		delete(server.approvalState.tokenIndex, tokenHash)
 		server.mu.Unlock()
 		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
@@ -438,7 +438,7 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 	}
 
 	grantAuditData := buildApprovalGrantedAuditData(approvalID, pendingApproval, decisionReason)
-	if session, ok := server.sessions[pendingApproval.ControlSessionID]; ok {
+	if session, ok := server.sessionState.sessions[pendingApproval.ControlSessionID]; ok {
 		mergeAuditTenancyFromControlSession(grantAuditData, session)
 	}
 	grantRoot := strings.TrimSpace(interfaceStringValue(pendingApproval.Metadata["grant_root"]))
@@ -452,12 +452,12 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 		return "", err
 	}
 	if grantRoot != "" {
-		controlSession := server.sessions[pendingApproval.ControlSessionID]
+		controlSession := server.sessionState.sessions[pendingApproval.ControlSessionID]
 		if controlSession.OperatorMountWriteGrants == nil {
 			controlSession.OperatorMountWriteGrants = make(map[string]time.Time)
 		}
 		controlSession.OperatorMountWriteGrants[grantRoot] = grantExpiresAt
-		server.sessions[pendingApproval.ControlSessionID] = controlSession
+		server.sessionState.sessions[pendingApproval.ControlSessionID] = controlSession
 	}
 	pendingApproval.State = approvalStateConsumed
 	pendingApproval.DecisionSubmittedAt = server.now().UTC()
@@ -533,7 +533,7 @@ func (server *Server) approvedExecutionTokenForPendingApproval(approvalID string
 	defer server.mu.Unlock()
 
 	server.pruneExpiredLocked()
-	ownerSession, found := server.sessions[pendingApproval.ExecutionContext.ControlSessionID]
+	ownerSession, found := server.sessionState.sessions[pendingApproval.ExecutionContext.ControlSessionID]
 	if !found {
 		return capabilityToken{}, CapabilityResponse{
 			RequestID:         pendingApproval.Request.RequestID,

@@ -158,7 +158,7 @@ func operatorMountBindingFromContext(server *Server, ctx context.Context) (opera
 	}
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	sess, ok := server.sessions[sid]
+	sess, ok := server.sessionState.sessions[sid]
 	if !ok {
 		return operatorMountSessionBinding{}, fmt.Errorf("unknown control session")
 	}
@@ -190,7 +190,7 @@ func operatorMountBindingForControlSession(server *Server, controlSessionID stri
 	}
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	controlSession, found := server.sessions[controlSessionID]
+	controlSession, found := server.sessionState.sessions[controlSessionID]
 	if !found {
 		return operatorMountSessionBinding{}, fmt.Errorf("unknown control session")
 	}
@@ -265,7 +265,7 @@ func operatorMountWriteGrantForRequest(server *Server, controlSessionID string, 
 	}
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	controlSession, found := server.sessions[controlSessionID]
+	controlSession, found := server.sessionState.sessions[controlSessionID]
 	if !found {
 		return operatorMountWriteGrant{}, false, fmt.Errorf("unknown control session")
 	}
@@ -278,7 +278,7 @@ func operatorMountWriteGrantForRequest(server *Server, controlSessionID string, 
 	}
 	if !expiresAt.IsZero() && server.now().UTC().After(expiresAt) {
 		delete(controlSession.OperatorMountWriteGrants, matchedRoot)
-		server.sessions[controlSessionID] = controlSession
+		server.sessionState.sessions[controlSessionID] = controlSession
 		return operatorMountWriteGrant{root: matchedRoot}, false, nil
 	}
 	return operatorMountWriteGrant{root: matchedRoot, expiresAt: expiresAt}, true, nil
@@ -293,7 +293,7 @@ func operatorMountWriteGrantForRoot(server *Server, controlSessionID string, mat
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
-	controlSession, found := server.sessions[controlSessionID]
+	controlSession, found := server.sessionState.sessions[controlSessionID]
 	if !found {
 		return operatorMountWriteGrant{}, false, fmt.Errorf("unknown control session")
 	}
@@ -306,7 +306,7 @@ func operatorMountWriteGrantForRoot(server *Server, controlSessionID string, mat
 	}
 	if !expiresAt.IsZero() && server.now().UTC().After(expiresAt) {
 		delete(controlSession.OperatorMountWriteGrants, matchedRoot)
-		server.sessions[controlSessionID] = controlSession
+		server.sessionState.sessions[controlSessionID] = controlSession
 		return operatorMountWriteGrant{root: matchedRoot}, false, nil
 	}
 	return operatorMountWriteGrant{root: matchedRoot, expiresAt: expiresAt}, true, nil

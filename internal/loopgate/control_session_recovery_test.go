@@ -95,13 +95,13 @@ func TestOpenSessionRetiresDeadPeerOrphanBeforeActiveLimit(t *testing.T) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
-	if len(server.sessions) != 1 {
-		t.Fatalf("expected exactly one live control session after orphan recovery, got %d", len(server.sessions))
+	if len(server.sessionState.sessions) != 1 {
+		t.Fatalf("expected exactly one live control session after orphan recovery, got %d", len(server.sessionState.sessions))
 	}
-	if _, found := server.sessions[firstSession.ControlSessionID]; found {
+	if _, found := server.sessionState.sessions[firstSession.ControlSessionID]; found {
 		t.Fatalf("expected original orphaned session %q to be retired", firstSession.ControlSessionID)
 	}
-	if _, found := server.sessions[secondSession.ControlSessionID]; !found {
+	if _, found := server.sessionState.sessions[secondSession.ControlSessionID]; !found {
 		t.Fatalf("expected replacement session %q to remain active", secondSession.ControlSessionID)
 	}
 }
@@ -189,11 +189,11 @@ func TestOpenSessionOrphanRecoveryFailsClosedOnAuditFailure(t *testing.T) {
 
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	if _, found := server.sessions[firstSession.ControlSessionID]; !found {
+	if _, found := server.sessionState.sessions[firstSession.ControlSessionID]; !found {
 		t.Fatalf("expected orphaned session to remain when orphan recovery audit fails")
 	}
-	if len(server.sessions) != 1 {
-		t.Fatalf("expected no replacement session after failed orphan recovery, got %d", len(server.sessions))
+	if len(server.sessionState.sessions) != 1 {
+		t.Fatalf("expected no replacement session after failed orphan recovery, got %d", len(server.sessionState.sessions))
 	}
 }
 

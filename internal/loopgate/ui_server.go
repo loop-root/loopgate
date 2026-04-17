@@ -59,7 +59,7 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 			pendingCount++
 		}
 	}
-	if controlSession, found := server.sessions[tokenClaims.ControlSessionID]; found {
+	if controlSession, found := server.sessionState.sessions[tokenClaims.ControlSessionID]; found {
 		writeGrants = uiOperatorMountWriteGrantsLocked(controlSession, nowUTC)
 	}
 	server.mu.Unlock()
@@ -176,7 +176,7 @@ func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken,
 	defer server.mu.Unlock()
 
 	server.pruneExpiredLocked()
-	controlSession, found := server.sessions[tokenClaims.ControlSessionID]
+	controlSession, found := server.sessionState.sessions[tokenClaims.ControlSessionID]
 	if !found {
 		return UIOperatorMountWriteGrantStatusResponse{}, errOperatorMountWriteGrantNotFound
 	}
@@ -227,11 +227,11 @@ func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken,
 		} else {
 			controlSession.OperatorMountWriteGrants[normalizedRootPath] = currentGrantExpiresAtUTC
 		}
-		server.sessions[tokenClaims.ControlSessionID] = controlSession
+		server.sessionState.sessions[tokenClaims.ControlSessionID] = controlSession
 		return UIOperatorMountWriteGrantStatusResponse{}, err
 	}
 
-	server.sessions[tokenClaims.ControlSessionID] = controlSession
+	server.sessionState.sessions[tokenClaims.ControlSessionID] = controlSession
 	return UIOperatorMountWriteGrantStatusResponse{
 		Grants: uiOperatorMountWriteGrantsLocked(controlSession, nowUTC),
 	}, nil

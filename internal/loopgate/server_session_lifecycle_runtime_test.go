@@ -135,9 +135,9 @@ func TestCloseSessionReleasesActiveLimitByPeerUID(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	if len(server.sessions) != 0 {
+	if len(server.sessionState.sessions) != 0 {
 		server.mu.Unlock()
-		t.Fatalf("expected no active sessions after close, got %d", len(server.sessions))
+		t.Fatalf("expected no active sessions after close, got %d", len(server.sessionState.sessions))
 	}
 	server.mu.Unlock()
 
@@ -172,7 +172,7 @@ func TestCloseSessionDeniedWhenPendingApprovalsExist(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	_, sessionStillPresent := server.sessions[client.controlSessionID]
+	_, sessionStillPresent := server.sessionState.sessions[client.controlSessionID]
 	server.mu.Unlock()
 	if !sessionStillPresent {
 		t.Fatalf("expected session %q to remain active after denied close", client.controlSessionID)
@@ -199,8 +199,8 @@ func TestSessionOpenAuditFailureRestoresReplacedSession(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	_, originalSessionStillPresent := server.sessions[originalControlSessionID]
-	_, originalTokenStillPresent := server.tokens[originalCapabilityToken]
+	_, originalSessionStillPresent := server.sessionState.sessions[originalControlSessionID]
+	_, originalTokenStillPresent := server.sessionState.tokens[originalCapabilityToken]
 	server.mu.Unlock()
 	if !originalSessionStillPresent {
 		t.Fatalf("expected original session %q to be restored after audit failure", originalControlSessionID)
@@ -235,8 +235,8 @@ func TestSessionOpenRateLimitDenialPreservesExistingSession(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	_, originalSessionStillPresent := server.sessions[originalControlSessionID]
-	_, originalTokenStillPresent := server.tokens[originalCapabilityToken]
+	_, originalSessionStillPresent := server.sessionState.sessions[originalControlSessionID]
+	_, originalTokenStillPresent := server.sessionState.tokens[originalCapabilityToken]
 	server.mu.Unlock()
 	if !originalSessionStillPresent {
 		t.Fatalf("expected original session %q to remain after replacement rate-limit denial", originalControlSessionID)

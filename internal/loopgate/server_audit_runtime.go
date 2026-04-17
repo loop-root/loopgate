@@ -132,7 +132,7 @@ func (server *Server) tenantUserForControlSession(controlSessionID string) (tena
 		return "", ""
 	}
 	server.mu.Lock()
-	session, found := server.sessions[controlSessionID]
+	session, found := server.sessionState.sessions[controlSessionID]
 	server.mu.Unlock()
 	if !found {
 		return "", ""

@@ -548,12 +548,12 @@ func TestUIOperatorMountWriteGrantRouteRequiresScopeAndFreshApprovalForRenewal(t
 	}
 
 	server.mu.Lock()
-	controlSession := server.sessions[client.controlSessionID]
+	controlSession := server.sessionState.sessions[client.controlSessionID]
 	controlSession.OperatorMountPaths = []string{resolvedRepoRoot}
 	controlSession.OperatorMountWriteGrants = map[string]time.Time{
 		resolvedRepoRoot: server.now().UTC().Add(time.Hour),
 	}
-	server.sessions[client.controlSessionID] = controlSession
+	server.sessionState.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
 	deniedClient := NewClient(client.socketPath)

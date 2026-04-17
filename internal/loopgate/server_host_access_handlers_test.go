@@ -237,8 +237,11 @@ func newHostPlanApplyPolicyTestServer(t *testing.T, repoRoot string, homeDir str
 			plans:         make(map[string]*hostAccessStoredPlan),
 			appliedPlanAt: make(map[string]time.Time),
 		},
-		sessions: make(map[string]controlSession),
-		tokens:   make(map[string]capabilityToken),
+		sessionState: sessionControlState{
+			sessions:  make(map[string]controlSession),
+			tokens:    make(map[string]capabilityToken),
+			openByUID: make(map[uint32]time.Time),
+		},
 		approvalState: approvalControlState{
 			records:    make(map[string]pendingApproval),
 			tokenIndex: make(map[string]string),

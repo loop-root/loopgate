@@ -175,7 +175,7 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 		t.Fatalf("final status after advertised session bootstrap: %v", err)
 	}
 	server.mu.Lock()
-	server.sessionOpenByUID = make(map[uint32]time.Time)
+	server.sessionState.openByUID = make(map[uint32]time.Time)
 	server.mu.Unlock()
 	return client, status, server
 }

@@ -41,16 +41,16 @@ func (server *Server) pruneExpiredLocked() {
 		}
 	}
 
-	for tokenString, tokenClaims := range server.tokens {
+	for tokenString, tokenClaims := range server.sessionState.tokens {
 		if nowUTC.After(tokenClaims.ExpiresAt) {
-			delete(server.tokens, tokenString)
+			delete(server.sessionState.tokens, tokenString)
 			continue
 		}
 		noteNextSweepCandidate(tokenClaims.ExpiresAt)
 	}
-	for controlSessionID, activeSession := range server.sessions {
+	for controlSessionID, activeSession := range server.sessionState.sessions {
 		if nowUTC.After(activeSession.ExpiresAt) {
-			delete(server.sessions, controlSessionID)
+			delete(server.sessionState.sessions, controlSessionID)
 			delete(server.approvalState.tokenIndex, approvalTokenHash(activeSession.ApprovalToken))
 			continue
 		}

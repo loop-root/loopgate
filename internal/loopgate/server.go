@@ -222,6 +222,15 @@ type replayControlState struct {
 	sessionReadCounts map[string][]time.Time
 }
 
+type sessionControlState struct {
+	// sessions holds authoritative control session lifecycle state under server.mu.
+	sessions map[string]controlSession
+	// tokens holds active capability tokens bound to control sessions under server.mu.
+	tokens map[string]capabilityToken
+	// openByUID tracks recent session-open timestamps per peer UID under server.mu.
+	openByUID map[uint32]time.Time
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
 //   - Current production code treats audit.mu, ui.mu, claudeHookRuntime.mu, connectionRuntime.mu,
@@ -357,13 +366,13 @@ type Server struct {
 	// mu is the primary authoritative control-plane lock.
 	//
 	// Protected fields:
-	//   - sessions
-	//   - tokens
+	//   - sessionState.sessions
+	//   - sessionState.tokens
 	//   - approvalState.records
 	//   - replayState.seenRequests
 	//   - replayState.seenAuthNonces
 	//   - replayState.usedTokens
-	//   - sessionOpenByUID
+	//   - sessionState.openByUID
 	//   - approvalState.tokenIndex
 	//   - replayState.sessionReadCounts
 	//   - expiry scheduling / caps / session MAC rotation master
@@ -377,12 +386,10 @@ type Server struct {
 	//   - capture a single now() snapshot while holding mu for auth/expiry decisions
 	//   - do not split a logical state transition across multiple mu lock/unlock pairs
 	//   - prefer: gather authoritative state under mu -> unlock -> audit/UI/IO work
-	mu               sync.Mutex
-	sessions         map[string]controlSession
-	tokens           map[string]capabilityToken
-	approvalState    approvalControlState
-	replayState      replayControlState
-	sessionOpenByUID map[uint32]time.Time
+	mu            sync.Mutex
+	sessionState  sessionControlState
+	approvalState approvalControlState
+	replayState   replayControlState
 
 	sessionOpenMinInterval  time.Duration
 	maxActiveSessionsPerUID int
@@ -558,8 +565,11 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		pkceRuntime: pkceRuntimeState{
 			sessions: make(map[string]pendingPKCESession),
 		},
-		sessions: make(map[string]controlSession),
-		tokens:   make(map[string]capabilityToken),
+		sessionState: sessionControlState{
+			sessions:  make(map[string]controlSession),
+			tokens:    make(map[string]capabilityToken),
+			openByUID: make(map[uint32]time.Time),
+		},
 		approvalState: approvalControlState{
 			records:    make(map[string]pendingApproval),
 			tokenIndex: make(map[string]string),
@@ -570,7 +580,6 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 			usedTokens:        make(map[string]usedToken),
 			sessionReadCounts: make(map[string][]time.Time),
 		},
-		sessionOpenByUID:                     make(map[uint32]time.Time),
 		sessionOpenMinInterval:               defaultSessionOpenMinInterval,
 		maxActiveSessionsPerUID:              defaultMaxActiveSessionsPerUID,
 		expirySweepMaxInterval:               defaultExpirySweepMaxInterval,
@@ -1456,7 +1465,7 @@ func (server *Server) filterGrantedCapabilities(requested []string) (granted []s
 
 func (server *Server) activeSessionsForPeerUIDLocked(peerUID uint32) int {
 	activeSessionCount := 0
-	for _, activeSession := range server.sessions {
+	for _, activeSession := range server.sessionState.sessions {
 		if activeSession.PeerIdentity.UID == peerUID {
 			activeSessionCount++
 		}

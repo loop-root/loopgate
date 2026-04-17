@@ -13,14 +13,14 @@ func TestPruneExpiredLockedSkipsBeforeScheduledSweep(t *testing.T) {
 	server.mu.Lock()
 	server.expirySweepMaxInterval = time.Hour
 	server.nextExpirySweepAt = nowUTC.Add(30 * time.Minute)
-	server.tokens["expired-token"] = capabilityToken{
+	server.sessionState.tokens["expired-token"] = capabilityToken{
 		TokenID:      "expired-token-id",
 		Token:        "expired-token",
 		ExpiresAt:    nowUTC.Add(-1 * time.Minute),
 		PeerIdentity: peerIdentity{UID: 1234},
 	}
 	server.pruneExpiredLocked()
-	_, found := server.tokens["expired-token"]
+	_, found := server.sessionState.tokens["expired-token"]
 	server.mu.Unlock()
 
 	if !found {
@@ -39,13 +39,13 @@ func TestPruneExpiredLockedSchedulesEarliestExpiry(t *testing.T) {
 	server.mu.Lock()
 	server.expirySweepMaxInterval = time.Hour
 	server.nextExpirySweepAt = time.Time{}
-	server.tokens["live-token"] = capabilityToken{
+	server.sessionState.tokens["live-token"] = capabilityToken{
 		TokenID:      "live-token-id",
 		Token:        "live-token",
 		ExpiresAt:    tokenExpiryUTC,
 		PeerIdentity: peerIdentity{UID: 1234},
 	}
-	server.sessions["live-session"] = controlSession{
+	server.sessionState.sessions["live-session"] = controlSession{
 		ID:           "live-session",
 		ExpiresAt:    sessionExpiryUTC,
 		PeerIdentity: peerIdentity{UID: 1234},

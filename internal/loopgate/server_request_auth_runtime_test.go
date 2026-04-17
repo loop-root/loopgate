@@ -23,12 +23,12 @@ func TestExpiredCapabilityTokenIsRefreshedForLocalClient(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	tokenClaims := server.tokens[client.capabilityToken]
+	tokenClaims := server.sessionState.tokens[client.capabilityToken]
 	tokenClaims.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute)
-	server.tokens[client.capabilityToken] = tokenClaims
-	activeSession := server.sessions[tokenClaims.ControlSessionID]
+	server.sessionState.tokens[client.capabilityToken] = tokenClaims
+	activeSession := server.sessionState.sessions[tokenClaims.ControlSessionID]
 	activeSession.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute)
-	server.sessions[tokenClaims.ControlSessionID] = activeSession
+	server.sessionState.sessions[tokenClaims.ControlSessionID] = activeSession
 	server.mu.Unlock()
 
 	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
@@ -54,9 +54,9 @@ func TestCapabilityTokenPeerBindingMismatchRefreshesForLocalClient(t *testing.T)
 	}
 
 	server.mu.Lock()
-	tokenClaims := server.tokens[client.capabilityToken]
+	tokenClaims := server.sessionState.tokens[client.capabilityToken]
 	tokenClaims.PeerIdentity.PID++
-	server.tokens[client.capabilityToken] = tokenClaims
+	server.sessionState.tokens[client.capabilityToken] = tokenClaims
 	server.mu.Unlock()
 
 	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
@@ -205,12 +205,12 @@ func TestCapabilityAuthDenialsAreAudited(t *testing.T) {
 					t.Fatalf("ensure capability token: %v", err)
 				}
 				server.mu.Lock()
-				tokenClaims := server.tokens[client.capabilityToken]
+				tokenClaims := server.sessionState.tokens[client.capabilityToken]
 				tokenClaims.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute)
-				server.tokens[client.capabilityToken] = tokenClaims
-				activeSession := server.sessions[tokenClaims.ControlSessionID]
+				server.sessionState.tokens[client.capabilityToken] = tokenClaims
+				activeSession := server.sessionState.sessions[tokenClaims.ControlSessionID]
 				activeSession.ExpiresAt = time.Now().UTC().Add(-1 * time.Minute)
-				server.sessions[tokenClaims.ControlSessionID] = activeSession
+				server.sessionState.sessions[tokenClaims.ControlSessionID] = activeSession
 				server.mu.Unlock()
 				return client.capabilityToken
 			},
@@ -225,9 +225,9 @@ func TestCapabilityAuthDenialsAreAudited(t *testing.T) {
 					t.Fatalf("ensure capability token: %v", err)
 				}
 				server.mu.Lock()
-				tokenClaims := server.tokens[client.capabilityToken]
+				tokenClaims := server.sessionState.tokens[client.capabilityToken]
 				tokenClaims.PeerIdentity.PID++
-				server.tokens[client.capabilityToken] = tokenClaims
+				server.sessionState.tokens[client.capabilityToken] = tokenClaims
 				server.mu.Unlock()
 				return client.capabilityToken
 			},
@@ -438,9 +438,9 @@ func TestApprovalTokenPeerBindingMismatchIsDenied(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	activeSession := server.sessions[client.controlSessionID]
+	activeSession := server.sessionState.sessions[client.controlSessionID]
 	activeSession.PeerIdentity.PID++
-	server.sessions[client.controlSessionID] = activeSession
+	server.sessionState.sessions[client.controlSessionID] = activeSession
 	server.mu.Unlock()
 
 	decisionResponse, err := client.DecideApproval(context.Background(), response.ApprovalRequestID, true)
@@ -482,7 +482,7 @@ func TestApprovalDecisionCannotBeReplayedAfterResolution(t *testing.T) {
 
 	controlSessionID := client.controlSessionID
 	server.mu.Lock()
-	controlSession := server.sessions[controlSessionID]
+	controlSession := server.sessionState.sessions[controlSessionID]
 	server.mu.Unlock()
 	manualReplayRequest := ApprovalDecisionRequest{
 		Approved:      true,
@@ -506,7 +506,7 @@ func TestExecuteCapabilityRequest_DeniesNeedsApprovalWhenApprovalCreationDisable
 	}
 
 	server.mu.Lock()
-	baseToken := server.tokens[client.capabilityToken]
+	baseToken := server.sessionState.tokens[client.capabilityToken]
 	server.mu.Unlock()
 
 	response := server.executeCapabilityRequest(context.Background(), baseToken, CapabilityRequest{
@@ -539,7 +539,7 @@ func TestExecuteCapabilityRequest_ApprovalRollbackIsNeverVisibleToReaders(t *tes
 	}
 
 	server.mu.Lock()
-	baseToken := server.tokens[client.capabilityToken]
+	baseToken := server.sessionState.tokens[client.capabilityToken]
 	server.mu.Unlock()
 
 	auditStarted := make(chan struct{}, 1)

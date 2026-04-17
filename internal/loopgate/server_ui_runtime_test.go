@@ -56,12 +56,12 @@ func TestUIStatusIncludesActiveOperatorMountWriteGrants(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	controlSession := server.sessions[client.controlSessionID]
+	controlSession := server.sessionState.sessions[client.controlSessionID]
 	controlSession.OperatorMountWriteGrants = map[string]time.Time{
 		resolvedRepoRoot: server.now().UTC().Add(2 * time.Hour),
 		filepath.Join(resolvedRepoRoot, "expired"): server.now().UTC().Add(-1 * time.Minute),
 	}
-	server.sessions[client.controlSessionID] = controlSession
+	server.sessionState.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
 	uiStatus, err := client.UIStatus(context.Background())
@@ -92,12 +92,12 @@ func TestUpdateUIOperatorMountWriteGrantRevokesAndRenews(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	controlSession := server.sessions[client.controlSessionID]
+	controlSession := server.sessionState.sessions[client.controlSessionID]
 	controlSession.OperatorMountPaths = []string{resolvedRepoRoot}
 	controlSession.OperatorMountWriteGrants = map[string]time.Time{
 		resolvedRepoRoot: server.now().UTC().Add(time.Hour),
 	}
-	server.sessions[client.controlSessionID] = controlSession
+	server.sessionState.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
 	revokedResponse, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
@@ -112,9 +112,9 @@ func TestUpdateUIOperatorMountWriteGrantRevokesAndRenews(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	controlSession = server.sessions[client.controlSessionID]
+	controlSession = server.sessionState.sessions[client.controlSessionID]
 	controlSession.OperatorMountWriteGrants[resolvedRepoRoot] = server.now().UTC().Add(time.Hour)
-	server.sessions[client.controlSessionID] = controlSession
+	server.sessionState.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
 	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
@@ -138,13 +138,13 @@ func TestUpdateUIOperatorMountWriteGrantFailsClosedWhenAuditUnavailable(t *testi
 	}
 
 	server.mu.Lock()
-	controlSession := server.sessions[client.controlSessionID]
+	controlSession := server.sessionState.sessions[client.controlSessionID]
 	originalExpiresAtUTC := server.now().UTC().Add(time.Hour)
 	controlSession.OperatorMountPaths = []string{resolvedRepoRoot}
 	controlSession.OperatorMountWriteGrants = map[string]time.Time{
 		resolvedRepoRoot: originalExpiresAtUTC,
 	}
-	server.sessions[client.controlSessionID] = controlSession
+	server.sessionState.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
 	appendAuditEvent := server.appendAuditEvent
@@ -164,7 +164,7 @@ func TestUpdateUIOperatorMountWriteGrantFailsClosedWhenAuditUnavailable(t *testi
 
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	controlSession = server.sessions[client.controlSessionID]
+	controlSession = server.sessionState.sessions[client.controlSessionID]
 	if got := controlSession.OperatorMountWriteGrants[resolvedRepoRoot]; !got.Equal(originalExpiresAtUTC) {
 		t.Fatalf("grant expiry changed on audit failure: got %v want %v", got, originalExpiresAtUTC)
 	}

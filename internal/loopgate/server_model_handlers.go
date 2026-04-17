@@ -180,7 +180,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	var replacedSession controlSession
 	replacedSessionTokens := make(map[string]capabilityToken)
 	hadReplacedSession := false
-	previousSessionOpenAtUTC, hadPreviousSessionOpenAt := server.sessionOpenByUID[requestPeerIdentity.UID]
+	previousSessionOpenAtUTC, hadPreviousSessionOpenAt := server.sessionState.openByUID[requestPeerIdentity.UID]
 
 	// Idempotent re-open: if the same (UID, ClientSessionLabel) pair already has
 	// an active session, replace it once the new session is ready. This prevents
@@ -188,13 +188,13 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	// reconnects, while keeping later denial paths from destroying the still-live
 	// authoritative session.
 	clientLabel := defaultLabel(openRequest.SessionID, "session")
-	for csID, existingSession := range server.sessions {
+	for csID, existingSession := range server.sessionState.sessions {
 		if existingSession.PeerIdentity.UID == requestPeerIdentity.UID &&
 			existingSession.ClientSessionLabel == clientLabel {
 			replacedSessionID = csID
 			replacedSession = existingSession
 			hadReplacedSession = true
-			for tokenString, tokenClaims := range server.tokens {
+			for tokenString, tokenClaims := range server.sessionState.tokens {
 				if tokenClaims.ControlSessionID == csID {
 					replacedSessionTokens[tokenString] = tokenClaims
 				}
@@ -204,7 +204,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	}
 
 	activeSessionCountForUID := server.activeSessionsForPeerUIDLocked(requestPeerIdentity.UID)
-	totalSessionCount := len(server.sessions)
+	totalSessionCount := len(server.sessionState.sessions)
 	if hadReplacedSession {
 		activeSessionCountForUID--
 		totalSessionCount--
@@ -230,7 +230,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		return
 	}
 	if server.sessionOpenMinInterval > 0 {
-		lastOpenedAtUTC := server.sessionOpenByUID[requestPeerIdentity.UID]
+		lastOpenedAtUTC := server.sessionState.openByUID[requestPeerIdentity.UID]
 		if !lastOpenedAtUTC.IsZero() {
 			elapsed := nowUTC.Sub(lastOpenedAtUTC)
 			if elapsed < server.sessionOpenMinInterval {
@@ -314,12 +314,12 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 
 	if hadReplacedSession {
 		for replacedTokenString := range replacedSessionTokens {
-			delete(server.tokens, replacedTokenString)
+			delete(server.sessionState.tokens, replacedTokenString)
 		}
 		delete(server.approvalState.tokenIndex, approvalTokenHash(replacedSession.ApprovalToken))
-		delete(server.sessions, replacedSessionID)
+		delete(server.sessionState.sessions, replacedSessionID)
 	}
-	server.sessions[controlSessionID] = controlSession{
+	server.sessionState.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
 		ActorLabel:               tokenClaims.ActorLabel,
 		ClientSessionLabel:       tokenClaims.ClientSessionLabel,
@@ -336,9 +336,9 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		ExpiresAt:                expiresAt,
 		CreatedAt:                nowUTC,
 	}
-	server.tokens[capabilityTokenString] = tokenClaims
+	server.sessionState.tokens[capabilityTokenString] = tokenClaims
 	server.approvalState.tokenIndex[approvalTokenHash(approvalTokenString)] = controlSessionID
-	server.sessionOpenByUID[requestPeerIdentity.UID] = nowUTC
+	server.sessionState.openByUID[requestPeerIdentity.UID] = nowUTC
 	server.noteExpiryCandidateLocked(expiresAt)
 	server.mu.Unlock()
 
@@ -358,20 +358,20 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		"expires_at_utc":             expiresAt.Format(time.RFC3339Nano),
 	}); err != nil {
 		server.mu.Lock()
-		delete(server.sessions, controlSessionID)
-		delete(server.tokens, capabilityTokenString)
+		delete(server.sessionState.sessions, controlSessionID)
+		delete(server.sessionState.tokens, capabilityTokenString)
 		delete(server.approvalState.tokenIndex, approvalTokenHash(approvalTokenString))
 		if hadReplacedSession {
-			server.sessions[replacedSessionID] = replacedSession
+			server.sessionState.sessions[replacedSessionID] = replacedSession
 			for restoredTokenString, restoredTokenClaims := range replacedSessionTokens {
-				server.tokens[restoredTokenString] = restoredTokenClaims
+				server.sessionState.tokens[restoredTokenString] = restoredTokenClaims
 			}
 			server.approvalState.tokenIndex[approvalTokenHash(replacedSession.ApprovalToken)] = replacedSessionID
 		}
 		if hadPreviousSessionOpenAt {
-			server.sessionOpenByUID[requestPeerIdentity.UID] = previousSessionOpenAtUTC
+			server.sessionState.openByUID[requestPeerIdentity.UID] = previousSessionOpenAtUTC
 		} else {
-			delete(server.sessionOpenByUID, requestPeerIdentity.UID)
+			delete(server.sessionState.openByUID, requestPeerIdentity.UID)
 		}
 		server.mu.Unlock()
 		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
@@ -418,7 +418,7 @@ func (server *Server) handleSessionClose(writer http.ResponseWriter, request *ht
 	server.mu.Lock()
 	server.pruneExpiredLocked()
 
-	if _, found := server.sessions[tokenClaims.ControlSessionID]; !found {
+	if _, found := server.sessionState.sessions[tokenClaims.ControlSessionID]; !found {
 		server.mu.Unlock()
 		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
 			Status:       ResponseStatusDenied,

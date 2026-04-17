@@ -12,7 +12,7 @@ func TestLogEventAddsTenantFromSession(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	server.mu.Lock()
-	server.sessions["sess-tenant"] = controlSession{
+	server.sessionState.sessions["sess-tenant"] = controlSession{
 		ID:           "sess-tenant",
 		TenantID:     "acme-corp",
 		UserID:       "user-42",

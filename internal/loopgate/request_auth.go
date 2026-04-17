@@ -90,20 +90,20 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 	// token/session state and calling now() on the outside.
 	server.mu.Lock()
 	nowUTC := server.now().UTC()
-	tokenClaims, found := server.tokens[tokenString]
+	tokenClaims, found := server.sessionState.tokens[tokenString]
 	var activeSession controlSession
 	var sessionFound bool
 	var tokenExpired, sessionExpired bool
 	if found {
-		activeSession, sessionFound = server.sessions[tokenClaims.ControlSessionID]
+		activeSession, sessionFound = server.sessionState.sessions[tokenClaims.ControlSessionID]
 		tokenExpired = nowUTC.After(tokenClaims.ExpiresAt)
 		sessionExpired = sessionFound && nowUTC.After(activeSession.ExpiresAt)
 		if tokenExpired {
-			delete(server.tokens, tokenString)
+			delete(server.sessionState.tokens, tokenString)
 		}
 		if sessionExpired {
-			delete(server.sessions, tokenClaims.ControlSessionID)
-			delete(server.tokens, tokenString)
+			delete(server.sessionState.sessions, tokenClaims.ControlSessionID)
+			delete(server.sessionState.tokens, tokenString)
 		}
 	}
 	server.mu.Unlock()
@@ -190,7 +190,7 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 // parseSignedControlPlaneHeaders checks signed-request headers and timestamp skew.
 // It does not verify the HMAC. Callers supply expectedControlSessionID (for
 // example, a scoped worker session id from a compatibility table); those ids
-// are not necessarily rows in server.sessions.
+// are not necessarily rows in server.sessionState.sessions.
 func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expectedControlSessionID string) (requestTimestamp string, requestNonce string, requestSignature string, denial CapabilityResponse, ok bool) {
 	controlSessionID := strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session"))
 	requestTimestamp = strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp"))
@@ -270,7 +270,7 @@ func (server *Server) verifySignedRequest(request *http.Request, requestBodyByte
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	activeSession, found := server.sessions[controlSessionID]
+	activeSession, found := server.sessionState.sessions[controlSessionID]
 	server.mu.Unlock()
 	if !found || strings.TrimSpace(activeSession.SessionMACKey) == "" {
 		return CapabilityResponse{

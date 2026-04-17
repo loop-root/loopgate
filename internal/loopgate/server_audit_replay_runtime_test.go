@@ -98,7 +98,7 @@ func TestSingleUseExecutionTokenIsDeniedOnReuse(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	baseToken := server.tokens[client.capabilityToken]
+	baseToken := server.sessionState.tokens[client.capabilityToken]
 	server.mu.Unlock()
 
 	capabilityRequest := normalizeCapabilityRequest(CapabilityRequest{
@@ -257,7 +257,7 @@ func TestBoundExecutionTokenRejectsDifferentNormalizedArguments(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	baseToken := server.tokens[client.capabilityToken]
+	baseToken := server.sessionState.tokens[client.capabilityToken]
 	server.mu.Unlock()
 
 	approvedRequest := normalizeCapabilityRequest(CapabilityRequest{

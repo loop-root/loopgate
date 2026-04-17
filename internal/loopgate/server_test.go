@@ -271,7 +271,7 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForOperator(
 
 	controlSessionID := "cs-operator-mount-write"
 	server.mu.Lock()
-	server.sessions[controlSessionID] = controlSession{
+	server.sessionState.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
 		ActorLabel:               "operator",
 		ClientSessionLabel:       "operator-session",
@@ -346,7 +346,7 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 
 	controlSessionID := "cs-operator-mount-grant"
 	server.mu.Lock()
-	server.sessions[controlSessionID] = controlSession{
+	server.sessionState.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
 		ActorLabel:               "operator",
 		ClientSessionLabel:       "operator-session",
@@ -391,7 +391,7 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 	}
 
 	server.mu.Lock()
-	sessionAfterGrant := server.sessions[controlSessionID]
+	sessionAfterGrant := server.sessionState.sessions[controlSessionID]
 	grantExpiresAt, granted := sessionAfterGrant.OperatorMountWriteGrants[resolvedRepoRoot]
 	server.mu.Unlock()
 	if !granted {
@@ -442,7 +442,7 @@ func TestExecuteCapabilityRequest_ExpiredOperatorMountWriteGrantRequiresApproval
 
 	controlSessionID := "cs-operator-mount-expired-grant"
 	server.mu.Lock()
-	server.sessions[controlSessionID] = controlSession{
+	server.sessionState.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
 		ActorLabel:               "operator",
 		ClientSessionLabel:       "operator-session",
@@ -517,7 +517,7 @@ func TestNewServer_IgnoresStalePolicyJSONForOperatorMountWriteApproval(t *testin
 
 	controlSessionID := "cs-stale-policy-json"
 	server.mu.Lock()
-	server.sessions[controlSessionID] = controlSession{
+	server.sessionState.sessions[controlSessionID] = controlSession{
 		ID:                       controlSessionID,
 		ActorLabel:               "operator",
 		ClientSessionLabel:       "operator-session",
@@ -628,12 +628,12 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	controlSession := server.sessions[client.controlSessionID]
+	controlSession := server.sessionState.sessions[client.controlSessionID]
 	if controlSession.OperatorMountWriteGrants == nil {
 		controlSession.OperatorMountWriteGrants = make(map[string]time.Time)
 	}
 	controlSession.OperatorMountWriteGrants[resolvedHostRootPath] = server.now().UTC().Add(operatorMountWriteGrantTTL)
-	server.sessions[client.controlSessionID] = controlSession
+	server.sessionState.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
 	hostDestinationPath := filepath.Join(hostRootPath, "exported.txt")
