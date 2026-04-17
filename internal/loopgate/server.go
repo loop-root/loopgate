@@ -867,219 +867,21 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		return deniedResponse
 	}
 
-	effectiveTokenClaims := tokenClaims
-	if isHighRiskCapability(tool, policyDecision) && !tokenClaims.SingleUse {
-		effectiveTokenClaims = deriveExecutionToken(tokenClaims, capabilityRequest)
-	}
-	if denialResponse, denied := server.consumeExecutionToken(effectiveTokenClaims, capabilityRequest); denied {
-		if err := server.logEvent("capability.denied", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
-			"request_id":           capabilityRequest.RequestID,
-			"capability":           capabilityRequest.Capability,
-			"reason":               secrets.RedactText(denialResponse.DenialReason),
-			"denial_code":          denialResponse.DenialCode,
-			"actor_label":          effectiveTokenClaims.ActorLabel,
-			"client_session_label": effectiveTokenClaims.ClientSessionLabel,
-			"control_session_id":   effectiveTokenClaims.ControlSessionID,
-			"token_id":             effectiveTokenClaims.TokenID,
-			"parent_token_id":      effectiveTokenClaims.ParentTokenID,
-		}); err != nil {
-			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-		}
-		server.emitUIToolDenied(effectiveTokenClaims.ControlSessionID, capabilityRequest, denialResponse.DenialCode, denialResponse.DenialReason)
-		return denialResponse
+	effectiveTokenClaims, earlyResponse := server.prepareCapabilityExecution(tokenClaims, capabilityRequest, policyDecision, tool)
+	if earlyResponse != nil {
+		return *earlyResponse
 	}
 
-	// Per-session rate limiting for fs_read and operator_mount.fs_read.
-	if capabilityRequest.Capability == "fs_read" || capabilityRequest.Capability == "operator_mount.fs_read" {
-		if denied := server.checkFsReadRateLimit(effectiveTokenClaims.ControlSessionID); denied {
-			if auditErr := server.logEvent("capability.denied", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
-				"request_id":           capabilityRequest.RequestID,
-				"capability":           capabilityRequest.Capability,
-				"reason":               "fs_read rate limit exceeded",
-				"denial_code":          DenialCodeFsReadRateLimitExceeded,
-				"actor_label":          effectiveTokenClaims.ActorLabel,
-				"client_session_label": effectiveTokenClaims.ClientSessionLabel,
-				"control_session_id":   effectiveTokenClaims.ControlSessionID,
-			}); auditErr != nil {
-				return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-			}
-			return CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusDenied,
-				DenialReason: "fs_read rate limit exceeded",
-				DenialCode:   DenialCodeFsReadRateLimitExceeded,
-			}
-		}
+	if specialResponse, handled := server.dispatchDirectCapabilityExecution(effectiveTokenClaims, capabilityRequest); handled {
+		return specialResponse
 	}
 
-	if capabilityRequest.Capability == "host.folder.list" {
-		return server.executeHostFolderListCapability(effectiveTokenClaims, capabilityRequest)
-	}
-	if capabilityRequest.Capability == "host.folder.read" {
-		return server.executeHostFolderReadCapability(effectiveTokenClaims, capabilityRequest)
-	}
-	if capabilityRequest.Capability == "host.organize.plan" {
-		return server.executeHostOrganizePlanCapability(effectiveTokenClaims, capabilityRequest)
-	}
-	if capabilityRequest.Capability == "host.plan.apply" {
-		return server.executeHostPlanApplyCapability(effectiveTokenClaims, capabilityRequest)
+	output, earlyResponse := server.executeCapabilityTool(ctx, tool, effectiveTokenClaims, capabilityRequest)
+	if earlyResponse != nil {
+		return *earlyResponse
 	}
 
-	executionContext := ctx
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		executionContext, cancel = context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-	}
-	executionContext = withOperatorMountControlSession(executionContext, effectiveTokenClaims.ControlSessionID)
-
-	output, err := tool.Execute(executionContext, capabilityRequest.Arguments)
-	if err != nil {
-		if auditErr := server.logEvent("capability.error", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
-			"request_id":           capabilityRequest.RequestID,
-			"capability":           capabilityRequest.Capability,
-			"error":                secrets.RedactText(err.Error()),
-			"operator_error_class": secrets.LoopgateOperatorErrorClass(err),
-			"actor_label":          effectiveTokenClaims.ActorLabel,
-			"client_session_label": effectiveTokenClaims.ClientSessionLabel,
-			"control_session_id":   effectiveTokenClaims.ControlSessionID,
-			"token_id":             effectiveTokenClaims.TokenID,
-			"parent_token_id":      effectiveTokenClaims.ParentTokenID,
-		}); auditErr != nil {
-			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-		}
-		errorResponse := CapabilityResponse{
-			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
-			DenialReason: err.Error(),
-			DenialCode:   DenialCodeExecutionFailed,
-			Redacted:     true,
-		}
-		server.emitUIEvent(effectiveTokenClaims.ControlSessionID, UIEventTypeWarning, UIEventWarning{
-			Message: "capability execution failed: " + secrets.RedactText(err.Error()),
-		})
-		return errorResponse
-	}
-
-	var quarantineRef string
-	if _, configuredCapability := server.providerRuntime.configuredCapabilities[capabilityRequest.Capability]; configuredCapability {
-		quarantineRef, err = server.storeQuarantinedPayload(capabilityRequest, output)
-		if err != nil {
-			qErr := fmt.Errorf("quarantine persistence failed: %w", err)
-			if auditErr := server.logEvent("capability.error", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
-				"request_id":           capabilityRequest.RequestID,
-				"capability":           capabilityRequest.Capability,
-				"error":                secrets.RedactText(qErr.Error()),
-				"operator_error_class": secrets.LoopgateOperatorErrorClass(qErr),
-				"actor_label":          effectiveTokenClaims.ActorLabel,
-				"client_session_label": effectiveTokenClaims.ClientSessionLabel,
-				"control_session_id":   effectiveTokenClaims.ControlSessionID,
-				"token_id":             effectiveTokenClaims.TokenID,
-				"parent_token_id":      effectiveTokenClaims.ParentTokenID,
-			}); auditErr != nil {
-				return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-			}
-			server.emitUIEvent(effectiveTokenClaims.ControlSessionID, UIEventTypeWarning, UIEventWarning{
-				Message: "capability quarantine persistence failed",
-			})
-			return CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusError,
-				DenialReason: "capability quarantine persistence failed",
-				DenialCode:   DenialCodeExecutionFailed,
-				Redacted:     true,
-			}
-		}
-	}
-
-	structuredResult, fieldsMeta, classification, builtQuarantineRef, err := server.buildCapabilityResult(capabilityRequest, output, quarantineRef)
-	if err != nil {
-		return CapabilityResponse{
-			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
-			DenialReason: err.Error(),
-			DenialCode:   DenialCodeExecutionFailed,
-			Redacted:     true,
-		}
-	}
-	if quarantineRef == "" && classification.Quarantined() {
-		quarantineRef, err = server.storeQuarantinedPayload(capabilityRequest, output)
-		if err != nil {
-			qErr := fmt.Errorf("quarantine persistence failed: %w", err)
-			if auditErr := server.logEvent("capability.error", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
-				"request_id":           capabilityRequest.RequestID,
-				"capability":           capabilityRequest.Capability,
-				"error":                secrets.RedactText(qErr.Error()),
-				"operator_error_class": secrets.LoopgateOperatorErrorClass(qErr),
-				"actor_label":          effectiveTokenClaims.ActorLabel,
-				"client_session_label": effectiveTokenClaims.ClientSessionLabel,
-				"control_session_id":   effectiveTokenClaims.ControlSessionID,
-				"token_id":             effectiveTokenClaims.TokenID,
-				"parent_token_id":      effectiveTokenClaims.ParentTokenID,
-			}); auditErr != nil {
-				return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-			}
-			server.emitUIEvent(effectiveTokenClaims.ControlSessionID, UIEventTypeWarning, UIEventWarning{
-				Message: "capability quarantine persistence failed",
-			})
-			return CapabilityResponse{
-				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusError,
-				DenialReason: "capability quarantine persistence failed",
-				DenialCode:   DenialCodeExecutionFailed,
-				Redacted:     true,
-			}
-		}
-	}
-	if strings.TrimSpace(builtQuarantineRef) != "" {
-		quarantineRef = builtQuarantineRef
-	}
-	classification, err = normalizeResultClassification(classification, quarantineRef)
-	if err != nil {
-		return CapabilityResponse{
-			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
-			DenialReason: "capability result classification is invalid",
-			DenialCode:   DenialCodeExecutionFailed,
-			Redacted:     true,
-		}
-	}
-	resultMetadata := server.capabilityProvenanceMetadata(capabilityRequest.Capability, quarantineRef)
-	if resultMetadata == nil {
-		resultMetadata = make(map[string]interface{})
-	}
-	resultMetadata["prompt_eligible"] = classification.PromptEligible()
-	resultMetadata["display_only"] = classification.DisplayOnly()
-	resultMetadata["audit_only"] = classification.AuditOnly()
-	resultMetadata["quarantined"] = classification.Quarantined()
-	if err := server.logEvent("capability.executed", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
-		"request_id":            capabilityRequest.RequestID,
-		"capability":            capabilityRequest.Capability,
-		"status":                ResponseStatusSuccess,
-		"result_classification": classification,
-		"result_provenance":     resultMetadata,
-		"quarantine_ref":        quarantineRef,
-		"actor_label":           effectiveTokenClaims.ActorLabel,
-		"client_session_label":  effectiveTokenClaims.ClientSessionLabel,
-		"control_session_id":    effectiveTokenClaims.ControlSessionID,
-		"token_id":              effectiveTokenClaims.TokenID,
-		"parent_token_id":       effectiveTokenClaims.ParentTokenID,
-	}); err != nil {
-		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
-	}
-	successResponse := CapabilityResponse{
-		RequestID:        capabilityRequest.RequestID,
-		Status:           ResponseStatusSuccess,
-		StructuredResult: structuredResult,
-		FieldsMeta:       fieldsMeta,
-		Classification:   classification,
-		QuarantineRef:    quarantineRef,
-		Metadata:         resultMetadata,
-	}
-	if !classification.AuditOnly() {
-		server.emitUIToolResult(effectiveTokenClaims.ControlSessionID, capabilityRequest, successResponse)
-	}
-	return successResponse
+	return server.finalizeCapabilityExecution(effectiveTokenClaims, capabilityRequest, output)
 }
 
 func (server *Server) prepareCapabilityRequestExecution(tokenClaims capabilityToken, capabilityRequest CapabilityRequest, allowApprovalCreation bool) (CapabilityRequest, *CapabilityResponse) {
@@ -1379,6 +1181,216 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 	createdApproval.Reason = approvalReason
 	server.emitUIApprovalPending(createdApproval)
 	return pendingResponse
+}
+
+func (server *Server) prepareCapabilityExecution(tokenClaims capabilityToken, capabilityRequest CapabilityRequest, policyDecision policypkg.CheckResult, tool toolspkg.Tool) (capabilityToken, *CapabilityResponse) {
+	effectiveTokenClaims := tokenClaims
+	if isHighRiskCapability(tool, policyDecision) && !tokenClaims.SingleUse {
+		effectiveTokenClaims = deriveExecutionToken(tokenClaims, capabilityRequest)
+	}
+	if denialResponse, denied := server.consumeExecutionToken(effectiveTokenClaims, capabilityRequest); denied {
+		if err := server.logEvent("capability.denied", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"reason":               secrets.RedactText(denialResponse.DenialReason),
+			"denial_code":          denialResponse.DenialCode,
+			"actor_label":          effectiveTokenClaims.ActorLabel,
+			"client_session_label": effectiveTokenClaims.ClientSessionLabel,
+			"control_session_id":   effectiveTokenClaims.ControlSessionID,
+			"token_id":             effectiveTokenClaims.TokenID,
+			"parent_token_id":      effectiveTokenClaims.ParentTokenID,
+		}); err != nil {
+			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+			return effectiveTokenClaims, &auditUnavailable
+		}
+		server.emitUIToolDenied(effectiveTokenClaims.ControlSessionID, capabilityRequest, denialResponse.DenialCode, denialResponse.DenialReason)
+		return effectiveTokenClaims, &denialResponse
+	}
+	if capabilityRequest.Capability == "fs_read" || capabilityRequest.Capability == "operator_mount.fs_read" {
+		if denied := server.checkFsReadRateLimit(effectiveTokenClaims.ControlSessionID); denied {
+			if auditErr := server.logEvent("capability.denied", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
+				"request_id":           capabilityRequest.RequestID,
+				"capability":           capabilityRequest.Capability,
+				"reason":               "fs_read rate limit exceeded",
+				"denial_code":          DenialCodeFsReadRateLimitExceeded,
+				"actor_label":          effectiveTokenClaims.ActorLabel,
+				"client_session_label": effectiveTokenClaims.ClientSessionLabel,
+				"control_session_id":   effectiveTokenClaims.ControlSessionID,
+			}); auditErr != nil {
+				auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+				return effectiveTokenClaims, &auditUnavailable
+			}
+			deniedResponse := CapabilityResponse{
+				RequestID:    capabilityRequest.RequestID,
+				Status:       ResponseStatusDenied,
+				DenialReason: "fs_read rate limit exceeded",
+				DenialCode:   DenialCodeFsReadRateLimitExceeded,
+			}
+			return effectiveTokenClaims, &deniedResponse
+		}
+	}
+	return effectiveTokenClaims, nil
+}
+
+func (server *Server) dispatchDirectCapabilityExecution(effectiveTokenClaims capabilityToken, capabilityRequest CapabilityRequest) (CapabilityResponse, bool) {
+	switch capabilityRequest.Capability {
+	case "host.folder.list":
+		return server.executeHostFolderListCapability(effectiveTokenClaims, capabilityRequest), true
+	case "host.folder.read":
+		return server.executeHostFolderReadCapability(effectiveTokenClaims, capabilityRequest), true
+	case "host.organize.plan":
+		return server.executeHostOrganizePlanCapability(effectiveTokenClaims, capabilityRequest), true
+	case "host.plan.apply":
+		return server.executeHostPlanApplyCapability(effectiveTokenClaims, capabilityRequest), true
+	default:
+		return CapabilityResponse{}, false
+	}
+}
+
+func (server *Server) executeCapabilityTool(ctx context.Context, tool toolspkg.Tool, effectiveTokenClaims capabilityToken, capabilityRequest CapabilityRequest) (string, *CapabilityResponse) {
+	executionContext := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		executionContext, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+	executionContext = withOperatorMountControlSession(executionContext, effectiveTokenClaims.ControlSessionID)
+
+	output, err := tool.Execute(executionContext, capabilityRequest.Arguments)
+	if err != nil {
+		if auditErr := server.logEvent("capability.error", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
+			"request_id":           capabilityRequest.RequestID,
+			"capability":           capabilityRequest.Capability,
+			"error":                secrets.RedactText(err.Error()),
+			"operator_error_class": secrets.LoopgateOperatorErrorClass(err),
+			"actor_label":          effectiveTokenClaims.ActorLabel,
+			"client_session_label": effectiveTokenClaims.ClientSessionLabel,
+			"control_session_id":   effectiveTokenClaims.ControlSessionID,
+			"token_id":             effectiveTokenClaims.TokenID,
+			"parent_token_id":      effectiveTokenClaims.ParentTokenID,
+		}); auditErr != nil {
+			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+			return "", &auditUnavailable
+		}
+		errorResponse := CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
+		}
+		server.emitUIEvent(effectiveTokenClaims.ControlSessionID, UIEventTypeWarning, UIEventWarning{
+			Message: "capability execution failed: " + secrets.RedactText(err.Error()),
+		})
+		return "", &errorResponse
+	}
+	return output, nil
+}
+
+func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilityToken, capabilityRequest CapabilityRequest, output string) CapabilityResponse {
+	var (
+		quarantineRef string
+		err           error
+	)
+	if _, configuredCapability := server.providerRuntime.configuredCapabilities[capabilityRequest.Capability]; configuredCapability {
+		quarantineRef, err = server.storeQuarantinedPayload(capabilityRequest, output)
+		if err != nil {
+			return server.capabilityQuarantinePersistenceFailureResponse(effectiveTokenClaims, capabilityRequest, err)
+		}
+	}
+
+	structuredResult, fieldsMeta, classification, builtQuarantineRef, err := server.buildCapabilityResult(capabilityRequest, output, quarantineRef)
+	if err != nil {
+		return CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: err.Error(),
+			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
+		}
+	}
+	if quarantineRef == "" && classification.Quarantined() {
+		quarantineRef, err = server.storeQuarantinedPayload(capabilityRequest, output)
+		if err != nil {
+			return server.capabilityQuarantinePersistenceFailureResponse(effectiveTokenClaims, capabilityRequest, err)
+		}
+	}
+	if strings.TrimSpace(builtQuarantineRef) != "" {
+		quarantineRef = builtQuarantineRef
+	}
+	classification, err = normalizeResultClassification(classification, quarantineRef)
+	if err != nil {
+		return CapabilityResponse{
+			RequestID:    capabilityRequest.RequestID,
+			Status:       ResponseStatusError,
+			DenialReason: "capability result classification is invalid",
+			DenialCode:   DenialCodeExecutionFailed,
+			Redacted:     true,
+		}
+	}
+	resultMetadata := server.capabilityProvenanceMetadata(capabilityRequest.Capability, quarantineRef)
+	if resultMetadata == nil {
+		resultMetadata = make(map[string]interface{})
+	}
+	resultMetadata["prompt_eligible"] = classification.PromptEligible()
+	resultMetadata["display_only"] = classification.DisplayOnly()
+	resultMetadata["audit_only"] = classification.AuditOnly()
+	resultMetadata["quarantined"] = classification.Quarantined()
+	if err := server.logEvent("capability.executed", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
+		"request_id":            capabilityRequest.RequestID,
+		"capability":            capabilityRequest.Capability,
+		"status":                ResponseStatusSuccess,
+		"result_classification": classification,
+		"result_provenance":     resultMetadata,
+		"quarantine_ref":        quarantineRef,
+		"actor_label":           effectiveTokenClaims.ActorLabel,
+		"client_session_label":  effectiveTokenClaims.ClientSessionLabel,
+		"control_session_id":    effectiveTokenClaims.ControlSessionID,
+		"token_id":              effectiveTokenClaims.TokenID,
+		"parent_token_id":       effectiveTokenClaims.ParentTokenID,
+	}); err != nil {
+		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+	}
+	successResponse := CapabilityResponse{
+		RequestID:        capabilityRequest.RequestID,
+		Status:           ResponseStatusSuccess,
+		StructuredResult: structuredResult,
+		FieldsMeta:       fieldsMeta,
+		Classification:   classification,
+		QuarantineRef:    quarantineRef,
+		Metadata:         resultMetadata,
+	}
+	if !classification.AuditOnly() {
+		server.emitUIToolResult(effectiveTokenClaims.ControlSessionID, capabilityRequest, successResponse)
+	}
+	return successResponse
+}
+
+func (server *Server) capabilityQuarantinePersistenceFailureResponse(effectiveTokenClaims capabilityToken, capabilityRequest CapabilityRequest, quarantineErr error) CapabilityResponse {
+	wrappedErr := fmt.Errorf("quarantine persistence failed: %w", quarantineErr)
+	if auditErr := server.logEvent("capability.error", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
+		"request_id":           capabilityRequest.RequestID,
+		"capability":           capabilityRequest.Capability,
+		"error":                secrets.RedactText(wrappedErr.Error()),
+		"operator_error_class": secrets.LoopgateOperatorErrorClass(wrappedErr),
+		"actor_label":          effectiveTokenClaims.ActorLabel,
+		"client_session_label": effectiveTokenClaims.ClientSessionLabel,
+		"control_session_id":   effectiveTokenClaims.ControlSessionID,
+		"token_id":             effectiveTokenClaims.TokenID,
+		"parent_token_id":      effectiveTokenClaims.ParentTokenID,
+	}); auditErr != nil {
+		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
+	}
+	server.emitUIEvent(effectiveTokenClaims.ControlSessionID, UIEventTypeWarning, UIEventWarning{
+		Message: "capability quarantine persistence failed",
+	})
+	return CapabilityResponse{
+		RequestID:    capabilityRequest.RequestID,
+		Status:       ResponseStatusError,
+		DenialReason: "capability quarantine persistence failed",
+		DenialCode:   DenialCodeExecutionFailed,
+		Redacted:     true,
+	}
 }
 
 func (server *Server) capabilitySummaries() []CapabilitySummary {
