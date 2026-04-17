@@ -344,7 +344,7 @@ func (server *Server) createOrReuseMCPGatewayApprovalRequest(tokenClaims capabil
 		return existingApprovalRequest, false, nil
 	}
 
-	if len(server.approvals)+len(server.mcpGatewayApprovalRequests) >= server.maxTotalApprovalRecords {
+	if len(server.approvalState.records)+len(server.mcpGatewayApprovalRequests) >= server.maxTotalApprovalRecords {
 		return pendingMCPGatewayApprovalRequest{}, false, errMCPGatewayApprovalStoreSaturated
 	}
 	if server.countPendingApprovalsForSessionLocked(tokenClaims.ControlSessionID)+server.countPendingMCPGatewayApprovalRequestsForSessionLocked(tokenClaims.ControlSessionID) >= server.maxPendingApprovalsPerControlSession {

@@ -142,19 +142,19 @@ func TestPruneExpiredLocked_PrunesTerminalApprovalsAfterSessionTTL(t *testing.T)
 
 	server.mu.Lock()
 	server.expirySweepMaxInterval = 0
-	server.approvals["approval-expired"] = pendingApproval{
+	server.approvalState.records["approval-expired"] = pendingApproval{
 		ID:        "approval-expired",
 		ExpiresAt: expiredApprovalExpiryUTC,
 		State:     approvalStateGranted,
 	}
-	server.approvals["approval-retained"] = pendingApproval{
+	server.approvalState.records["approval-retained"] = pendingApproval{
 		ID:        "approval-retained",
 		ExpiresAt: retainedApprovalExpiryUTC,
 		State:     approvalStateGranted,
 	}
 	server.pruneExpiredLocked()
-	_, expiredApprovalFound := server.approvals["approval-expired"]
-	retainedApproval, retainedApprovalFound := server.approvals["approval-retained"]
+	_, expiredApprovalFound := server.approvalState.records["approval-expired"]
+	retainedApproval, retainedApprovalFound := server.approvalState.records["approval-retained"]
 	server.mu.Unlock()
 
 	if expiredApprovalFound {

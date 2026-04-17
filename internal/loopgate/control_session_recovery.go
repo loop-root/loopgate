@@ -66,7 +66,7 @@ func (server *Server) retireOrphanedControlSession(controlSessionID string) erro
 func (server *Server) cancelPendingApprovalsForControlSession(controlSessionID string, cancellationReason string) error {
 	server.mu.Lock()
 	pendingApprovals := make([]pendingApproval, 0)
-	for _, approvalRecord := range server.approvals {
+	for _, approvalRecord := range server.approvalState.records {
 		if approvalRecord.ControlSessionID != controlSessionID {
 			continue
 		}
@@ -93,7 +93,7 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 	cancelledAtUTC := server.now().UTC()
 
 	server.mu.Lock()
-	pendingApproval, found := server.approvals[approvalID]
+	pendingApproval, found := server.approvalState.records[approvalID]
 	if !found {
 		server.mu.Unlock()
 		return nil
@@ -105,7 +105,7 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 
 	previousApproval := pendingApproval
 	pendingApproval.State = approvalStateCancelled
-	server.approvals[approvalID] = pendingApproval
+	server.approvalState.records[approvalID] = pendingApproval
 
 	auditData := map[string]interface{}{
 		"approval_request_id":  approvalID,
@@ -124,9 +124,9 @@ func (server *Server) cancelPendingApproval(approvalID string, cancellationReaso
 	}
 
 	if err := server.logEvent("approval.cancelled", pendingApproval.ControlSessionID, auditData); err != nil {
-		currentApproval, currentFound := server.approvals[approvalID]
+		currentApproval, currentFound := server.approvalState.records[approvalID]
 		if currentFound && currentApproval.State == approvalStateCancelled {
-			server.approvals[approvalID] = previousApproval
+			server.approvalState.records[approvalID] = previousApproval
 		}
 		server.mu.Unlock()
 		return fmt.Errorf("audit unavailable: approval.cancelled audit append failed: %w", err)
@@ -154,7 +154,7 @@ func (server *Server) retireControlSession(controlSessionID string, closedAtUTC 
 	sessionReadCounts, hadSessionReadCounts := server.sessionReadCounts[controlSessionID]
 
 	delete(server.sessions, controlSessionID)
-	delete(server.approvalTokenIndex, approvalTokenHashValue)
+	delete(server.approvalState.tokenIndex, approvalTokenHashValue)
 	delete(server.sessionReadCounts, controlSessionID)
 	for tokenString := range sessionTokens {
 		delete(server.tokens, tokenString)
@@ -183,7 +183,7 @@ func (server *Server) retireControlSession(controlSessionID string, closedAtUTC 
 	if err := server.logEvent(auditEventType, controlSessionID, auditData); err != nil {
 		server.mu.Lock()
 		server.sessions[controlSessionID] = activeSession
-		server.approvalTokenIndex[approvalTokenHashValue] = controlSessionID
+		server.approvalState.tokenIndex[approvalTokenHashValue] = controlSessionID
 		if hadSessionReadCounts {
 			server.sessionReadCounts[controlSessionID] = sessionReadCounts
 		}

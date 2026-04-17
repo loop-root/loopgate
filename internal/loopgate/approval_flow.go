@@ -93,7 +93,7 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	controlSessionID, indexed := server.approvalTokenIndex[tokenHash]
+	controlSessionID, indexed := server.approvalState.tokenIndex[tokenHash]
 	if !indexed {
 		server.mu.Unlock()
 		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
@@ -108,7 +108,7 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	}
 	activeSession, sessionExists := server.sessions[controlSessionID]
 	if !sessionExists {
-		delete(server.approvalTokenIndex, tokenHash)
+		delete(server.approvalState.tokenIndex, tokenHash)
 		server.mu.Unlock()
 		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -143,7 +143,7 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 
 	if server.now().UTC().After(activeSession.ExpiresAt) {
 		delete(server.sessions, controlSessionID)
-		delete(server.approvalTokenIndex, tokenHash)
+		delete(server.approvalState.tokenIndex, tokenHash)
 		server.mu.Unlock()
 		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
 			Status:       ResponseStatusDenied,
@@ -283,7 +283,7 @@ func buildApprovalOperatorDeniedAuditData(approvalID string, pendingApproval pen
 // Must be called with server.mu held.
 func (server *Server) loadPendingApprovalForDecisionLocked(approvalID string) (pendingApproval, CapabilityResponse, bool) {
 	server.pruneExpiredLocked()
-	pendingApproval, found := server.approvals[approvalID]
+	pendingApproval, found := server.approvalState.records[approvalID]
 	if !found {
 		return pendingApproval, CapabilityResponse{
 			RequestID:    approvalID,
@@ -295,7 +295,7 @@ func (server *Server) loadPendingApprovalForDecisionLocked(approvalID string) (p
 
 	if pendingApproval.ExpiresAt.Before(server.now().UTC()) {
 		pendingApproval.State = approvalStateExpired
-		server.approvals[approvalID] = pendingApproval
+		server.approvalState.records[approvalID] = pendingApproval
 		return pendingApproval, CapabilityResponse{
 			RequestID:         pendingApproval.Request.RequestID,
 			Status:            ResponseStatusDenied,
@@ -305,7 +305,7 @@ func (server *Server) loadPendingApprovalForDecisionLocked(approvalID string) (p
 		}, false
 	}
 
-	pendingApproval = backfillApprovalManifestLocked(server.approvals, approvalID, pendingApproval)
+	pendingApproval = backfillApprovalManifestLocked(server.approvalState.records, approvalID, pendingApproval)
 	return pendingApproval, CapabilityResponse{}, true
 }
 
@@ -426,7 +426,7 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
-	pendingApproval, found := server.approvals[approvalID]
+	pendingApproval, found := server.approvalState.records[approvalID]
 	if !found {
 		return "", fmt.Errorf("approval request not found")
 	}
@@ -462,7 +462,7 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 	pendingApproval.State = approvalStateConsumed
 	pendingApproval.DecisionSubmittedAt = server.now().UTC()
 	pendingApproval.DecisionNonce = ""
-	server.approvals[approvalID] = pendingApproval
+	server.approvalState.records[approvalID] = pendingApproval
 	return auditEventHash, nil
 }
 
@@ -483,7 +483,7 @@ func (server *Server) recordPendingApprovalDecisionLocked(controlSession control
 		pendingApproval.State = approvalStateConsumed
 		pendingApproval.DecisionSubmittedAt = server.now().UTC()
 		pendingApproval.DecisionNonce = ""
-		server.approvals[approvalID] = pendingApproval
+		server.approvalState.records[approvalID] = pendingApproval
 		return pendingApproval, CapabilityResponse{}, auditEventHash, true
 	}
 
@@ -502,7 +502,7 @@ func (server *Server) recordPendingApprovalDecisionLocked(controlSession control
 	pendingApproval.State = approvalStateDenied
 	pendingApproval.DecisionSubmittedAt = server.now().UTC()
 	pendingApproval.DecisionNonce = ""
-	server.approvals[approvalID] = pendingApproval
+	server.approvalState.records[approvalID] = pendingApproval
 	return pendingApproval, CapabilityResponse{}, auditEventHash, true
 }
 
@@ -605,7 +605,7 @@ func (server *Server) markApprovalExecutionResult(approvalID string, executionSt
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
-	pendingApproval, found := server.approvals[approvalID]
+	pendingApproval, found := server.approvalState.records[approvalID]
 	if !found {
 		return
 	}
@@ -613,7 +613,7 @@ func (server *Server) markApprovalExecutionResult(approvalID string, executionSt
 		pendingApproval.State = approvalStateExecutionFailed
 	}
 	pendingApproval.ExecutedAt = server.now().UTC()
-	server.approvals[approvalID] = pendingApproval
+	server.approvalState.records[approvalID] = pendingApproval
 }
 
 func approvalDecisionHTTPStatus(denialCode string) int {

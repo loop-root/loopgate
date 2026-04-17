@@ -316,7 +316,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		for replacedTokenString := range replacedSessionTokens {
 			delete(server.tokens, replacedTokenString)
 		}
-		delete(server.approvalTokenIndex, approvalTokenHash(replacedSession.ApprovalToken))
+		delete(server.approvalState.tokenIndex, approvalTokenHash(replacedSession.ApprovalToken))
 		delete(server.sessions, replacedSessionID)
 	}
 	server.sessions[controlSessionID] = controlSession{
@@ -337,7 +337,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		CreatedAt:                nowUTC,
 	}
 	server.tokens[capabilityTokenString] = tokenClaims
-	server.approvalTokenIndex[approvalTokenHash(approvalTokenString)] = controlSessionID
+	server.approvalState.tokenIndex[approvalTokenHash(approvalTokenString)] = controlSessionID
 	server.sessionOpenByUID[requestPeerIdentity.UID] = nowUTC
 	server.noteExpiryCandidateLocked(expiresAt)
 	server.mu.Unlock()
@@ -360,13 +360,13 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		server.mu.Lock()
 		delete(server.sessions, controlSessionID)
 		delete(server.tokens, capabilityTokenString)
-		delete(server.approvalTokenIndex, approvalTokenHash(approvalTokenString))
+		delete(server.approvalState.tokenIndex, approvalTokenHash(approvalTokenString))
 		if hadReplacedSession {
 			server.sessions[replacedSessionID] = replacedSession
 			for restoredTokenString, restoredTokenClaims := range replacedSessionTokens {
 				server.tokens[restoredTokenString] = restoredTokenClaims
 			}
-			server.approvalTokenIndex[approvalTokenHash(replacedSession.ApprovalToken)] = replacedSessionID
+			server.approvalState.tokenIndex[approvalTokenHash(replacedSession.ApprovalToken)] = replacedSessionID
 		}
 		if hadPreviousSessionOpenAt {
 			server.sessionOpenByUID[requestPeerIdentity.UID] = previousSessionOpenAtUTC
@@ -429,7 +429,7 @@ func (server *Server) handleSessionClose(writer http.ResponseWriter, request *ht
 	}
 
 	pendingApprovalCount := 0
-	for _, pendingApproval := range server.approvals {
+	for _, pendingApproval := range server.approvalState.records {
 		if pendingApproval.ControlSessionID == tokenClaims.ControlSessionID &&
 			pendingApproval.State == approvalStatePending {
 			pendingApprovalCount++

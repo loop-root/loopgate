@@ -116,7 +116,7 @@ func TestOpenSessionCancelsPendingApprovalsForDeadPeerOrphan(t *testing.T) {
 
 	firstSession := openSessionWithPeer(t, server, firstPeerIdentity, "operator", "operator-launch-a")
 	server.mu.Lock()
-	server.approvals["approval-orphan"] = pendingApproval{
+	server.approvalState.records["approval-orphan"] = pendingApproval{
 		ID:               "approval-orphan",
 		Request:          CapabilityRequest{Capability: "fs_write"},
 		CreatedAt:        server.now().UTC(),
@@ -140,7 +140,7 @@ func TestOpenSessionCancelsPendingApprovalsForDeadPeerOrphan(t *testing.T) {
 	openSessionWithPeer(t, server, secondPeerIdentity, "operator", "operator-launch-b")
 
 	server.mu.Lock()
-	approvalRecord, found := server.approvals["approval-orphan"]
+	approvalRecord, found := server.approvalState.records["approval-orphan"]
 	server.mu.Unlock()
 	if !found {
 		t.Fatalf("expected pending approval to remain as a cancelled record")
@@ -202,7 +202,7 @@ func TestCancelPendingApprovalRollbackIsNeverVisibleToReaders(t *testing.T) {
 	server := newControlSessionRecoveryTestServer(t, repoRoot)
 
 	server.mu.Lock()
-	server.approvals["approval-hidden-rollback"] = pendingApproval{
+	server.approvalState.records["approval-hidden-rollback"] = pendingApproval{
 		ID:               "approval-hidden-rollback",
 		Request:          CapabilityRequest{Capability: "fs_write"},
 		CreatedAt:        server.now().UTC(),
@@ -245,7 +245,7 @@ func TestCancelPendingApprovalRollbackIsNeverVisibleToReaders(t *testing.T) {
 			default:
 			}
 			server.mu.Lock()
-			if approvalRecord, found := server.approvals["approval-hidden-rollback"]; found && approvalRecord.State == approvalStateCancelled {
+			if approvalRecord, found := server.approvalState.records["approval-hidden-rollback"]; found && approvalRecord.State == approvalStateCancelled {
 				sawCancelledApproval.Store(true)
 			}
 			server.mu.Unlock()
@@ -274,7 +274,7 @@ func TestCancelPendingApprovalRollbackIsNeverVisibleToReaders(t *testing.T) {
 
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	approvalRecord := server.approvals["approval-hidden-rollback"]
+	approvalRecord := server.approvalState.records["approval-hidden-rollback"]
 	if approvalRecord.State != approvalStatePending {
 		t.Fatalf("expected rollback to restore pending state, got %#v", approvalRecord)
 	}

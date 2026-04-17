@@ -45,12 +45,12 @@ Purpose:
 Protects:
 - `sessions`
 - `tokens`
-- `approvals`
+- `approvalState.records`
 - `seenRequests`
 - `seenAuthNonces`
 - `usedTokens`
 - `sessionOpenByUID`
-- `approvalTokenIndex`
+- `approvalState.tokenIndex`
 - `sessionReadCounts`
 - expiry scheduling fields
 - capacity counters/caps coupled to those maps

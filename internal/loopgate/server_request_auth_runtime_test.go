@@ -526,8 +526,8 @@ func TestExecuteCapabilityRequest_DeniesNeedsApprovalWhenApprovalCreationDisable
 
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	if len(server.approvals) != 0 {
-		t.Fatalf("expected no pending approvals to be created on fail-closed path, got %#v", server.approvals)
+	if len(server.approvalState.records) != 0 {
+		t.Fatalf("expected no pending approvals to be created on fail-closed path, got %#v", server.approvalState.records)
 	}
 }
 
@@ -567,7 +567,7 @@ func TestExecuteCapabilityRequest_ApprovalRollbackIsNeverVisibleToReaders(t *tes
 			default:
 			}
 			server.mu.Lock()
-			if len(server.approvals) > 0 {
+			if len(server.approvalState.records) > 0 {
 				sawPendingApproval.Store(true)
 			}
 			server.mu.Unlock()
@@ -603,8 +603,8 @@ func TestExecuteCapabilityRequest_ApprovalRollbackIsNeverVisibleToReaders(t *tes
 
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	if len(server.approvals) != 0 {
-		t.Fatalf("expected no pending approvals after rollback, got %#v", server.approvals)
+	if len(server.approvalState.records) != 0 {
+		t.Fatalf("expected no pending approvals after rollback, got %#v", server.approvalState.records)
 	}
 }
 

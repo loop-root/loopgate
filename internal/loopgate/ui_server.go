@@ -54,7 +54,7 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 	nowUTC := server.now().UTC()
 	pendingCount := 0
 	writeGrants := make([]UIOperatorMountWriteGrant, 0)
-	for _, pendingApproval := range server.approvals {
+	for _, pendingApproval := range server.approvalState.records {
 		if pendingApproval.ControlSessionID == tokenClaims.ControlSessionID && pendingApproval.State == approvalStatePending {
 			pendingCount++
 		}
@@ -254,8 +254,8 @@ func (server *Server) handleUIApprovals(writer http.ResponseWriter, request *htt
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	approvalSummaries := make([]UIApprovalSummary, 0, len(server.approvals))
-	for _, pendingApproval := range server.approvals {
+	approvalSummaries := make([]UIApprovalSummary, 0, len(server.approvalState.records))
+	for _, pendingApproval := range server.approvalState.records {
 		if pendingApproval.ControlSessionID != controlSession.ID || pendingApproval.State != approvalStatePending {
 			continue
 		}
@@ -515,11 +515,11 @@ func (server *Server) currentApprovalDecisionState(approvalID string) (nonce, ma
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
-	approval, found := server.approvals[approvalID]
+	approval, found := server.approvalState.records[approvalID]
 	if !found {
 		return "", "", false
 	}
-	approval = backfillApprovalManifestLocked(server.approvals, approvalID, approval)
+	approval = backfillApprovalManifestLocked(server.approvalState.records, approvalID, approval)
 	return approval.DecisionNonce, approval.ApprovalManifestSHA256, true
 }
 

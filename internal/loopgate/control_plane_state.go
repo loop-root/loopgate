@@ -51,21 +51,21 @@ func (server *Server) pruneExpiredLocked() {
 	for controlSessionID, activeSession := range server.sessions {
 		if nowUTC.After(activeSession.ExpiresAt) {
 			delete(server.sessions, controlSessionID)
-			delete(server.approvalTokenIndex, approvalTokenHash(activeSession.ApprovalToken))
+			delete(server.approvalState.tokenIndex, approvalTokenHash(activeSession.ApprovalToken))
 			continue
 		}
 		noteNextSweepCandidate(activeSession.ExpiresAt)
 	}
-	for approvalID, pendingApproval := range server.approvals {
+	for approvalID, pendingApproval := range server.approvalState.records {
 		if nowUTC.After(pendingApproval.ExpiresAt) {
 			if pendingApproval.State == approvalStatePending {
 				pendingApproval.State = approvalStateExpired
-				server.approvals[approvalID] = pendingApproval
+				server.approvalState.records[approvalID] = pendingApproval
 				noteNextSweepCandidate(pendingApproval.ExpiresAt.Add(requestReplayWindow))
 				continue
 			}
 			if nowUTC.Sub(pendingApproval.ExpiresAt) > requestReplayWindow {
-				delete(server.approvals, approvalID)
+				delete(server.approvalState.records, approvalID)
 				continue
 			}
 			noteNextSweepCandidate(pendingApproval.ExpiresAt.Add(requestReplayWindow))
@@ -421,7 +421,7 @@ func (server *Server) saveNonceReplayState() error {
 
 func (server *Server) countPendingApprovalsForSessionLocked(controlSessionID string) int {
 	pendingCount := 0
-	for _, pendingApproval := range server.approvals {
+	for _, pendingApproval := range server.approvalState.records {
 		if pendingApproval.ControlSessionID != controlSessionID {
 			continue
 		}

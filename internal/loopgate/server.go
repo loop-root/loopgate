@@ -204,6 +204,13 @@ type claudeHookRuntimeState struct {
 	mu sync.Mutex
 }
 
+type approvalControlState struct {
+	// records holds authoritative approval lifecycle state under server.mu.
+	records map[string]pendingApproval
+	// tokenIndex maps SHA-256(approval token) to control session ID under server.mu.
+	tokenIndex map[string]string
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
 //   - Current production code treats audit.mu, ui.mu, claudeHookRuntime.mu, connectionRuntime.mu,
@@ -341,12 +348,12 @@ type Server struct {
 	// Protected fields:
 	//   - sessions
 	//   - tokens
-	//   - approvals
+	//   - approvalState.records
 	//   - seenRequests
 	//   - seenAuthNonces
 	//   - usedTokens
 	//   - sessionOpenByUID
-	//   - approvalTokenIndex
+	//   - approvalState.tokenIndex
 	//   - sessionReadCounts
 	//   - expiry scheduling / caps / session MAC rotation master
 	//
@@ -359,16 +366,15 @@ type Server struct {
 	//   - capture a single now() snapshot while holding mu for auth/expiry decisions
 	//   - do not split a logical state transition across multiple mu lock/unlock pairs
 	//   - prefer: gather authoritative state under mu -> unlock -> audit/UI/IO work
-	mu                 sync.Mutex
-	sessions           map[string]controlSession
-	tokens             map[string]capabilityToken
-	approvals          map[string]pendingApproval
-	seenRequests       map[string]seenRequest
-	seenAuthNonces     map[string]seenRequest
-	usedTokens         map[string]usedToken
-	sessionOpenByUID   map[uint32]time.Time
-	approvalTokenIndex map[string]string      // SHA-256(approval token) → control session ID
-	sessionReadCounts  map[string][]time.Time // control session ID → timestamps of fs_read executions
+	mu                sync.Mutex
+	sessions          map[string]controlSession
+	tokens            map[string]capabilityToken
+	approvalState     approvalControlState
+	seenRequests      map[string]seenRequest
+	seenAuthNonces    map[string]seenRequest
+	usedTokens        map[string]usedToken
+	sessionOpenByUID  map[uint32]time.Time
+	sessionReadCounts map[string][]time.Time // control session ID → timestamps of fs_read executions
 
 	sessionOpenMinInterval  time.Duration
 	maxActiveSessionsPerUID int
@@ -380,7 +386,7 @@ type Server struct {
 	maxAuthNonceReplayEntries            int
 	// maxTotalControlSessions caps active control sessions (fail closed when full).
 	maxTotalControlSessions int
-	// maxTotalApprovalRecords caps server.approvals map size including terminal rows until pruned.
+	// maxTotalApprovalRecords caps server.approvalState.records including terminal rows until pruned.
 	maxTotalApprovalRecords int
 	// sessionMACRotationMaster is 32 bytes of server-held entropy used to derive per-epoch
 	// session MAC keys (see session_mac_rotation.go). Loaded or created under runtime/state.
@@ -544,14 +550,16 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		pkceRuntime: pkceRuntimeState{
 			sessions: make(map[string]pendingPKCESession),
 		},
-		sessions:                             make(map[string]controlSession),
-		tokens:                               make(map[string]capabilityToken),
-		approvals:                            make(map[string]pendingApproval),
+		sessions: make(map[string]controlSession),
+		tokens:   make(map[string]capabilityToken),
+		approvalState: approvalControlState{
+			records:    make(map[string]pendingApproval),
+			tokenIndex: make(map[string]string),
+		},
 		seenRequests:                         make(map[string]seenRequest),
 		seenAuthNonces:                       make(map[string]seenRequest),
 		usedTokens:                           make(map[string]usedToken),
 		sessionOpenByUID:                     make(map[uint32]time.Time),
-		approvalTokenIndex:                   make(map[string]string),
 		sessionReadCounts:                    make(map[string][]time.Time),
 		sessionOpenMinInterval:               defaultSessionOpenMinInterval,
 		maxActiveSessionsPerUID:              defaultMaxActiveSessionsPerUID,
@@ -1080,7 +1088,7 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 	}
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	if len(server.approvals) >= server.maxTotalApprovalRecords {
+	if len(server.approvalState.records) >= server.maxTotalApprovalRecords {
 		server.mu.Unlock()
 		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 			"request_id":           capabilityRequest.RequestID,
@@ -1145,7 +1153,7 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 		ApprovalManifestSHA256: manifestSHA256,
 		ExecutionBodySHA256:    bodySHA256,
 	}
-	server.approvals[approvalID] = createdApproval
+	server.approvalState.records[approvalID] = createdApproval
 	server.noteExpiryCandidateLocked(expiresAt)
 
 	approvalCreatedAuditData := map[string]interface{}{
@@ -1165,7 +1173,7 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 		approvalCreatedAuditData["approval_class"] = approvalClass
 	}
 	if err := server.logEvent("approval.created", tokenClaims.ControlSessionID, approvalCreatedAuditData); err != nil {
-		delete(server.approvals, approvalID)
+		delete(server.approvalState.records, approvalID)
 		server.mu.Unlock()
 		return CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,

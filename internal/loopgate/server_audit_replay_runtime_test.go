@@ -158,9 +158,9 @@ func TestApprovalExecuteDeniesWhenStoredExecutionBodyMutated(t *testing.T) {
 		t.Fatalf("expected pending approval, got %#v", pendingResponse)
 	}
 	server.mu.Lock()
-	pa := server.approvals[pendingResponse.ApprovalRequestID]
+	pa := server.approvalState.records[pendingResponse.ApprovalRequestID]
 	pa.Request.Arguments["path"] = "evil.txt"
-	server.approvals[pendingResponse.ApprovalRequestID] = pa
+	server.approvalState.records[pendingResponse.ApprovalRequestID] = pa
 	server.mu.Unlock()
 	approvedResponse, err := client.UIDecideApproval(context.Background(), pendingResponse.ApprovalRequestID, true)
 	if err != nil {

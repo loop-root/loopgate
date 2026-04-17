@@ -26,15 +26,15 @@ func (server *Server) handleControlApprovals(writer http.ResponseWriter, request
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	approvalSummaries := make([]OperatorApprovalSummary, 0, len(server.approvals))
-	for approvalID, pendingApproval := range server.approvals {
+	approvalSummaries := make([]OperatorApprovalSummary, 0, len(server.approvalState.records))
+	for approvalID, pendingApproval := range server.approvalState.records {
 		if pendingApproval.State != approvalStatePending {
 			continue
 		}
 		if strings.TrimSpace(tokenClaims.TenantID) != "" && strings.TrimSpace(pendingApproval.ExecutionContext.TenantID) != "" && tokenClaims.TenantID != pendingApproval.ExecutionContext.TenantID {
 			continue
 		}
-		pendingApproval = backfillApprovalManifestLocked(server.approvals, approvalID, pendingApproval)
+		pendingApproval = backfillApprovalManifestLocked(server.approvalState.records, approvalID, pendingApproval)
 		approvalSummaries = append(approvalSummaries, operatorApprovalSummaryFromPending(pendingApproval))
 	}
 	server.mu.Unlock()

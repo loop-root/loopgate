@@ -320,7 +320,7 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForOperator(
 		t.Fatalf("expected approval_reason for root grant, got %#v", response.Metadata)
 	}
 	server.mu.Lock()
-	pendingApproval, found := server.approvals[response.ApprovalRequestID]
+	pendingApproval, found := server.approvalState.records[response.ApprovalRequestID]
 	server.mu.Unlock()
 	if !found {
 		t.Fatalf("pending approval %q not found", response.ApprovalRequestID)

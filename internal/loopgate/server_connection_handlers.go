@@ -54,7 +54,7 @@ func (server *Server) handleStatus(writer http.ResponseWriter, request *http.Req
 	server.mu.Lock()
 	server.pruneExpiredLocked()
 	pendingCount := 0
-	for _, pendingApproval := range server.approvals {
+	for _, pendingApproval := range server.approvalState.records {
 		if pendingApproval.State == "pending" {
 			pendingCount++
 		}

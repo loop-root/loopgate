@@ -157,7 +157,7 @@ func TestCloseSessionDeniedWhenPendingApprovalsExist(t *testing.T) {
 	}
 
 	server.mu.Lock()
-	server.approvals["approval-pending-close"] = pendingApproval{
+	server.approvalState.records["approval-pending-close"] = pendingApproval{
 		ID:               "approval-pending-close",
 		ControlSessionID: client.controlSessionID,
 		CreatedAt:        server.now().UTC(),
