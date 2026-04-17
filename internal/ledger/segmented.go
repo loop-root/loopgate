@@ -52,12 +52,16 @@ type manifestState struct {
 }
 
 func AppendWithRotation(path string, ledgerEvent Event, rotationSettings RotationSettings) error {
+	return defaultAppendRuntime.AppendWithRotation(path, ledgerEvent, rotationSettings)
+}
+
+func (runtime *AppendRuntime) AppendWithRotation(path string, ledgerEvent Event, rotationSettings RotationSettings) error {
 	if err := validateRotationSettings(rotationSettings); err != nil {
 		return err
 	}
 
 	if rotationSettings.RotateAtBytes <= 0 {
-		return appendWithMaxEventBytes(path, ledgerEvent, rotationSettings.MaxEventBytes)
+		return appendWithMaxEventBytes(runtime, path, ledgerEvent, rotationSettings.MaxEventBytes)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -85,6 +89,7 @@ func AppendWithRotation(path string, ledgerEvent Event, rotationSettings Rotatio
 	defer activeHandle.Close()
 
 	activeChainState, activeLedgerSize, err := loadVerifiedActiveChainState(
+		runtime,
 		activeHandle,
 		path,
 		verifiedManifestState.lastSequence,
@@ -96,11 +101,11 @@ func AppendWithRotation(path string, ledgerEvent Event, rotationSettings Rotatio
 
 	_, eventLineBytes, _, err := prepareLedgerEventLine(activeChainState.lastSequence, activeChainState.lastHash, ledgerEvent)
 	if err != nil {
-		clearCachedChainState(normalizeLedgerPath(path), "ledger_sequence")
+		runtime.clearCachedChainState(normalizeLedgerPath(path), "ledger_sequence")
 		return fmt.Errorf("prepare rotated ledger event: %w", err)
 	}
 	if err := validateEventLineSize(eventLineBytes, rotationSettings.MaxEventBytes); err != nil {
-		clearCachedChainState(normalizeLedgerPath(path), "ledger_sequence")
+		runtime.clearCachedChainState(normalizeLedgerPath(path), "ledger_sequence")
 		return err
 	}
 
@@ -124,6 +129,7 @@ func AppendWithRotation(path string, ledgerEvent Event, rotationSettings Rotatio
 	}
 
 	return appendPreparedEventToFile(
+		runtime,
 		activeHandle,
 		path,
 		verifiedManifestState.lastSequence,
@@ -134,6 +140,10 @@ func AppendWithRotation(path string, ledgerEvent Event, rotationSettings Rotatio
 }
 
 func ReadSegmentedChainState(path string, sequenceField string, rotationSettings RotationSettings) (int64, string, error) {
+	return defaultAppendRuntime.ReadSegmentedChainState(path, sequenceField, rotationSettings)
+}
+
+func (runtime *AppendRuntime) ReadSegmentedChainState(path string, sequenceField string, rotationSettings RotationSettings) (int64, string, error) {
 	if err := validateRotationSettings(rotationSettings); err != nil {
 		return 0, "", err
 	}
@@ -152,83 +162,21 @@ func ReadSegmentedChainState(path string, sequenceField string, rotationSettings
 	activeHandle, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			clearCachedChainState(normalizeLedgerPath(path), "ledger_sequence")
+			runtime.clearCachedChainState(normalizeLedgerPath(path), "ledger_sequence")
 			return baseSequence, baseEventHash, nil
 		}
 		return 0, "", fmt.Errorf("open active ledger: %w", err)
 	}
 	defer activeHandle.Close()
 
-	lastSequence, lastEventHash, err := ReadVerifiedChainStateFromBase(activeHandle, sequenceField, baseSequence, baseEventHash)
+	lastSequence, lastEventHash, err := runtime.readVerifiedChainStateFromBase(activeHandle, sequenceField, baseSequence, baseEventHash)
 	if err != nil {
 		return 0, "", err
 	}
-	if err := PrimeAppendChainState(path, activeHandle, lastSequence, lastEventHash); err != nil {
+	if err := runtime.PrimeAppendChainState(path, activeHandle, lastSequence, lastEventHash); err != nil {
 		return 0, "", err
 	}
 	return lastSequence, lastEventHash, nil
-}
-
-func ReadVerifiedChainStateFromBase(fileHandle *os.File, sequenceField string, baseSequence int64, baseEventHash string) (int64, string, error) {
-	if _, err := fileHandle.Seek(0, io.SeekStart); err != nil {
-		return 0, "", fmt.Errorf("seek ledger start: %w", err)
-	}
-
-	scanner := bufio.NewScanner(fileHandle)
-	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
-
-	foundEvent := false
-	expectedSequence := baseSequence + 1
-	previousEventHash := baseEventHash
-	for scanner.Scan() {
-		parsedEvent, ok := ParseEvent(scanner.Bytes())
-		if !ok {
-			return 0, "", fmt.Errorf("%w: malformed ledger line", ErrLedgerIntegrity)
-		}
-
-		sequenceValue, err := chainSequenceValue(parsedEvent, sequenceField)
-		if err != nil {
-			return 0, "", err
-		}
-		if sequenceValue != expectedSequence {
-			return 0, "", fmt.Errorf("%w: unexpected %s %d (expected %d)", ErrLedgerIntegrity, sequenceField, sequenceValue, expectedSequence)
-		}
-
-		storedPreviousHash, ok := parsedEvent.Data["previous_event_hash"].(string)
-		if !ok {
-			return 0, "", fmt.Errorf("%w: missing previous_event_hash", ErrLedgerIntegrity)
-		}
-		if storedPreviousHash != previousEventHash {
-			return 0, "", fmt.Errorf("%w: previous_event_hash mismatch", ErrLedgerIntegrity)
-		}
-
-		storedEventHash, ok := parsedEvent.Data["event_hash"].(string)
-		if !ok || storedEventHash == "" {
-			return 0, "", fmt.Errorf("%w: missing event_hash", ErrLedgerIntegrity)
-		}
-		expectedEventHash, err := hashStoredChainEvent(parsedEvent)
-		if err != nil {
-			return 0, "", fmt.Errorf("hash ledger event: %w", err)
-		}
-		if storedEventHash != expectedEventHash {
-			return 0, "", fmt.Errorf("%w: event_hash mismatch", ErrLedgerIntegrity)
-		}
-
-		previousEventHash = storedEventHash
-		expectedSequence++
-		foundEvent = true
-	}
-	if err := scanner.Err(); err != nil {
-		return 0, "", fmt.Errorf("scan ledger: %w", err)
-	}
-	if !foundEvent {
-		cacheVerifiedChainStateFromFileHandle(fileHandle, sequenceField, baseSequence, baseEventHash)
-		return baseSequence, baseEventHash, nil
-	}
-
-	lastSequence := expectedSequence - 1
-	cacheVerifiedChainStateFromFileHandle(fileHandle, sequenceField, lastSequence, previousEventHash)
-	return lastSequence, previousEventHash, nil
 }
 
 func rolloverActiveSegment(path string, rotationSettings RotationSettings, verifiedManifestState manifestState, activeChainState cachedChainState) error {
@@ -290,24 +238,24 @@ func rolloverActiveSegment(path string, rotationSettings RotationSettings, verif
 	return nil
 }
 
-func appendPreparedEventToFile(fileHandle *os.File, path string, baseSequence int64, baseEventHash string, ledgerEvent Event, maxEventBytes int) error {
+func appendPreparedEventToFile(runtime *AppendRuntime, fileHandle *os.File, path string, baseSequence int64, baseEventHash string, ledgerEvent Event, maxEventBytes int) error {
 	normalizedPath := normalizeLedgerPath(path)
 	currentFileInfo, err := fileHandle.Stat()
 	if err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return fmt.Errorf("stat ledger file: %w", err)
 	}
 	currentFileState, err := ledgerFileStateFromFileInfo(currentFileInfo)
 	if err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return fmt.Errorf("load ledger file state: %w", err)
 	}
 
-	chainState, found := loadCachedChainState(normalizedPath, "ledger_sequence", currentFileState)
+	chainState, found := runtime.loadCachedChainState(normalizedPath, "ledger_sequence", currentFileState)
 	if !found {
-		lastSequence, lastEventHash, err := ReadVerifiedChainStateFromBase(fileHandle, "ledger_sequence", baseSequence, baseEventHash)
+		lastSequence, lastEventHash, err := runtime.readVerifiedChainStateFromBase(fileHandle, "ledger_sequence", baseSequence, baseEventHash)
 		if err != nil {
-			clearCachedChainState(normalizedPath, "ledger_sequence")
+			runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 			return err
 		}
 		chainState = cachedChainState{
@@ -319,38 +267,38 @@ func appendPreparedEventToFile(fileHandle *os.File, path string, baseSequence in
 
 	_, eventLineBytes, eventHash, err := prepareLedgerEventLine(chainState.lastSequence, chainState.lastHash, ledgerEvent)
 	if err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return fmt.Errorf("prepare ledger event: %w", err)
 	}
 	if err := validateEventLineSize(eventLineBytes, maxEventBytes); err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return err
 	}
 
 	if _, err := fileHandle.Seek(0, io.SeekEnd); err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return fmt.Errorf("seek ledger end: %w", err)
 	}
 	if _, err := fileHandle.Write(eventLineBytes); err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return fmt.Errorf("write ledger event: %w", err)
 	}
-	if err := syncLedgerFileHandle(fileHandle); err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+	if err := runtime.syncLedgerFileHandle(fileHandle); err != nil {
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return fmt.Errorf("sync ledger: %w", err)
 	}
 
 	updatedFileInfo, err := fileHandle.Stat()
 	if err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return nil
 	}
 	updatedFileState, err := ledgerFileStateFromFileInfo(updatedFileInfo)
 	if err != nil {
-		clearCachedChainState(normalizedPath, "ledger_sequence")
+		runtime.clearCachedChainState(normalizedPath, "ledger_sequence")
 		return nil
 	}
-	storeCachedChainState(normalizedPath, "ledger_sequence", cachedChainState{
+	runtime.storeCachedChainState(normalizedPath, "ledger_sequence", cachedChainState{
 		lastSequence: chainState.lastSequence + 1,
 		lastHash:     eventHash,
 		fileState:    updatedFileState,
@@ -358,7 +306,7 @@ func appendPreparedEventToFile(fileHandle *os.File, path string, baseSequence in
 	return nil
 }
 
-func loadVerifiedActiveChainState(fileHandle *os.File, path string, baseSequence int64, baseEventHash string) (cachedChainState, int64, error) {
+func loadVerifiedActiveChainState(runtime *AppendRuntime, fileHandle *os.File, path string, baseSequence int64, baseEventHash string) (cachedChainState, int64, error) {
 	currentFileInfo, err := fileHandle.Stat()
 	if err != nil {
 		return cachedChainState{}, 0, fmt.Errorf("stat active ledger: %w", err)
@@ -369,12 +317,12 @@ func loadVerifiedActiveChainState(fileHandle *os.File, path string, baseSequence
 	}
 
 	normalizedPath := normalizeLedgerPath(path)
-	cachedState, found := loadCachedChainState(normalizedPath, "ledger_sequence", currentFileState)
+	cachedState, found := runtime.loadCachedChainState(normalizedPath, "ledger_sequence", currentFileState)
 	if found {
 		return cachedState, currentFileInfo.Size(), nil
 	}
 
-	lastSequence, lastEventHash, err := ReadVerifiedChainStateFromBase(fileHandle, "ledger_sequence", baseSequence, baseEventHash)
+	lastSequence, lastEventHash, err := runtime.readVerifiedChainStateFromBase(fileHandle, "ledger_sequence", baseSequence, baseEventHash)
 	if err != nil {
 		return cachedChainState{}, 0, err
 	}
@@ -604,9 +552,9 @@ func prepareLedgerEventLine(lastSequence int64, lastEventHash string, ledgerEven
 	return preparedEvent, eventLineBytes, eventHash, nil
 }
 
-func appendWithMaxEventBytes(path string, ledgerEvent Event, maxEventBytes int) error {
+func appendWithMaxEventBytes(runtime *AppendRuntime, path string, ledgerEvent Event, maxEventBytes int) error {
 	if maxEventBytes <= 0 {
-		return Append(path, ledgerEvent)
+		return runtime.Append(path, ledgerEvent)
 	}
 
 	lockHandle, err := openLedgerLock(path)
@@ -621,7 +569,7 @@ func appendWithMaxEventBytes(path string, ledgerEvent Event, maxEventBytes int) 
 	}
 	defer activeHandle.Close()
 
-	return appendPreparedEventToFile(activeHandle, path, 0, "", ledgerEvent, maxEventBytes)
+	return appendPreparedEventToFile(runtime, activeHandle, path, 0, "", ledgerEvent, maxEventBytes)
 }
 
 func openLedgerLock(path string) (*os.File, error) {

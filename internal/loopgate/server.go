@@ -269,17 +269,20 @@ type Server struct {
 	checker                    *policypkg.Checker
 	now                        func() time.Time
 	appendAuditEvent           func(string, ledger.Event) error
-	resolveSecretStore         func(secrets.SecretRef) (secrets.SecretStore, error)
-	reportResponseWriteError   func(httpStatus int, cause error)
-	reportSecurityWarning      func(eventCode string, cause error)
-	resolvePeerIdentity        func(net.Conn) (peerIdentity, error)
-	resolveExePath             func(int) (string, error)
-	processExists              func(int) (bool, error)
-	resolveUserHomeDir         func() (string, error)
-	expectedClientPath         string
-	newModelClientFromConfig   func(modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error)
-	nonceReplayStore           authNonceReplayStore
-	server                     *http.Server
+	// auditLedgerRuntime owns the append-chain cache for this server's audit
+	// ledger reads/appends so audit state does not rely on package-global cache mutation.
+	auditLedgerRuntime       *ledger.AppendRuntime
+	resolveSecretStore       func(secrets.SecretRef) (secrets.SecretStore, error)
+	reportResponseWriteError func(httpStatus int, cause error)
+	reportSecurityWarning    func(eventCode string, cause error)
+	resolvePeerIdentity      func(net.Conn) (peerIdentity, error)
+	resolveExePath           func(int) (string, error)
+	processExists            func(int) (bool, error)
+	resolveUserHomeDir       func() (string, error)
+	expectedClientPath       string
+	newModelClientFromConfig func(modelruntime.Config) (*modelpkg.Client, modelruntime.Config, error)
+	nonceReplayStore         authNonceReplayStore
+	server                   *http.Server
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
 	diagnostic *loopdiag.Manager
 
@@ -557,6 +560,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		registry:                   nil,
 		checker:                    nil,
 		now:                        time.Now,
+		auditLedgerRuntime:         ledger.NewAppendRuntime(),
 		resolveSecretStore:         secrets.NewStoreForRef,
 		reportResponseWriteError: func(httpStatus int, cause error) {
 			fmt.Fprintf(os.Stderr, "ERROR: response_write status=%d class=%s\n", httpStatus, secrets.LoopgateOperatorErrorClass(cause))
@@ -618,6 +622,9 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	}
 	server.storePolicyRuntime(initialPolicyRuntime)
 	server.appendAuditEvent = func(path string, auditEvent ledger.Event) error {
+		if server.auditLedgerRuntime != nil {
+			return server.auditLedgerRuntime.AppendWithRotation(path, auditEvent, server.auditLedgerRotationSettings())
+		}
 		return ledger.AppendWithRotation(path, auditEvent, server.auditLedgerRotationSettings())
 	}
 	server.newModelClientFromConfig = server.newModelClientFromRuntimeConfig

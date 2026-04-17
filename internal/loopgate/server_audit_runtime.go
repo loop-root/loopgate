@@ -20,7 +20,16 @@ import (
 )
 
 func (server *Server) loadAuditChainState() error {
-	lastAuditSequence, lastAuditHash, err := ledger.ReadSegmentedChainState(server.auditPath, "audit_sequence", server.auditLedgerRotationSettings())
+	var (
+		lastAuditSequence int64
+		lastAuditHash     string
+		err               error
+	)
+	if server.auditLedgerRuntime != nil {
+		lastAuditSequence, lastAuditHash, err = server.auditLedgerRuntime.ReadSegmentedChainState(server.auditPath, "audit_sequence", server.auditLedgerRotationSettings())
+	} else {
+		lastAuditSequence, lastAuditHash, err = ledger.ReadSegmentedChainState(server.auditPath, "audit_sequence", server.auditLedgerRotationSettings())
+	}
 	if err != nil {
 		return err
 	}

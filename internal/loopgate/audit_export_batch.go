@@ -44,7 +44,12 @@ func (server *Server) prepareNextAuditExportBatch() (auditExportBatch, error) {
 	defer closeAuditLedgerReadLock(lockHandle)
 
 	rotationSettings := server.auditLedgerRotationSettings()
-	if _, _, err := ledger.ReadSegmentedChainState(server.auditPath, "audit_sequence", rotationSettings); err != nil {
+	if server.auditLedgerRuntime != nil {
+		_, _, err = server.auditLedgerRuntime.ReadSegmentedChainState(server.auditPath, "audit_sequence", rotationSettings)
+	} else {
+		_, _, err = ledger.ReadSegmentedChainState(server.auditPath, "audit_sequence", rotationSettings)
+	}
+	if err != nil {
 		return auditExportBatch{}, fmt.Errorf("verify audit ledger before export: %w", err)
 	}
 

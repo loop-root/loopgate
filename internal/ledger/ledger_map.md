@@ -16,6 +16,8 @@ Use it when changing:
 
 - `ledger.go`
   - core append, chain validation, `Event` structure, schema version
+  - `AppendRuntime`, which owns append-chain cache state instead of hiding it in
+    anonymous package-global mutation
 
 - `ledger_test.go`, `segmented_test.go`
   - integrity and append tests
@@ -35,4 +37,7 @@ Use it when changing:
 
 - Never mutate past events; ordering and hashes must stay consistent.
 - Partial writes and integrity errors must surface explicitly to callers.
+- Keep append-chain cache ownership explicit. `AppendRuntime` instances may own
+  cache state for a caller such as Loopgate's audit runtime; package-level
+  helpers are only convenience delegates to the default runtime.
 - **Security semantics:** `event_hash` / `previous_event_hash` are **SHA-256 over canonical JSON** (not a secret-keyed MAC). They detect accidental corruption and intra-file tampering that breaks the chain; they do **not** prove Loopgate authorship against a same-user attacker who replaces the whole file with a new valid chain. Operators: `docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md`.
