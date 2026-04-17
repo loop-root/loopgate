@@ -31,6 +31,7 @@ repositories.
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./loopgate-threat-model.md)
 - [Review closure status](./reports/reviews/2026-04-16/review_status.md)
+- [T3 handoff snapshot](./reports/handoffs/2026-04-16_t3_handoff.md)
 - [Active product gaps](./roadmap/loopgate_v1_product_gaps.md)
 - [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
 - [Release candidate checklist](./roadmap/release_candidate_checklist.md)
