@@ -150,8 +150,10 @@ func TestValidateModelConfig_DeniesModelConnectionMetadataMismatch(t *testing.T)
 		t.Run(testCase.name, func(t *testing.T) {
 			server := &Server{
 				modelConnectionPath: t.TempDir() + "/model_connections.json",
-				modelConnections: map[string]modelConnectionRecord{
-					"primary": testCase.record,
+				modelConnectionRuntime: modelConnectionRuntimeState{
+					records: map[string]modelConnectionRecord{
+						"primary": testCase.record,
+					},
 				},
 				resolveSecretStore: func(validatedRef secrets.SecretRef) (secrets.SecretStore, error) {
 					return fakeModelPolicySecretStore{}, nil

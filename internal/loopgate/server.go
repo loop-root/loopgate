@@ -169,10 +169,30 @@ type connectionRuntimeState struct {
 	records map[string]connectionRecord
 }
 
+type modelConnectionRuntimeState struct {
+	// mu protects persisted model endpoint connection records.
+	//
+	// Protected fields:
+	//   - records
+	//
+	// Why this lock exists:
+	//   - model endpoint credentials use a different persistence path and lifecycle
+	//     than generic integration connections
+	//   - separating them keeps model-provider setup changes independent from the
+	//     general connection record domain
+	//
+	// Sequencing rule:
+	//   - clone/mutate model connection records under modelConnectionRuntime.mu
+	//   - release it before audit emission or secret-store I/O where possible
+	mu sync.Mutex
+
+	records map[string]modelConnectionRecord
+}
+
 // Locking invariant for Server state:
 //   - Prefer holding exactly one of these mutex families at a time.
 //   - Current production code treats audit.mu, ui.mu, connectionRuntime.mu,
-//     modelConnectionsMu, hostAccessRuntime.mu, providerRuntime.mu,
+//     modelConnectionRuntime.mu, hostAccessRuntime.mu, providerRuntime.mu,
 //     pkceRuntime.mu, and policyRuntimeMu as leaf-domain locks. Callers
 //     snapshot state under one lock, release it, and only then cross into
 //     another domain.
@@ -267,11 +287,9 @@ type Server struct {
 	// See connectionRuntimeState above and docs/design_overview/loopgate_locking.md.
 	connectionRuntime connectionRuntimeState
 
-	// modelConnectionsMu protects model endpoint connection records and their
-	// persistence path. This is separate from connectionRuntime.mu because model-provider
-	// credentials and generic integration credentials evolve on different paths.
-	modelConnectionsMu sync.Mutex
-	modelConnections   map[string]modelConnectionRecord
+	// modelConnectionRuntime owns persisted model endpoint connection records.
+	// See modelConnectionRuntimeState above and docs/design_overview/loopgate_locking.md.
+	modelConnectionRuntime modelConnectionRuntimeState
 
 	// hostAccessRuntime owns temporary host-access planning state and
 	// applied-plan tombstones used for duplicate recovery.
@@ -564,7 +582,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load model connection records: %w", err)
 	}
-	server.modelConnections = loadedModelConnections
+	server.modelConnectionRuntime.records = loadedModelConnections
 	if err := server.ensureDefaultAuditLedgerCheckpointSecret(context.Background()); err != nil {
 		return nil, fmt.Errorf("ensure default audit checkpoint secret: %w", err)
 	}

@@ -55,18 +55,20 @@ func TestNewModelClientFromRuntimeConfig_AnthropicModelConnectionUsesSecretStore
 		resolveSecretStore: func(validatedRef secrets.SecretRef) (secrets.SecretStore, error) {
 			return fakeStore, nil
 		},
-		modelConnections: map[string]modelConnectionRecord{
-			"anthropic-primary": {
-				ConnectionID: "anthropic-primary",
-				ProviderName: "anthropic",
-				BaseURL:      testServer.URL + "/v1",
-				Credential: secrets.SecretRef{
-					ID:          "model-anthropic-primary",
-					Backend:     secrets.BackendSecure,
-					AccountName: "model.anthropic-primary",
-					Scope:       "model_inference.anthropic-primary",
+		modelConnectionRuntime: modelConnectionRuntimeState{
+			records: map[string]modelConnectionRecord{
+				"anthropic-primary": {
+					ConnectionID: "anthropic-primary",
+					ProviderName: "anthropic",
+					BaseURL:      testServer.URL + "/v1",
+					Credential: secrets.SecretRef{
+						ID:          "model-anthropic-primary",
+						Backend:     secrets.BackendSecure,
+						AccountName: "model.anthropic-primary",
+						Scope:       "model_inference.anthropic-primary",
+					},
+					Status: "stored",
 				},
-				Status: "stored",
 			},
 		},
 	}

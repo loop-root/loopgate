@@ -191,9 +191,9 @@ func (server *Server) StoreModelConnection(ctx context.Context, request ModelCon
 		return ModelConnectionStatus{}, err
 	}
 
-	server.modelConnectionsMu.Lock()
-	_, foundExistingRecord := server.modelConnections[normalizedRequest.ConnectionID]
-	server.modelConnectionsMu.Unlock()
+	server.modelConnectionRuntime.mu.Lock()
+	_, foundExistingRecord := server.modelConnectionRuntime.records[normalizedRequest.ConnectionID]
+	server.modelConnectionRuntime.mu.Unlock()
 	if foundExistingRecord {
 		return ModelConnectionStatus{}, fmt.Errorf("model connection %q already exists; explicit rotation flow required", normalizedRequest.ConnectionID)
 	}
@@ -227,16 +227,16 @@ func (server *Server) StoreModelConnection(ctx context.Context, request ModelCon
 		record.LastRotatedAtUTC = nowUTC.Format(time.RFC3339Nano)
 	}
 
-	server.modelConnectionsMu.Lock()
-	updatedModelConnections := cloneModelConnectionRecords(server.modelConnections)
+	server.modelConnectionRuntime.mu.Lock()
+	updatedModelConnections := cloneModelConnectionRecords(server.modelConnectionRuntime.records)
 	updatedModelConnections[record.ConnectionID] = record
 	if err := saveModelConnectionRecords(server.modelConnectionPath, updatedModelConnections); err != nil {
-		server.modelConnectionsMu.Unlock()
+		server.modelConnectionRuntime.mu.Unlock()
 		cleanupErr := deleteModelConnectionSecretForRollback(ctx, secretStore, secretRef)
 		return ModelConnectionStatus{}, errors.Join(err, cleanupErr)
 	}
-	server.modelConnections = updatedModelConnections
-	server.modelConnectionsMu.Unlock()
+	server.modelConnectionRuntime.records = updatedModelConnections
+	server.modelConnectionRuntime.mu.Unlock()
 
 	if err := server.logEvent("model.connection_stored", "", map[string]interface{}{
 		"connection_id":       record.ConnectionID,
@@ -245,14 +245,14 @@ func (server *Server) StoreModelConnection(ctx context.Context, request ModelCon
 		"secure_store_ref_id": record.Credential.ID,
 		"status":              record.Status,
 	}); err != nil {
-		server.modelConnectionsMu.Lock()
-		rollbackConnections := cloneModelConnectionRecords(server.modelConnections)
+		server.modelConnectionRuntime.mu.Lock()
+		rollbackConnections := cloneModelConnectionRecords(server.modelConnectionRuntime.records)
 		delete(rollbackConnections, record.ConnectionID)
 		saveErr := saveModelConnectionRecords(server.modelConnectionPath, rollbackConnections)
 		if saveErr == nil {
-			server.modelConnections = rollbackConnections
+			server.modelConnectionRuntime.records = rollbackConnections
 		}
-		server.modelConnectionsMu.Unlock()
+		server.modelConnectionRuntime.mu.Unlock()
 		cleanupErr := deleteModelConnectionSecretForRollback(ctx, secretStore, secretRef)
 		return ModelConnectionStatus{}, errors.Join(err, saveErr, cleanupErr)
 	}
@@ -273,9 +273,9 @@ func (server *Server) ValidateModelConnection(ctx context.Context, connectionID 
 		return ModelConnectionStatus{}, err
 	}
 
-	server.modelConnectionsMu.Lock()
-	modelConnectionRecord, found := server.modelConnections[trimmedConnectionID]
-	server.modelConnectionsMu.Unlock()
+	server.modelConnectionRuntime.mu.Lock()
+	modelConnectionRecord, found := server.modelConnectionRuntime.records[trimmedConnectionID]
+	server.modelConnectionRuntime.mu.Unlock()
 	if !found {
 		return ModelConnectionStatus{}, fmt.Errorf("model connection %q not found", trimmedConnectionID)
 	}
@@ -302,15 +302,15 @@ func (server *Server) ValidateModelConnection(ctx context.Context, connectionID 
 		updatedRecord.LastRotatedAtUTC = secretMetadata.LastRotatedAt.UTC().Format(time.RFC3339Nano)
 	}
 
-	server.modelConnectionsMu.Lock()
-	updatedModelConnections := cloneModelConnectionRecords(server.modelConnections)
+	server.modelConnectionRuntime.mu.Lock()
+	updatedModelConnections := cloneModelConnectionRecords(server.modelConnectionRuntime.records)
 	updatedModelConnections[trimmedConnectionID] = updatedRecord
 	if err := saveModelConnectionRecords(server.modelConnectionPath, updatedModelConnections); err != nil {
-		server.modelConnectionsMu.Unlock()
+		server.modelConnectionRuntime.mu.Unlock()
 		return ModelConnectionStatus{}, err
 	}
-	server.modelConnections = updatedModelConnections
-	server.modelConnectionsMu.Unlock()
+	server.modelConnectionRuntime.records = updatedModelConnections
+	server.modelConnectionRuntime.mu.Unlock()
 
 	return updatedRecord.statusSummary(), nil
 }
@@ -321,9 +321,9 @@ func (server *Server) resolveModelConnection(connectionID string) (modelConnecti
 		return modelConnectionRecord{}, err
 	}
 
-	server.modelConnectionsMu.Lock()
-	record, found := server.modelConnections[trimmedConnectionID]
-	server.modelConnectionsMu.Unlock()
+	server.modelConnectionRuntime.mu.Lock()
+	record, found := server.modelConnectionRuntime.records[trimmedConnectionID]
+	server.modelConnectionRuntime.mu.Unlock()
 	if !found {
 		return modelConnectionRecord{}, fmt.Errorf("model connection %q not found", trimmedConnectionID)
 	}

@@ -145,13 +145,13 @@ Why separate:
 - provider/subject credential metadata evolves independently from control
   sessions and approvals
 
-### `modelConnectionsMu`
+### `modelConnectionRuntime.mu`
 
 Purpose:
 - protect model-provider connection records
 
 Protects:
-- `modelConnections`
+- `modelConnectionRuntime.records`
 
 Why separate:
 - model endpoint credentials and generic integration credentials are distinct
