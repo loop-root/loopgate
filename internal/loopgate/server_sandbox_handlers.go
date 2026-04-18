@@ -3,6 +3,7 @@ package loopgate
 import (
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 
@@ -34,28 +35,28 @@ func (server *Server) handleSandboxImport(writer http.ResponseWriter, request *h
 		return
 	}
 
-	var importRequest SandboxImportRequest
+	var importRequest controlapipkg.SandboxImportRequest
 	if err := decodeJSONBytes(requestBodyBytes, &importRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := importRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	importResponse, err := server.importIntoSandbox(tokenClaims, importRequest)
 	if err != nil {
-		server.writeJSON(writer, sandboxHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, sandboxHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactSandboxError(err),
 			DenialCode:   sandboxDenialCode(err),
 			Redacted:     true,
@@ -84,28 +85,28 @@ func (server *Server) handleSandboxStage(writer http.ResponseWriter, request *ht
 		return
 	}
 
-	var stageRequest SandboxStageRequest
+	var stageRequest controlapipkg.SandboxStageRequest
 	if err := decodeJSONBytes(requestBodyBytes, &stageRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := stageRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	stageResponse, err := server.stageSandboxArtifact(tokenClaims, stageRequest)
 	if err != nil {
-		server.writeJSON(writer, sandboxHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, sandboxHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactSandboxError(err),
 			DenialCode:   sandboxDenialCode(err),
 			Redacted:     true,
@@ -134,28 +135,28 @@ func (server *Server) handleSandboxMetadata(writer http.ResponseWriter, request 
 		return
 	}
 
-	var metadataRequest SandboxMetadataRequest
+	var metadataRequest controlapipkg.SandboxMetadataRequest
 	if err := decodeJSONBytes(requestBodyBytes, &metadataRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := metadataRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	metadataResponse, err := server.stageArtifactMetadata(metadataRequest.SandboxSourcePath)
 	if err != nil {
-		server.writeJSON(writer, sandboxHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, sandboxHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactSandboxError(err),
 			DenialCode:   sandboxDenialCode(err),
 			Redacted:     true,
@@ -171,10 +172,10 @@ func (server *Server) handleSandboxMetadata(writer http.ResponseWriter, request 
 		"content_sha256":        metadataResponse.ContentSHA256,
 		"size_bytes":            metadataResponse.SizeBytes,
 	}); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 		})
 		return
 	}
@@ -200,28 +201,28 @@ func (server *Server) handleSandboxExport(writer http.ResponseWriter, request *h
 		return
 	}
 
-	var exportRequest SandboxExportRequest
+	var exportRequest controlapipkg.SandboxExportRequest
 	if err := decodeJSONBytes(requestBodyBytes, &exportRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := exportRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	exportResponse, err := server.exportSandboxArtifact(tokenClaims, exportRequest)
 	if err != nil {
-		server.writeJSON(writer, sandboxHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, sandboxHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactSandboxError(err),
 			DenialCode:   sandboxDenialCode(err),
 			Redacted:     true,
@@ -250,28 +251,28 @@ func (server *Server) handleSandboxList(writer http.ResponseWriter, request *htt
 		return
 	}
 
-	var listRequest SandboxListRequest
+	var listRequest controlapipkg.SandboxListRequest
 	if err := decodeJSONBytes(requestBodyBytes, &listRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := listRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	listResponse, err := server.listSandboxDirectory(tokenClaims, listRequest)
 	if err != nil {
-		server.writeJSON(writer, sandboxHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, sandboxHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactSandboxError(err),
 			DenialCode:   sandboxDenialCode(err),
 			Redacted:     true,
@@ -281,25 +282,25 @@ func (server *Server) handleSandboxList(writer http.ResponseWriter, request *htt
 	server.writeJSON(writer, http.StatusOK, listResponse)
 }
 
-func (server *Server) listSandboxDirectory(tokenClaims capabilityToken, listRequest SandboxListRequest) (SandboxListResponse, error) {
+func (server *Server) listSandboxDirectory(tokenClaims capabilityToken, listRequest controlapipkg.SandboxListRequest) (controlapipkg.SandboxListResponse, error) {
 	if err := server.sandboxPaths.Ensure(); err != nil {
-		return SandboxListResponse{}, fmt.Errorf("ensure sandbox paths: %w", err)
+		return controlapipkg.SandboxListResponse{}, fmt.Errorf("ensure sandbox paths: %w", err)
 	}
 
 	resolvedPath, relativePath, err := server.sandboxPaths.ResolveHomePath(listRequest.SandboxPath)
 	if err != nil {
-		return SandboxListResponse{}, err
+		return controlapipkg.SandboxListResponse{}, err
 	}
 
 	dirEntries, err := os.ReadDir(resolvedPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return SandboxListResponse{}, sandbox.ErrSandboxSourceUnavailable
+			return controlapipkg.SandboxListResponse{}, sandbox.ErrSandboxSourceUnavailable
 		}
-		return SandboxListResponse{}, fmt.Errorf("read sandbox directory: %w", err)
+		return controlapipkg.SandboxListResponse{}, fmt.Errorf("read sandbox directory: %w", err)
 	}
 
-	entries := make([]SandboxListEntry, 0, len(dirEntries))
+	entries := make([]controlapipkg.SandboxListEntry, 0, len(dirEntries))
 	for _, dirEntry := range dirEntries {
 		if dirEntry.Type()&os.ModeSymlink != 0 {
 			continue
@@ -312,7 +313,7 @@ func (server *Server) listSandboxDirectory(tokenClaims capabilityToken, listRequ
 		if dirEntry.IsDir() {
 			entryType = "directory"
 		}
-		entries = append(entries, SandboxListEntry{
+		entries = append(entries, controlapipkg.SandboxListEntry{
 			Name:       dirEntry.Name(),
 			EntryType:  entryType,
 			SizeBytes:  info.Size(),
@@ -326,37 +327,37 @@ func (server *Server) listSandboxDirectory(tokenClaims capabilityToken, listRequ
 		"client_session_label": tokenClaims.ClientSessionLabel,
 		"sandbox_path":         relativePath,
 	}); err != nil {
-		return SandboxListResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
+		return controlapipkg.SandboxListResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
 	}
 
-	return SandboxListResponse{
+	return controlapipkg.SandboxListResponse{
 		SandboxPath:         relativePath,
 		SandboxAbsolutePath: sandbox.VirtualizeRelativeHomePath(relativePath),
 		Entries:             entries,
 	}, nil
 }
 
-func (server *Server) importIntoSandbox(tokenClaims capabilityToken, importRequest SandboxImportRequest) (SandboxOperationResponse, error) {
+func (server *Server) importIntoSandbox(tokenClaims capabilityToken, importRequest controlapipkg.SandboxImportRequest) (controlapipkg.SandboxOperationResponse, error) {
 	if err := server.sandboxPaths.Ensure(); err != nil {
-		return SandboxOperationResponse{}, fmt.Errorf("ensure sandbox paths: %w", err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("ensure sandbox paths: %w", err)
 	}
 	resolvedSourcePath, _, err := sandbox.ResolveHostSource(importRequest.HostSourcePath)
 	if err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 	if _, err := operatorMountRootForResolvedHostPath(server, tokenClaims.ControlSessionID, resolvedSourcePath); err != nil {
-		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostPathUnbound, err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostPathUnbound, err)
 	}
 	destinationAbsolutePath, destinationRelativePath, err := server.sandboxPaths.BuildImportDestination(importRequest.DestinationName)
 	if err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 	entryType, err := sandbox.CopyPathAtomic(resolvedSourcePath, destinationAbsolutePath)
 	if err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 
-	importResponse := SandboxOperationResponse{
+	importResponse := controlapipkg.SandboxOperationResponse{
 		Action:              "import",
 		EntryType:           entryType,
 		SandboxRelativePath: destinationRelativePath,
@@ -373,34 +374,34 @@ func (server *Server) importIntoSandbox(tokenClaims capabilityToken, importReque
 		"entry_type":            entryType,
 	}); err != nil {
 		_ = os.RemoveAll(destinationAbsolutePath)
-		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
 	}
 	return importResponse, nil
 }
 
-func (server *Server) stageSandboxArtifact(tokenClaims capabilityToken, stageRequest SandboxStageRequest) (SandboxOperationResponse, error) {
+func (server *Server) stageSandboxArtifact(tokenClaims capabilityToken, stageRequest controlapipkg.SandboxStageRequest) (controlapipkg.SandboxOperationResponse, error) {
 	if err := server.sandboxPaths.Ensure(); err != nil {
-		return SandboxOperationResponse{}, fmt.Errorf("ensure sandbox paths: %w", err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("ensure sandbox paths: %w", err)
 	}
 	resolvedSourcePath, sourceRelativePath, err := server.sandboxPaths.ResolveHomePath(stageRequest.SandboxSourcePath)
 	if err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 	destinationAbsolutePath, destinationRelativePath, err := server.sandboxPaths.BuildStagedOutput(stageRequest.OutputName)
 	if err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 	entryType, err := sandbox.CopyPathAtomic(resolvedSourcePath, destinationAbsolutePath)
 	if err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 	stagedArtifactRecord, err := server.writeStagedArtifact(resolvedSourcePath, sourceRelativePath, destinationAbsolutePath, destinationRelativePath, entryType)
 	if err != nil {
 		_ = os.RemoveAll(destinationAbsolutePath)
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 
-	stageResponse := SandboxOperationResponse{
+	stageResponse := controlapipkg.SandboxOperationResponse{
 		Action:              "stage",
 		EntryType:           entryType,
 		SandboxRelativePath: destinationRelativePath,
@@ -424,39 +425,39 @@ func (server *Server) stageSandboxArtifact(tokenClaims capabilityToken, stageReq
 	}); err != nil {
 		_ = os.RemoveAll(destinationAbsolutePath)
 		_ = os.Remove(recordPathForSandboxArtifact(server.repoRoot, destinationRelativePath))
-		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
 	}
 	return stageResponse, nil
 }
 
-func (server *Server) exportSandboxArtifact(tokenClaims capabilityToken, exportRequest SandboxExportRequest) (SandboxOperationResponse, error) {
+func (server *Server) exportSandboxArtifact(tokenClaims capabilityToken, exportRequest controlapipkg.SandboxExportRequest) (controlapipkg.SandboxOperationResponse, error) {
 	resolvedSourcePath, sourceRelativePath, err := server.sandboxPaths.ResolveOutputsPath(exportRequest.SandboxSourcePath)
 	if err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 	stagedArtifactRecord, err := loadStagedArtifactRecord(server.repoRoot, sourceRelativePath)
 	if err != nil {
-		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxArtifactNotStaged, err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxArtifactNotStaged, err)
 	}
 	resolvedDestinationPath, err := sandbox.ResolveHostDestination(exportRequest.HostDestinationPath)
 	if err != nil {
-		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostDestinationInvalid, err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostDestinationInvalid, err)
 	}
 	matchedRootPath, err := operatorMountRootForResolvedHostPath(server, tokenClaims.ControlSessionID, resolvedDestinationPath)
 	if err != nil {
-		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostPathUnbound, err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxHostPathUnbound, err)
 	}
 	if _, granted, err := operatorMountWriteGrantForRoot(server, tokenClaims.ControlSessionID, matchedRootPath); err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	} else if !granted {
-		return SandboxOperationResponse{}, fmt.Errorf("%w: %s", errSandboxHostWriteGrantRequired, matchedRootPath)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %s", errSandboxHostWriteGrantRequired, matchedRootPath)
 	}
 	entryType, err := sandbox.CopyPathAtomic(resolvedSourcePath, resolvedDestinationPath)
 	if err != nil {
-		return SandboxOperationResponse{}, err
+		return controlapipkg.SandboxOperationResponse{}, err
 	}
 
-	exportResponse := SandboxOperationResponse{
+	exportResponse := controlapipkg.SandboxOperationResponse{
 		Action:              "export",
 		EntryType:           entryType,
 		SandboxRelativePath: sourceRelativePath,
@@ -480,7 +481,7 @@ func (server *Server) exportSandboxArtifact(tokenClaims capabilityToken, exportR
 		"size_bytes":            exportResponse.SizeBytes,
 	}); err != nil {
 		_ = os.RemoveAll(resolvedDestinationPath)
-		return SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
+		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
 	}
 	return exportResponse, nil
 }
@@ -511,25 +512,25 @@ func sandboxHTTPStatus(err error) int {
 func sandboxDenialCode(err error) string {
 	switch {
 	case errors.Is(err, sandbox.ErrSandboxSourceUnavailable):
-		return DenialCodeSandboxSourceUnavailable
+		return controlapipkg.DenialCodeSandboxSourceUnavailable
 	case errors.Is(err, errSandboxArtifactNotStaged):
-		return DenialCodeSandboxArtifactNotStaged
+		return controlapipkg.DenialCodeSandboxArtifactNotStaged
 	case errors.Is(err, sandbox.ErrSandboxDestinationExists):
-		return DenialCodeSandboxDestinationExists
+		return controlapipkg.DenialCodeSandboxDestinationExists
 	case errors.Is(err, errSandboxHostDestinationInvalid):
-		return DenialCodeSandboxHostDestinationInvalid
+		return controlapipkg.DenialCodeSandboxHostDestinationInvalid
 	case errors.Is(err, errSandboxHostPathUnbound):
-		return DenialCodeControlSessionBindingInvalid
+		return controlapipkg.DenialCodeControlSessionBindingInvalid
 	case errors.Is(err, sandbox.ErrSymlinkNotAllowed):
-		return DenialCodeSandboxSymlinkNotAllowed
+		return controlapipkg.DenialCodeSandboxSymlinkNotAllowed
 	case errors.Is(err, errSandboxHostWriteGrantRequired):
-		return DenialCodeApprovalRequired
+		return controlapipkg.DenialCodeApprovalRequired
 	case errors.Is(err, errSandboxAuditUnavailable):
-		return DenialCodeAuditUnavailable
+		return controlapipkg.DenialCodeAuditUnavailable
 	case errors.Is(err, sandbox.ErrSandboxPathInvalid), errors.Is(err, sandbox.ErrSandboxPathOutsideRoot):
-		return DenialCodeSandboxPathInvalid
+		return controlapipkg.DenialCodeSandboxPathInvalid
 	default:
-		return DenialCodeExecutionFailed
+		return controlapipkg.DenialCodeExecutionFailed
 	}
 }
 

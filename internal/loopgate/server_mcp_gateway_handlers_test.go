@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,7 @@ func TestMCPGatewayFakeStdioServerHelper(t *testing.T) {
 	if os.Getenv("LOOPGATE_MCP_GATEWAY_TEST_HELPER") != "1" {
 		return
 	}
+	helperMode := strings.TrimSpace(os.Getenv("LOOPGATE_MCP_GATEWAY_TEST_HELPER_MODE"))
 
 	helperTransport := &mcpGatewayLaunchedServer{
 		StdinWriter:          os.Stdout,
@@ -76,6 +78,29 @@ func TestMCPGatewayFakeStdioServerHelper(t *testing.T) {
 		case "notifications/initialized":
 			continue
 		case "tools/call":
+			switch helperMode {
+			case "notification_flood":
+				for notificationIndex := 0; notificationIndex <= mcpGatewayMaxNotificationFrames; notificationIndex++ {
+					notificationBytes, err := json.Marshal(map[string]interface{}{
+						"jsonrpc": mcpGatewayJSONRPCVersion,
+						"method":  "notifications/tools/list_changed",
+						"params": map[string]interface{}{
+							"sequence": notificationIndex,
+						},
+					})
+					if err != nil {
+						_, _ = fmt.Fprintf(os.Stderr, "helper marshal notification flood frame: %v\n", err)
+						os.Exit(2)
+					}
+					if err := writeMCPGatewayJSONRPCFrame(helperTransport, notificationBytes); err != nil {
+						os.Exit(0)
+					}
+				}
+				select {}
+			case "block_tools_call":
+				select {}
+			}
+
 			var params struct {
 				Name      string                     `json:"name"`
 				Arguments map[string]json.RawMessage `json:"arguments"`
@@ -219,7 +244,7 @@ func TestClientLoadMCPGatewayServerStatus_OK(t *testing.T) {
 	if _, err := mcpWriteClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
-	launchResponse, err := mcpWriteClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
+	launchResponse, err := mcpWriteClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
 	if err != nil {
 		t.Fatalf("ensure MCP gateway server launch: %v", err)
 	}
@@ -272,7 +297,7 @@ func TestClientLoadMCPGatewayServerStatus_CleansUpDeadProcess(t *testing.T) {
 	if _, err := mcpWriteClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
-	launchResponse, err := mcpWriteClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
+	launchResponse, err := mcpWriteClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
 	if err != nil {
 		t.Fatalf("ensure MCP gateway server launch: %v", err)
 	}
@@ -298,7 +323,7 @@ func TestClientLoadMCPGatewayServerStatus_CleansUpDeadProcess(t *testing.T) {
 		t.Fatalf("ensure diagnostic.read token: %v", err)
 	}
 
-	var statusResponse MCPGatewayServerStatusResponse
+	var statusResponse controlapipkg.MCPGatewayServerStatusResponse
 	deadProcessPruned := false
 	for attempt := 0; attempt < 10; attempt++ {
 		statusResponse, err = statusClient.LoadMCPGatewayServerStatus(context.Background())
@@ -346,7 +371,7 @@ func TestClientCheckMCPGatewayDecision_ReturnsTypedDecision(t *testing.T) {
 		t.Fatalf("ensure diagnostic.read token: %v", err)
 	}
 
-	allowedDecision, err := decisionClient.CheckMCPGatewayDecision(context.Background(), MCPGatewayDecisionRequest{
+	allowedDecision, err := decisionClient.CheckMCPGatewayDecision(context.Background(), controlapipkg.MCPGatewayDecisionRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 	})
@@ -357,14 +382,14 @@ func TestClientCheckMCPGatewayDecision_ReturnsTypedDecision(t *testing.T) {
 		t.Fatalf("unexpected approval decision: %#v", allowedDecision)
 	}
 
-	deniedDecision, err := decisionClient.CheckMCPGatewayDecision(context.Background(), MCPGatewayDecisionRequest{
+	deniedDecision, err := decisionClient.CheckMCPGatewayDecision(context.Background(), controlapipkg.MCPGatewayDecisionRequest{
 		ServerID: "github",
 		ToolName: "unknown_tool",
 	})
 	if err != nil {
 		t.Fatalf("check denied MCP gateway decision: %v", err)
 	}
-	if deniedDecision.Decision != "deny" || deniedDecision.DenialCode != DenialCodeMCPGatewayToolNotFound {
+	if deniedDecision.Decision != "deny" || deniedDecision.DenialCode != controlapipkg.DenialCodeMCPGatewayToolNotFound {
 		t.Fatalf("unexpected denied decision: %#v", deniedDecision)
 	}
 }
@@ -379,7 +404,7 @@ func TestMCPGatewayDecisionRoute_RejectsMalformedRequest(t *testing.T) {
 		t.Fatalf("ensure diagnostic.read token: %v", err)
 	}
 
-	if _, err := decisionClient.CheckMCPGatewayDecision(context.Background(), MCPGatewayDecisionRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	if _, err := decisionClient.CheckMCPGatewayDecision(context.Background(), controlapipkg.MCPGatewayDecisionRequest{}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed request denial, got %v", err)
 	}
 }
@@ -403,7 +428,7 @@ func TestClientEnsureMCPGatewayServerLaunched_OK(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	launchResponse, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
+	launchResponse, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
 	if err != nil {
 		t.Fatalf("ensure MCP gateway server launch: %v", err)
 	}
@@ -465,11 +490,11 @@ func TestClientEnsureMCPGatewayServerLaunched_ReusesRunningServer(t *testing.T) 
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	firstLaunch, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
+	firstLaunch, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
 	if err != nil {
 		t.Fatalf("ensure first MCP gateway server launch: %v", err)
 	}
-	secondLaunch, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
+	secondLaunch, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
 	if err != nil {
 		t.Fatalf("ensure reused MCP gateway server launch: %v", err)
 	}
@@ -522,7 +547,7 @@ func TestClientEnsureMCPGatewayServerLaunched_RollsBackOnAuditFailure(t *testing
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	if _, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"}); err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	if _, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected audit unavailable denial on MCP server launch, got %v", err)
 	}
 
@@ -555,12 +580,12 @@ func TestClientStopMCPGatewayServer_OK(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	launchResponse, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
+	launchResponse, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"})
 	if err != nil {
 		t.Fatalf("ensure MCP gateway server launch: %v", err)
 	}
 
-	stopResponse, err := mcpClient.StopMCPGatewayServer(context.Background(), MCPGatewayStopRequest{ServerID: "cat_stdio"})
+	stopResponse, err := mcpClient.StopMCPGatewayServer(context.Background(), controlapipkg.MCPGatewayStopRequest{ServerID: "cat_stdio"})
 	if err != nil {
 		t.Fatalf("stop MCP gateway server: %v", err)
 	}
@@ -607,7 +632,7 @@ func TestClientStopMCPGatewayServer_NoOpWhenAbsent(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	stopResponse, err := mcpClient.StopMCPGatewayServer(context.Background(), MCPGatewayStopRequest{ServerID: "cat_stdio"})
+	stopResponse, err := mcpClient.StopMCPGatewayServer(context.Background(), controlapipkg.MCPGatewayStopRequest{ServerID: "cat_stdio"})
 	if err != nil {
 		t.Fatalf("stop absent MCP gateway server: %v", err)
 	}
@@ -650,11 +675,11 @@ func TestClientStopMCPGatewayServer_ReturnsAuditUnavailableAfterStop(t *testing.
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	if _, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"}); err != nil {
+	if _, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "cat_stdio"}); err != nil {
 		t.Fatalf("ensure MCP gateway server launch: %v", err)
 	}
 
-	if _, err := mcpClient.StopMCPGatewayServer(context.Background(), MCPGatewayStopRequest{ServerID: "cat_stdio"}); err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	if _, err := mcpClient.StopMCPGatewayServer(context.Background(), controlapipkg.MCPGatewayStopRequest{ServerID: "cat_stdio"}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected audit unavailable denial on MCP server stop, got %v", err)
 	}
 
@@ -710,7 +735,7 @@ func TestClientExecuteMCPGatewayInvocation_OK(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	launchResponse, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{ServerID: "helper_stdio"})
+	launchResponse, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "helper_stdio"})
 	if err != nil {
 		t.Fatalf("ensure launched helper stdio server: %v", err)
 	}
@@ -723,7 +748,7 @@ func TestClientExecuteMCPGatewayInvocation_OK(t *testing.T) {
 		killMCPGatewayProcessByPID(launchResponse.PID)
 	})
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "helper_stdio",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -734,7 +759,7 @@ func TestClientExecuteMCPGatewayInvocation_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare MCP gateway approval: %v", err)
 	}
-	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		Approved:               true,
 		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
@@ -743,7 +768,7 @@ func TestClientExecuteMCPGatewayInvocation_OK(t *testing.T) {
 		t.Fatalf("grant MCP gateway approval: %v", err)
 	}
 
-	executionResponse, err := mcpClient.ExecuteMCPGatewayInvocation(context.Background(), MCPGatewayExecutionRequest{
+	executionResponse, err := mcpClient.ExecuteMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayExecutionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
 		ServerID:               "helper_stdio",
@@ -783,6 +808,207 @@ func TestClientExecuteMCPGatewayInvocation_OK(t *testing.T) {
 	}
 }
 
+func TestClientExecuteMCPGatewayInvocation_FailsClosedOnNotificationFlood(t *testing.T) {
+	repoRoot := t.TempDir()
+	testExecutablePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	t.Setenv("LOOPGATE_MCP_GATEWAY_TEST_HELPER", "1")
+	t.Setenv("LOOPGATE_MCP_GATEWAY_TEST_HELPER_MODE", "notification_flood")
+
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithMCPGateway(fmt.Sprintf(`
+  mcp_gateway:
+    deny_unknown_servers: true
+    servers:
+      helper_stdio:
+        enabled: true
+        transport: stdio
+        launch:
+          command: %s
+          args:
+            - -test.run=TestMCPGatewayFakeStdioServerHelper
+        allowed_environment:
+          - LOOPGATE_MCP_GATEWAY_TEST_HELPER
+          - LOOPGATE_MCP_GATEWAY_TEST_HELPER_MODE
+        tool_policies:
+          search_repositories:
+            enabled: true
+            requires_approval: true
+            required_arguments:
+              - owner
+              - repo
+            allowed_arguments:
+              - owner
+              - repo
+            argument_value_kinds:
+              owner: string
+              repo: string
+`, testExecutablePath)))
+
+	mcpClient := NewClient(client.socketPath)
+	mcpClient.ConfigureSession("test-actor", "mcp-gateway-execute-notification-flood", []string{controlCapabilityMCPGatewayWrite})
+	if _, err := mcpClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure mcp_gateway.write token: %v", err)
+	}
+
+	if _, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "helper_stdio"}); err != nil {
+		t.Fatalf("ensure launched helper stdio server: %v", err)
+	}
+
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
+		ServerID: "helper_stdio",
+		ToolName: "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"owner": json.RawMessage(`"openai"`),
+			"repo":  json.RawMessage(`"loopgate"`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("prepare MCP gateway approval: %v", err)
+	}
+	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
+		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
+		Approved:               true,
+		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
+		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
+	}); err != nil {
+		t.Fatalf("grant MCP gateway approval: %v", err)
+	}
+
+	if _, err := mcpClient.ExecuteMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayExecutionRequest{
+		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
+		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
+		ServerID:               "helper_stdio",
+		ToolName:               "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"owner": json.RawMessage(`"openai"`),
+			"repo":  json.RawMessage(`"loopgate"`),
+		},
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeExecutionFailed) {
+		t.Fatalf("expected execution-failed denial on notification flood, got %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		server.mu.Lock()
+		_, launchedFound := server.mcpGatewayLaunchedServers["helper_stdio"]
+		storedApproval := server.mcpGatewayApprovalRequests[preparedApproval.ApprovalRequestID]
+		server.mu.Unlock()
+		if !launchedFound && storedApproval.State == approvalStateExecutionFailed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected notification-flooded server cleanup and failed approval, launched=%v approval=%#v", launchedFound, storedApproval)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
+func TestClientExecuteMCPGatewayInvocation_CancelsBlockedRoundTrip(t *testing.T) {
+	repoRoot := t.TempDir()
+	testExecutablePath, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test executable: %v", err)
+	}
+	t.Setenv("LOOPGATE_MCP_GATEWAY_TEST_HELPER", "1")
+	t.Setenv("LOOPGATE_MCP_GATEWAY_TEST_HELPER_MODE", "block_tools_call")
+
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithMCPGateway(fmt.Sprintf(`
+  mcp_gateway:
+    deny_unknown_servers: true
+    servers:
+      helper_stdio:
+        enabled: true
+        transport: stdio
+        launch:
+          command: %s
+          args:
+            - -test.run=TestMCPGatewayFakeStdioServerHelper
+        allowed_environment:
+          - LOOPGATE_MCP_GATEWAY_TEST_HELPER
+          - LOOPGATE_MCP_GATEWAY_TEST_HELPER_MODE
+        tool_policies:
+          search_repositories:
+            enabled: true
+            requires_approval: true
+            required_arguments:
+              - owner
+              - repo
+            allowed_arguments:
+              - owner
+              - repo
+            argument_value_kinds:
+              owner: string
+              repo: string
+`, testExecutablePath)))
+
+	mcpClient := NewClient(client.socketPath)
+	mcpClient.ConfigureSession("test-actor", "mcp-gateway-execute-cancel", []string{controlCapabilityMCPGatewayWrite})
+	if _, err := mcpClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure mcp_gateway.write token: %v", err)
+	}
+
+	if _, err := mcpClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{ServerID: "helper_stdio"}); err != nil {
+		t.Fatalf("ensure launched helper stdio server: %v", err)
+	}
+
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
+		ServerID: "helper_stdio",
+		ToolName: "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"owner": json.RawMessage(`"openai"`),
+			"repo":  json.RawMessage(`"loopgate"`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("prepare MCP gateway approval: %v", err)
+	}
+	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
+		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
+		Approved:               true,
+		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
+		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
+	}); err != nil {
+		t.Fatalf("grant MCP gateway approval: %v", err)
+	}
+
+	executionContext, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+
+	_, err = mcpClient.ExecuteMCPGatewayInvocation(executionContext, controlapipkg.MCPGatewayExecutionRequest{
+		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
+		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
+		ServerID:               "helper_stdio",
+		ToolName:               "search_repositories",
+		Arguments: map[string]json.RawMessage{
+			"owner": json.RawMessage(`"openai"`),
+			"repo":  json.RawMessage(`"loopgate"`),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected blocked MCP round-trip to fail after context cancellation")
+	}
+	if !strings.Contains(err.Error(), "context deadline exceeded") && !strings.Contains(err.Error(), controlapipkg.DenialCodeExecutionFailed) {
+		t.Fatalf("expected cancellation-driven request failure, got %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		server.mu.Lock()
+		_, launchedFound := server.mcpGatewayLaunchedServers["helper_stdio"]
+		storedApproval := server.mcpGatewayApprovalRequests[preparedApproval.ApprovalRequestID]
+		server.mu.Unlock()
+		if !launchedFound && storedApproval.State == approvalStateExecutionFailed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected blocked round-trip cleanup after cancellation, launched=%v approval=%#v", launchedFound, storedApproval)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
 func TestClientExecuteMCPGatewayInvocation_RejectsUnlaunchedServer(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAMLWithMCPGateway(`
@@ -815,7 +1041,7 @@ func TestClientExecuteMCPGatewayInvocation_RejectsUnlaunchedServer(t *testing.T)
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "helper_stdio",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -826,7 +1052,7 @@ func TestClientExecuteMCPGatewayInvocation_RejectsUnlaunchedServer(t *testing.T)
 	if err != nil {
 		t.Fatalf("prepare MCP gateway approval: %v", err)
 	}
-	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		Approved:               true,
 		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
@@ -835,7 +1061,7 @@ func TestClientExecuteMCPGatewayInvocation_RejectsUnlaunchedServer(t *testing.T)
 		t.Fatalf("grant MCP gateway approval: %v", err)
 	}
 
-	if _, err := mcpClient.ExecuteMCPGatewayInvocation(context.Background(), MCPGatewayExecutionRequest{
+	if _, err := mcpClient.ExecuteMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayExecutionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
 		ServerID:               "helper_stdio",
@@ -844,7 +1070,7 @@ func TestClientExecuteMCPGatewayInvocation_RejectsUnlaunchedServer(t *testing.T)
 			"owner": json.RawMessage(`"openai"`),
 			"repo":  json.RawMessage(`"loopgate"`),
 		},
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeMCPGatewayServerNotLaunched) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMCPGatewayServerNotLaunched) {
 		t.Fatalf("expected unlaunched MCP server denial, got %v", err)
 	}
 }
@@ -884,7 +1110,7 @@ func TestClientValidateMCPGatewayInvocation_OK(t *testing.T) {
 		t.Fatalf("ensure diagnostic.read token: %v", err)
 	}
 
-	response, err := validateClient.ValidateMCPGatewayInvocation(context.Background(), MCPGatewayInvocationRequest{
+	response, err := validateClient.ValidateMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -934,10 +1160,10 @@ func TestMCPGatewayInvocationValidateRoute_RejectsMalformedRequest(t *testing.T)
 		t.Fatalf("ensure diagnostic.read token: %v", err)
 	}
 
-	if _, err := validateClient.ValidateMCPGatewayInvocation(context.Background(), MCPGatewayInvocationRequest{
+	if _, err := validateClient.ValidateMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed invocation validation request denial, got %v", err)
 	}
 }
@@ -972,7 +1198,7 @@ func TestClientValidateMCPGatewayInvocation_DeniesArgumentPolicyMismatch(t *test
 		t.Fatalf("ensure diagnostic.read token: %v", err)
 	}
 
-	response, err := validateClient.ValidateMCPGatewayInvocation(context.Background(), MCPGatewayInvocationRequest{
+	response, err := validateClient.ValidateMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -983,7 +1209,7 @@ func TestClientValidateMCPGatewayInvocation_DeniesArgumentPolicyMismatch(t *test
 	if err != nil {
 		t.Fatalf("validate MCP gateway invocation with wrong argument kind: %v", err)
 	}
-	if response.Decision != "deny" || response.DenialCode != DenialCodeMCPGatewayArgumentsInvalid {
+	if response.Decision != "deny" || response.DenialCode != controlapipkg.DenialCodeMCPGatewayArgumentsInvalid {
 		t.Fatalf("expected typed argument-policy deny, got %#v", response)
 	}
 
@@ -995,7 +1221,7 @@ func TestClientValidateMCPGatewayInvocation_DeniesArgumentPolicyMismatch(t *test
 	if !strings.Contains(auditText, "\"type\":\"mcp_gateway.invocation_checked\"") {
 		t.Fatalf("expected MCP gateway invocation audit event, got %s", auditText)
 	}
-	if !strings.Contains(auditText, "\"decision\":\"deny\"") || !strings.Contains(auditText, "\"denial_code\":\""+DenialCodeMCPGatewayArgumentsInvalid+"\"") {
+	if !strings.Contains(auditText, "\"decision\":\"deny\"") || !strings.Contains(auditText, "\"denial_code\":\""+controlapipkg.DenialCodeMCPGatewayArgumentsInvalid+"\"") {
 		t.Fatalf("expected deny decision and denial code in audit, got %s", auditText)
 	}
 	if strings.Contains(auditText, "\"ten\"") {
@@ -1035,7 +1261,7 @@ func TestClientRequestMCPGatewayInvocationApproval_OK(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	response, err := approvalClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	response, err := approvalClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1117,7 +1343,7 @@ func TestClientRequestMCPGatewayInvocationApproval_ReusesPendingApproval(t *test
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	invocationRequest := MCPGatewayInvocationRequest{
+	invocationRequest := controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1185,14 +1411,14 @@ func TestClientRequestMCPGatewayInvocationApproval_RollsBackOnAuditFailure(t *te
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	if _, err := approvalClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	if _, err := approvalClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
 			"owner": json.RawMessage(`"openai"`),
 			"repo":  json.RawMessage(`"loopgate"`),
 		},
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected audit unavailable denial, got %v", err)
 	}
 
@@ -1236,7 +1462,7 @@ func TestClientDecideMCPGatewayInvocationApproval_Approved(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1248,7 +1474,7 @@ func TestClientDecideMCPGatewayInvocationApproval_Approved(t *testing.T) {
 		t.Fatalf("prepare MCP gateway approval: %v", err)
 	}
 
-	resolutionResponse, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	resolutionResponse, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		Approved:               true,
 		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
@@ -1319,7 +1545,7 @@ func TestClientDecideMCPGatewayInvocationApproval_Denied(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1331,7 +1557,7 @@ func TestClientDecideMCPGatewayInvocationApproval_Denied(t *testing.T) {
 		t.Fatalf("prepare MCP gateway approval: %v", err)
 	}
 
-	resolutionResponse, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	resolutionResponse, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID: preparedApproval.ApprovalRequestID,
 		Approved:          false,
 		DecisionNonce:     preparedApproval.ApprovalDecisionNonce,
@@ -1383,7 +1609,7 @@ func TestClientDecideMCPGatewayInvocationApproval_RejectsManifestMismatch(t *tes
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1395,12 +1621,12 @@ func TestClientDecideMCPGatewayInvocationApproval_RejectsManifestMismatch(t *tes
 		t.Fatalf("prepare MCP gateway approval: %v", err)
 	}
 
-	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		Approved:               true,
 		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
 		ApprovalManifestSHA256: strings.Repeat("0", len(preparedApproval.ApprovalManifestSHA256)),
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeApprovalManifestMismatch) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeApprovalManifestMismatch) {
 		t.Fatalf("expected approval manifest mismatch denial, got %v", err)
 	}
 
@@ -1444,7 +1670,7 @@ func TestClientDecideMCPGatewayInvocationApproval_RollsBackOnGrantAuditFailure(t
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1464,12 +1690,12 @@ func TestClientDecideMCPGatewayInvocationApproval_RollsBackOnGrantAuditFailure(t
 		return originalAppendAuditEvent(path, auditEvent)
 	}
 
-	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		Approved:               true,
 		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
 		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected audit unavailable denial on approval grant, got %v", err)
 	}
 
@@ -1513,7 +1739,7 @@ func TestClientValidateMCPGatewayExecution_OK(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1524,7 +1750,7 @@ func TestClientValidateMCPGatewayExecution_OK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare MCP gateway approval: %v", err)
 	}
-	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		Approved:               true,
 		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
@@ -1533,7 +1759,7 @@ func TestClientValidateMCPGatewayExecution_OK(t *testing.T) {
 		t.Fatalf("grant MCP gateway approval: %v", err)
 	}
 
-	executionValidation, err := mcpClient.ValidateMCPGatewayExecution(context.Background(), MCPGatewayExecutionRequest{
+	executionValidation, err := mcpClient.ValidateMCPGatewayExecution(context.Background(), controlapipkg.MCPGatewayExecutionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
 		ServerID:               "github",
@@ -1601,7 +1827,7 @@ func TestClientValidateMCPGatewayExecution_RejectsPendingApproval(t *testing.T) 
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1613,7 +1839,7 @@ func TestClientValidateMCPGatewayExecution_RejectsPendingApproval(t *testing.T) 
 		t.Fatalf("prepare MCP gateway approval: %v", err)
 	}
 
-	if _, err := mcpClient.ValidateMCPGatewayExecution(context.Background(), MCPGatewayExecutionRequest{
+	if _, err := mcpClient.ValidateMCPGatewayExecution(context.Background(), controlapipkg.MCPGatewayExecutionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
 		ServerID:               "github",
@@ -1622,7 +1848,7 @@ func TestClientValidateMCPGatewayExecution_RejectsPendingApproval(t *testing.T) 
 			"owner": json.RawMessage(`"openai"`),
 			"repo":  json.RawMessage(`"loopgate"`),
 		},
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeApprovalStateInvalid) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeApprovalStateInvalid) {
 		t.Fatalf("expected approval state invalid for pending MCP approval, got %v", err)
 	}
 }
@@ -1661,7 +1887,7 @@ func TestClientValidateMCPGatewayExecution_RejectsBodyMismatch(t *testing.T) {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
 
-	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	preparedApproval, err := mcpClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -1672,7 +1898,7 @@ func TestClientValidateMCPGatewayExecution_RejectsBodyMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare MCP gateway approval: %v", err)
 	}
-	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	if _, err := mcpClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		Approved:               true,
 		DecisionNonce:          preparedApproval.ApprovalDecisionNonce,
@@ -1681,7 +1907,7 @@ func TestClientValidateMCPGatewayExecution_RejectsBodyMismatch(t *testing.T) {
 		t.Fatalf("grant MCP gateway approval: %v", err)
 	}
 
-	if _, err := mcpClient.ValidateMCPGatewayExecution(context.Background(), MCPGatewayExecutionRequest{
+	if _, err := mcpClient.ValidateMCPGatewayExecution(context.Background(), controlapipkg.MCPGatewayExecutionRequest{
 		ApprovalRequestID:      preparedApproval.ApprovalRequestID,
 		ApprovalManifestSHA256: preparedApproval.ApprovalManifestSHA256,
 		ServerID:               "github",
@@ -1691,7 +1917,7 @@ func TestClientValidateMCPGatewayExecution_RejectsBodyMismatch(t *testing.T) {
 			"repo":  json.RawMessage(`"loopgate"`),
 			"limit": json.RawMessage(`10`),
 		},
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeApprovalManifestMismatch) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeApprovalManifestMismatch) {
 		t.Fatalf("expected approval manifest mismatch for altered execution body, got %v", err)
 	}
 

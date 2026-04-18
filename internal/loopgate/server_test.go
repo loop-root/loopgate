@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,7 @@ func TestClientExecuteCapability_ReadAndWrite(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	writeResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	writeResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-write",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -30,11 +31,11 @@ func TestClientExecuteCapability_ReadAndWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute fs_write: %v", err)
 	}
-	if writeResponse.Status != ResponseStatusSuccess {
+	if writeResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("unexpected write response: %#v", writeResponse)
 	}
 
-	readResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	readResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-read",
 		Capability: "fs_read",
 		Arguments: map[string]string{
@@ -78,7 +79,7 @@ func TestClientExecuteCapability_FsReadRateLimitUsesDedicatedDenialCode(t *testi
 	server.replayState.sessionReadCounts[client.controlSessionID] = preloadedReads
 	server.mu.Unlock()
 
-	deniedResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	deniedResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-read-rate-limited",
 		Capability: "fs_read",
 		Arguments: map[string]string{
@@ -88,10 +89,10 @@ func TestClientExecuteCapability_FsReadRateLimitUsesDedicatedDenialCode(t *testi
 	if err != nil {
 		t.Fatalf("execute rate-limited fs_read: %v", err)
 	}
-	if deniedResponse.Status != ResponseStatusDenied {
+	if deniedResponse.Status != controlapipkg.ResponseStatusDenied {
 		t.Fatalf("expected denied fs_read response, got %#v", deniedResponse)
 	}
-	if deniedResponse.DenialCode != DenialCodeFsReadRateLimitExceeded {
+	if deniedResponse.DenialCode != controlapipkg.DenialCodeFsReadRateLimitExceeded {
 		t.Fatalf("expected fs_read rate-limit denial code, got %#v", deniedResponse)
 	}
 }
@@ -120,6 +121,22 @@ func TestCheckFsReadRateLimit_DoesNotMutateCallerSliceBackingArray(t *testing.T)
 		if !preloadedReads[index].Equal(expectedTimestamp) {
 			t.Fatalf("expected original caller slice to remain unchanged at index %d: want %s got %s", index, expectedTimestamp, preloadedReads[index])
 		}
+	}
+}
+
+func TestCheckFsReadRateLimit_UsesServerConfiguredLimit(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	server.fsReadRateLimit = 1
+
+	controlSessionID := "session-rate-limit-configurable"
+	nowUTC := server.now().UTC()
+	server.mu.Lock()
+	server.replayState.sessionReadCounts[controlSessionID] = []time.Time{nowUTC}
+	server.mu.Unlock()
+
+	if denied := server.checkFsReadRateLimit(controlSessionID); !denied {
+		t.Fatal("expected fs_read rate limit denial at configured server limit")
 	}
 }
 
@@ -153,7 +170,7 @@ func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "    denied_paths: []\n", "    denied_paths:\n      - \".morph/memory\"\n      - \"runtime/state/memory\"\n", 1)
 	client, _, _ := startLoopgateServer(t, repoRoot, policyYAML)
 
-	readResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	readResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-memory-read",
 		Capability: "fs_read",
 		Arguments: map[string]string{
@@ -163,14 +180,14 @@ func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute fs_read: %v", err)
 	}
-	if readResponse.Status != ResponseStatusError {
+	if readResponse.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected blocked read response, got %#v", readResponse)
 	}
 	if !strings.Contains(readResponse.DenialReason, "path denied") {
 		t.Fatalf("expected path denial, got %#v", readResponse)
 	}
 
-	writeResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	writeResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-memory-write",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -181,7 +198,7 @@ func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute fs_write: %v", err)
 	}
-	if writeResponse.Status != ResponseStatusError {
+	if writeResponse.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected blocked write response, got %#v", writeResponse)
 	}
 	if !strings.Contains(writeResponse.DenialReason, "path denied") {
@@ -193,7 +210,7 @@ func TestExecuteCapabilityRequest_ShellCommandOutsideAllowlistIsDeniedBeforeAppr
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgateShellPolicyYAML(true, []string{"git"}))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-shell-policy-deny",
 		Capability: "shell_exec",
 		Arguments: map[string]string{
@@ -203,10 +220,10 @@ func TestExecuteCapabilityRequest_ShellCommandOutsideAllowlistIsDeniedBeforeAppr
 	if err != nil {
 		t.Fatalf("execute shell_exec: %v", err)
 	}
-	if response.Status != ResponseStatusDenied {
+	if response.Status != controlapipkg.ResponseStatusDenied {
 		t.Fatalf("expected denied shell response, got %#v", response)
 	}
-	if response.DenialCode != DenialCodePolicyDenied {
+	if response.DenialCode != controlapipkg.DenialCodePolicyDenied {
 		t.Fatalf("expected policy denial code, got %#v", response)
 	}
 	if response.ApprovalRequired {
@@ -218,7 +235,7 @@ func TestClientExecuteCapability_RequiresApproval(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-approval",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -232,7 +249,7 @@ func TestClientExecuteCapability_RequiresApproval(t *testing.T) {
 	if !response.ApprovalRequired {
 		t.Fatalf("expected approval required, got %#v", response)
 	}
-	if response.DenialCode != DenialCodeApprovalRequired {
+	if response.DenialCode != controlapipkg.DenialCodeApprovalRequired {
 		t.Fatalf("expected approval-required denial code, got %#v", response)
 	}
 	if approvalClass, _ := response.Metadata["approval_class"].(string); approvalClass != ApprovalClassWriteSandboxPath {
@@ -243,7 +260,7 @@ func TestClientExecuteCapability_RequiresApproval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("approve request: %v", err)
 	}
-	if resolvedResponse.Status != ResponseStatusSuccess {
+	if resolvedResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("unexpected resolved response: %#v", resolvedResponse)
 	}
 
@@ -337,7 +354,7 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForOperator(
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           time.Now().UTC().Add(time.Hour),
 		},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-operator-mount-write",
 			Capability: "operator_mount.fs_write",
 			Arguments: map[string]string{
@@ -351,10 +368,10 @@ func TestExecuteCapabilityRequest_OperatorMountWriteRequiresApprovalForOperator(
 	if !response.ApprovalRequired {
 		t.Fatalf("expected approval required, got %#v", response)
 	}
-	if response.Status != ResponseStatusPendingApproval {
+	if response.Status != controlapipkg.ResponseStatusPendingApproval {
 		t.Fatalf("expected pending approval, got %#v", response)
 	}
-	if response.DenialCode != DenialCodeApprovalRequired {
+	if response.DenialCode != controlapipkg.DenialCodeApprovalRequired {
 		t.Fatalf("expected approval-required denial code, got %#v", response)
 	}
 	if approvalClass, _ := response.Metadata["approval_class"].(string); approvalClass != ApprovalClassWriteHostFolder {
@@ -412,7 +429,7 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           nowUTC.Add(time.Hour),
 		},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-operator-mount-grant-1",
 			Capability: "operator_mount.fs_write",
 			Arguments: map[string]string{
@@ -455,7 +472,7 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           nowUTC.Add(time.Hour),
 		},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-operator-mount-grant-2",
 			Capability: "operator_mount.fs_write",
 			Arguments: map[string]string{
@@ -465,7 +482,7 @@ func TestCommitApprovalGrantConsumed_EnablesOperatorMountWriteGrant(t *testing.T
 		},
 		true,
 	)
-	if secondResponse.Status != ResponseStatusSuccess {
+	if secondResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected granted write success, got %#v", secondResponse)
 	}
 	if _, err := os.Stat(filepath.Join(repoRoot, "second.md")); err != nil {
@@ -511,7 +528,7 @@ func TestExecuteCapabilityRequest_ExpiredOperatorMountWriteGrantRequiresApproval
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           nowUTC.Add(time.Hour),
 		},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-operator-mount-expired",
 			Capability: "operator_mount.fs_write",
 			Arguments: map[string]string{
@@ -583,7 +600,7 @@ func TestNewServer_IgnoresStalePolicyJSONForOperatorMountWriteApproval(t *testin
 			AllowedCapabilities: capabilitySet([]string{"operator_mount.fs_write"}),
 			ExpiresAt:           nowUTC.Add(time.Hour),
 		},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-stale-policy-json",
 			Capability: "operator_mount.fs_write",
 			Arguments: map[string]string{
@@ -618,7 +635,7 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 		t.Fatalf("write host source: %v", err)
 	}
 
-	importResponse, err := client.SandboxImport(context.Background(), SandboxImportRequest{
+	importResponse, err := client.SandboxImport(context.Background(), controlapipkg.SandboxImportRequest{
 		HostSourcePath:  hostSourcePath,
 		DestinationName: "example.txt",
 	})
@@ -635,7 +652,7 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 		t.Fatalf("expected virtual sandbox path, got %#v", importResponse)
 	}
 
-	stageResponse, err := client.SandboxStage(context.Background(), SandboxStageRequest{
+	stageResponse, err := client.SandboxStage(context.Background(), controlapipkg.SandboxStageRequest{
 		SandboxSourcePath: "/morph/home/imports/example.txt",
 		OutputName:        "export-me.txt",
 	})
@@ -655,7 +672,7 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 		t.Fatalf("expected virtual staged path, got %#v", stageResponse)
 	}
 
-	metadataResponse, err := client.SandboxMetadata(context.Background(), SandboxMetadataRequest{
+	metadataResponse, err := client.SandboxMetadata(context.Background(), controlapipkg.SandboxMetadataRequest{
 		SandboxSourcePath: "/morph/home/outputs/export-me.txt",
 	})
 	if err != nil {
@@ -681,7 +698,7 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 	server.mu.Unlock()
 
 	hostDestinationPath := filepath.Join(hostRootPath, "exported.txt")
-	exportResponse, err := client.SandboxExport(context.Background(), SandboxExportRequest{
+	exportResponse, err := client.SandboxExport(context.Background(), controlapipkg.SandboxExportRequest{
 		SandboxSourcePath:   "/morph/home/outputs/export-me.txt",
 		HostDestinationPath: hostDestinationPath,
 	})
@@ -728,14 +745,14 @@ func TestSandboxImportRequiresBoundOperatorMountPath(t *testing.T) {
 		t.Fatalf("write host source: %v", err)
 	}
 
-	_, err := client.SandboxImport(context.Background(), SandboxImportRequest{
+	_, err := client.SandboxImport(context.Background(), controlapipkg.SandboxImportRequest{
 		HostSourcePath:  hostSourcePath,
 		DestinationName: "example.txt",
 	})
 	if err == nil {
 		t.Fatal("expected sandbox import denial without operator mount binding")
 	}
-	if !strings.Contains(err.Error(), DenialCodeControlSessionBindingInvalid) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeControlSessionBindingInvalid) {
 		t.Fatalf("expected control session binding denial, got %v", err)
 	}
 }
@@ -755,27 +772,27 @@ func TestSandboxExportRequiresOperatorMountWriteGrant(t *testing.T) {
 	if err := os.WriteFile(hostSourcePath, []byte("sandbox flow"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}
-	if _, err := client.SandboxImport(context.Background(), SandboxImportRequest{
+	if _, err := client.SandboxImport(context.Background(), controlapipkg.SandboxImportRequest{
 		HostSourcePath:  hostSourcePath,
 		DestinationName: "example.txt",
 	}); err != nil {
 		t.Fatalf("sandbox import: %v", err)
 	}
-	if _, err := client.SandboxStage(context.Background(), SandboxStageRequest{
+	if _, err := client.SandboxStage(context.Background(), controlapipkg.SandboxStageRequest{
 		SandboxSourcePath: "/morph/home/imports/example.txt",
 		OutputName:        "export-me.txt",
 	}); err != nil {
 		t.Fatalf("sandbox stage: %v", err)
 	}
 
-	_, err := client.SandboxExport(context.Background(), SandboxExportRequest{
+	_, err := client.SandboxExport(context.Background(), controlapipkg.SandboxExportRequest{
 		SandboxSourcePath:   "/morph/home/outputs/export-me.txt",
 		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
 	})
 	if err == nil {
 		t.Fatal("expected sandbox export denial without operator mount write grant")
 	}
-	if !strings.Contains(err.Error(), DenialCodeApprovalRequired) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeApprovalRequired) {
 		t.Fatalf("expected approval-required denial, got %v", err)
 	}
 }

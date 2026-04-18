@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"loopgate/internal/config"
-	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 )
 
 func TestSandboxImportRejectsHostDirectoryWithSymlinkOverRealSocket(t *testing.T) {
@@ -45,14 +45,14 @@ func TestSandboxImportRejectsHostDirectoryWithSymlinkOverRealSocket(t *testing.T
 		t.Fatalf("create hostile symlink: %v", err)
 	}
 
-	_, err = client.SandboxImport(context.Background(), loopgate.SandboxImportRequest{
+	_, err = client.SandboxImport(context.Background(), controlapipkg.SandboxImportRequest{
 		HostSourcePath:  hostDirectory,
 		DestinationName: "hostile-import",
 	})
 	if err == nil {
 		t.Fatal("expected sandbox import with hostile symlink to be denied")
 	}
-	if !strings.Contains(err.Error(), loopgate.DenialCodeSandboxSymlinkNotAllowed) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeSandboxSymlinkNotAllowed) {
 		t.Fatalf("expected sandbox symlink denial, got %v", err)
 	}
 
@@ -84,14 +84,14 @@ func TestSandboxStageRejectsSandboxSymlinkEscapeOverRealSocket(t *testing.T) {
 		t.Fatalf("create sandbox symlink: %v", err)
 	}
 
-	_, err := client.SandboxStage(context.Background(), loopgate.SandboxStageRequest{
+	_, err := client.SandboxStage(context.Background(), controlapipkg.SandboxStageRequest{
 		SandboxSourcePath: "/morph/home/imports/escape.txt",
 		OutputName:        "escaped.txt",
 	})
 	if err == nil {
 		t.Fatal("expected sandbox stage from escaping symlink to be denied")
 	}
-	if !strings.Contains(err.Error(), loopgate.DenialCodeSandboxPathInvalid) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeSandboxPathInvalid) {
 		t.Fatalf("expected sandbox path invalid denial, got %v", err)
 	}
 

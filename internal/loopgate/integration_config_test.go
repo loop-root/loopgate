@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -127,7 +128,7 @@ func TestLoadConfiguredConnectionFile_PublicReadAllowsCredentiallessHTMLMetadata
 	if err != nil {
 		t.Fatalf("expected public_read config to load, got %v", err)
 	}
-	if loadedConnection.Registration.GrantType != GrantTypePublicRead {
+	if loadedConnection.Registration.GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("unexpected grant type: %#v", loadedConnection.Registration)
 	}
 	if loadedConnection.TokenURL != nil || loadedConnection.AuthorizationURL != nil {
@@ -145,7 +146,7 @@ func TestLoadConfiguredConnectionFile_CheckedInPublicStatusExampleLoads(t *testi
 	if err != nil {
 		t.Fatalf("load checked-in public status example: %v", err)
 	}
-	if loadedConnection.Registration.GrantType != GrantTypePublicRead {
+	if loadedConnection.Registration.GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("unexpected grant type: %#v", loadedConnection.Registration)
 	}
 	capabilityDefinition, found := loadedCapabilities["statuspage.summary_get"]
@@ -195,7 +196,7 @@ func TestLoadConfiguredConnectionFile_PublicReadAllowsNestedJSONSelectors(t *tes
 	if err != nil {
 		t.Fatalf("expected nested json public_read config to load, got %v", err)
 	}
-	if loadedConnection.Registration.GrantType != GrantTypePublicRead {
+	if loadedConnection.Registration.GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("unexpected grant type: %#v", loadedConnection.Registration)
 	}
 	capabilityDefinition, found := loadedCapabilities["statuspage.summary_get"]
@@ -250,7 +251,7 @@ func TestLoadConfiguredConnectionFile_PublicReadAllowsJSONIssueListSelector(t *t
 	if err != nil {
 		t.Fatalf("expected issue-list config to load, got %v", err)
 	}
-	if loadedConnection.Registration.GrantType != GrantTypePublicRead {
+	if loadedConnection.Registration.GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("unexpected grant type: %#v", loadedConnection.Registration)
 	}
 	capabilityDefinition, found := loadedCapabilities["repo.issues_list"]
@@ -275,7 +276,7 @@ func TestLoadConfiguredConnectionFile_CheckedInPublicRepoIssuesExampleLoads(t *t
 	if err != nil {
 		t.Fatalf("load checked-in public repo issues example: %v", err)
 	}
-	if loadedConnection.Registration.GrantType != GrantTypePublicRead {
+	if loadedConnection.Registration.GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("unexpected grant type: %#v", loadedConnection.Registration)
 	}
 	capabilityDefinition, found := loadedCapabilities["repo.issues_list"]
@@ -817,7 +818,7 @@ func TestLoadConfiguredConnectionFile_MarkdownSectionRequiresTaintedTextSensitiv
 	if err == nil {
 		t.Fatal("expected benign sensitivity to be denied for markdown section extraction")
 	}
-	if !strings.Contains(err.Error(), ResultFieldSensitivityTaintedText) {
+	if !strings.Contains(err.Error(), controlapipkg.ResultFieldSensitivityTaintedText) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

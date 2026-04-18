@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"encoding/json"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -46,7 +47,7 @@ func TestConnectionRoutesRequireConnectionScopes(t *testing.T) {
 	if _, err := readDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied connection.read token: %v", err)
 	}
-	if _, err := readDeniedClient.ConnectionsStatus(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := readDeniedClient.ConnectionsStatus(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected connection.read scope denial, got %v", err)
 	}
 
@@ -55,13 +56,13 @@ func TestConnectionRoutesRequireConnectionScopes(t *testing.T) {
 	if _, err := writeDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied connection.write token: %v", err)
 	}
-	if _, err := writeDeniedClient.ValidateConnection(context.Background(), "missing", "subject"); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := writeDeniedClient.ValidateConnection(context.Background(), "missing", "subject"); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected connection.write scope denial for validate, got %v", err)
 	}
-	if _, err := writeDeniedClient.StartPKCEConnection(context.Background(), PKCEStartRequest{
+	if _, err := writeDeniedClient.StartPKCEConnection(context.Background(), controlapipkg.PKCEStartRequest{
 		Provider: "examplepkce",
 		Subject:  "workspace-user",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected connection.write scope denial for pkce start, got %v", err)
 	}
 }
@@ -81,7 +82,7 @@ func TestSiteRoutesRequireScopedCapabilities(t *testing.T) {
 	if _, err := inspectDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied site.inspect token: %v", err)
 	}
-	if _, err := inspectDeniedClient.InspectSite(context.Background(), SiteInspectionRequest{URL: providerServer.URL}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := inspectDeniedClient.InspectSite(context.Background(), controlapipkg.SiteInspectionRequest{URL: providerServer.URL}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected site.inspect scope denial, got %v", err)
 	}
 
@@ -90,7 +91,7 @@ func TestSiteRoutesRequireScopedCapabilities(t *testing.T) {
 	if _, err := trustDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied site.trust.write token: %v", err)
 	}
-	if _, err := trustDeniedClient.CreateTrustDraft(context.Background(), SiteTrustDraftRequest{URL: providerServer.URL}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := trustDeniedClient.CreateTrustDraft(context.Background(), controlapipkg.SiteTrustDraftRequest{URL: providerServer.URL}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected site.trust.write scope denial, got %v", err)
 	}
 }
@@ -106,47 +107,47 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 		t.Fatalf("ensure denied diagnostic.read token: %v", err)
 	}
 	var deniedReport map[string]interface{}
-	if err := deniedClient.FetchDiagnosticReport(context.Background(), &deniedReport); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if err := deniedClient.FetchDiagnosticReport(context.Background(), &deniedReport); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected diagnostic.read scope denial, got %v", err)
 	}
-	if _, err := deniedClient.CheckAuditExportTrust(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := deniedClient.CheckAuditExportTrust(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected diagnostic.read scope denial for audit export trust check, got %v", err)
 	}
-	if _, err := deniedClient.LoadMCPGatewayInventory(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := deniedClient.LoadMCPGatewayInventory(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected diagnostic.read scope denial for MCP gateway inventory, got %v", err)
 	}
-	if _, err := deniedClient.LoadMCPGatewayServerStatus(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := deniedClient.LoadMCPGatewayServerStatus(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected diagnostic.read scope denial for MCP gateway server status, got %v", err)
 	}
-	if _, err := deniedClient.CheckMCPGatewayDecision(context.Background(), MCPGatewayDecisionRequest{
+	if _, err := deniedClient.CheckMCPGatewayDecision(context.Background(), controlapipkg.MCPGatewayDecisionRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected diagnostic.read scope denial for MCP gateway decision, got %v", err)
 	}
-	if _, err := deniedClient.ValidateMCPGatewayInvocation(context.Background(), MCPGatewayInvocationRequest{
+	if _, err := deniedClient.ValidateMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected diagnostic.read scope denial for MCP gateway invocation validation, got %v", err)
 	}
-	if _, err := deniedClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	if _, err := deniedClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
 			"query": json.RawMessage(`"loopgate"`),
 		},
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway approval preparation, got %v", err)
 	}
-	if _, err := deniedClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{
+	if _, err := deniedClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{
 		ApprovalRequestID: "missing",
 		Approved:          true,
 		DecisionNonce:     "nonce",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway approval decision, got %v", err)
 	}
-	if _, err := deniedClient.ValidateMCPGatewayExecution(context.Background(), MCPGatewayExecutionRequest{
+	if _, err := deniedClient.ValidateMCPGatewayExecution(context.Background(), controlapipkg.MCPGatewayExecutionRequest{
 		ApprovalRequestID:      "missing",
 		ApprovalManifestSHA256: "abcd",
 		ServerID:               "github",
@@ -154,20 +155,20 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 		Arguments: map[string]json.RawMessage{
 			"query": json.RawMessage(`"loopgate"`),
 		},
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway execution validation, got %v", err)
 	}
-	if _, err := deniedClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{
+	if _, err := deniedClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{
 		ServerID: "github",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway server launch, got %v", err)
 	}
-	if _, err := deniedClient.StopMCPGatewayServer(context.Background(), MCPGatewayStopRequest{
+	if _, err := deniedClient.StopMCPGatewayServer(context.Background(), controlapipkg.MCPGatewayStopRequest{
 		ServerID: "github",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway server stop, got %v", err)
 	}
-	if _, err := deniedClient.ExecuteMCPGatewayInvocation(context.Background(), MCPGatewayExecutionRequest{
+	if _, err := deniedClient.ExecuteMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayExecutionRequest{
 		ApprovalRequestID:      "missing",
 		ApprovalManifestSHA256: "abcd",
 		ServerID:               "github",
@@ -175,7 +176,7 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 		Arguments: map[string]json.RawMessage{
 			"query": json.RawMessage(`"loopgate"`),
 		},
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected mcp_gateway.write scope denial for MCP gateway execution, got %v", err)
 	}
 
@@ -200,20 +201,20 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 	if _, err := allowedClient.LoadMCPGatewayServerStatus(context.Background()); err != nil {
 		t.Fatalf("load MCP gateway server status with diagnostic.read: %v", err)
 	}
-	decisionResponse, err := allowedClient.CheckMCPGatewayDecision(context.Background(), MCPGatewayDecisionRequest{
+	decisionResponse, err := allowedClient.CheckMCPGatewayDecision(context.Background(), controlapipkg.MCPGatewayDecisionRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 	})
 	if err != nil {
 		t.Fatalf("check MCP gateway decision with diagnostic.read: %v", err)
 	}
-	if decisionResponse.Decision != "deny" || decisionResponse.DenialCode != DenialCodeMCPGatewayServerNotFound {
+	if decisionResponse.Decision != "deny" || decisionResponse.DenialCode != controlapipkg.DenialCodeMCPGatewayServerNotFound {
 		t.Fatalf("expected typed MCP gateway deny on unknown server with diagnostic.read, got %#v", decisionResponse)
 	}
-	if _, err := allowedClient.ValidateMCPGatewayInvocation(context.Background(), MCPGatewayInvocationRequest{
+	if _, err := allowedClient.ValidateMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed invocation validation under diagnostic.read, got %v", err)
 	}
 
@@ -222,25 +223,25 @@ func TestDiagnosticRouteRequiresScopedCapability(t *testing.T) {
 	if _, err := mcpWriteClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure mcp_gateway.write token: %v", err)
 	}
-	if _, err := mcpWriteClient.RequestMCPGatewayInvocationApproval(context.Background(), MCPGatewayInvocationRequest{
+	if _, err := mcpWriteClient.RequestMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed approval preparation request under mcp_gateway.write, got %v", err)
 	}
-	if _, err := mcpWriteClient.DecideMCPGatewayInvocationApproval(context.Background(), MCPGatewayApprovalDecisionRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	if _, err := mcpWriteClient.DecideMCPGatewayInvocationApproval(context.Background(), controlapipkg.MCPGatewayApprovalDecisionRequest{}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed approval decision request under mcp_gateway.write, got %v", err)
 	}
-	if _, err := mcpWriteClient.ValidateMCPGatewayExecution(context.Background(), MCPGatewayExecutionRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	if _, err := mcpWriteClient.ValidateMCPGatewayExecution(context.Background(), controlapipkg.MCPGatewayExecutionRequest{}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed MCP gateway execution validation request under mcp_gateway.write, got %v", err)
 	}
-	if _, err := mcpWriteClient.EnsureMCPGatewayServerLaunched(context.Background(), MCPGatewayEnsureLaunchRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	if _, err := mcpWriteClient.EnsureMCPGatewayServerLaunched(context.Background(), controlapipkg.MCPGatewayEnsureLaunchRequest{}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed MCP gateway ensure-launched request under mcp_gateway.write, got %v", err)
 	}
-	if _, err := mcpWriteClient.StopMCPGatewayServer(context.Background(), MCPGatewayStopRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	if _, err := mcpWriteClient.StopMCPGatewayServer(context.Background(), controlapipkg.MCPGatewayStopRequest{}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed MCP gateway stop request under mcp_gateway.write, got %v", err)
 	}
-	if _, err := mcpWriteClient.ExecuteMCPGatewayInvocation(context.Background(), MCPGatewayExecutionRequest{}); err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	if _, err := mcpWriteClient.ExecuteMCPGatewayInvocation(context.Background(), controlapipkg.MCPGatewayExecutionRequest{}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed MCP gateway execute request under mcp_gateway.write, got %v", err)
 	}
 }
@@ -255,16 +256,16 @@ func TestFolderAccessRoutesRequireScopedCapabilities(t *testing.T) {
 	if _, err := deniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied folder_access token: %v", err)
 	}
-	if _, err := deniedClient.FolderAccessStatus(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := deniedClient.FolderAccessStatus(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected folder_access.read scope denial, got %v", err)
 	}
-	if _, err := deniedClient.SharedFolderStatus(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := deniedClient.SharedFolderStatus(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected shared-folder read scope denial, got %v", err)
 	}
-	if _, err := deniedClient.SyncFolderAccess(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := deniedClient.SyncFolderAccess(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected folder_access.write scope denial for sync, got %v", err)
 	}
-	if _, err := deniedClient.SyncSharedFolder(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := deniedClient.SyncSharedFolder(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected shared-folder write scope denial for sync, got %v", err)
 	}
 
@@ -297,7 +298,7 @@ func TestQuarantineRoutesRequireScopedCapabilities(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	quarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	quarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-quarantine-scope",
 		Capability: "remote_fetch",
 	}, "quarantined payload")
@@ -310,10 +311,10 @@ func TestQuarantineRoutesRequireScopedCapabilities(t *testing.T) {
 	if _, err := readDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied quarantine.read token: %v", err)
 	}
-	if _, err := readDeniedClient.QuarantineMetadata(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := readDeniedClient.QuarantineMetadata(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected quarantine.read scope denial for metadata, got %v", err)
 	}
-	if _, err := readDeniedClient.ViewQuarantinedPayload(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := readDeniedClient.ViewQuarantinedPayload(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected quarantine.read scope denial for view, got %v", err)
 	}
 
@@ -322,7 +323,7 @@ func TestQuarantineRoutesRequireScopedCapabilities(t *testing.T) {
 	if _, err := writeDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied quarantine.write token: %v", err)
 	}
-	if _, err := writeDeniedClient.PruneQuarantinedPayload(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := writeDeniedClient.PruneQuarantinedPayload(context.Background(), quarantineRef); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected quarantine.write scope denial for prune, got %v", err)
 	}
 
@@ -388,7 +389,7 @@ func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 	if _, err := listDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied fs_list token: %v", err)
 	}
-	if _, err := listDeniedClient.SandboxList(context.Background(), SandboxListRequest{SandboxPath: "workspace"}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := listDeniedClient.SandboxList(context.Background(), controlapipkg.SandboxListRequest{SandboxPath: "workspace"}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected fs_list scope denial for sandbox list, got %v", err)
 	}
 
@@ -397,7 +398,7 @@ func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 	if _, err := listAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure fs_list token: %v", err)
 	}
-	if _, err := listAllowedClient.SandboxList(context.Background(), SandboxListRequest{SandboxPath: "workspace"}); err != nil {
+	if _, err := listAllowedClient.SandboxList(context.Background(), controlapipkg.SandboxListRequest{SandboxPath: "workspace"}); err != nil {
 		t.Fatalf("sandbox list with fs_list: %v", err)
 	}
 
@@ -413,10 +414,10 @@ func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 	if _, err := importDeniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied fs_write token: %v", err)
 	}
-	if _, err := importDeniedClient.SandboxImport(context.Background(), SandboxImportRequest{
+	if _, err := importDeniedClient.SandboxImport(context.Background(), controlapipkg.SandboxImportRequest{
 		HostSourcePath:  hostImportPath,
 		DestinationName: "scope-import-denied.txt",
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected fs_write scope denial for sandbox import, got %v", err)
 	}
 
@@ -426,13 +427,13 @@ func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 	if _, err := importAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure fs_write token: %v", err)
 	}
-	if _, err := importAllowedClient.SandboxImport(context.Background(), SandboxImportRequest{
+	if _, err := importAllowedClient.SandboxImport(context.Background(), controlapipkg.SandboxImportRequest{
 		HostSourcePath:  hostImportPath,
 		DestinationName: "scope-import-allowed.txt",
 	}); err != nil {
 		t.Fatalf("sandbox import with fs_write: %v", err)
 	}
-	stageResponse, err := importAllowedClient.SandboxStage(context.Background(), SandboxStageRequest{
+	stageResponse, err := importAllowedClient.SandboxStage(context.Background(), controlapipkg.SandboxStageRequest{
 		SandboxSourcePath: "workspace/scope-test.txt",
 		OutputName:        "scope-output.txt",
 	})
@@ -440,7 +441,7 @@ func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 		t.Fatalf("sandbox stage with fs_write: %v", err)
 	}
 
-	if _, err := metadataDeniedClient.SandboxMetadata(context.Background(), SandboxMetadataRequest{SandboxSourcePath: stageResponse.SandboxRelativePath}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := metadataDeniedClient.SandboxMetadata(context.Background(), controlapipkg.SandboxMetadataRequest{SandboxSourcePath: stageResponse.SandboxRelativePath}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected fs_read scope denial for sandbox metadata, got %v", err)
 	}
 
@@ -449,7 +450,7 @@ func TestSandboxRoutesRequireCapabilityScopes(t *testing.T) {
 	if _, err := metadataAllowedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure fs_read token: %v", err)
 	}
-	if _, err := metadataAllowedClient.SandboxMetadata(context.Background(), SandboxMetadataRequest{SandboxSourcePath: stageResponse.SandboxRelativePath}); err != nil {
+	if _, err := metadataAllowedClient.SandboxMetadata(context.Background(), controlapipkg.SandboxMetadataRequest{SandboxSourcePath: stageResponse.SandboxRelativePath}); err != nil {
 		t.Fatalf("sandbox metadata with fs_read: %v", err)
 	}
 }
@@ -477,17 +478,17 @@ func TestUIOperatorMountWriteGrantRouteRequiresScopeAndFreshApprovalForRenewal(t
 	if _, err := deniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied operator mount grant token: %v", err)
 	}
-	if _, err := deniedClient.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+	if _, err := deniedClient.UpdateUIOperatorMountWriteGrant(context.Background(), controlapipkg.UIOperatorMountWriteGrantUpdateRequest{
 		RootPath: resolvedRepoRoot,
-		Action:   OperatorMountWriteGrantActionRevoke,
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+		Action:   controlapipkg.OperatorMountWriteGrantActionRevoke,
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected operator mount grant scope denial, got %v", err)
 	}
 
-	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), controlapipkg.UIOperatorMountWriteGrantUpdateRequest{
 		RootPath: resolvedRepoRoot,
-		Action:   OperatorMountWriteGrantActionRenew,
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeApprovalRequired) {
+		Action:   controlapipkg.OperatorMountWriteGrantActionRenew,
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeApprovalRequired) {
 		t.Fatalf("expected renew to require fresh approval, got %v", err)
 	}
 }

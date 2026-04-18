@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 )
 
@@ -21,20 +22,20 @@ func (server *Server) decodeJSONBody(writer http.ResponseWriter, request *http.R
 	return nil
 }
 
-func (server *Server) readAndVerifySignedBody(writer http.ResponseWriter, request *http.Request, maxBodyBytes int64, controlSessionID string) ([]byte, CapabilityResponse, bool) {
+func (server *Server) readAndVerifySignedBody(writer http.ResponseWriter, request *http.Request, maxBodyBytes int64, controlSessionID string) ([]byte, controlapipkg.CapabilityResponse, bool) {
 	request.Body = http.MaxBytesReader(writer, request.Body, maxBodyBytes)
 	requestBodyBytes, err := io.ReadAll(request.Body)
 	if err != nil {
-		return nil, CapabilityResponse{
-			Status:       ResponseStatusError,
+		return nil, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: fmt.Sprintf("invalid request body: %v", err),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		}, false
 	}
 	if verificationResponse, ok := server.verifySignedRequest(request, requestBodyBytes, controlSessionID); !ok {
 		return nil, verificationResponse, false
 	}
-	return requestBodyBytes, CapabilityResponse{}, true
+	return requestBodyBytes, controlapipkg.CapabilityResponse{}, true
 }
 
 func decodeJSONBytes(requestBodyBytes []byte, destination interface{}) error {

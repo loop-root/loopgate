@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -126,10 +127,10 @@ func (server *Server) handleFolderAccessSync(writer http.ResponseWriter, request
 	if len(requestBodyBytes) > 0 {
 		var emptyRequest struct{}
 		if err := decodeJSONBytes(requestBodyBytes, &emptyRequest); err != nil {
-			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
-				DenialCode:   DenialCodeMalformedRequest,
+				DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			})
 			return
 		}
@@ -137,10 +138,10 @@ func (server *Server) handleFolderAccessSync(writer http.ResponseWriter, request
 
 	syncResponse, err := server.syncGrantedFolderAccess(tokenClaims)
 	if err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
@@ -164,10 +165,10 @@ func (server *Server) handleFolderAccess(writer http.ResponseWriter, request *ht
 		}
 		statusResponse, err := server.folderAccessStatus()
 		if err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
-				DenialCode:   DenialCodeExecutionFailed,
+				DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			})
 			return
 		}
@@ -181,29 +182,29 @@ func (server *Server) handleFolderAccess(writer http.ResponseWriter, request *ht
 			server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 			return
 		}
-		var updateRequest FolderAccessUpdateRequest
+		var updateRequest controlapipkg.FolderAccessUpdateRequest
 		if err := decodeJSONBytes(requestBodyBytes, &updateRequest); err != nil {
-			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
-				DenialCode:   DenialCodeMalformedRequest,
+				DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			})
 			return
 		}
 		if err := updateRequest.Validate(); err != nil {
-			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
-				DenialCode:   DenialCodeMalformedRequest,
+				DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			})
 			return
 		}
 		statusResponse, err := server.updateFolderAccess(tokenClaims, updateRequest)
 		if err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
-				DenialCode:   DenialCodeExecutionFailed,
+				DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			})
 			return
 		}
@@ -213,41 +214,41 @@ func (server *Server) handleFolderAccess(writer http.ResponseWriter, request *ht
 	}
 }
 
-func (server *Server) FolderAccessStatus() (FolderAccessStatusResponse, error) {
+func (server *Server) FolderAccessStatus() (controlapipkg.FolderAccessStatusResponse, error) {
 	return server.folderAccessStatus()
 }
 
-func (server *Server) folderAccessStatus() (FolderAccessStatusResponse, error) {
+func (server *Server) folderAccessStatus() (controlapipkg.FolderAccessStatusResponse, error) {
 	grantedSet, err := server.loadFolderAccessGrantedSet()
 	if err != nil {
-		return FolderAccessStatusResponse{}, err
+		return controlapipkg.FolderAccessStatusResponse{}, err
 	}
 
-	statuses := make([]FolderAccessStatus, 0, len(defaultFolderAccessPresets()))
+	statuses := make([]controlapipkg.FolderAccessStatus, 0, len(defaultFolderAccessPresets()))
 	for _, preset := range defaultFolderAccessPresets() {
 		status, err := server.folderAccessStatusForPreset(preset, grantedSet[preset.ID])
 		if err != nil {
-			return FolderAccessStatusResponse{}, err
+			return controlapipkg.FolderAccessStatusResponse{}, err
 		}
 		statuses = append(statuses, status)
 	}
-	return FolderAccessStatusResponse{Folders: statuses}, nil
+	return controlapipkg.FolderAccessStatusResponse{Folders: statuses}, nil
 }
 
-func (server *Server) syncGrantedFolderAccess(tokenClaims capabilityToken) (FolderAccessSyncResponse, error) {
+func (server *Server) syncGrantedFolderAccess(tokenClaims capabilityToken) (controlapipkg.FolderAccessSyncResponse, error) {
 	grantedSet, err := server.loadFolderAccessGrantedSet()
 	if err != nil {
-		return FolderAccessSyncResponse{}, err
+		return controlapipkg.FolderAccessSyncResponse{}, err
 	}
 	stateFile, err := server.loadFolderAccessState()
 	if err != nil {
-		return FolderAccessSyncResponse{}, err
+		return controlapipkg.FolderAccessSyncResponse{}, err
 	}
 	if stateFile.SourceFingerprints == nil {
 		stateFile.SourceFingerprints = make(map[string]string)
 	}
 
-	statuses := make([]FolderAccessStatus, 0, len(defaultFolderAccessPresets()))
+	statuses := make([]controlapipkg.FolderAccessStatus, 0, len(defaultFolderAccessPresets()))
 	changedIDs := make([]string, 0, len(defaultFolderAccessPresets()))
 	stateChanged := false
 
@@ -260,7 +261,7 @@ func (server *Server) syncGrantedFolderAccess(tokenClaims capabilityToken) (Fold
 			}
 			status, statusErr := server.folderAccessStatusForPreset(preset, false)
 			if statusErr != nil {
-				return FolderAccessSyncResponse{}, statusErr
+				return controlapipkg.FolderAccessSyncResponse{}, statusErr
 			}
 			statuses = append(statuses, status)
 			continue
@@ -268,7 +269,7 @@ func (server *Server) syncGrantedFolderAccess(tokenClaims capabilityToken) (Fold
 
 		status, changed, sourceFingerprint, syncErr := server.syncFolderAccessPresetIfNeeded(preset, tokenClaims, stateFile.SourceFingerprints[preset.ID])
 		if syncErr != nil {
-			return FolderAccessSyncResponse{}, syncErr
+			return controlapipkg.FolderAccessSyncResponse{}, syncErr
 		}
 		statuses = append(statuses, status)
 		if sourceFingerprint == "" {
@@ -287,29 +288,29 @@ func (server *Server) syncGrantedFolderAccess(tokenClaims capabilityToken) (Fold
 
 	if stateChanged {
 		if err := server.saveFolderAccessState(stateFile); err != nil {
-			return FolderAccessSyncResponse{}, err
+			return controlapipkg.FolderAccessSyncResponse{}, err
 		}
 	}
 
-	return FolderAccessSyncResponse{
+	return controlapipkg.FolderAccessSyncResponse{
 		Folders:    statuses,
 		ChangedIDs: changedIDs,
 	}, nil
 }
 
-func (server *Server) updateFolderAccess(tokenClaims capabilityToken, updateRequest FolderAccessUpdateRequest) (FolderAccessStatusResponse, error) {
+func (server *Server) updateFolderAccess(tokenClaims capabilityToken, updateRequest controlapipkg.FolderAccessUpdateRequest) (controlapipkg.FolderAccessStatusResponse, error) {
 	normalizedGrantedIDs, err := normalizeFolderAccessGrantedIDs(updateRequest.GrantedIDs)
 	if err != nil {
-		return FolderAccessStatusResponse{}, err
+		return controlapipkg.FolderAccessStatusResponse{}, err
 	}
 	if err := config.SaveJSONConfig(server.configStateDir, folderAccessConfigSection, folderAccessConfigFile{
 		Version:    folderAccessConfigVersion,
 		GrantedIDs: normalizedGrantedIDs,
 	}); err != nil {
-		return FolderAccessStatusResponse{}, fmt.Errorf("save folder access config: %w", err)
+		return controlapipkg.FolderAccessStatusResponse{}, fmt.Errorf("save folder access config: %w", err)
 	}
 	if err := server.applyFolderAccessSelection(tokenClaims, normalizedGrantedIDs); err != nil {
-		return FolderAccessStatusResponse{}, err
+		return controlapipkg.FolderAccessStatusResponse{}, err
 	}
 	return server.folderAccessStatus()
 }
@@ -414,17 +415,17 @@ func (server *Server) applyFolderAccessSelection(tokenClaims capabilityToken, gr
 	return nil
 }
 
-func (server *Server) folderAccessStatusForPreset(preset folderAccessPreset, granted bool) (FolderAccessStatus, error) {
+func (server *Server) folderAccessStatusForPreset(preset folderAccessPreset, granted bool) (controlapipkg.FolderAccessStatus, error) {
 	hostPath, err := server.folderAccessPresetHostPath(preset)
 	if err != nil {
-		return FolderAccessStatus{}, err
+		return controlapipkg.FolderAccessStatus{}, err
 	}
 
 	hostExists := false
 	if hostInfo, statErr := os.Stat(hostPath); statErr == nil && hostInfo.IsDir() {
 		hostExists = true
 	} else if statErr != nil && !os.IsNotExist(statErr) {
-		return FolderAccessStatus{}, fmt.Errorf("stat %s folder: %w", preset.ID, statErr)
+		return controlapipkg.FolderAccessStatus{}, fmt.Errorf("stat %s folder: %w", preset.ID, statErr)
 	}
 
 	// HostAccessOnly folders use host.folder.* capabilities directly — no sandbox
@@ -434,7 +435,7 @@ func (server *Server) folderAccessStatusForPreset(preset folderAccessPreset, gra
 		if hostExists {
 			entryCount = countDirectoryEntries(hostPath)
 		}
-		return FolderAccessStatus{
+		return controlapipkg.FolderAccessStatus{
 			ID:             preset.ID,
 			Name:           preset.Name,
 			Description:    preset.Description,
@@ -451,11 +452,11 @@ func (server *Server) folderAccessStatusForPreset(preset folderAccessPreset, gra
 	}
 
 	if err := server.sandboxPaths.Ensure(); err != nil {
-		return FolderAccessStatus{}, fmt.Errorf("ensure sandbox paths: %w", err)
+		return controlapipkg.FolderAccessStatus{}, fmt.Errorf("ensure sandbox paths: %w", err)
 	}
 	destinationAbsolutePath, destinationRelativePath, err := server.sandboxPaths.BuildImportDestination(preset.SandboxName)
 	if err != nil {
-		return FolderAccessStatus{}, err
+		return controlapipkg.FolderAccessStatus{}, err
 	}
 	mirrorReady := false
 	entryCount := 0
@@ -463,10 +464,10 @@ func (server *Server) folderAccessStatusForPreset(preset folderAccessPreset, gra
 		mirrorReady = granted
 		entryCount = countDirectoryEntries(destinationAbsolutePath)
 	} else if statErr != nil && !os.IsNotExist(statErr) {
-		return FolderAccessStatus{}, fmt.Errorf("stat mirrored %s folder: %w", preset.ID, statErr)
+		return controlapipkg.FolderAccessStatus{}, fmt.Errorf("stat mirrored %s folder: %w", preset.ID, statErr)
 	}
 
-	return FolderAccessStatus{
+	return controlapipkg.FolderAccessStatus{
 		ID:                  preset.ID,
 		Name:                preset.Name,
 		Description:         preset.Description,
@@ -483,7 +484,7 @@ func (server *Server) folderAccessStatusForPreset(preset folderAccessPreset, gra
 	}, nil
 }
 
-func (server *Server) syncFolderAccessPreset(preset folderAccessPreset, granted bool, tokenClaims capabilityToken) (FolderAccessStatus, error) {
+func (server *Server) syncFolderAccessPreset(preset folderAccessPreset, granted bool, tokenClaims capabilityToken) (controlapipkg.FolderAccessStatus, error) {
 	// HostAccessOnly presets require no mirroring — just return the current status.
 	if preset.HostAccessOnly {
 		return server.folderAccessStatusForPreset(preset, granted)
@@ -491,34 +492,34 @@ func (server *Server) syncFolderAccessPreset(preset folderAccessPreset, granted 
 
 	hostPath, err := server.folderAccessPresetHostPath(preset)
 	if err != nil {
-		return FolderAccessStatus{}, err
+		return controlapipkg.FolderAccessStatus{}, err
 	}
 	if preset.CreateIfMissing {
 		if err := os.MkdirAll(hostPath, 0o700); err != nil {
-			return FolderAccessStatus{}, fmt.Errorf("create %s folder: %w", preset.ID, err)
+			return controlapipkg.FolderAccessStatus{}, fmt.Errorf("create %s folder: %w", preset.ID, err)
 		}
 	}
 	if err := server.sandboxPaths.Ensure(); err != nil {
-		return FolderAccessStatus{}, fmt.Errorf("ensure sandbox paths: %w", err)
+		return controlapipkg.FolderAccessStatus{}, fmt.Errorf("ensure sandbox paths: %w", err)
 	}
 	hostInfo, err := os.Stat(hostPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return server.folderAccessStatusForPreset(preset, granted)
 		}
-		return FolderAccessStatus{}, fmt.Errorf("stat %s folder: %w", preset.ID, err)
+		return controlapipkg.FolderAccessStatus{}, fmt.Errorf("stat %s folder: %w", preset.ID, err)
 	}
 	if !hostInfo.IsDir() {
-		return FolderAccessStatus{}, fmt.Errorf("%s folder must be a directory", preset.Name)
+		return controlapipkg.FolderAccessStatus{}, fmt.Errorf("%s folder must be a directory", preset.Name)
 	}
 
 	resolvedSourcePath, _, err := sandbox.ResolveHostSource(hostPath)
 	if err != nil {
-		return FolderAccessStatus{}, err
+		return controlapipkg.FolderAccessStatus{}, err
 	}
 	destinationAbsolutePath, destinationRelativePath, err := server.sandboxPaths.BuildImportDestination(preset.SandboxName)
 	if err != nil {
-		return FolderAccessStatus{}, err
+		return controlapipkg.FolderAccessStatus{}, err
 	}
 
 	entryCount := 0
@@ -538,10 +539,10 @@ func (server *Server) syncFolderAccessPreset(preset folderAccessPreset, granted 
 		}
 		return nil
 	}); err != nil {
-		return FolderAccessStatus{}, err
+		return controlapipkg.FolderAccessStatus{}, err
 	}
 
-	return FolderAccessStatus{
+	return controlapipkg.FolderAccessStatus{
 		ID:                  preset.ID,
 		Name:                preset.Name,
 		Description:         preset.Description,
@@ -558,7 +559,7 @@ func (server *Server) syncFolderAccessPreset(preset folderAccessPreset, granted 
 	}, nil
 }
 
-func (server *Server) syncFolderAccessPresetIfNeeded(preset folderAccessPreset, tokenClaims capabilityToken, previousFingerprint string) (FolderAccessStatus, bool, string, error) {
+func (server *Server) syncFolderAccessPresetIfNeeded(preset folderAccessPreset, tokenClaims capabilityToken, previousFingerprint string) (controlapipkg.FolderAccessStatus, bool, string, error) {
 	// HostAccessOnly presets never need a mirror sync — return status directly.
 	if preset.HostAccessOnly {
 		status, err := server.folderAccessStatusForPreset(preset, true)
@@ -567,17 +568,17 @@ func (server *Server) syncFolderAccessPresetIfNeeded(preset folderAccessPreset, 
 
 	hostPath, err := server.folderAccessPresetHostPath(preset)
 	if err != nil {
-		return FolderAccessStatus{}, false, "", err
+		return controlapipkg.FolderAccessStatus{}, false, "", err
 	}
 	if preset.CreateIfMissing {
 		if err := os.MkdirAll(hostPath, 0o700); err != nil {
-			return FolderAccessStatus{}, false, "", fmt.Errorf("create %s folder: %w", preset.ID, err)
+			return controlapipkg.FolderAccessStatus{}, false, "", fmt.Errorf("create %s folder: %w", preset.ID, err)
 		}
 	}
 
 	status, err := server.folderAccessStatusForPreset(preset, true)
 	if err != nil {
-		return FolderAccessStatus{}, false, "", err
+		return controlapipkg.FolderAccessStatus{}, false, "", err
 	}
 	if !status.HostExists {
 		return status, false, "", nil
@@ -585,7 +586,7 @@ func (server *Server) syncFolderAccessPresetIfNeeded(preset folderAccessPreset, 
 
 	sourceFingerprint, err := folderAccessSourceFingerprint(status.HostPath)
 	if err != nil {
-		return FolderAccessStatus{}, false, "", err
+		return controlapipkg.FolderAccessStatus{}, false, "", err
 	}
 	if status.MirrorReady && previousFingerprint == sourceFingerprint {
 		return status, false, sourceFingerprint, nil
@@ -593,7 +594,7 @@ func (server *Server) syncFolderAccessPresetIfNeeded(preset folderAccessPreset, 
 
 	syncedStatus, err := server.syncFolderAccessPreset(preset, true, tokenClaims)
 	if err != nil {
-		return FolderAccessStatus{}, false, "", err
+		return controlapipkg.FolderAccessStatus{}, false, "", err
 	}
 	return syncedStatus, true, sourceFingerprint, nil
 }
@@ -688,12 +689,35 @@ func folderAccessSourceFingerprint(sourcePath string) (string, error) {
 		if _, err := io.WriteString(sourceHash, fmt.Sprintf("%d\x00%d\n", entryInfo.Size(), entryInfo.ModTime().UTC().UnixNano())); err != nil {
 			return fmt.Errorf("hash entry metadata: %w", err)
 		}
+		if entryType == "file" {
+			contentSHA256, err := fileSHA256Hex(entryPath)
+			if err != nil {
+				return fmt.Errorf("hash entry content %q: %w", virtualRelativePath, err)
+			}
+			if _, err := io.WriteString(sourceHash, contentSHA256+"\n"); err != nil {
+				return fmt.Errorf("hash entry content digest %q: %w", virtualRelativePath, err)
+			}
+		}
 		return nil
 	}); err != nil {
 		return "", fmt.Errorf("fingerprint folder access source %q: %w", sourcePath, err)
 	}
 
 	return hex.EncodeToString(sourceHash.Sum(nil)), nil
+}
+
+func fileSHA256Hex(path string) (string, error) {
+	fileHandle, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer fileHandle.Close()
+
+	fileHash := sha256.New()
+	if _, err := io.Copy(fileHash, fileHandle); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(fileHash.Sum(nil)), nil
 }
 
 func folderAccessPresetByID(presetID string) (folderAccessPreset, bool) {

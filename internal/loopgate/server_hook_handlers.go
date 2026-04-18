@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 	"strings"
@@ -61,30 +62,46 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	// This prevents any other local user from using this endpoint as a policy oracle.
 	peer, ok := peerIdentityFromContext(r.Context())
 	if !ok {
-		server.writeJSON(w, http.StatusUnauthorized, HookPreValidateResponse{
+		if server.checkHookPeerAuthFailureRateLimit("missing:" + strings.TrimSpace(r.RemoteAddr)) {
+			server.writeJSON(w, http.StatusTooManyRequests, controlapipkg.HookPreValidateResponse{
+				Decision:   "block",
+				Reason:     "hook peer authentication failure rate limit exceeded",
+				DenialCode: controlapipkg.DenialCodeHookRateLimitExceeded,
+			})
+			return
+		}
+		server.writeJSON(w, http.StatusUnauthorized, controlapipkg.HookPreValidateResponse{
 			Decision:   "block",
 			Reason:     "missing peer identity — request must arrive over Unix domain socket",
-			DenialCode: DenialCodeHookPeerBindingRejected,
+			DenialCode: controlapipkg.DenialCodeHookPeerBindingRejected,
 		})
 		return
 	}
 	serverUID := uint32(os.Getuid())
 	if peer.UID != serverUID {
-		server.writeJSON(w, http.StatusForbidden, HookPreValidateResponse{
+		if server.checkHookPeerAuthFailureRateLimit(fmt.Sprintf("uid:%d", peer.UID)) {
+			server.writeJSON(w, http.StatusTooManyRequests, controlapipkg.HookPreValidateResponse{
+				Decision:   "block",
+				Reason:     "hook peer authentication failure rate limit exceeded",
+				DenialCode: controlapipkg.DenialCodeHookRateLimitExceeded,
+			})
+			return
+		}
+		server.writeJSON(w, http.StatusForbidden, controlapipkg.HookPreValidateResponse{
 			Decision:   "block",
 			Reason:     fmt.Sprintf("peer UID %d does not match server UID %d", peer.UID, serverUID),
-			DenialCode: DenialCodeHookPeerBindingRejected,
+			DenialCode: controlapipkg.DenialCodeHookPeerBindingRejected,
 		})
 		return
 	}
 
 	const maxHookBodyBytes = 65536 // 64 KiB — tool inputs are bounded
-	var req HookPreValidateRequest
+	var req controlapipkg.HookPreValidateRequest
 	if err := server.decodeJSONBody(w, r, maxHookBodyBytes, &req); err != nil {
-		server.writeJSON(w, http.StatusBadRequest, HookPreValidateResponse{
+		server.writeJSON(w, http.StatusBadRequest, controlapipkg.HookPreValidateResponse{
 			Decision:   "block",
 			Reason:     "malformed request body: " + err.Error(),
-			DenialCode: DenialCodeMalformedRequest,
+			DenialCode: controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
@@ -99,10 +116,10 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		// Fail closed using the normal hook JSON contract. We intentionally avoid emitting
 		// an audit event here so a local hammering loop cannot turn the limiter into an
 		// append-only audit amplification path.
-		server.writeJSON(w, http.StatusOK, HookPreValidateResponse{
+		server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{
 			Decision:   "block",
 			Reason:     "hook pre-validate rate limit exceeded",
-			DenialCode: DenialCodeHookRateLimitExceeded,
+			DenialCode: controlapipkg.DenialCodeHookRateLimitExceeded,
 		})
 		return
 	}
@@ -236,11 +253,11 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		if hookSurfaceClass == claudeCodeHookSurfaceSecondaryGovernance && hookEventName != claudeCodeHookEventPostToolUse && hookEventName != claudeCodeHookEventPostToolUseFailure && hookEventName != claudeCodeHookEventPermissionRequest {
 			decision = "block"
 			reason = "hook event is governance-relevant but not implemented in Loopgate yet"
-			denialCode = DenialCodeHookEventUnimplemented
+			denialCode = controlapipkg.DenialCodeHookEventUnimplemented
 		} else if hookSurfaceClass == claudeCodeHookSurfaceUnknown {
 			decision = "block"
 			reason = "hook event is not recognized by Loopgate — denied by default"
-			denialCode = DenialCodeHookUnknownEvent
+			denialCode = controlapipkg.DenialCodeHookUnknownEvent
 		} else if hookEventName == claudeCodeHookEventSessionStart {
 			reason = "session start recorded for local lifecycle audit"
 		} else if hookEventName == claudeCodeHookEventUserPromptSubmit {
@@ -278,13 +295,13 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		if decision == "allow" {
-			server.writeJSON(w, http.StatusOK, HookPreValidateResponse{
+			server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{
 				Decision:          "allow",
 				AdditionalContext: additionalContext,
 			})
 			return
 		}
-		server.writeJSON(w, http.StatusOK, HookPreValidateResponse{
+		server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{
 			Decision:   "block",
 			Reason:     reason,
 			DenialCode: denialCode,
@@ -318,13 +335,13 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		if decision == "allow" {
-			server.writeJSON(w, http.StatusOK, HookPreValidateResponse{Decision: "allow"})
+			server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{Decision: "allow"})
 			return
 		}
-		server.writeJSON(w, http.StatusOK, HookPreValidateResponse{
+		server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{
 			Decision:   "block",
 			Reason:     reason,
-			DenialCode: DenialCodeHookUnknownTool,
+			DenialCode: controlapipkg.DenialCodeHookUnknownTool,
 		})
 		return
 	}
@@ -332,7 +349,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	result := server.evaluateClaudeCodeHookPolicy(req, toolDef)
 
 	decision := "block"
-	denialCode := DenialCodePolicyDenied
+	denialCode := controlapipkg.DenialCodePolicyDenied
 	hookApprovalRequestID := ""
 	hookApprovalState := ""
 	hookApprovalSurface := ""
@@ -348,7 +365,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 				Decision: policypkg.Deny,
 				Reason:   "failed to create local Claude hook approval: " + approvalErr.Error(),
 			}
-			denialCode = DenialCodeApprovalCreationFailed
+			denialCode = controlapipkg.DenialCodeApprovalCreationFailed
 			break
 		}
 		if approvalCreated {
@@ -410,11 +427,11 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	}
 
 	if decision == "allow" {
-		server.writeJSON(w, http.StatusOK, HookPreValidateResponse{Decision: "allow"})
+		server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{Decision: "allow"})
 		return
 	}
 	if decision == "ask" {
-		server.writeJSON(w, http.StatusOK, HookPreValidateResponse{
+		server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{
 			Decision:          "ask",
 			Reason:            result.Reason,
 			ApprovalRequestID: hookApprovalRequestID,
@@ -422,7 +439,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	server.writeJSON(w, http.StatusOK, HookPreValidateResponse{
+	server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{
 		Decision:   "block",
 		Reason:     result.Reason,
 		DenialCode: denialCode,

@@ -3,6 +3,7 @@ package loopgate
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,7 +19,7 @@ func isHighRiskCapability(tool toolspkg.Tool, policyDecision policypkg.CheckResu
 	return tool.Operation() == toolspkg.OpWrite
 }
 
-func deriveExecutionToken(baseToken capabilityToken, capabilityRequest CapabilityRequest) capabilityToken {
+func deriveExecutionToken(baseToken capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) capabilityToken {
 	derivedTokenID := "exec:" + baseToken.TokenID + ":" + capabilityRequest.RequestID
 	return capabilityToken{
 		TokenID:             derivedTokenID,
@@ -58,7 +59,7 @@ func normalizedArgumentHash(arguments map[string]string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func normalizeCapabilityRequest(capabilityRequest CapabilityRequest) CapabilityRequest {
+func normalizeCapabilityRequest(capabilityRequest controlapipkg.CapabilityRequest) controlapipkg.CapabilityRequest {
 	capabilityRequest.RequestID = strings.TrimSpace(capabilityRequest.RequestID)
 	capabilityRequest.SessionID = strings.TrimSpace(capabilityRequest.SessionID)
 	capabilityRequest.Actor = strings.TrimSpace(capabilityRequest.Actor)

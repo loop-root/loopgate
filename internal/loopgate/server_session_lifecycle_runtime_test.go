@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ func TestOpenSessionRejectsEmptyCapabilityScope(t *testing.T) {
 	client.ConfigureSession("test-actor", "test-session", nil)
 
 	_, err := client.ensureCapabilityToken(context.Background())
-	if err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityScopeRequired) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityScopeRequired) {
 		t.Fatalf("expected empty capability scope denial, got %v", err)
 	}
 }
@@ -47,7 +48,7 @@ func TestOpenSessionRejectsMismatchedWorkspaceBinding(t *testing.T) {
 
 	client.SetWorkspaceID("workspace-other-repo")
 	client.ConfigureSession("safe-actor", "safe-session", capabilityNames(status.Capabilities))
-	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeControlSessionBindingInvalid) {
+	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeControlSessionBindingInvalid) {
 		t.Fatalf("expected mismatched workspace binding denial, got %v", err)
 	}
 
@@ -66,7 +67,7 @@ func TestOpenSessionRejectsOperatorMountBindingWithoutExpectedClientPin(t *testi
 
 	client.SetOperatorMountPaths([]string{hostRootPath}, hostRootPath)
 	client.ConfigureSession("operator", "operator-mount-unpinned", []string{"fs_list"})
-	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeControlSessionBindingInvalid) {
+	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeControlSessionBindingInvalid) {
 		t.Fatalf("expected operator mount binding denial without expected client pin, got %v", err)
 	}
 }
@@ -78,7 +79,7 @@ func TestOpenSessionRejectsPinnedClientWhenExecutableResolverUnavailable(t *test
 	server.resolveExePath = nil
 
 	client.ConfigureSession("safe-actor", "safe-session", []string{"fs_list"})
-	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeProcessBindingRejected) {
+	if _, err := client.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeProcessBindingRejected) {
 		t.Fatalf("expected process binding rejection when resolver is unavailable, got %v", err)
 	}
 }
@@ -98,7 +99,7 @@ func TestOpenSessionRateLimitByPeerUID(t *testing.T) {
 	secondClient := NewClient(server.socketPath)
 	secondClient.ConfigureSession("second-actor", "second-session", capabilityNames(status.Capabilities))
 	_, err := secondClient.ensureCapabilityToken(context.Background())
-	if err == nil || !strings.Contains(err.Error(), DenialCodeSessionOpenRateLimited) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeSessionOpenRateLimited) {
 		t.Fatalf("expected session-open rate limit denial, got %v", err)
 	}
 }
@@ -116,7 +117,7 @@ func TestOpenSessionActiveLimitByPeerUID(t *testing.T) {
 	secondClient := NewClient(client.socketPath)
 	secondClient.ConfigureSession("second-actor", "second-session", capabilityNames(status.Capabilities))
 	_, err := secondClient.ensureCapabilityToken(context.Background())
-	if err == nil || !strings.Contains(err.Error(), DenialCodeSessionActiveLimitReached) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeSessionActiveLimitReached) {
 		t.Fatalf("expected active-session-limit denial, got %v", err)
 	}
 }
@@ -167,7 +168,7 @@ func TestCloseSessionDeniedWhenPendingApprovalsExist(t *testing.T) {
 	server.mu.Unlock()
 
 	err := client.CloseSession(context.Background())
-	if err == nil || !strings.Contains(err.Error(), DenialCodeSessionCloseBlocked) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeSessionCloseBlocked) {
 		t.Fatalf("expected session-close-blocked denial, got %v", err)
 	}
 
@@ -194,7 +195,7 @@ func TestSessionOpenAuditFailureRestoresReplacedSession(t *testing.T) {
 
 	replacingClient := NewClient(client.socketPath)
 	replacingClient.ConfigureSession("test-actor", "test-session", capabilityNames(status.Capabilities))
-	if _, err := replacingClient.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	if _, err := replacingClient.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected session open audit failure, got %v", err)
 	}
 
@@ -230,7 +231,7 @@ func TestSessionOpenRateLimitDenialPreservesExistingSession(t *testing.T) {
 
 	replacingClient := NewClient(server.socketPath)
 	replacingClient.ConfigureSession("reopen-actor", "reopen-session", capabilityNames(status.Capabilities))
-	if _, err := replacingClient.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeSessionOpenRateLimited) {
+	if _, err := replacingClient.ensureCapabilityToken(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeSessionOpenRateLimited) {
 		t.Fatalf("expected session open rate-limit denial, got %v", err)
 	}
 

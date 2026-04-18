@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 
 	"loopgate/internal/config"
@@ -20,15 +21,15 @@ func (client *Client) LoadPolicyConfig(ctx context.Context) (config.Policy, erro
 	return response, nil
 }
 
-func (client *Client) ReloadPolicyFromDisk(ctx context.Context) (ConfigPolicyReloadResponse, error) {
+func (client *Client) ReloadPolicyFromDisk(ctx context.Context) (controlapipkg.ConfigPolicyReloadResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return ConfigPolicyReloadResponse{}, err
+		return controlapipkg.ConfigPolicyReloadResponse{}, err
 	}
 
-	var response ConfigPolicyReloadResponse
+	var response controlapipkg.ConfigPolicyReloadResponse
 	if err := client.doJSON(ctx, http.MethodPut, "/v1/config/policy", capabilityToken, nil, &response, nil); err != nil {
-		return ConfigPolicyReloadResponse{}, err
+		return controlapipkg.ConfigPolicyReloadResponse{}, err
 	}
 	return response, nil
 }

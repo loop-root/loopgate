@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"mime"
 	"net"
 	"net/http"
@@ -44,7 +45,7 @@ type inspectedSite struct {
 	ContentType    string
 	HTTPS          bool
 	TLSValid       bool
-	Certificate    *SiteCertificateInfo
+	Certificate    *controlapipkg.SiteCertificateInfo
 	RawBody        string
 }
 
@@ -97,18 +98,18 @@ func validateSiteTarget(rawURL string) (validatedSiteTarget, error) {
 	}, nil
 }
 
-func (server *Server) inspectSite(ctx context.Context, rawURL string) (SiteInspectionResponse, error) {
+func (server *Server) inspectSite(ctx context.Context, rawURL string) (controlapipkg.SiteInspectionResponse, error) {
 	validatedSite, err := validateSiteTarget(rawURL)
 	if err != nil {
-		return SiteInspectionResponse{}, err
+		return controlapipkg.SiteInspectionResponse{}, err
 	}
 
 	inspectedSiteResponse, err := server.fetchSiteInspection(ctx, validatedSite)
 	if err != nil {
-		return SiteInspectionResponse{}, err
+		return controlapipkg.SiteInspectionResponse{}, err
 	}
 
-	siteInspectionResponse := SiteInspectionResponse{
+	siteInspectionResponse := controlapipkg.SiteInspectionResponse{
 		NormalizedURL:  inspectedSiteResponse.Target.NormalizedURL,
 		Scheme:         inspectedSiteResponse.Target.Scheme,
 		Host:           inspectedSiteResponse.Target.Authority,
@@ -128,36 +129,36 @@ func (server *Server) inspectSite(ctx context.Context, rawURL string) (SiteInspe
 		if err == errSiteTrustDraftUnavailable || err == errSiteInspectionContentUnsupported {
 			return siteInspectionResponse, nil
 		}
-		return SiteInspectionResponse{}, err
+		return controlapipkg.SiteInspectionResponse{}, err
 	}
 	siteInspectionResponse.DraftSuggestion = &draftSuggestion
 	siteInspectionResponse.TrustDraftAllowed = siteTrustDraftTransportAllowed(siteInspectionResponse)
 	return siteInspectionResponse, nil
 }
 
-func (server *Server) createSiteTrustDraft(ctx context.Context, tokenClaims capabilityToken, rawURL string) (SiteTrustDraftResponse, error) {
+func (server *Server) createSiteTrustDraft(ctx context.Context, tokenClaims capabilityToken, rawURL string) (controlapipkg.SiteTrustDraftResponse, error) {
 	siteInspectionResponse, err := server.inspectSite(ctx, rawURL)
 	if err != nil {
-		return SiteTrustDraftResponse{}, err
+		return controlapipkg.SiteTrustDraftResponse{}, err
 	}
 	if !siteInspectionResponse.TrustDraftAllowed || siteInspectionResponse.DraftSuggestion == nil {
 		if !siteTrustDraftTransportAllowed(siteInspectionResponse) {
-			return SiteTrustDraftResponse{}, errSiteHTTPSRequired
+			return controlapipkg.SiteTrustDraftResponse{}, errSiteHTTPSRequired
 		}
-		return SiteTrustDraftResponse{}, errSiteTrustDraftUnavailable
+		return controlapipkg.SiteTrustDraftResponse{}, errSiteTrustDraftUnavailable
 	}
 
 	draftSuggestion := *siteInspectionResponse.DraftSuggestion
 	draftPath := filepath.Join(server.repoRoot, connectionConfigDir, "drafts", draftSuggestion.Provider+"-"+draftSuggestion.Subject+".yaml")
 	if _, err := os.Stat(draftPath); err == nil {
-		return SiteTrustDraftResponse{}, errSiteTrustDraftAlreadyExists
+		return controlapipkg.SiteTrustDraftResponse{}, errSiteTrustDraftAlreadyExists
 	} else if err != nil && !os.IsNotExist(err) {
-		return SiteTrustDraftResponse{}, fmt.Errorf("stat trust draft: %w", err)
+		return controlapipkg.SiteTrustDraftResponse{}, fmt.Errorf("stat trust draft: %w", err)
 	}
 
 	draftConfig := buildSiteTrustDraftConfig(siteInspectionResponse, draftSuggestion)
 	if err := writeSiteTrustDraftFile(draftPath, draftConfig); err != nil {
-		return SiteTrustDraftResponse{}, err
+		return controlapipkg.SiteTrustDraftResponse{}, err
 	}
 	if err := server.logEvent("site.trust_draft_created", tokenClaims.ControlSessionID, map[string]interface{}{
 		"normalized_url":       siteInspectionResponse.NormalizedURL,
@@ -171,10 +172,10 @@ func (server *Server) createSiteTrustDraft(ctx context.Context, tokenClaims capa
 		"client_session_label": tokenClaims.ClientSessionLabel,
 	}); err != nil {
 		_ = os.Remove(draftPath)
-		return SiteTrustDraftResponse{}, err
+		return controlapipkg.SiteTrustDraftResponse{}, err
 	}
 
-	return SiteTrustDraftResponse{
+	return controlapipkg.SiteTrustDraftResponse{
 		NormalizedURL: siteInspectionResponse.NormalizedURL,
 		DraftPath:     draftPath,
 		Suggestion:    draftSuggestion,
@@ -280,12 +281,12 @@ func (server *Server) siteInspectionHTTPClient(validatedSite validatedSiteTarget
 	}
 }
 
-func certificateInfoForLeaf(leafCertificate *x509.Certificate) *SiteCertificateInfo {
+func certificateInfoForLeaf(leafCertificate *x509.Certificate) *controlapipkg.SiteCertificateInfo {
 	if leafCertificate == nil {
 		return nil
 	}
 	fingerprint := sha256.Sum256(leafCertificate.Raw)
-	return &SiteCertificateInfo{
+	return &controlapipkg.SiteCertificateInfo{
 		Subject:           leafCertificate.Subject.String(),
 		Issuer:            leafCertificate.Issuer.String(),
 		DNSNames:          append([]string(nil), leafCertificate.DNSNames...),
@@ -321,9 +322,9 @@ func verifySiteCertificate(hostname string, peerCertificates []*x509.Certificate
 	return leafCertificate.VerifyHostname(hostname)
 }
 
-func buildSiteTrustDraftSuggestion(inspected inspectedSite) (SiteTrustDraftSuggestion, error) {
+func buildSiteTrustDraftSuggestion(inspected inspectedSite) (controlapipkg.SiteTrustDraftSuggestion, error) {
 	if inspected.HTTPStatusCode < 200 || inspected.HTTPStatusCode >= 300 {
-		return SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
+		return controlapipkg.SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
 	}
 
 	switch {
@@ -332,54 +333,54 @@ func buildSiteTrustDraftSuggestion(inspected inspectedSite) (SiteTrustDraftSugge
 	case inspected.ContentType == "text/html":
 		return buildHTMLSiteTrustDraftSuggestion(inspected)
 	default:
-		return SiteTrustDraftSuggestion{}, errSiteInspectionContentUnsupported
+		return controlapipkg.SiteTrustDraftSuggestion{}, errSiteInspectionContentUnsupported
 	}
 }
 
-func siteTrustDraftTransportAllowed(siteInspectionResponse SiteInspectionResponse) bool {
+func siteTrustDraftTransportAllowed(siteInspectionResponse controlapipkg.SiteInspectionResponse) bool {
 	if siteInspectionResponse.Scheme == "https" {
 		return siteInspectionResponse.TLSValid
 	}
 	return siteInspectionResponse.Scheme == "http" && isLocalhostHost(validatedHostForDraft(siteInspectionResponse.Host))
 }
 
-func buildJSONSiteTrustDraftSuggestion(inspected inspectedSite) (SiteTrustDraftSuggestion, error) {
+func buildJSONSiteTrustDraftSuggestion(inspected inspectedSite) (controlapipkg.SiteTrustDraftSuggestion, error) {
 	var parsedBody map[string]interface{}
 	if err := json.Unmarshal([]byte(inspected.RawBody), &parsedBody); err != nil {
-		return SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
+		return controlapipkg.SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
 	}
 	statusDescription, err := extractNestedJSONField(parsedBody, "status.description")
 	if err != nil {
-		return SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
+		return controlapipkg.SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
 	}
 	statusIndicator, err := extractNestedJSONField(parsedBody, "status.indicator")
 	if err != nil {
-		return SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
+		return controlapipkg.SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
 	}
 	descriptionValue, okDescription := statusDescription.(string)
 	indicatorValue, okIndicator := statusIndicator.(string)
 	if !okDescription || !okIndicator || strings.TrimSpace(descriptionValue) == "" || strings.TrimSpace(indicatorValue) == "" {
-		return SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
+		return controlapipkg.SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
 	}
 
 	providerID, subjectID := siteDraftIdentifiers(inspected.Target)
-	return SiteTrustDraftSuggestion{
+	return controlapipkg.SiteTrustDraftSuggestion{
 		Provider:       providerID,
 		Subject:        subjectID,
 		CapabilityName: providerID + ".status_get",
 		ContentClass:   contentClassStructuredJSONConfig,
 		Extractor:      extractorJSONNestedSelectorConfig,
 		CapabilityPath: inspected.Target.Path,
-		Fields: []SiteDraftField{
+		Fields: []controlapipkg.SiteDraftField{
 			{
 				Name:           "status_description",
-				Sensitivity:    ResultFieldSensitivityTaintedText,
+				Sensitivity:    controlapipkg.ResultFieldSensitivityTaintedText,
 				MaxInlineBytes: 256,
 				JSONPath:       "status.description",
 			},
 			{
 				Name:           "status_indicator",
-				Sensitivity:    ResultFieldSensitivityTaintedText,
+				Sensitivity:    controlapipkg.ResultFieldSensitivityTaintedText,
 				MaxInlineBytes: 64,
 				JSONPath:       "status.indicator",
 			},
@@ -387,43 +388,43 @@ func buildJSONSiteTrustDraftSuggestion(inspected inspectedSite) (SiteTrustDraftS
 	}, nil
 }
 
-func buildHTMLSiteTrustDraftSuggestion(inspected inspectedSite) (SiteTrustDraftSuggestion, error) {
+func buildHTMLSiteTrustDraftSuggestion(inspected inspectedSite) (controlapipkg.SiteTrustDraftSuggestion, error) {
 	parsedHTMLMetadata, err := parseHTMLMetadata(inspected.RawBody)
 	if err != nil {
-		return SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
+		return controlapipkg.SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
 	}
 
-	draftFields := make([]SiteDraftField, 0, 3)
+	draftFields := make([]controlapipkg.SiteDraftField, 0, 3)
 	if len(parsedHTMLMetadata.Titles) == 1 && strings.TrimSpace(parsedHTMLMetadata.Titles[0]) != "" {
-		draftFields = append(draftFields, SiteDraftField{
+		draftFields = append(draftFields, controlapipkg.SiteDraftField{
 			Name:           "page_title",
-			Sensitivity:    ResultFieldSensitivityTaintedText,
+			Sensitivity:    controlapipkg.ResultFieldSensitivityTaintedText,
 			MaxInlineBytes: 256,
 			HTMLTitle:      true,
 		})
 	}
 	if descriptionValues, found := parsedHTMLMetadata.MetaNameValues["description"]; found && len(descriptionValues.Values) == 1 && strings.TrimSpace(descriptionValues.Values[0]) != "" {
-		draftFields = append(draftFields, SiteDraftField{
+		draftFields = append(draftFields, controlapipkg.SiteDraftField{
 			Name:           "description",
-			Sensitivity:    ResultFieldSensitivityTaintedText,
+			Sensitivity:    controlapipkg.ResultFieldSensitivityTaintedText,
 			MaxInlineBytes: 256,
 			MetaName:       "description",
 		})
 	}
 	if siteNameValues, found := parsedHTMLMetadata.MetaPropertyValues["og:site_name"]; found && len(siteNameValues.Values) == 1 && strings.TrimSpace(siteNameValues.Values[0]) != "" {
-		draftFields = append(draftFields, SiteDraftField{
+		draftFields = append(draftFields, controlapipkg.SiteDraftField{
 			Name:           "site_name",
-			Sensitivity:    ResultFieldSensitivityTaintedText,
+			Sensitivity:    controlapipkg.ResultFieldSensitivityTaintedText,
 			MaxInlineBytes: 128,
 			MetaProperty:   "og:site_name",
 		})
 	}
 	if len(draftFields) == 0 {
-		return SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
+		return controlapipkg.SiteTrustDraftSuggestion{}, errSiteTrustDraftUnavailable
 	}
 
 	providerID, subjectID := siteDraftIdentifiers(inspected.Target)
-	return SiteTrustDraftSuggestion{
+	return controlapipkg.SiteTrustDraftSuggestion{
 		Provider:       providerID,
 		Subject:        subjectID,
 		CapabilityName: providerID + ".page_get",
@@ -475,7 +476,7 @@ func sanitizeSiteIdentifier(rawValue string) string {
 	return candidate
 }
 
-func buildSiteTrustDraftConfig(siteInspectionResponse SiteInspectionResponse, draftSuggestion SiteTrustDraftSuggestion) connectionConfigFile {
+func buildSiteTrustDraftConfig(siteInspectionResponse controlapipkg.SiteInspectionResponse, draftSuggestion controlapipkg.SiteTrustDraftSuggestion) connectionConfigFile {
 	draftFields := make([]connectionCapabilityFieldConfig, 0, len(draftSuggestion.Fields))
 	for _, draftField := range draftSuggestion.Fields {
 		draftFields = append(draftFields, connectionCapabilityFieldConfig{
@@ -491,7 +492,7 @@ func buildSiteTrustDraftConfig(siteInspectionResponse SiteInspectionResponse, dr
 	}
 	return connectionConfigFile{
 		Provider:     draftSuggestion.Provider,
-		GrantType:    GrantTypePublicRead,
+		GrantType:    controlapipkg.GrantTypePublicRead,
 		Subject:      draftSuggestion.Subject,
 		APIBaseURL:   (&url.URL{Scheme: siteInspectionResponse.Scheme, Host: siteInspectionResponse.Host}).String(),
 		AllowedHosts: []string{validatedHostForDraft(siteInspectionResponse.Host)},
@@ -584,17 +585,17 @@ func siteInspectionHTTPStatus(err error) int {
 func siteTrustDenialCode(err error) string {
 	switch {
 	case errors.Is(err, errSiteURLInvalid):
-		return DenialCodeSiteURLInvalid
+		return controlapipkg.DenialCodeSiteURLInvalid
 	case errors.Is(err, errSiteHTTPSRequired):
-		return DenialCodeHTTPSRequired
+		return controlapipkg.DenialCodeHTTPSRequired
 	case errors.Is(err, errSiteTrustDraftUnavailable):
-		return DenialCodeSiteTrustDraftNotAvailable
+		return controlapipkg.DenialCodeSiteTrustDraftNotAvailable
 	case errors.Is(err, errSiteTrustDraftAlreadyExists):
-		return DenialCodeSiteTrustDraftExists
+		return controlapipkg.DenialCodeSiteTrustDraftExists
 	case errors.Is(err, errSiteInspectionContentUnsupported):
-		return DenialCodeSiteInspectionUnsupportedType
+		return controlapipkg.DenialCodeSiteInspectionUnsupportedType
 	default:
-		return DenialCodeExecutionFailed
+		return controlapipkg.DenialCodeExecutionFailed
 	}
 }
 

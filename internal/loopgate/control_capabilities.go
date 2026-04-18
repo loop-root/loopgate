@@ -1,6 +1,9 @@
 package loopgate
 
-import "sort"
+import (
+	controlapipkg "loopgate/internal/loopgate/controlapi"
+	"sort"
+)
 
 const (
 	controlCapabilityApprovalRead            = "approval.read"
@@ -23,7 +26,7 @@ const (
 	controlCapabilityUIWrite                 = "ui.write"
 )
 
-var internalControlCapabilityCatalog = map[string]CapabilitySummary{
+var internalControlCapabilityCatalog = map[string]controlapipkg.CapabilitySummary{
 	controlCapabilityApprovalRead: {
 		Name:        controlCapabilityApprovalRead,
 		Category:    "approval",
@@ -155,14 +158,14 @@ func capabilityScopeAllowed(tokenClaims capabilityToken, capabilityName string) 
 	return allowed
 }
 
-func controlCapabilitySummaries() []CapabilitySummary {
+func controlCapabilitySummaries() []controlapipkg.CapabilitySummary {
 	capabilityNames := make([]string, 0, len(internalControlCapabilityCatalog))
 	for capabilityName := range internalControlCapabilityCatalog {
 		capabilityNames = append(capabilityNames, capabilityName)
 	}
 	sort.Strings(capabilityNames)
 
-	summaries := make([]CapabilitySummary, 0, len(capabilityNames))
+	summaries := make([]controlapipkg.CapabilitySummary, 0, len(capabilityNames))
 	for _, capabilityName := range capabilityNames {
 		summaries = append(summaries, internalControlCapabilityCatalog[capabilityName])
 	}

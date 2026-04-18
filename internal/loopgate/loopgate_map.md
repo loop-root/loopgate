@@ -56,16 +56,16 @@ For integrators it matters in four ways:
   - capability-risk classification, actor-scoped session helpers, execution-token derivation, capability request normalization, and capability-set helpers
 - `request_body_runtime.go`
   - strict JSON body decode and signed-body verification helpers shared across HTTP handlers
-- `types.go`
-  - core control-plane request/response structs, including:
-    - `CapabilitySummary`
-    - `OpenSessionRequest`
-    - `CapabilityRequest`
-    - `CapabilityResponse`
-- `types_connections.go`
-  - connection status, PKCE, model-connection store, and site-inspection/trust wire contracts plus validators
-- `types_sandbox.go`
-  - sandbox import/export/list/metadata wire contracts plus request validation helpers
+- `controlapi/`
+  - local control-plane wire contracts and validation helpers that do not require `Server`
+  - grouped by concern:
+    - `core.go` for shared request/response shapes, denial codes, result classification, and hook payloads
+    - `connections.go` for connection, PKCE, and site-trust contracts
+    - `sandbox.go` for sandbox import/export/list metadata contracts
+    - `mcp_gateway.go` for MCP gateway request validation and operator/runtime response shapes
+    - `ui.go` for UI/event envelopes and folder-access status contracts
+    - `audit_export.go` for audit-export operator responses
+  - runtime code and clients import `controlapi` directly; the temporary compatibility re-exports have been removed
 
 ### Retired legacy surface
 
@@ -90,9 +90,9 @@ Loopgate splits HTTP-style handlers across `server_*_handlers.go` files. Example
 
 - `ui_server.go`
   - UI status and approvals
-- `ui_types.go`
+- `controlapi/ui.go`
   - client-facing UI summaries and event envelopes
-  - includes folder-access sync/status response types used by **local HTTP clients**
+  - runtime code validates emitted envelopes directly through `controlapi`
 - `client.go`
   - public Go client surface core (`Client`, constructors, model/connections/site wrappers) over the Unix socket — **wire reference** for non-Go integrators; see `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`
 - `client_session.go`
@@ -121,7 +121,7 @@ The current working set in this directory is:
 - `folder_access.go`
 - `server.go`
 - `server_connection_handlers.go`
-- `ui_types.go`
+- `controlapi/ui.go`
 
 These files matter because:
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,7 +22,7 @@ func TestDuplicateRequestIDIsRejected(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	firstResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	firstResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-duplicate",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -31,11 +32,11 @@ func TestDuplicateRequestIDIsRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first execute: %v", err)
 	}
-	if firstResponse.Status != ResponseStatusSuccess {
+	if firstResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("unexpected first response: %#v", firstResponse)
 	}
 
-	secondResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	secondResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-duplicate",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -45,7 +46,7 @@ func TestDuplicateRequestIDIsRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second execute should return typed denial, got %v", err)
 	}
-	if secondResponse.Status != ResponseStatusDenied || secondResponse.DenialCode != DenialCodeRequestReplayDetected {
+	if secondResponse.Status != controlapipkg.ResponseStatusDenied || secondResponse.DenialCode != controlapipkg.DenialCodeRequestReplayDetected {
 		t.Fatalf("expected replay denial, got %#v", secondResponse)
 	}
 }
@@ -59,7 +60,7 @@ func TestAuditFailureIsSurfacedExplicitly(t *testing.T) {
 	client.ConfigureSession("audit-test", "audit-session", []string{"fs_list"})
 
 	_, err := client.ensureCapabilityToken(context.Background())
-	if err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected audit unavailable error, got %v", err)
 	}
 }
@@ -75,7 +76,7 @@ func TestCapabilityExecutionAuditFailureReturnsAuditUnavailable(t *testing.T) {
 		return errors.New("audit sink unavailable")
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-audit-fail-after-open",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -85,7 +86,7 @@ func TestCapabilityExecutionAuditFailureReturnsAuditUnavailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected typed audit unavailable response, got %v", err)
 	}
-	if response.Status != ResponseStatusError || response.DenialCode != DenialCodeAuditUnavailable {
+	if response.Status != controlapipkg.ResponseStatusError || response.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected audit unavailable response, got %#v", response)
 	}
 }
@@ -101,7 +102,7 @@ func TestSingleUseExecutionTokenIsDeniedOnReuse(t *testing.T) {
 	baseToken := server.sessionState.tokens[client.capabilityToken]
 	server.mu.Unlock()
 
-	capabilityRequest := normalizeCapabilityRequest(CapabilityRequest{
+	capabilityRequest := normalizeCapabilityRequest(controlapipkg.CapabilityRequest{
 		RequestID:  "req-single-use",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -112,7 +113,7 @@ func TestSingleUseExecutionTokenIsDeniedOnReuse(t *testing.T) {
 	executionToken := deriveExecutionToken(baseToken, capabilityRequest)
 
 	firstResponse := server.executeCapabilityRequest(context.Background(), executionToken, capabilityRequest, false)
-	if firstResponse.Status != ResponseStatusSuccess {
+	if firstResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected first single-use execution to succeed, got %#v", firstResponse)
 	}
 	server.mu.Lock()
@@ -132,7 +133,7 @@ func TestSingleUseExecutionTokenIsDeniedOnReuse(t *testing.T) {
 	}
 
 	secondResponse := server.executeCapabilityRequest(context.Background(), executionToken, capabilityRequest, false)
-	if secondResponse.Status != ResponseStatusDenied || secondResponse.DenialCode != DenialCodeCapabilityTokenReused {
+	if secondResponse.Status != controlapipkg.ResponseStatusDenied || secondResponse.DenialCode != controlapipkg.DenialCodeCapabilityTokenReused {
 		t.Fatalf("expected reused single-use token denial, got %#v", secondResponse)
 	}
 }
@@ -143,7 +144,7 @@ func TestApprovalExecuteDeniesWhenStoredExecutionBodyMutated(t *testing.T) {
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure capability token: %v", err)
 	}
-	pendingResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	pendingResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-integrity",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -166,10 +167,10 @@ func TestApprovalExecuteDeniesWhenStoredExecutionBodyMutated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ui approval decision: %v", err)
 	}
-	if approvedResponse.DenialCode != DenialCodeApprovalExecutionBodyMismatch {
+	if approvedResponse.DenialCode != controlapipkg.DenialCodeApprovalExecutionBodyMismatch {
 		t.Fatalf("expected execution body mismatch, got %#v", approvedResponse)
 	}
-	if approvedResponse.Status != ResponseStatusError {
+	if approvedResponse.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected error status, got %#v", approvedResponse)
 	}
 }
@@ -182,7 +183,7 @@ func TestPendingApprovalLimitPerControlSession(t *testing.T) {
 		t.Fatalf("ensure capability token: %v", err)
 	}
 	for i := range 2 {
-		resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		resp, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 			RequestID:  "req-ap-limit-" + string(rune('0'+i)),
 			Capability: "fs_write",
 			Arguments: map[string]string{
@@ -197,7 +198,7 @@ func TestPendingApprovalLimitPerControlSession(t *testing.T) {
 			t.Fatalf("expected pending approval %d, got %#v", i, resp)
 		}
 	}
-	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	resp, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-ap-limit-2",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -208,7 +209,7 @@ func TestPendingApprovalLimitPerControlSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute third: %v", err)
 	}
-	if resp.Status != ResponseStatusDenied || resp.DenialCode != DenialCodePendingApprovalLimitReached {
+	if resp.Status != controlapipkg.ResponseStatusDenied || resp.DenialCode != controlapipkg.DenialCodePendingApprovalLimitReached {
 		t.Fatalf("expected pending approval limit, got %#v", resp)
 	}
 }
@@ -221,7 +222,7 @@ func TestRequestReplayStoreSaturates(t *testing.T) {
 		t.Fatalf("ensure capability token: %v", err)
 	}
 	for i := range 2 {
-		_, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		_, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 			RequestID:  "req-replay-sat-" + string(rune('0'+i)),
 			Capability: "fs_write",
 			Arguments: map[string]string{
@@ -233,7 +234,7 @@ func TestRequestReplayStoreSaturates(t *testing.T) {
 			t.Fatalf("execute %d: %v", i, err)
 		}
 	}
-	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	resp, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-replay-sat-2",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -244,7 +245,7 @@ func TestRequestReplayStoreSaturates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute third: %v", err)
 	}
-	if resp.Status != ResponseStatusDenied || resp.DenialCode != DenialCodeReplayStateSaturated {
+	if resp.Status != controlapipkg.ResponseStatusDenied || resp.DenialCode != controlapipkg.DenialCodeReplayStateSaturated {
 		t.Fatalf("expected replay store saturated, got %#v", resp)
 	}
 }
@@ -260,7 +261,7 @@ func TestBoundExecutionTokenRejectsDifferentNormalizedArguments(t *testing.T) {
 	baseToken := server.sessionState.tokens[client.capabilityToken]
 	server.mu.Unlock()
 
-	approvedRequest := normalizeCapabilityRequest(CapabilityRequest{
+	approvedRequest := normalizeCapabilityRequest(controlapipkg.CapabilityRequest{
 		RequestID:  "req-bound",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -270,7 +271,7 @@ func TestBoundExecutionTokenRejectsDifferentNormalizedArguments(t *testing.T) {
 	})
 	executionToken := deriveExecutionToken(baseToken, approvedRequest)
 
-	mutatedRequest := normalizeCapabilityRequest(CapabilityRequest{
+	mutatedRequest := normalizeCapabilityRequest(controlapipkg.CapabilityRequest{
 		RequestID:  "req-bound-mutated",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -279,7 +280,7 @@ func TestBoundExecutionTokenRejectsDifferentNormalizedArguments(t *testing.T) {
 		},
 	})
 	response := server.executeCapabilityRequest(context.Background(), executionToken, mutatedRequest, false)
-	if response.Status != ResponseStatusDenied || response.DenialCode != DenialCodeCapabilityTokenBindingInvalid {
+	if response.Status != controlapipkg.ResponseStatusDenied || response.DenialCode != controlapipkg.DenialCodeCapabilityTokenBindingInvalid {
 		t.Fatalf("expected bound token mismatch denial, got %#v", response)
 	}
 }
@@ -288,7 +289,7 @@ func TestLoopgateAuditEventsIncludeHashChainMetadata(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	_, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	_, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-audit-chain",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -487,7 +488,7 @@ func TestHookPreValidateWritesAuditSequenceMetadata(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}

@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 )
@@ -22,12 +23,12 @@ func (server *Server) handleCapabilityExecute(writer http.ResponseWriter, reques
 		return
 	}
 
-	var capabilityRequest CapabilityRequest
+	var capabilityRequest controlapipkg.CapabilityRequest
 	if err := decodeJSONBytes(requestBodyBytes, &capabilityRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
@@ -50,10 +51,10 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 	approvalID := strings.TrimPrefix(request.URL.Path, "/v1/approvals/")
 	approvalID = strings.TrimSuffix(approvalID, "/decision")
 	if strings.TrimSpace(approvalID) == "" || strings.Contains(approvalID, "/") {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "invalid approval id",
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
@@ -64,20 +65,20 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 		return
 	}
 
-	var decisionRequest ApprovalDecisionRequest
+	var decisionRequest controlapipkg.ApprovalDecisionRequest
 	if err := decodeJSONBytes(requestBodyBytes, &decisionRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := decisionRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
@@ -85,11 +86,11 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 		pendingApproval, denialResponse, ok := server.validatePendingApprovalDecision(controlSession, approvalID, decisionRequest)
 		if !ok {
 			if err := server.auditApprovalDecisionDenial(controlSession, approvalID, pendingApproval, denialResponse); err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+				server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 					RequestID:         approvalID,
-					Status:            ResponseStatusError,
+					Status:            controlapipkg.ResponseStatusError,
 					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
+					DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 					ApprovalRequestID: approvalID,
 				})
 				return
@@ -102,11 +103,11 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 			return
 		}
 		if _, err := server.commitApprovalGrantConsumed(approvalID, decisionRequest.DecisionNonce, decisionRequest.Reason); err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalID,
 			})
 			return
@@ -127,11 +128,11 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 	pendingApproval, denialResponse, _, ok := server.validateAndRecordApprovalDecision(controlSession, approvalID, decisionRequest)
 	if !ok {
 		if err := server.auditApprovalDecisionDenial(controlSession, approvalID, pendingApproval, denialResponse); err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 				RequestID:         approvalID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalID,
 			})
 			return
@@ -139,12 +140,12 @@ func (server *Server) handleApprovalDecision(writer http.ResponseWriter, request
 		server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
-	server.writeJSON(writer, http.StatusOK, CapabilityResponse{
+	server.writeJSON(writer, http.StatusOK, controlapipkg.CapabilityResponse{
 		RequestID:         pendingApproval.Request.RequestID,
-		Status:            ResponseStatusDenied,
+		Status:            controlapipkg.ResponseStatusDenied,
 		DenialReason:      "approval denied",
-		DenialCode:        DenialCodeApprovalDenied,
+		DenialCode:        controlapipkg.DenialCodeApprovalDenied,
 		ApprovalRequestID: approvalID,
 	})
-	server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
+	server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", controlapipkg.ResponseStatusDenied)
 }

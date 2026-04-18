@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,7 +26,7 @@ func TestAuditExportFlushRouteRequiresScopedCapability(t *testing.T) {
 	if _, err := deniedClient.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure denied audit.export token: %v", err)
 	}
-	if _, err := deniedClient.FlushAuditExport(context.Background()); err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if _, err := deniedClient.FlushAuditExport(context.Background()); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected audit.export scope denial, got %v", err)
 	}
 }
@@ -46,7 +47,7 @@ func TestAuditExportFlushRoute_SignedRequestRequired(t *testing.T) {
 
 	_, err := client.FlushAuditExport(context.Background())
 	var denied RequestDeniedError
-	if !errors.As(err, &denied) || denied.DenialCode != DenialCodeRequestSignatureMissing {
+	if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeRequestSignatureMissing {
 		t.Fatalf("expected request signature missing denial, got %v", err)
 	}
 }
@@ -146,7 +147,7 @@ func TestAuditExportFlushRoute_AuditRequestFailureFailsClosedBeforeRemotePost(t 
 
 	_, err := client.FlushAuditExport(context.Background())
 	var denied RequestDeniedError
-	if !errors.As(err, &denied) || denied.DenialCode != DenialCodeAuditUnavailable {
+	if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected audit unavailable denial, got %v", err)
 	}
 	if got := atomic.LoadInt32(&postCount); got != 0 {

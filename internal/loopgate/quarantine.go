@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,7 +73,7 @@ type QuarantineViewResponse struct {
 	RawPayload string                     `json:"raw_payload"`
 }
 
-func (server *Server) storeQuarantinedPayload(capabilityRequest CapabilityRequest, rawPayload string) (string, error) {
+func (server *Server) storeQuarantinedPayload(capabilityRequest controlapipkg.CapabilityRequest, rawPayload string) (string, error) {
 	quarantineID, err := randomHex(16)
 	if err != nil {
 		return "", fmt.Errorf("generate quarantine id: %w", err)

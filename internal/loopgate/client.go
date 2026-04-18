@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net"
 	"net/http"
 	"strings"
@@ -66,8 +67,6 @@ type DelegatedSessionConfig struct {
 	ExpiresAt        time.Time
 }
 
-var _ ControlPlaneClient = (*Client)(nil)
-
 func NewClient(socketPath string) *Client {
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
@@ -96,22 +95,22 @@ func NewClientFromDelegatedSession(socketPath string, delegatedSession Delegated
 
 // Health returns a minimal liveness response without authentication. Use for startup probes only;
 // capability and policy inventory require Status after session open.
-func (client *Client) Health(ctx context.Context) (HealthResponse, error) {
-	var response HealthResponse
+func (client *Client) Health(ctx context.Context) (controlapipkg.HealthResponse, error) {
+	var response controlapipkg.HealthResponse
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/health", "", nil, &response, nil); err != nil {
-		return HealthResponse{}, err
+		return controlapipkg.HealthResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) Status(ctx context.Context) (StatusResponse, error) {
+func (client *Client) Status(ctx context.Context) (controlapipkg.StatusResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return StatusResponse{}, err
+		return controlapipkg.StatusResponse{}, err
 	}
-	var response StatusResponse
+	var response controlapipkg.StatusResponse
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/status", capabilityToken, nil, &response, nil); err != nil {
-		return StatusResponse{}, err
+		return controlapipkg.StatusResponse{}, err
 	}
 	return response, nil
 }
@@ -126,77 +125,77 @@ func (client *Client) FetchDiagnosticReport(ctx context.Context, responseBody in
 	return client.doJSON(ctx, http.MethodGet, "/v1/diagnostic/report", capabilityToken, nil, responseBody, nil)
 }
 
-func (client *Client) ConnectionsStatus(ctx context.Context) ([]ConnectionStatus, error) {
+func (client *Client) ConnectionsStatus(ctx context.Context) ([]controlapipkg.ConnectionStatus, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var response ConnectionsStatusResponse
+	var response controlapipkg.ConnectionsStatusResponse
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/connections/status", capabilityToken, nil, &response, nil); err != nil {
 		return nil, err
 	}
 	return response.Connections, nil
 }
 
-func (client *Client) ValidateConnection(ctx context.Context, provider string, subject string) (ConnectionStatus, error) {
+func (client *Client) ValidateConnection(ctx context.Context, provider string, subject string) (controlapipkg.ConnectionStatus, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
-	var response ConnectionStatus
-	if err := client.doJSON(ctx, http.MethodPost, "/v1/connections/validate", capabilityToken, ConnectionKeyRequest{
+	var response controlapipkg.ConnectionStatus
+	if err := client.doJSON(ctx, http.MethodPost, "/v1/connections/validate", capabilityToken, controlapipkg.ConnectionKeyRequest{
 		Provider: provider,
 		Subject:  subject,
 	}, &response, nil); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) StartPKCEConnection(ctx context.Context, request PKCEStartRequest) (PKCEStartResponse, error) {
+func (client *Client) StartPKCEConnection(ctx context.Context, request controlapipkg.PKCEStartRequest) (controlapipkg.PKCEStartResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return PKCEStartResponse{}, err
+		return controlapipkg.PKCEStartResponse{}, err
 	}
-	var response PKCEStartResponse
+	var response controlapipkg.PKCEStartResponse
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/connections/pkce/start", capabilityToken, request, &response, nil); err != nil {
-		return PKCEStartResponse{}, err
+		return controlapipkg.PKCEStartResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) CompletePKCEConnection(ctx context.Context, request PKCECompleteRequest) (ConnectionStatus, error) {
+func (client *Client) CompletePKCEConnection(ctx context.Context, request controlapipkg.PKCECompleteRequest) (controlapipkg.ConnectionStatus, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
-	var response ConnectionStatus
+	var response controlapipkg.ConnectionStatus
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/connections/pkce/complete", capabilityToken, request, &response, nil); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) InspectSite(ctx context.Context, request SiteInspectionRequest) (SiteInspectionResponse, error) {
+func (client *Client) InspectSite(ctx context.Context, request controlapipkg.SiteInspectionRequest) (controlapipkg.SiteInspectionResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return SiteInspectionResponse{}, err
+		return controlapipkg.SiteInspectionResponse{}, err
 	}
-	var response SiteInspectionResponse
+	var response controlapipkg.SiteInspectionResponse
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/sites/inspect", capabilityToken, request, &response, nil); err != nil {
-		return SiteInspectionResponse{}, err
+		return controlapipkg.SiteInspectionResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) CreateTrustDraft(ctx context.Context, request SiteTrustDraftRequest) (SiteTrustDraftResponse, error) {
+func (client *Client) CreateTrustDraft(ctx context.Context, request controlapipkg.SiteTrustDraftRequest) (controlapipkg.SiteTrustDraftResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return SiteTrustDraftResponse{}, err
+		return controlapipkg.SiteTrustDraftResponse{}, err
 	}
-	var response SiteTrustDraftResponse
+	var response controlapipkg.SiteTrustDraftResponse
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/sites/trust-draft", capabilityToken, request, &response, nil); err != nil {
-		return SiteTrustDraftResponse{}, err
+		return controlapipkg.SiteTrustDraftResponse{}, err
 	}
 	return response, nil
 }

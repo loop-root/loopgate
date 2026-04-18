@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/url"
 	"path"
@@ -49,7 +50,7 @@ func (server *Server) executeConfiguredCapability(ctx context.Context, capabilit
 	}
 
 	accessToken := ""
-	if configuredConnectionDefinition.Registration.GrantType != GrantTypePublicRead {
+	if configuredConnectionDefinition.Registration.GrantType != controlapipkg.GrantTypePublicRead {
 		resolvedAccessToken, err := server.accessTokenForConfiguredConnection(ctx, configuredConnectionDefinition)
 		if err != nil {
 			return "", err
@@ -135,22 +136,22 @@ func (server *Server) accessTokenForConfiguredConnection(ctx context.Context, co
 
 func (server *Server) issueConnectionAccessToken(ctx context.Context, configuredConnectionDefinition configuredConnection) (oauthTokenResponse, error) {
 	switch configuredConnectionDefinition.Registration.GrantType {
-	case GrantTypePublicRead:
+	case controlapipkg.GrantTypePublicRead:
 		return oauthTokenResponse{}, fmt.Errorf("public_read connections do not issue access tokens")
-	case GrantTypeClientCredentials:
+	case controlapipkg.GrantTypeClientCredentials:
 		rawClientSecret, _, _, err := server.ResolveConnectionSecret(ctx, configuredConnectionDefinition.Registration.Provider, configuredConnectionDefinition.Registration.Subject)
 		if err != nil {
 			return oauthTokenResponse{}, fmt.Errorf("resolve connection credential: %w", err)
 		}
 		formValues := url.Values{}
-		formValues.Set("grant_type", GrantTypeClientCredentials)
+		formValues.Set("grant_type", controlapipkg.GrantTypeClientCredentials)
 		formValues.Set("client_id", configuredConnectionDefinition.ClientID)
 		formValues.Set("client_secret", string(rawClientSecret))
 		if len(configuredConnectionDefinition.Registration.Scopes) > 0 {
 			formValues.Set("scope", strings.Join(configuredConnectionDefinition.Registration.Scopes, " "))
 		}
 		return server.exchangeOAuthToken(ctx, configuredConnectionDefinition, formValues)
-	case GrantTypePKCE:
+	case controlapipkg.GrantTypePKCE:
 		rawRefreshToken, _, _, err := server.ResolveConnectionSecret(ctx, configuredConnectionDefinition.Registration.Provider, configuredConnectionDefinition.Registration.Subject)
 		if err != nil {
 			return oauthTokenResponse{}, fmt.Errorf("resolve connection refresh token: %w", err)
@@ -198,8 +199,8 @@ func contentTypeForConfiguredContentClass(contentClass string) string {
 	}
 }
 
-func validateConfiguredFieldsMetadata(structuredResult map[string]interface{}, fieldsMeta map[string]ResultFieldMetadata) error {
-	capabilityResponse := CapabilityResponse{
+func validateConfiguredFieldsMetadata(structuredResult map[string]interface{}, fieldsMeta map[string]controlapipkg.ResultFieldMetadata) error {
+	capabilityResponse := controlapipkg.CapabilityResponse{
 		StructuredResult: structuredResult,
 		FieldsMeta:       fieldsMeta,
 	}

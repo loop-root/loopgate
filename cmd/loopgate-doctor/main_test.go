@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"loopgate/internal/config"
-	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"loopgate/internal/secrets"
 	"loopgate/internal/testutil"
 )
@@ -79,9 +79,9 @@ func TestRunTrustCheck_UsesRunningLoopgateServer(t *testing.T) {
 	socketPath := filepath.Join(repoRoot, "runtime", "state", "loopgate.sock")
 	calledSocketPath := ""
 	previousCheckAuditExportTrust := checkAuditExportTrust
-	checkAuditExportTrust = func(actualSocketPath string) (loopgate.AuditExportTrustCheckResponse, error) {
+	checkAuditExportTrust = func(actualSocketPath string) (controlapipkg.AuditExportTrustCheckResponse, error) {
 		calledSocketPath = actualSocketPath
-		return loopgate.AuditExportTrustCheckResponse{
+		return controlapipkg.AuditExportTrustCheckResponse{
 			Status:       "healthy",
 			Summary:      "audit export trust is healthy",
 			EndpointHost: "admin.example.com",
@@ -98,7 +98,7 @@ func TestRunTrustCheck_UsesRunningLoopgateServer(t *testing.T) {
 		t.Fatalf("expected trust-check success, got exit code %d stderr=%s", exitCode, stderr.String())
 	}
 
-	var response loopgate.AuditExportTrustCheckResponse
+	var response controlapipkg.AuditExportTrustCheckResponse
 	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
 		t.Fatalf("decode trust-check output: %v\nstdout=%s", err, stdout.String())
 	}

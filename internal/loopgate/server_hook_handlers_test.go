@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -70,14 +71,14 @@ func TestHookPreValidate_DeniesUnknownToolByDefault(t *testing.T) {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
 
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
 	if response.Decision != "block" {
 		t.Fatalf("expected unknown tool to block, got %#v", response)
 	}
-	if response.DenialCode != DenialCodeHookUnknownTool {
+	if response.DenialCode != controlapipkg.DenialCodeHookUnknownTool {
 		t.Fatalf("expected hook unknown tool denial code, got %#v", response)
 	}
 }
@@ -103,7 +104,7 @@ func TestHookPreValidate_DeniesToolDisabledByClaudeCodePolicy(t *testing.T) {
 
 	server.handleHookPreValidate(recorder, request)
 
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -135,7 +136,7 @@ func TestHookPreValidate_DeniesBashCommandDeniedPrefix(t *testing.T) {
 
 	server.handleHookPreValidate(recorder, request)
 
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -144,6 +145,67 @@ func TestHookPreValidate_DeniesBashCommandDeniedPrefix(t *testing.T) {
 	}
 	if !strings.Contains(response.Reason, "denied prefix") {
 		t.Fatalf("expected denied prefix reason, got %#v", response)
+	}
+}
+
+func TestHookPreValidate_DeniesBashCommandDeniedPrefixWithNonSpaceWhitespace(t *testing.T) {
+	repoRoot := t.TempDir()
+	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        denied_command_prefixes:\n          - \"rm -rf\"\n", 1)
+	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	requestBody := bytes.NewBufferString("{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm\\t-rf /tmp/demo\"},\"session_id\":\"session-hook\"}")
+	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+
+	server.handleHookPreValidate(recorder, request)
+
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode hook response: %v", err)
+	}
+	if response.Decision != "block" {
+		t.Fatalf("expected denied prefix with tab separator to block, got %#v", response)
+	}
+	if !strings.Contains(response.Reason, "denied prefix") {
+		t.Fatalf("expected denied prefix reason, got %#v", response)
+	}
+}
+
+func TestHookPreValidate_AllowsBashCommandAllowedPrefixWithNonSpaceWhitespace(t *testing.T) {
+	repoRoot := t.TempDir()
+	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        allowed_command_prefixes:\n          - \"git status\"\n", 1)
+	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	requestBody := bytes.NewBufferString("{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git\\tstatus --short\"},\"session_id\":\"session-hook\"}")
+	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+
+	server.handleHookPreValidate(recorder, request)
+
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode hook response: %v", err)
+	}
+	if response.Decision != "allow" {
+		t.Fatalf("expected allowed prefix with tab separator to allow, got %#v", response)
 	}
 }
 
@@ -167,7 +229,7 @@ func TestHookPreValidate_DeniesReadOutsideAllowedRoots(t *testing.T) {
 
 	server.handleHookPreValidate(recorder, request)
 
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -202,7 +264,7 @@ func TestHookPreValidate_NeedsApprovalReturnsAskAndPersistsLocalHookApproval(t *
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -280,7 +342,7 @@ func TestHookPreValidate_PermissionRequestMatchesPendingClaudeApproval(t *testin
 	if permissionRecorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", permissionRecorder.Code, permissionRecorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(permissionRecorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -368,7 +430,7 @@ func TestHookPreValidate_AllowsObservabilityHookEventAuditOnly(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -407,14 +469,14 @@ func TestHookPreValidate_BlocksSecondaryGovernanceHookEventUntilImplemented(t *t
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
 	if response.Decision != "block" {
 		t.Fatalf("expected secondary governance hook to block, got %#v", response)
 	}
-	if response.DenialCode != DenialCodeHookEventUnimplemented {
+	if response.DenialCode != controlapipkg.DenialCodeHookEventUnimplemented {
 		t.Fatalf("expected hook event unimplemented denial code, got %#v", response)
 	}
 
@@ -459,7 +521,7 @@ func TestHookPreValidate_PostToolUseResolvesPendingLocalHookApproval(t *testing.
 	if posttoolRecorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", posttoolRecorder.Code, posttoolRecorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(posttoolRecorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -581,7 +643,7 @@ func TestHookPreValidate_RateLimitBlocksPreToolUse(t *testing.T) {
 	if firstRecorder.Code != http.StatusOK {
 		t.Fatalf("expected first status 200, got %d body=%s", firstRecorder.Code, firstRecorder.Body.String())
 	}
-	var firstResponse HookPreValidateResponse
+	var firstResponse controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(firstRecorder.Body.Bytes(), &firstResponse); err != nil {
 		t.Fatalf("decode first hook response: %v", err)
 	}
@@ -601,14 +663,14 @@ func TestHookPreValidate_RateLimitBlocksPreToolUse(t *testing.T) {
 	if secondRecorder.Code != http.StatusOK {
 		t.Fatalf("expected second status 200, got %d body=%s", secondRecorder.Code, secondRecorder.Body.String())
 	}
-	var secondResponse HookPreValidateResponse
+	var secondResponse controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(secondRecorder.Body.Bytes(), &secondResponse); err != nil {
 		t.Fatalf("decode second hook response: %v", err)
 	}
 	if secondResponse.Decision != "block" {
 		t.Fatalf("expected second pretool request to block, got %#v", secondResponse)
 	}
-	if secondResponse.DenialCode != DenialCodeHookRateLimitExceeded {
+	if secondResponse.DenialCode != controlapipkg.DenialCodeHookRateLimitExceeded {
 		t.Fatalf("expected hook rate-limit denial code, got %#v", secondResponse)
 	}
 }
@@ -648,7 +710,7 @@ func TestHookPreValidate_RateLimitDoesNotBlockSessionStart(t *testing.T) {
 	if sessionStartRecorder.Code != http.StatusOK {
 		t.Fatalf("expected session start status 200, got %d body=%s", sessionStartRecorder.Code, sessionStartRecorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(sessionStartRecorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode session start response: %v", err)
 	}
@@ -659,6 +721,71 @@ func TestHookPreValidate_RateLimitDoesNotBlockSessionStart(t *testing.T) {
 	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
 	if hookEventName, _ := lastAuditEvent.Data["hook_event_name"].(string); hookEventName != claudeCodeHookEventSessionStart {
 		t.Fatalf("expected session start audit event after rate-limited pretool use, got %#v", lastAuditEvent.Data["hook_event_name"])
+	}
+}
+
+func TestHookPreValidate_PeerAuthFailureRateLimitBlocksRepeatedMissingPeerIdentity(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	server.hookPeerAuthFailureRateLimit = 1
+	server.hookPeerAuthFailureWindow = time.Hour
+
+	firstRequest := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"session-hook"}`))
+	firstRecorder := httptest.NewRecorder()
+	server.handleHookPreValidate(firstRecorder, firstRequest)
+
+	if firstRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected first missing-peer failure to return 401, got %d body=%s", firstRecorder.Code, firstRecorder.Body.String())
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"session-hook"}`))
+	secondRecorder := httptest.NewRecorder()
+	server.handleHookPreValidate(secondRecorder, secondRequest)
+
+	if secondRecorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected repeated missing-peer failure to return 429, got %d body=%s", secondRecorder.Code, secondRecorder.Body.String())
+	}
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(secondRecorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode repeated missing-peer response: %v", err)
+	}
+	if response.Decision != "block" || response.DenialCode != controlapipkg.DenialCodeHookRateLimitExceeded {
+		t.Fatalf("expected hook peer-auth rate-limit denial, got %#v", response)
+	}
+}
+
+func TestHookPreValidate_PeerAuthFailureRateLimitBlocksRepeatedUIDMismatch(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+	server.hookPeerAuthFailureRateLimit = 1
+	server.hookPeerAuthFailureWindow = time.Hour
+
+	wrongPeerContext := context.WithValue(context.Background(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()) + 1,
+		PID: 4242,
+	})
+
+	firstRequest := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"session-hook"}`)).WithContext(wrongPeerContext)
+	firstRecorder := httptest.NewRecorder()
+	server.handleHookPreValidate(firstRecorder, firstRequest)
+
+	if firstRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected first UID-mismatch failure to return 403, got %d body=%s", firstRecorder.Code, firstRecorder.Body.String())
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Read","session_id":"session-hook"}`)).WithContext(wrongPeerContext)
+	secondRecorder := httptest.NewRecorder()
+	server.handleHookPreValidate(secondRecorder, secondRequest)
+
+	if secondRecorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected repeated UID-mismatch failure to return 429, got %d body=%s", secondRecorder.Code, secondRecorder.Body.String())
+	}
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(secondRecorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode repeated UID-mismatch response: %v", err)
+	}
+	if response.Decision != "block" || response.DenialCode != controlapipkg.DenialCodeHookRateLimitExceeded {
+		t.Fatalf("expected hook peer-auth rate-limit denial, got %#v", response)
 	}
 }
 
@@ -679,7 +806,7 @@ func TestHookPreValidate_SessionStartStaysAuditOnly(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -724,7 +851,7 @@ func TestHookPreValidate_UserPromptSubmitStaysAuditOnlyEvenWhenMemoryWouldMatch(
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -761,7 +888,7 @@ func TestHookPreValidate_UserPromptSubmitNoMatchStaysAuditOnly(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}
@@ -803,7 +930,7 @@ func TestHookPreValidate_SessionEndRecordsLifecycleReason(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var response HookPreValidateResponse
+	var response controlapipkg.HookPreValidateResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode hook response: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 
 	"loopgate/internal/ledger"
 	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"loopgate/internal/troubleshoot"
 )
 
@@ -20,7 +21,7 @@ func TestAuditCrashRecoveryFailsClosedOnTruncatedActiveLedgerTail(t *testing.T) 
 	client := harness.newClient("integration-actor", "integration-audit-crash-recovery", capabilityNames(status.Capabilities))
 	t.Cleanup(client.CloseIdleConnections)
 
-	executeResponse, err := client.ExecuteCapability(context.Background(), loopgate.CapabilityRequest{
+	executeResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-audit-crash-recovery",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -30,7 +31,7 @@ func TestAuditCrashRecoveryFailsClosedOnTruncatedActiveLedgerTail(t *testing.T) 
 	if err != nil {
 		t.Fatalf("execute capability before simulated crash: %v", err)
 	}
-	if executeResponse.Status != loopgate.ResponseStatusSuccess {
+	if executeResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful capability execution before simulated crash, got %#v", executeResponse)
 	}
 

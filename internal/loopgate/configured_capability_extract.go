@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -11,88 +12,88 @@ import (
 	"loopgate/internal/identifiers"
 )
 
-func (server *Server) buildCapabilityResult(capabilityRequest CapabilityRequest, output string, sourceQuarantineRef string) (map[string]interface{}, map[string]ResultFieldMetadata, ResultClassification, string, error) {
+func (server *Server) buildCapabilityResult(capabilityRequest controlapipkg.CapabilityRequest, output string, sourceQuarantineRef string) (map[string]interface{}, map[string]controlapipkg.ResultFieldMetadata, controlapipkg.ResultClassification, string, error) {
 	capability := capabilityRequest.Capability
 	arguments := capabilityRequest.Arguments
 	if configuredCapabilityDefinition, found := server.providerRuntime.configuredCapabilities[capability]; found {
 		structuredResult := map[string]interface{}{
 			"capability": capability,
 		}
-		fieldsMeta := map[string]ResultFieldMetadata{
+		fieldsMeta := map[string]controlapipkg.ResultFieldMetadata{
 			"capability": {
-				Origin:         ResultFieldOriginLocal,
+				Origin:         controlapipkg.ResultFieldOriginLocal,
 				ContentType:    "text/plain",
-				Trust:          ResultFieldTrustDeterministic,
-				Sensitivity:    ResultFieldSensitivityBenign,
+				Trust:          controlapipkg.ResultFieldTrustDeterministic,
+				Sensitivity:    controlapipkg.ResultFieldSensitivityBenign,
 				SizeBytes:      len(capability),
-				Kind:           ResultFieldKindScalar,
-				ScalarSubclass: ResultFieldScalarSubclassStrictIdentifier,
+				Kind:           controlapipkg.ResultFieldKindScalar,
+				ScalarSubclass: controlapipkg.ResultFieldScalarSubclassStrictIdentifier,
 				PromptEligible: false,
 			},
 		}
 		extractedFieldValues, err := extractConfiguredResponseFields(configuredCapabilityDefinition, output)
 		if err != nil {
-			return nil, nil, ResultClassification{}, "", err
+			return nil, nil, controlapipkg.ResultClassification{}, "", err
 		}
 		for _, responseField := range configuredCapabilityDefinition.ResponseFields {
 			fieldValue, found := extractedFieldValues[responseField.Name]
 			if !found {
-				return nil, nil, ResultClassification{}, "", fmt.Errorf("configured response field %q was not extracted", responseField.Name)
+				return nil, nil, controlapipkg.ResultClassification{}, "", fmt.Errorf("configured response field %q was not extracted", responseField.Name)
 			}
 			fieldKind, fieldContentType, fieldSizeBytes, err := describeResultFieldValue(fieldValue)
 			if err != nil {
-				return nil, nil, ResultClassification{}, "", fmt.Errorf("describe configured response field %q: %w", responseField.Name, err)
+				return nil, nil, controlapipkg.ResultClassification{}, "", fmt.Errorf("describe configured response field %q: %w", responseField.Name, err)
 			}
-			allowArrayField := configuredCapabilityDefinition.Extractor == extractorJSONObjectList && fieldKind == ResultFieldKindArray
-			if fieldKind != ResultFieldKindScalar && !allowArrayField {
-				return nil, nil, ResultClassification{}, "", fmt.Errorf("configured response field %q must be scalar, got %s", responseField.Name, fieldKind)
+			allowArrayField := configuredCapabilityDefinition.Extractor == extractorJSONObjectList && fieldKind == controlapipkg.ResultFieldKindArray
+			if fieldKind != controlapipkg.ResultFieldKindScalar && !allowArrayField {
+				return nil, nil, controlapipkg.ResultClassification{}, "", fmt.Errorf("configured response field %q must be scalar, got %s", responseField.Name, fieldKind)
 			}
 			if fieldSizeBytes > responseField.MaxInlineBytes {
 				if !responseField.AllowBlobRefFallback {
-					return nil, nil, ResultClassification{}, "", fmt.Errorf("configured response field %q exceeded max_inline_bytes", responseField.Name)
+					return nil, nil, controlapipkg.ResultClassification{}, "", fmt.Errorf("configured response field %q exceeded max_inline_bytes", responseField.Name)
 				}
 				if strings.TrimSpace(sourceQuarantineRef) == "" {
-					return nil, nil, ResultClassification{}, "", fmt.Errorf("configured response field %q requires quarantine ref for blob_ref fallback", responseField.Name)
+					return nil, nil, controlapipkg.ResultClassification{}, "", fmt.Errorf("configured response field %q requires quarantine ref for blob_ref fallback", responseField.Name)
 				}
 				blobReferenceValue, err := buildBlobRefValue(sourceQuarantineRef, responseField.Name, fieldValue, fieldContentType, fieldSizeBytes)
 				if err != nil {
-					return nil, nil, ResultClassification{}, "", fmt.Errorf("build blob_ref for configured response field %q: %w", responseField.Name, err)
+					return nil, nil, controlapipkg.ResultClassification{}, "", fmt.Errorf("build blob_ref for configured response field %q: %w", responseField.Name, err)
 				}
 				structuredResult[responseField.Name] = blobReferenceValue
-				fieldsMeta[responseField.Name] = ResultFieldMetadata{
-					Origin:         ResultFieldOriginRemote,
+				fieldsMeta[responseField.Name] = controlapipkg.ResultFieldMetadata{
+					Origin:         controlapipkg.ResultFieldOriginRemote,
 					ContentType:    fieldContentType,
-					Trust:          ResultFieldTrustDeterministic,
+					Trust:          controlapipkg.ResultFieldTrustDeterministic,
 					Sensitivity:    responseField.Sensitivity,
 					SizeBytes:      fieldSizeBytes,
-					Kind:           ResultFieldKindBlobRef,
+					Kind:           controlapipkg.ResultFieldKindBlobRef,
 					PromptEligible: false,
 				}
 				continue
 			}
 			structuredResult[responseField.Name] = fieldValue
-			resultFieldMetadata := ResultFieldMetadata{
-				Origin:         ResultFieldOriginRemote,
+			resultFieldMetadata := controlapipkg.ResultFieldMetadata{
+				Origin:         controlapipkg.ResultFieldOriginRemote,
 				ContentType:    fieldContentType,
-				Trust:          ResultFieldTrustDeterministic,
+				Trust:          controlapipkg.ResultFieldTrustDeterministic,
 				Sensitivity:    responseField.Sensitivity,
 				SizeBytes:      fieldSizeBytes,
 				Kind:           fieldKind,
 				PromptEligible: false,
 			}
-			if fieldKind == ResultFieldKindScalar {
+			if fieldKind == controlapipkg.ResultFieldKindScalar {
 				resultFieldMetadata.ScalarSubclass = scalarSubclassForConfiguredFieldValue(fieldValue, responseField.Sensitivity)
 			}
 			fieldsMeta[responseField.Name] = resultFieldMetadata
 		}
-		classification := ResultClassification{
-			Exposure: ResultExposureDisplay,
-			Quarantine: ResultQuarantine{
+		classification := controlapipkg.ResultClassification{
+			Exposure: controlapipkg.ResultExposureDisplay,
+			Quarantine: controlapipkg.ResultQuarantine{
 				Quarantined: true,
 			},
 		}
 		if err := validateConfiguredFieldsMetadata(structuredResult, fieldsMeta); err != nil {
-			return nil, nil, ResultClassification{}, "", err
+			return nil, nil, controlapipkg.ResultClassification{}, "", err
 		}
 		return structuredResult, fieldsMeta, classification, "", nil
 	}
@@ -105,7 +106,7 @@ func buildBlobRefValue(sourceQuarantineRef string, fieldPath string, fieldValue 
 		return nil, err
 	}
 	return map[string]interface{}{
-		"kind":           ResultFieldKindBlobRef,
+		"kind":           controlapipkg.ResultFieldKindBlobRef,
 		"quarantine_ref": sourceQuarantineRef,
 		"field_path":     fieldPath,
 		"content_sha256": fieldValueHash,
@@ -118,17 +119,17 @@ func buildBlobRefValue(sourceQuarantineRef string, fieldPath string, fieldValue 
 func scalarSubclassForConfiguredFieldValue(fieldValue interface{}, fieldSensitivity string) string {
 	switch typedFieldValue := fieldValue.(type) {
 	case bool:
-		return ResultFieldScalarSubclassBoolean
+		return controlapipkg.ResultFieldScalarSubclassBoolean
 	case float64, float32, int, int64, int32, uint, uint32, uint64:
-		return ResultFieldScalarSubclassValidatedNumber
+		return controlapipkg.ResultFieldScalarSubclassValidatedNumber
 	case string:
 		if normalizedTimestamp, ok := normalizePromotableTimestamp(typedFieldValue); ok && normalizedTimestamp != "" {
-			return ResultFieldScalarSubclassTimestamp
+			return controlapipkg.ResultFieldScalarSubclassTimestamp
 		}
-		if fieldSensitivity == ResultFieldSensitivityBenign && identifiers.ValidateSafeIdentifier("configured response strict identifier", typedFieldValue) == nil {
-			return ResultFieldScalarSubclassStrictIdentifier
+		if fieldSensitivity == controlapipkg.ResultFieldSensitivityBenign && identifiers.ValidateSafeIdentifier("configured response strict identifier", typedFieldValue) == nil {
+			return controlapipkg.ResultFieldScalarSubclassStrictIdentifier
 		}
-		return ResultFieldScalarSubclassShortTextLabel
+		return controlapipkg.ResultFieldScalarSubclassShortTextLabel
 	default:
 		return ""
 	}

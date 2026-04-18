@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -118,6 +120,51 @@ func (server *Server) pruneExpiredLocked() {
 			continue
 		}
 		noteNextSweepCandidate(consumedToken.ConsumedAt.Add(requestReplayWindow))
+	}
+	for controlSessionID, readTimestamps := range server.replayState.sessionReadCounts {
+		prunedReadTimestamps := readTimestamps[:0]
+		for _, readTimestamp := range readTimestamps {
+			if nowUTC.Sub(readTimestamp) >= fsReadRateWindow {
+				continue
+			}
+			prunedReadTimestamps = append(prunedReadTimestamps, readTimestamp)
+			noteNextSweepCandidate(readTimestamp.Add(fsReadRateWindow))
+		}
+		if len(prunedReadTimestamps) == 0 {
+			delete(server.replayState.sessionReadCounts, controlSessionID)
+			continue
+		}
+		server.replayState.sessionReadCounts[controlSessionID] = prunedReadTimestamps
+	}
+	for peerUID, hookTimestamps := range server.replayState.hookPreValidateCounts {
+		prunedHookTimestamps := hookTimestamps[:0]
+		for _, hookTimestamp := range hookTimestamps {
+			if nowUTC.Sub(hookTimestamp) >= server.hookPreValidateRateWindow {
+				continue
+			}
+			prunedHookTimestamps = append(prunedHookTimestamps, hookTimestamp)
+			noteNextSweepCandidate(hookTimestamp.Add(server.hookPreValidateRateWindow))
+		}
+		if len(prunedHookTimestamps) == 0 {
+			delete(server.replayState.hookPreValidateCounts, peerUID)
+			continue
+		}
+		server.replayState.hookPreValidateCounts[peerUID] = prunedHookTimestamps
+	}
+	for rateLimitKey, failureTimestamps := range server.replayState.hookPeerAuthFailureCounts {
+		prunedFailureTimestamps := failureTimestamps[:0]
+		for _, failureTimestamp := range failureTimestamps {
+			if nowUTC.Sub(failureTimestamp) >= server.hookPeerAuthFailureWindow {
+				continue
+			}
+			prunedFailureTimestamps = append(prunedFailureTimestamps, failureTimestamp)
+			noteNextSweepCandidate(failureTimestamp.Add(server.hookPeerAuthFailureWindow))
+		}
+		if len(prunedFailureTimestamps) == 0 {
+			delete(server.replayState.hookPeerAuthFailureCounts, rateLimitKey)
+			continue
+		}
+		server.replayState.hookPeerAuthFailureCounts[rateLimitKey] = prunedFailureTimestamps
 	}
 	if server.expirySweepMaxInterval <= 0 {
 		server.nextExpirySweepAt = time.Time{}
@@ -261,6 +308,29 @@ func (store appendOnlyNonceReplayStore) Record(nonceKey string, seenNonce seenRe
 }
 
 func (store appendOnlyNonceReplayStore) Compact(seenAuthNonces map[string]seenRequest) error {
+	nonceKeys := make([]string, 0, len(seenAuthNonces))
+	for nonceKey := range seenAuthNonces {
+		nonceKeys = append(nonceKeys, nonceKey)
+	}
+	slices.Sort(nonceKeys)
+
+	logBytes := make([]byte, 0, len(nonceKeys)*96)
+	for _, nonceKey := range nonceKeys {
+		seenNonce := seenAuthNonces[nonceKey]
+		recordBytes, err := json.Marshal(nonceReplayLogRecord{
+			NonceKey:         nonceKey,
+			ControlSessionID: seenNonce.ControlSessionID,
+			SeenAt:           seenNonce.SeenAt.UTC().Format(time.RFC3339Nano),
+		})
+		if err != nil {
+			return fmt.Errorf("marshal compacted nonce replay log record: %w", err)
+		}
+		logBytes = append(logBytes, recordBytes...)
+		logBytes = append(logBytes, '\n')
+	}
+	if err := atomicWritePrivateStateFile(store.path, logBytes); err != nil {
+		return fmt.Errorf("persist compacted nonce replay log: %w", err)
+	}
 	return nil
 }
 
@@ -346,7 +416,7 @@ func loadAppendOnlyNonceReplayLog(path string, nowUTC time.Time) (map[string]see
 	return loadedNonces, nil
 }
 
-func atomicWritePrivateJSON(path string, jsonBytes []byte) error {
+func atomicWritePrivateStateFile(path string, fileBytes []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
@@ -363,7 +433,7 @@ func atomicWritePrivateJSON(path string, jsonBytes []byte) error {
 		cleanupTemp()
 		return fmt.Errorf("chmod state temp file: %w", err)
 	}
-	if _, err := tempFile.Write(jsonBytes); err != nil {
+	if _, err := tempFile.Write(fileBytes); err != nil {
 		cleanupTemp()
 		return fmt.Errorf("write state temp file: %w", err)
 	}
@@ -384,6 +454,10 @@ func atomicWritePrivateJSON(path string, jsonBytes []byte) error {
 		_ = stateDir.Close()
 	}
 	return nil
+}
+
+func atomicWritePrivateJSON(path string, jsonBytes []byte) error {
+	return atomicWritePrivateStateFile(path, jsonBytes)
 }
 
 func appendPrivateStateLine(path string, line []byte) error {
@@ -456,25 +530,25 @@ func (server *Server) countPendingMCPGatewayApprovalRequestsForSessionLocked(con
 
 // recordRequest returns nil when the request_id is accepted for replay tracking, or a denial
 // when duplicate or when the replay map is saturated (fail closed — no eviction).
-func (server *Server) recordRequest(controlSessionID string, capabilityRequest CapabilityRequest) *CapabilityResponse {
+func (server *Server) recordRequest(controlSessionID string, capabilityRequest controlapipkg.CapabilityRequest) *controlapipkg.CapabilityResponse {
 	requestKey := controlSessionID + ":" + capabilityRequest.RequestID
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	server.pruneExpiredLocked()
 	if _, found := server.replayState.seenRequests[requestKey]; found {
-		return &CapabilityResponse{
+		return &controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "duplicate request_id was rejected",
-			DenialCode:   DenialCodeRequestReplayDetected,
+			DenialCode:   controlapipkg.DenialCodeRequestReplayDetected,
 		}
 	}
 	if len(server.replayState.seenRequests) >= server.maxSeenRequestReplayEntries {
-		return &CapabilityResponse{
+		return &controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "request replay store is at capacity",
-			DenialCode:   DenialCodeReplayStateSaturated,
+			DenialCode:   controlapipkg.DenialCodeReplayStateSaturated,
 		}
 	}
 	server.replayState.seenRequests[requestKey] = seenRequest{
@@ -485,25 +559,25 @@ func (server *Server) recordRequest(controlSessionID string, capabilityRequest C
 	return nil
 }
 
-func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabilityRequest CapabilityRequest) (CapabilityResponse, bool) {
+func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) (controlapipkg.CapabilityResponse, bool) {
 	if strings.TrimSpace(tokenClaims.BoundCapability) != "" && tokenClaims.BoundCapability != capabilityRequest.Capability {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "capability token binding does not match requested capability",
-			DenialCode:   DenialCodeCapabilityTokenBindingInvalid,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenBindingInvalid,
 		}, true
 	}
 	if strings.TrimSpace(tokenClaims.BoundArgumentHash) != "" && tokenClaims.BoundArgumentHash != normalizedArgumentHash(capabilityRequest.Arguments) {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "capability token binding does not match normalized arguments",
-			DenialCode:   DenialCodeCapabilityTokenBindingInvalid,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenBindingInvalid,
 		}, true
 	}
 	if !tokenClaims.SingleUse {
-		return CapabilityResponse{}, false
+		return controlapipkg.CapabilityResponse{}, false
 	}
 
 	server.mu.Lock()
@@ -511,11 +585,11 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 
 	server.pruneExpiredLocked()
 	if _, alreadyUsed := server.replayState.usedTokens[tokenClaims.TokenID]; alreadyUsed {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "single-use capability token was already consumed",
-			DenialCode:   DenialCodeCapabilityTokenReused,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenReused,
 		}, true
 	}
 	server.replayState.usedTokens[tokenClaims.TokenID] = usedToken{
@@ -527,29 +601,29 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 		ConsumedAt:        server.now().UTC(),
 	}
 	server.noteReplayWindowCandidateLocked(server.replayState.usedTokens[tokenClaims.TokenID].ConsumedAt)
-	return CapabilityResponse{}, false
+	return controlapipkg.CapabilityResponse{}, false
 }
 
 // recordAuthNonce returns nil if the nonce is new and recorded, a denial for replay, or a
 // denial when the nonce map is saturated (fail closed).
-func (server *Server) recordAuthNonce(controlSessionID string, requestNonce string) *CapabilityResponse {
+func (server *Server) recordAuthNonce(controlSessionID string, requestNonce string) *controlapipkg.CapabilityResponse {
 	nonceKey := controlSessionID + ":" + requestNonce
 	server.mu.Lock()
 	server.pruneExpiredLocked()
 	if _, found := server.replayState.seenAuthNonces[nonceKey]; found {
 		server.mu.Unlock()
-		return &CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return &controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "request nonce replay was rejected",
-			DenialCode:   DenialCodeRequestNonceReplayDetected,
+			DenialCode:   controlapipkg.DenialCodeRequestNonceReplayDetected,
 		}
 	}
 	if len(server.replayState.seenAuthNonces) >= server.maxAuthNonceReplayEntries {
 		server.mu.Unlock()
-		return &CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return &controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "request nonce replay store is at capacity",
-			DenialCode:   DenialCodeReplayStateSaturated,
+			DenialCode:   controlapipkg.DenialCodeReplayStateSaturated,
 		}
 	}
 	server.replayState.seenAuthNonces[nonceKey] = seenRequest{
@@ -564,10 +638,10 @@ func (server *Server) recordAuthNonce(controlSessionID string, requestNonce stri
 		server.mu.Lock()
 		delete(server.replayState.seenAuthNonces, nonceKey)
 		server.mu.Unlock()
-		return &CapabilityResponse{
-			Status:       ResponseStatusError,
+		return &controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "nonce replay state is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 		}
 	}
 	return nil

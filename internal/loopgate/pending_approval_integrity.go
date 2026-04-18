@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"crypto/subtle"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 
@@ -13,37 +14,37 @@ import (
 // verifyPendingApprovalStoredExecutionBody checks that pending.Request still serializes to the
 // same SHA256 recorded at approval creation. Skips when ExecutionBodySHA256 is empty (legacy
 // backfill-only records).
-func (server *Server) verifyPendingApprovalStoredExecutionBody(pending pendingApproval) (CapabilityResponse, bool) {
+func (server *Server) verifyPendingApprovalStoredExecutionBody(pending pendingApproval) (controlapipkg.CapabilityResponse, bool) {
 	if strings.TrimSpace(pending.ExecutionBodySHA256) == "" {
-		return CapabilityResponse{}, true
+		return controlapipkg.CapabilityResponse{}, true
 	}
 	current, err := approvalpkg.RequestBodySHA256(pending.Request)
 	if err != nil {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    pending.Request.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane approval execution body check failed",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 	// Constant-time compare on hex digests: same length from SHA256 hex encoding.
 	if len(current) != len(pending.ExecutionBodySHA256) {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    pending.Request.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "stored approval request does not match execution body hash",
-			DenialCode:   DenialCodeApprovalExecutionBodyMismatch,
+			DenialCode:   controlapipkg.DenialCodeApprovalExecutionBodyMismatch,
 		}, false
 	}
 	if subtle.ConstantTimeCompare([]byte(current), []byte(pending.ExecutionBodySHA256)) != 1 {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    pending.Request.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "stored approval request does not match execution body hash",
-			DenialCode:   DenialCodeApprovalExecutionBodyMismatch,
+			DenialCode:   controlapipkg.DenialCodeApprovalExecutionBodyMismatch,
 		}, false
 	}
-	return CapabilityResponse{}, true
+	return controlapipkg.CapabilityResponse{}, true
 }
 
 // writePendingApprovalExecutionIntegrityDenial mirrors other approval denial paths: audit, then JSON.
@@ -52,7 +53,7 @@ func (server *Server) writePendingApprovalExecutionIntegrityDenial(
 	controlSession controlSession,
 	approvalID string,
 	pendingApproval pendingApproval,
-	denial CapabilityResponse,
+	denial controlapipkg.CapabilityResponse,
 ) {
 	approvalDeniedAuditData := map[string]interface{}{
 		"approval_request_id":  approvalID,
@@ -67,11 +68,11 @@ func (server *Server) writePendingApprovalExecutionIntegrityDenial(
 		approvalDeniedAuditData["approval_class"] = approvalClass
 	}
 	if err := server.logEvent("approval.denied", controlSession.ID, approvalDeniedAuditData); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 			RequestID:         denial.RequestID,
-			Status:            ResponseStatusError,
+			Status:            controlapipkg.ResponseStatusError,
 			DenialReason:      "control-plane audit is unavailable",
-			DenialCode:        DenialCodeAuditUnavailable,
+			DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 			ApprovalRequestID: approvalID,
 		})
 		return

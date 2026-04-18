@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -236,7 +237,7 @@ func operatorMountRootForResolvedHostPath(server *Server, controlSessionID strin
 	return operatorMountMatchedRootPath(binding.paths, resolvedHostPath)
 }
 
-func operatorMountWriteGrantForRequest(server *Server, controlSessionID string, capabilityRequest CapabilityRequest) (operatorMountWriteGrant, bool, error) {
+func operatorMountWriteGrantForRequest(server *Server, controlSessionID string, capabilityRequest controlapipkg.CapabilityRequest) (operatorMountWriteGrant, bool, error) {
 	if capabilityRequest.Capability != "operator_mount.fs_write" && capabilityRequest.Capability != "operator_mount.fs_mkdir" {
 		return operatorMountWriteGrant{}, false, nil
 	}

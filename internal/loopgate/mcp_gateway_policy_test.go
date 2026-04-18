@@ -3,6 +3,7 @@ package loopgate
 import (
 	"encoding/json"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"strings"
 	"testing"
 )
@@ -216,7 +217,7 @@ func TestValidateMCPGatewayToolArguments_EnforcesDeclaredArgumentPolicy(t *testi
 		t.Fatalf("unexpected server manifest: %#v", serverManifest)
 	}
 
-	validRequest, err := validateMCPGatewayInvocationRequest(MCPGatewayInvocationRequest{
+	validRequest, err := controlapipkg.ValidateMCPGatewayInvocationRequest(controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -231,7 +232,7 @@ func TestValidateMCPGatewayToolArguments_EnforcesDeclaredArgumentPolicy(t *testi
 		t.Fatalf("expected valid tool arguments: %v", err)
 	}
 
-	missingRequiredRequest, err := validateMCPGatewayInvocationRequest(MCPGatewayInvocationRequest{
+	missingRequiredRequest, err := controlapipkg.ValidateMCPGatewayInvocationRequest(controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -245,7 +246,7 @@ func TestValidateMCPGatewayToolArguments_EnforcesDeclaredArgumentPolicy(t *testi
 		t.Fatalf("expected required argument denial, got %v", err)
 	}
 
-	deniedArgumentRequest, err := validateMCPGatewayInvocationRequest(MCPGatewayInvocationRequest{
+	deniedArgumentRequest, err := controlapipkg.ValidateMCPGatewayInvocationRequest(controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{
@@ -260,7 +261,7 @@ func TestValidateMCPGatewayToolArguments_EnforcesDeclaredArgumentPolicy(t *testi
 		t.Fatalf("expected allowed-arguments denial, got %v", err)
 	}
 
-	wrongKindRequest, err := validateMCPGatewayInvocationRequest(MCPGatewayInvocationRequest{
+	wrongKindRequest, err := controlapipkg.ValidateMCPGatewayInvocationRequest(controlapipkg.MCPGatewayInvocationRequest{
 		ServerID: "github",
 		ToolName: "search_repositories",
 		Arguments: map[string]json.RawMessage{

@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 )
 
@@ -25,26 +26,26 @@ func (server *Server) handleQuarantineMetadata(writer http.ResponseWriter, reque
 
 	var metadataRequest QuarantineLookupRequest
 	if err := decodeJSONBytes(requestBodyBytes, &metadataRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := metadataRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	metadataResponse, err := server.quarantineMetadata(metadataRequest.QuarantineRef)
 	if err != nil {
-		server.writeJSON(writer, quarantineHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, quarantineHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactQuarantineError(err),
 			DenialCode:   quarantineDenialCode(err),
 			Redacted:     true,
@@ -75,26 +76,26 @@ func (server *Server) handleQuarantineView(writer http.ResponseWriter, request *
 
 	var viewRequest QuarantineLookupRequest
 	if err := decodeJSONBytes(requestBodyBytes, &viewRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := viewRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	viewResponse, err := server.viewQuarantinedPayload(viewRequest.QuarantineRef)
 	if err != nil {
-		server.writeJSON(writer, quarantineHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, quarantineHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactQuarantineError(err),
 			DenialCode:   quarantineDenialCode(err),
 			Redacted:     true,
@@ -111,10 +112,10 @@ func (server *Server) handleQuarantineView(writer http.ResponseWriter, request *
 		"actor_label":          tokenClaims.ActorLabel,
 		"client_session_label": tokenClaims.ClientSessionLabel,
 	}); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 		})
 		return
 	}
@@ -142,26 +143,26 @@ func (server *Server) handleQuarantinePrune(writer http.ResponseWriter, request 
 
 	var pruneRequest QuarantineLookupRequest
 	if err := decodeJSONBytes(requestBodyBytes, &pruneRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := pruneRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	metadataResponse, err := server.pruneQuarantinedPayloadAndLoadMetadata(pruneRequest.QuarantineRef, "operator_requested")
 	if err != nil {
-		server.writeJSON(writer, quarantineHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, quarantineHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactQuarantineError(err),
 			DenialCode:   quarantineDenialCode(err),
 			Redacted:     true,

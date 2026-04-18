@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net"
 	"net/http"
 	"strings"
@@ -48,7 +49,7 @@ func TestHealthUnauthenticatedSucceeds(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("expected health 200, got %d", response.StatusCode)
 	}
-	var payload HealthResponse
+	var payload controlapipkg.HealthResponse
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode health: %v", err)
 	}
@@ -111,7 +112,7 @@ func TestSessionOpen_GrantsOnlyRegisteredCapabilities(t *testing.T) {
 	}
 
 	for _, cap := range status.Capabilities {
-		response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+		response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 			RequestID:  "req-" + cap.Name,
 			Capability: cap.Name,
 			Arguments:  map[string]string{"path": "."},
@@ -119,7 +120,7 @@ func TestSessionOpen_GrantsOnlyRegisteredCapabilities(t *testing.T) {
 		if err != nil {
 			t.Fatalf("execute %s: %v", cap.Name, err)
 		}
-		if response.DenialCode == DenialCodeCapabilityTokenScopeDenied {
+		if response.DenialCode == controlapipkg.DenialCodeCapabilityTokenScopeDenied {
 			t.Errorf("capability %s should be in granted scope", cap.Name)
 		}
 	}
@@ -144,7 +145,7 @@ func TestSessionOpen_DuplicateLabelReplacesOldSession(t *testing.T) {
 		t.Error("new session should get a new token")
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-after-replace",
 		Capability: "fs_list",
 		Arguments:  map[string]string{"path": "."},
@@ -152,7 +153,7 @@ func TestSessionOpen_DuplicateLabelReplacesOldSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute after replace: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected success after session replace, got %#v", response)
 	}
 }

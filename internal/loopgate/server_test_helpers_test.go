@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -71,7 +72,7 @@ func newShortLoopgateSocketPath(t *testing.T) string {
 	return socketPath
 }
 
-func startLoopgateServer(t *testing.T, repoRoot string, policyYAML string) (*Client, StatusResponse, *Server) {
+func startLoopgateServer(t *testing.T, repoRoot string, policyYAML string) (*Client, controlapipkg.StatusResponse, *Server) {
 	return startLoopgateServerWithRuntime(t, repoRoot, policyYAML, nil, true)
 }
 
@@ -104,7 +105,7 @@ func pinTestProcessAsExpectedClient(t *testing.T, server *Server) {
 
 // startLoopgateServerWithRuntime starts Loopgate in a temp repo. When runSessionBootstrap is false,
 // the server is healthy but no control session is opened (for tests where session open must fail).
-func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML string, runtimeCfg *config.RuntimeConfig, runSessionBootstrap bool) (*Client, StatusResponse, *Server) {
+func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML string, runtimeCfg *config.RuntimeConfig, runSessionBootstrap bool) (*Client, controlapipkg.StatusResponse, *Server) {
 	t.Helper()
 
 	policySigner, err := testutil.NewPolicyTestSigner()
@@ -161,7 +162,7 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 	}
 
 	if !runSessionBootstrap {
-		return client, StatusResponse{}, server
+		return client, controlapipkg.StatusResponse{}, server
 	}
 
 	client.ConfigureSession("test-actor", "test-session", []string{"fs_list"})
@@ -189,7 +190,7 @@ func mustJSON(t *testing.T, value interface{}) []byte {
 	return encodedBytes
 }
 
-func capabilityNames(capabilities []CapabilitySummary) []string {
+func capabilityNames(capabilities []controlapipkg.CapabilitySummary) []string {
 	names := make([]string, 0, len(capabilities))
 	for _, capability := range capabilities {
 		names = append(names, capability.Name)
@@ -197,13 +198,13 @@ func capabilityNames(capabilities []CapabilitySummary) []string {
 	return names
 }
 
-func advertisedSessionCapabilityNames(status StatusResponse) []string {
+func advertisedSessionCapabilityNames(status controlapipkg.StatusResponse) []string {
 	advertisedCapabilities := capabilityNames(status.Capabilities)
 	advertisedCapabilities = append(advertisedCapabilities, capabilityNames(status.ControlCapabilities)...)
 	return advertisedCapabilities
 }
 
-func containsCapability(capabilities []CapabilitySummary, capabilityName string) bool {
+func containsCapability(capabilities []controlapipkg.CapabilitySummary, capabilityName string) bool {
 	for _, capability := range capabilities {
 		if capability.Name == capabilityName {
 			return true
@@ -687,7 +688,7 @@ func writeConfiguredPKCEYAML(t *testing.T, repoRoot string, providerBaseURL stri
 	}
 }
 
-func readUIReplayEvents(t *testing.T, client *Client, lastEventID string) []UIEventEnvelope {
+func readUIReplayEvents(t *testing.T, client *Client, lastEventID string) []controlapipkg.UIEventEnvelope {
 	t.Helper()
 
 	capabilityToken, err := client.ensureCapabilityToken(context.Background())
@@ -720,7 +721,7 @@ func readUIReplayEvents(t *testing.T, client *Client, lastEventID string) []UIEv
 	}
 
 	reader := bufio.NewReader(httpResponse.Body)
-	events := make([]UIEventEnvelope, 0, 8)
+	events := make([]controlapipkg.UIEventEnvelope, 0, 8)
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -729,7 +730,7 @@ func readUIReplayEvents(t *testing.T, client *Client, lastEventID string) []UIEv
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
-		var uiEvent UIEventEnvelope
+		var uiEvent controlapipkg.UIEventEnvelope
 		if err := json.Unmarshal([]byte(strings.TrimPrefix(strings.TrimSpace(line), "data: ")), &uiEvent); err != nil {
 			t.Fatalf("decode ui event: %v", err)
 		}
@@ -738,7 +739,7 @@ func readUIReplayEvents(t *testing.T, client *Client, lastEventID string) []UIEv
 	return events
 }
 
-func readUIRecentEvents(t *testing.T, client *Client, lastEventID string) []UIEventEnvelope {
+func readUIRecentEvents(t *testing.T, client *Client, lastEventID string) []controlapipkg.UIEventEnvelope {
 	t.Helper()
 
 	capabilityToken, err := client.ensureCapabilityToken(context.Background())
@@ -767,14 +768,14 @@ func readUIRecentEvents(t *testing.T, client *Client, lastEventID string) []UIEv
 		t.Fatalf("unexpected recent ui events status: %d", httpResponse.StatusCode)
 	}
 
-	var response UIRecentEventsResponse
+	var response controlapipkg.UIRecentEventsResponse
 	if err := json.NewDecoder(httpResponse.Body).Decode(&response); err != nil {
 		t.Fatalf("decode recent ui events response: %v", err)
 	}
 	return response.Events
 }
 
-func containsUIEventType(events []UIEventEnvelope, expectedType string) bool {
+func containsUIEventType(events []controlapipkg.UIEventEnvelope, expectedType string) bool {
 	for _, uiEvent := range events {
 		if uiEvent.Type == expectedType {
 			return true
@@ -783,7 +784,7 @@ func containsUIEventType(events []UIEventEnvelope, expectedType string) bool {
 	return false
 }
 
-func containsUICapabilityEvent(events []UIEventEnvelope, capability string) bool {
+func containsUICapabilityEvent(events []controlapipkg.UIEventEnvelope, capability string) bool {
 	for _, uiEvent := range events {
 		encodedEvent, err := json.Marshal(uiEvent)
 		if err != nil {

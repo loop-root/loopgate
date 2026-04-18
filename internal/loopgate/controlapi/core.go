@@ -1,7 +1,6 @@
-package loopgate
+package controlapi
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -112,51 +111,6 @@ const (
 	DenialCodeHookEventUnimplemented  = "hook_event_unimplemented"
 	DenialCodeHookRateLimitExceeded   = "hook_rate_limit_exceeded"
 )
-
-type ControlPlaneClient interface {
-	Status(ctx context.Context) (StatusResponse, error)
-	ConfigureSession(actor string, sessionID string, requestedCapabilities []string)
-	LoadPolicyConfig(ctx context.Context) (config.Policy, error)
-	ReloadPolicyFromDisk(ctx context.Context) (ConfigPolicyReloadResponse, error)
-	FlushAuditExport(ctx context.Context) (AuditExportFlushResponse, error)
-	CheckAuditExportTrust(ctx context.Context) (AuditExportTrustCheckResponse, error)
-	LoadMCPGatewayInventory(ctx context.Context) (MCPGatewayInventoryResponse, error)
-	LoadMCPGatewayServerStatus(ctx context.Context) (MCPGatewayServerStatusResponse, error)
-	CheckMCPGatewayDecision(ctx context.Context, request MCPGatewayDecisionRequest) (MCPGatewayDecisionResponse, error)
-	EnsureMCPGatewayServerLaunched(ctx context.Context, request MCPGatewayEnsureLaunchRequest) (MCPGatewayEnsureLaunchResponse, error)
-	StopMCPGatewayServer(ctx context.Context, request MCPGatewayStopRequest) (MCPGatewayStopResponse, error)
-	ValidateMCPGatewayInvocation(ctx context.Context, request MCPGatewayInvocationRequest) (MCPGatewayInvocationValidationResponse, error)
-	RequestMCPGatewayInvocationApproval(ctx context.Context, request MCPGatewayInvocationRequest) (MCPGatewayInvocationApprovalResponse, error)
-	DecideMCPGatewayInvocationApproval(ctx context.Context, request MCPGatewayApprovalDecisionRequest) (MCPGatewayApprovalDecisionResponse, error)
-	ValidateMCPGatewayExecution(ctx context.Context, request MCPGatewayExecutionRequest) (MCPGatewayExecutionValidationResponse, error)
-	ExecuteMCPGatewayInvocation(ctx context.Context, request MCPGatewayExecutionRequest) (MCPGatewayExecutionResponse, error)
-	ConnectionsStatus(ctx context.Context) ([]ConnectionStatus, error)
-	ValidateConnection(ctx context.Context, provider string, subject string) (ConnectionStatus, error)
-	StartPKCEConnection(ctx context.Context, request PKCEStartRequest) (PKCEStartResponse, error)
-	CompletePKCEConnection(ctx context.Context, request PKCECompleteRequest) (ConnectionStatus, error)
-	InspectSite(ctx context.Context, request SiteInspectionRequest) (SiteInspectionResponse, error)
-	CreateTrustDraft(ctx context.Context, request SiteTrustDraftRequest) (SiteTrustDraftResponse, error)
-	SandboxImport(ctx context.Context, request SandboxImportRequest) (SandboxOperationResponse, error)
-	SandboxStage(ctx context.Context, request SandboxStageRequest) (SandboxOperationResponse, error)
-	SandboxMetadata(ctx context.Context, request SandboxMetadataRequest) (SandboxArtifactMetadataResponse, error)
-	SandboxExport(ctx context.Context, request SandboxExportRequest) (SandboxOperationResponse, error)
-	SandboxList(ctx context.Context, request SandboxListRequest) (SandboxListResponse, error)
-	QuarantineMetadata(ctx context.Context, quarantineRef string) (QuarantineMetadataResponse, error)
-	ViewQuarantinedPayload(ctx context.Context, quarantineRef string) (QuarantineViewResponse, error)
-	PruneQuarantinedPayload(ctx context.Context, quarantineRef string) (QuarantineMetadataResponse, error)
-	ExecuteCapability(ctx context.Context, capabilityRequest CapabilityRequest) (CapabilityResponse, error)
-	DecideApproval(ctx context.Context, approvalRequestID string, approved bool) (CapabilityResponse, error)
-	ListPendingApprovals(ctx context.Context) (OperatorApprovalsResponse, error)
-	DecidePendingApproval(ctx context.Context, approvalRequestID string, approved bool, reason string) (OperatorApprovalDecisionResponse, error)
-	UIStatus(ctx context.Context) (UIStatusResponse, error)
-	UIApprovals(ctx context.Context) (UIApprovalsResponse, error)
-	UIDecideApproval(ctx context.Context, approvalRequestID string, approved bool) (CapabilityResponse, error)
-	SharedFolderStatus(ctx context.Context) (SharedFolderStatusResponse, error)
-	SyncSharedFolder(ctx context.Context) (SharedFolderStatusResponse, error)
-	FolderAccessStatus(ctx context.Context) (FolderAccessStatusResponse, error)
-	SyncFolderAccess(ctx context.Context) (FolderAccessSyncResponse, error)
-	UpdateFolderAccess(ctx context.Context, request FolderAccessUpdateRequest) (FolderAccessStatusResponse, error)
-}
 
 type CapabilitySummary struct {
 	Name        string `json:"name"`

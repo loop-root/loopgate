@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -50,7 +51,7 @@ func TestDiagnosticReportRequiresSignedRequest(t *testing.T) {
 	var ignored map[string]interface{}
 	err := client.FetchDiagnosticReport(context.Background(), &ignored)
 	var denied RequestDeniedError
-	if !errors.As(err, &denied) || denied.DenialCode != DenialCodeRequestSignatureMissing {
+	if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeRequestSignatureMissing {
 		t.Fatalf("expected request signature missing denial, got %v", err)
 	}
 }
@@ -68,7 +69,7 @@ func TestAuditExportTrustCheckRequiresSignedRequest(t *testing.T) {
 
 	_, err := client.CheckAuditExportTrust(context.Background())
 	var denied RequestDeniedError
-	if !errors.As(err, &denied) || denied.DenialCode != DenialCodeRequestSignatureMissing {
+	if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeRequestSignatureMissing {
 		t.Fatalf("expected request signature missing denial, got %v", err)
 	}
 }

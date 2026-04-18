@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -37,14 +38,14 @@ func TestRetiredHavenRoutesAreNotRegistered(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	var statusResponse StatusResponse
+	var statusResponse controlapipkg.StatusResponse
 	if err := client.doJSON(context.Background(), http.MethodGet, "/v1/status", client.capabilityToken, nil, &statusResponse, nil); err != nil {
 		t.Fatalf("status with retired Haven routes absent: %v", err)
 	}
 
 	err := client.doJSON(context.Background(), http.MethodPost, "/v1/chat", client.capabilityToken, map[string]string{
 		"message": "retired route should be unregistered",
-	}, &CapabilityResponse{}, nil)
+	}, &controlapipkg.CapabilityResponse{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatalf("expected 404 for retired /v1/chat route, got %v", err)
 	}

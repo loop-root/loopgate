@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ import (
 
 const hookAuditPreviewMaxBytes = 256
 
-func buildHookAuditProjection(req HookPreValidateRequest, repoRoot string, includePreviews bool) map[string]interface{} {
+func buildHookAuditProjection(req controlapipkg.HookPreValidateRequest, repoRoot string, includePreviews bool) map[string]interface{} {
 	auditProjection := map[string]interface{}{
 		"tool_name": req.ToolName,
 	}
@@ -73,7 +74,7 @@ func buildHookAuditProjection(req HookPreValidateRequest, repoRoot string, inclu
 	return auditProjection
 }
 
-func mergeHookAuditProjection(auditData map[string]interface{}, req HookPreValidateRequest, repoRoot string, includePreviews bool) map[string]interface{} {
+func mergeHookAuditProjection(auditData map[string]interface{}, req controlapipkg.HookPreValidateRequest, repoRoot string, includePreviews bool) map[string]interface{} {
 	if auditData == nil {
 		auditData = map[string]interface{}{}
 	}

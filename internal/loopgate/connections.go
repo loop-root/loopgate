@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,7 +43,7 @@ type connectionStateFile struct {
 }
 
 func isPublicReadGrantType(rawGrantType string) bool {
-	return strings.TrimSpace(rawGrantType) == GrantTypePublicRead
+	return strings.TrimSpace(rawGrantType) == controlapipkg.GrantTypePublicRead
 }
 
 func secretRefIsEmpty(secretRef secrets.SecretRef) bool {
@@ -57,7 +58,7 @@ func (connectionRegistration connectionRegistration) Validate() error {
 		return err
 	}
 	if strings.TrimSpace(connectionRegistration.GrantType) != "" {
-		if err := ValidateGrantType(connectionRegistration.GrantType); err != nil {
+		if err := controlapipkg.ValidateGrantType(connectionRegistration.GrantType); err != nil {
 			return err
 		}
 	}
@@ -85,7 +86,7 @@ func (connectionRecord connectionRecord) Validate() error {
 		return err
 	}
 	if strings.TrimSpace(connectionRecord.GrantType) != "" {
-		if err := ValidateGrantType(connectionRecord.GrantType); err != nil {
+		if err := controlapipkg.ValidateGrantType(connectionRecord.GrantType); err != nil {
 			return err
 		}
 	}
@@ -113,12 +114,12 @@ func (connectionRecord connectionRecord) Validate() error {
 	return connectionRecord.Credential.Validate()
 }
 
-func (connectionRecord connectionRecord) statusSummary() ConnectionStatus {
+func (connectionRecord connectionRecord) statusSummary() controlapipkg.ConnectionStatus {
 	secureStoreRefID := connectionRecord.Credential.ID
 	if isPublicReadGrantType(connectionRecord.GrantType) {
 		secureStoreRefID = "none"
 	}
-	return ConnectionStatus{
+	return controlapipkg.ConnectionStatus{
 		Provider:           connectionRecord.Provider,
 		GrantType:          connectionRecord.GrantType,
 		Subject:            connectionRecord.Subject,
@@ -254,11 +255,11 @@ func saveConnectionRecords(path string, connectionRecords map[string]connectionR
 	return nil
 }
 
-func (server *Server) connectionStatuses() []ConnectionStatus {
+func (server *Server) connectionStatuses() []controlapipkg.ConnectionStatus {
 	server.connectionRuntime.mu.Lock()
 	defer server.connectionRuntime.mu.Unlock()
 
-	connectionStatuses := make([]ConnectionStatus, 0, len(server.connectionRuntime.records)+len(server.providerRuntime.configuredConnections))
+	connectionStatuses := make([]controlapipkg.ConnectionStatus, 0, len(server.connectionRuntime.records)+len(server.providerRuntime.configuredConnections))
 	for _, connectionRecord := range server.connectionRuntime.records {
 		connectionStatuses = append(connectionStatuses, connectionRecord.statusSummary())
 	}
@@ -269,7 +270,7 @@ func (server *Server) connectionStatuses() []ConnectionStatus {
 		if _, found := server.connectionRuntime.records[connectionKey]; found {
 			continue
 		}
-		connectionStatuses = append(connectionStatuses, ConnectionStatus{
+		connectionStatuses = append(connectionStatuses, controlapipkg.ConnectionStatus{
 			Provider:           configuredConnectionDefinition.Registration.Provider,
 			GrantType:          configuredConnectionDefinition.Registration.GrantType,
 			Subject:            configuredConnectionDefinition.Registration.Subject,
@@ -292,19 +293,19 @@ func (server *Server) connectionStatuses() []ConnectionStatus {
 	return connectionStatuses
 }
 
-func (server *Server) RegisterConnection(ctx context.Context, registration connectionRegistration) (ConnectionStatus, error) {
+func (server *Server) RegisterConnection(ctx context.Context, registration connectionRegistration) (controlapipkg.ConnectionStatus, error) {
 	normalizedRegistration := normalizeConnectionRegistration(registration)
 	if err := normalizedRegistration.Validate(); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 
 	secretStore, err := server.secretStoreForRef(normalizedRegistration.Credential)
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	secretMetadata, err := secretStore.Metadata(ctx, normalizedRegistration.Credential)
 	if err != nil {
-		return ConnectionStatus{}, fmt.Errorf("validate connection secret ref: %w", err)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("validate connection secret ref: %w", err)
 	}
 
 	nowUTC := server.now().UTC()
@@ -340,7 +341,7 @@ func (server *Server) RegisterConnection(ctx context.Context, registration conne
 	updatedConnections[connectionRecordKey(record.Provider, record.Subject)] = record
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
 		server.connectionRuntime.mu.Unlock()
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	server.connectionRuntime.records = updatedConnections
 	server.connectionRuntime.mu.Unlock()
@@ -349,13 +350,13 @@ func (server *Server) RegisterConnection(ctx context.Context, registration conne
 	return record.statusSummary(), nil
 }
 
-func (server *Server) UpsertConnectionCredential(ctx context.Context, registration connectionRegistration, rawSecretBytes []byte) (ConnectionStatus, error) {
+func (server *Server) UpsertConnectionCredential(ctx context.Context, registration connectionRegistration, rawSecretBytes []byte) (controlapipkg.ConnectionStatus, error) {
 	normalizedRegistration := normalizeConnectionRegistration(registration)
 	if err := normalizedRegistration.Validate(); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	if len(rawSecretBytes) == 0 {
-		return ConnectionStatus{}, fmt.Errorf("%w: connection secret value is empty", secrets.ErrSecretValidation)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("%w: connection secret value is empty", secrets.ErrSecretValidation)
 	}
 
 	connectionKey := connectionRecordKey(normalizedRegistration.Provider, normalizedRegistration.Subject)
@@ -364,16 +365,16 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 	_, foundExistingRecord := server.connectionRuntime.records[connectionKey]
 	server.connectionRuntime.mu.Unlock()
 	if foundExistingRecord {
-		return ConnectionStatus{}, fmt.Errorf("connection credential already exists for provider %q subject %q; explicit rotation flow required", normalizedRegistration.Provider, normalizedRegistration.Subject)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("connection credential already exists for provider %q subject %q; explicit rotation flow required", normalizedRegistration.Provider, normalizedRegistration.Subject)
 	}
 
 	secretStore, err := server.secretStoreForRef(normalizedRegistration.Credential)
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	secretMetadata, err := secretStore.Put(ctx, normalizedRegistration.Credential, rawSecretBytes)
 	if err != nil {
-		return ConnectionStatus{}, fmt.Errorf("store connection secret: %w", err)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("store connection secret: %w", err)
 	}
 
 	nowUTC := server.now().UTC()
@@ -402,7 +403,7 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
 		server.connectionRuntime.mu.Unlock()
 		cleanupErr := deleteConnectionSecretForRollback(ctx, secretStore, normalizedRegistration.Credential)
-		return ConnectionStatus{}, errors.Join(err, cleanupErr)
+		return controlapipkg.ConnectionStatus{}, errors.Join(err, cleanupErr)
 	}
 	server.connectionRuntime.records = updatedConnections
 	server.connectionRuntime.mu.Unlock()
@@ -424,20 +425,20 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 		}
 		server.connectionRuntime.mu.Unlock()
 		cleanupErr := deleteConnectionSecretForRollback(ctx, secretStore, normalizedRegistration.Credential)
-		return ConnectionStatus{}, errors.Join(err, saveErr, cleanupErr)
+		return controlapipkg.ConnectionStatus{}, errors.Join(err, saveErr, cleanupErr)
 	}
 	server.invalidateProviderAccessToken(connectionKey)
 
 	return record.statusSummary(), nil
 }
 
-func (server *Server) RotateConnectionCredential(ctx context.Context, registration connectionRegistration, rawSecretBytes []byte) (ConnectionStatus, error) {
+func (server *Server) RotateConnectionCredential(ctx context.Context, registration connectionRegistration, rawSecretBytes []byte) (controlapipkg.ConnectionStatus, error) {
 	normalizedRegistration := normalizeConnectionRegistration(registration)
 	if err := normalizedRegistration.Validate(); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	if len(rawSecretBytes) == 0 {
-		return ConnectionStatus{}, fmt.Errorf("%w: connection secret value is empty", secrets.ErrSecretValidation)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("%w: connection secret value is empty", secrets.ErrSecretValidation)
 	}
 
 	connectionKey := connectionRecordKey(normalizedRegistration.Provider, normalizedRegistration.Subject)
@@ -446,23 +447,23 @@ func (server *Server) RotateConnectionCredential(ctx context.Context, registrati
 	existingRecord, foundExistingRecord := server.connectionRuntime.records[connectionKey]
 	server.connectionRuntime.mu.Unlock()
 	if !foundExistingRecord {
-		return ConnectionStatus{}, fmt.Errorf("connection credential not found for provider %q subject %q", normalizedRegistration.Provider, normalizedRegistration.Subject)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("connection credential not found for provider %q subject %q", normalizedRegistration.Provider, normalizedRegistration.Subject)
 	}
 	if existingRecord.Credential != normalizedRegistration.Credential {
-		return ConnectionStatus{}, fmt.Errorf("connection credential rotation requires the existing secret ref for provider %q subject %q", normalizedRegistration.Provider, normalizedRegistration.Subject)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("connection credential rotation requires the existing secret ref for provider %q subject %q", normalizedRegistration.Provider, normalizedRegistration.Subject)
 	}
 
 	secretStore, err := server.secretStoreForRef(normalizedRegistration.Credential)
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	previousSecretBytes, _, err := secretStore.Get(ctx, normalizedRegistration.Credential)
 	if err != nil {
-		return ConnectionStatus{}, fmt.Errorf("read existing connection secret for rotation: %w", err)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("read existing connection secret for rotation: %w", err)
 	}
 	secretMetadata, err := secretStore.Put(ctx, normalizedRegistration.Credential, rawSecretBytes)
 	if err != nil {
-		return ConnectionStatus{}, fmt.Errorf("store rotated connection secret: %w", err)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("store rotated connection secret: %w", err)
 	}
 
 	nowUTC := server.now().UTC()
@@ -492,9 +493,9 @@ func (server *Server) RotateConnectionCredential(ctx context.Context, registrati
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
 		server.connectionRuntime.mu.Unlock()
 		if restoreErr := server.restoreConnectionSecret(ctx, secretStore, normalizedRegistration.Credential, previousSecretBytes); restoreErr != nil {
-			return ConnectionStatus{}, errors.Join(err, restoreErr)
+			return controlapipkg.ConnectionStatus{}, errors.Join(err, restoreErr)
 		}
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	server.connectionRuntime.records = updatedConnections
 	server.connectionRuntime.mu.Unlock()
@@ -516,22 +517,22 @@ func (server *Server) RotateConnectionCredential(ctx context.Context, registrati
 		}
 		server.connectionRuntime.mu.Unlock()
 		restoreErr := server.restoreConnectionSecret(ctx, secretStore, normalizedRegistration.Credential, previousSecretBytes)
-		return ConnectionStatus{}, errors.Join(err, saveErr, restoreErr)
+		return controlapipkg.ConnectionStatus{}, errors.Join(err, saveErr, restoreErr)
 	}
 	server.invalidateProviderAccessToken(connectionKey)
 
 	return updatedRecord.statusSummary(), nil
 }
 
-func (server *Server) ResolveConnectionSecret(ctx context.Context, provider string, subject string) ([]byte, secrets.SecretMetadata, ConnectionStatus, error) {
+func (server *Server) ResolveConnectionSecret(ctx context.Context, provider string, subject string) ([]byte, secrets.SecretMetadata, controlapipkg.ConnectionStatus, error) {
 	trimmedProvider := strings.TrimSpace(provider)
 	trimmedSubject := strings.TrimSpace(subject)
 	if err := identifiers.ValidateSafeIdentifier("connection provider", trimmedProvider); err != nil {
-		return nil, secrets.SecretMetadata{}, ConnectionStatus{}, err
+		return nil, secrets.SecretMetadata{}, controlapipkg.ConnectionStatus{}, err
 	}
 	if trimmedSubject != "" {
 		if err := identifiers.ValidateSafeIdentifier("connection subject", trimmedSubject); err != nil {
-			return nil, secrets.SecretMetadata{}, ConnectionStatus{}, err
+			return nil, secrets.SecretMetadata{}, controlapipkg.ConnectionStatus{}, err
 		}
 	}
 
@@ -539,16 +540,16 @@ func (server *Server) ResolveConnectionSecret(ctx context.Context, provider stri
 	connectionRecord, found := server.connectionRuntime.records[connectionRecordKey(trimmedProvider, trimmedSubject)]
 	server.connectionRuntime.mu.Unlock()
 	if !found {
-		return nil, secrets.SecretMetadata{}, ConnectionStatus{}, fmt.Errorf("connection not found for provider %q", trimmedProvider)
+		return nil, secrets.SecretMetadata{}, controlapipkg.ConnectionStatus{}, fmt.Errorf("connection not found for provider %q", trimmedProvider)
 	}
 
 	secretStore, err := server.secretStoreForRef(connectionRecord.Credential)
 	if err != nil {
-		return nil, secrets.SecretMetadata{}, ConnectionStatus{}, err
+		return nil, secrets.SecretMetadata{}, controlapipkg.ConnectionStatus{}, err
 	}
 	rawSecretBytes, secretMetadata, err := secretStore.Get(ctx, connectionRecord.Credential)
 	if err != nil {
-		return nil, secrets.SecretMetadata{}, ConnectionStatus{}, fmt.Errorf("resolve connection secret: %w", err)
+		return nil, secrets.SecretMetadata{}, controlapipkg.ConnectionStatus{}, fmt.Errorf("resolve connection secret: %w", err)
 	}
 
 	nowUTC := server.now().UTC().Format(time.RFC3339Nano)
@@ -566,7 +567,7 @@ func (server *Server) ResolveConnectionSecret(ctx context.Context, provider stri
 	updatedConnections[connectionRecordKey(trimmedProvider, trimmedSubject)] = updatedRecord
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
 		server.connectionRuntime.mu.Unlock()
-		return nil, secrets.SecretMetadata{}, ConnectionStatus{}, err
+		return nil, secrets.SecretMetadata{}, controlapipkg.ConnectionStatus{}, err
 	}
 	server.connectionRuntime.records = updatedConnections
 	server.connectionRuntime.mu.Unlock()
@@ -574,15 +575,15 @@ func (server *Server) ResolveConnectionSecret(ctx context.Context, provider stri
 	return rawSecretBytes, secretMetadata, updatedRecord.statusSummary(), nil
 }
 
-func (server *Server) ValidateConnection(ctx context.Context, provider string, subject string) (ConnectionStatus, error) {
+func (server *Server) ValidateConnection(ctx context.Context, provider string, subject string) (controlapipkg.ConnectionStatus, error) {
 	trimmedProvider := strings.TrimSpace(provider)
 	trimmedSubject := strings.TrimSpace(subject)
 	if err := identifiers.ValidateSafeIdentifier("connection provider", trimmedProvider); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	if trimmedSubject != "" {
 		if err := identifiers.ValidateSafeIdentifier("connection subject", trimmedSubject); err != nil {
-			return ConnectionStatus{}, err
+			return controlapipkg.ConnectionStatus{}, err
 		}
 	}
 
@@ -592,7 +593,7 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 	if !found {
 		configuredConnectionDefinition, configuredFound := server.providerRuntime.configuredConnections[connectionRecordKey(trimmedProvider, trimmedSubject)]
 		if configuredFound && isPublicReadGrantType(configuredConnectionDefinition.Registration.GrantType) {
-			return ConnectionStatus{
+			return controlapipkg.ConnectionStatus{
 				Provider:           configuredConnectionDefinition.Registration.Provider,
 				GrantType:          configuredConnectionDefinition.Registration.GrantType,
 				Subject:            configuredConnectionDefinition.Registration.Subject,
@@ -604,7 +605,7 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 				LastRotatedAtUTC:   "never",
 			}, nil
 		}
-		return ConnectionStatus{}, fmt.Errorf("connection not found for provider %q", trimmedProvider)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("connection not found for provider %q", trimmedProvider)
 	}
 
 	if isPublicReadGrantType(connectionRecord.GrantType) {
@@ -616,7 +617,7 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 		updatedRecord.Status = defaultLabel(updatedRecord.Status, "public_configured")
 		if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
 			server.connectionRuntime.mu.Unlock()
-			return ConnectionStatus{}, err
+			return controlapipkg.ConnectionStatus{}, err
 		}
 		server.connectionRuntime.records = updatedConnections
 		server.connectionRuntime.mu.Unlock()
@@ -628,18 +629,18 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 			"secure_store_ref_id": "none",
 			"status":              updatedRecord.Status,
 		}); err != nil {
-			return ConnectionStatus{}, err
+			return controlapipkg.ConnectionStatus{}, err
 		}
 		return updatedRecord.statusSummary(), nil
 	}
 
 	secretStore, err := server.secretStoreForRef(connectionRecord.Credential)
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	secretMetadata, err := secretStore.Metadata(ctx, connectionRecord.Credential)
 	if err != nil {
-		return ConnectionStatus{}, fmt.Errorf("validate connection secret ref: %w", err)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("validate connection secret ref: %w", err)
 	}
 
 	nowUTC := server.now().UTC()
@@ -656,7 +657,7 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 	}
 	if err := saveConnectionRecords(server.connectionPath, updatedConnections); err != nil {
 		server.connectionRuntime.mu.Unlock()
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	server.connectionRuntime.records = updatedConnections
 	server.connectionRuntime.mu.Unlock()
@@ -669,7 +670,7 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 		"secure_store_ref_id": updatedRecord.Credential.ID,
 		"status":              updatedRecord.Status,
 	}); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 
 	return updatedRecord.statusSummary(), nil

@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ func TestConfigGetRequiresAuthenticatedScopedSignedRequest(t *testing.T) {
 
 	var rawPolicy map[string]interface{}
 	err := client.doJSON(context.Background(), http.MethodGet, "/v1/config/policy", "", nil, &rawPolicy, nil)
-	if err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenMissing) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenMissing) {
 		t.Fatalf("expected missing capability token denial, got %v", err)
 	}
 
@@ -26,7 +27,7 @@ func TestConfigGetRequiresAuthenticatedScopedSignedRequest(t *testing.T) {
 		t.Fatalf("ensure scoped capability token: %v", err)
 	}
 	err = client.doJSON(context.Background(), http.MethodGet, "/v1/config/policy", client.capabilityToken, nil, &rawPolicy, nil)
-	if err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected config.read scope denial, got %v", err)
 	}
 
@@ -56,7 +57,7 @@ func TestConfigPutRequiresConfigWriteScope(t *testing.T) {
 	}
 	var deniedResponse map[string]string
 	err := writerDeniedClient.doJSON(context.Background(), http.MethodPut, "/v1/config/runtime", writerDeniedClient.capabilityToken, runtimeConfigUpdate, &deniedResponse, nil)
-	if err == nil || !strings.Contains(err.Error(), DenialCodeCapabilityTokenScopeDenied) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeCapabilityTokenScopeDenied) {
 		t.Fatalf("expected config.write scope denial, got %v", err)
 	}
 

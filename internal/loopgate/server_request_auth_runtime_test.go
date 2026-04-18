@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -31,7 +32,7 @@ func TestExpiredCapabilityTokenIsRefreshedForLocalClient(t *testing.T) {
 	server.sessionState.sessions[tokenClaims.ControlSessionID] = activeSession
 	server.mu.Unlock()
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-expired",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -41,7 +42,7 @@ func TestExpiredCapabilityTokenIsRefreshedForLocalClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected local client to refresh expired capability token, got %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected refreshed capability execution to succeed, got %#v", response)
 	}
 }
@@ -59,7 +60,7 @@ func TestCapabilityTokenPeerBindingMismatchRefreshesForLocalClient(t *testing.T)
 	server.sessionState.tokens[client.capabilityToken] = tokenClaims
 	server.mu.Unlock()
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-peer-mismatch",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -69,7 +70,7 @@ func TestCapabilityTokenPeerBindingMismatchRefreshesForLocalClient(t *testing.T)
 	if err != nil {
 		t.Fatalf("expected local client to refresh peer-mismatched capability token, got %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected refreshed capability execution to succeed, got %#v", response)
 	}
 }
@@ -85,7 +86,7 @@ func TestCapabilityExecuteRequiresSignedRequest(t *testing.T) {
 	client.sessionMACKey = ""
 	client.mu.Unlock()
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-missing-signature",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -95,7 +96,7 @@ func TestCapabilityExecuteRequiresSignedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute capability: %v", err)
 	}
-	if response.Status != ResponseStatusDenied || response.DenialCode != DenialCodeRequestSignatureMissing {
+	if response.Status != controlapipkg.ResponseStatusDenied || response.DenialCode != controlapipkg.DenialCodeRequestSignatureMissing {
 		t.Fatalf("expected request signature missing denial, got %#v", response)
 	}
 }
@@ -111,7 +112,7 @@ func TestCapabilityExecuteRejectsInvalidSignature(t *testing.T) {
 	client.sessionMACKey = "wrong-session-mac-key"
 	client.mu.Unlock()
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-invalid-signature",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -121,7 +122,7 @@ func TestCapabilityExecuteRejectsInvalidSignature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute capability: %v", err)
 	}
-	if response.Status != ResponseStatusDenied || response.DenialCode != DenialCodeRequestSignatureInvalid {
+	if response.Status != controlapipkg.ResponseStatusDenied || response.DenialCode != controlapipkg.DenialCodeRequestSignatureInvalid {
 		t.Fatalf("expected request signature invalid denial, got %#v", response)
 	}
 }
@@ -133,7 +134,7 @@ func TestCapabilityExecuteRejectsReplayedRequestNonce(t *testing.T) {
 		t.Fatalf("ensure capability token: %v", err)
 	}
 
-	requestBody := CapabilityRequest{
+	requestBody := controlapipkg.CapabilityRequest{
 		RequestID:  "req-replayed-nonce",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -150,14 +151,14 @@ func TestCapabilityExecuteRejectsReplayedRequestNonce(t *testing.T) {
 		"X-Loopgate-Request-Signature": requestSignature,
 	}
 
-	var firstResponse CapabilityResponse
+	var firstResponse controlapipkg.CapabilityResponse
 	if err := client.doJSONWithHeaders(context.Background(), http.MethodPost, "/v1/capabilities/execute", client.capabilityToken, requestBody, &firstResponse, requestHeaders); err != nil {
 		t.Fatalf("first signed request: %v", err)
 	}
 
-	var secondResponse CapabilityResponse
+	var secondResponse controlapipkg.CapabilityResponse
 	err := client.doJSONWithHeaders(context.Background(), http.MethodPost, "/v1/capabilities/execute", client.capabilityToken, requestBody, &secondResponse, requestHeaders)
-	if err == nil || !strings.Contains(err.Error(), DenialCodeRequestNonceReplayDetected) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeRequestNonceReplayDetected) {
 		t.Fatalf("expected request nonce replay denial, got %v", err)
 	}
 }
@@ -169,7 +170,7 @@ func TestSignedRequestFailsClosedWhenNonceReplayPersistenceUnavailable(t *testin
 	server.nonceReplayStore = appendOnlyNonceReplayStore{path: server.noncePath}
 
 	_, err := client.Status(context.Background())
-	if err == nil || !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected nonce replay persistence failure to fail closed, got %v", err)
 	}
 }
@@ -187,7 +188,7 @@ func TestCapabilityAuthDenialsAreAudited(t *testing.T) {
 				t.Helper()
 				return ""
 			},
-			wantDenialCode: DenialCodeCapabilityTokenMissing,
+			wantDenialCode: controlapipkg.DenialCodeCapabilityTokenMissing,
 		},
 		{
 			name: "invalid capability token",
@@ -195,7 +196,7 @@ func TestCapabilityAuthDenialsAreAudited(t *testing.T) {
 				t.Helper()
 				return "invalid-capability-token"
 			},
-			wantDenialCode: DenialCodeCapabilityTokenInvalid,
+			wantDenialCode: controlapipkg.DenialCodeCapabilityTokenInvalid,
 		},
 		{
 			name: "expired capability token",
@@ -214,7 +215,7 @@ func TestCapabilityAuthDenialsAreAudited(t *testing.T) {
 				server.mu.Unlock()
 				return client.capabilityToken
 			},
-			wantDenialCode:     DenialCodeCapabilityTokenExpired,
+			wantDenialCode:     controlapipkg.DenialCodeCapabilityTokenExpired,
 			wantControlSession: true,
 		},
 		{
@@ -231,7 +232,7 @@ func TestCapabilityAuthDenialsAreAudited(t *testing.T) {
 				server.mu.Unlock()
 				return client.capabilityToken
 			},
-			wantDenialCode:     DenialCodeCapabilityTokenInvalid,
+			wantDenialCode:     controlapipkg.DenialCodeCapabilityTokenInvalid,
 			wantControlSession: true,
 		},
 	}
@@ -248,7 +249,7 @@ func TestCapabilityAuthDenialsAreAudited(t *testing.T) {
 			rawClient.delegatedSession = true
 			rawClient.mu.Unlock()
 
-			var statusResponse StatusResponse
+			var statusResponse controlapipkg.StatusResponse
 			err := rawClient.doJSON(context.Background(), http.MethodGet, "/v1/status", capabilityToken, nil, &statusResponse, nil)
 			var denied RequestDeniedError
 			if !errors.As(err, &denied) || denied.DenialCode != testCase.wantDenialCode {
@@ -296,10 +297,10 @@ func TestCapabilityAuthDenialFailsClosedWhenAuditUnavailable(t *testing.T) {
 	rawClient.delegatedSession = true
 	rawClient.mu.Unlock()
 
-	var statusResponse StatusResponse
+	var statusResponse controlapipkg.StatusResponse
 	err := rawClient.doJSON(context.Background(), http.MethodGet, "/v1/status", "invalid-capability-token", nil, &statusResponse, nil)
 	var denied RequestDeniedError
-	if !errors.As(err, &denied) || denied.DenialCode != DenialCodeAuditUnavailable {
+	if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected audit unavailable denial, got %v", err)
 	}
 }
@@ -308,7 +309,7 @@ func TestApprovalAuthDenialIsAudited(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-approval-auth-audit",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -323,14 +324,14 @@ func TestApprovalAuthDenialIsAudited(t *testing.T) {
 		t.Fatalf("expected pending approval, got %#v", response)
 	}
 
-	var decisionResponse CapabilityResponse
+	var decisionResponse controlapipkg.CapabilityResponse
 	approvalPath := "/v1/approvals/" + response.ApprovalRequestID + "/decision"
-	err = client.doJSON(context.Background(), http.MethodPost, approvalPath, "", ApprovalDecisionRequest{
+	err = client.doJSON(context.Background(), http.MethodPost, approvalPath, "", controlapipkg.ApprovalDecisionRequest{
 		Approved:      true,
 		DecisionNonce: response.Metadata["approval_decision_nonce"].(string),
 	}, &decisionResponse, nil)
 	var denied RequestDeniedError
-	if !errors.As(err, &denied) || denied.DenialCode != DenialCodeApprovalTokenMissing {
+	if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeApprovalTokenMissing {
 		t.Fatalf("expected approval token missing denial, got %v", err)
 	}
 
@@ -338,8 +339,8 @@ func TestApprovalAuthDenialIsAudited(t *testing.T) {
 	if authDeniedEvent.Data["auth_kind"] != "approval_token" {
 		t.Fatalf("expected auth_kind approval_token, got %#v", authDeniedEvent.Data["auth_kind"])
 	}
-	if authDeniedEvent.Data["denial_code"] != DenialCodeApprovalTokenMissing {
-		t.Fatalf("expected denial_code %q, got %#v", DenialCodeApprovalTokenMissing, authDeniedEvent.Data["denial_code"])
+	if authDeniedEvent.Data["denial_code"] != controlapipkg.DenialCodeApprovalTokenMissing {
+		t.Fatalf("expected denial_code %q, got %#v", controlapipkg.DenialCodeApprovalTokenMissing, authDeniedEvent.Data["denial_code"])
 	}
 	if authDeniedEvent.Data["request_method"] != http.MethodPost {
 		t.Fatalf("expected request_method POST, got %#v", authDeniedEvent.Data["request_method"])
@@ -353,7 +354,7 @@ func TestApprovalDecisionRequiresMatchingCapabilityTokenOwner(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-owner",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -378,16 +379,16 @@ func TestApprovalDecisionRequiresMatchingCapabilityTokenOwner(t *testing.T) {
 		t.Fatalf("ensure other client approval token: %v", err)
 	}
 
-	var approvalResponse CapabilityResponse
+	var approvalResponse controlapipkg.CapabilityResponse
 	approvalNonce := response.Metadata["approval_decision_nonce"].(string)
 	approvalPath := "/v1/approvals/" + response.ApprovalRequestID + "/decision"
-	err = otherClient.doJSON(context.Background(), http.MethodPost, approvalPath, "", ApprovalDecisionRequest{
+	err = otherClient.doJSON(context.Background(), http.MethodPost, approvalPath, "", controlapipkg.ApprovalDecisionRequest{
 		Approved:      true,
 		DecisionNonce: approvalNonce,
 	}, &approvalResponse, map[string]string{
 		"X-Loopgate-Approval-Token": otherApprovalToken,
 	})
-	if err == nil || !strings.Contains(err.Error(), DenialCodeApprovalOwnerMismatch) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeApprovalOwnerMismatch) {
 		t.Fatalf("expected approval owner mismatch denial, got %v", err)
 	}
 }
@@ -396,7 +397,7 @@ func TestApprovalDecisionRequiresDecisionNonce(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-missing-nonce",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -422,7 +423,7 @@ func TestApprovalTokenPeerBindingMismatchIsDenied(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-approval-peer-mismatch",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -447,7 +448,7 @@ func TestApprovalTokenPeerBindingMismatchIsDenied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decide approval: %v", err)
 	}
-	if decisionResponse.Status != ResponseStatusDenied || decisionResponse.DenialCode != DenialCodeApprovalTokenInvalid {
+	if decisionResponse.Status != controlapipkg.ResponseStatusDenied || decisionResponse.DenialCode != controlapipkg.DenialCodeApprovalTokenInvalid {
 		t.Fatalf("expected approval peer binding denial, got %#v", decisionResponse)
 	}
 }
@@ -456,7 +457,7 @@ func TestApprovalDecisionCannotBeReplayedAfterResolution(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-approval-replay",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -476,7 +477,7 @@ func TestApprovalDecisionCannotBeReplayedAfterResolution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first approval decision: %v", err)
 	}
-	if firstResponse.Status != ResponseStatusSuccess {
+	if firstResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful execution after approval, got %#v", firstResponse)
 	}
 
@@ -484,16 +485,16 @@ func TestApprovalDecisionCannotBeReplayedAfterResolution(t *testing.T) {
 	server.mu.Lock()
 	controlSession := server.sessionState.sessions[controlSessionID]
 	server.mu.Unlock()
-	manualReplayRequest := ApprovalDecisionRequest{
+	manualReplayRequest := controlapipkg.ApprovalDecisionRequest{
 		Approved:      true,
 		DecisionNonce: approvalNonce,
 	}
-	var replayResponse CapabilityResponse
+	var replayResponse controlapipkg.CapabilityResponse
 	replayPath := "/v1/approvals/" + response.ApprovalRequestID + "/decision"
 	err = client.doJSON(context.Background(), http.MethodPost, replayPath, "", manualReplayRequest, &replayResponse, map[string]string{
 		"X-Loopgate-Approval-Token": controlSession.ApprovalToken,
 	})
-	if err == nil || !strings.Contains(err.Error(), DenialCodeApprovalStateConflict) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeApprovalStateConflict) {
 		t.Fatalf("expected approval state conflict denial on replay, got %v", err)
 	}
 }
@@ -509,7 +510,7 @@ func TestExecuteCapabilityRequest_DeniesNeedsApprovalWhenApprovalCreationDisable
 	baseToken := server.sessionState.tokens[client.capabilityToken]
 	server.mu.Unlock()
 
-	response := server.executeCapabilityRequest(context.Background(), baseToken, CapabilityRequest{
+	response := server.executeCapabilityRequest(context.Background(), baseToken, controlapipkg.CapabilityRequest{
 		RequestID:  "req-no-approval-bypass",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -517,7 +518,7 @@ func TestExecuteCapabilityRequest_DeniesNeedsApprovalWhenApprovalCreationDisable
 			"content": "approval bypass should fail closed",
 		},
 	}, false)
-	if response.Status != ResponseStatusDenied || response.DenialCode != DenialCodeApprovalRequired || !response.ApprovalRequired {
+	if response.Status != controlapipkg.ResponseStatusDenied || response.DenialCode != controlapipkg.DenialCodeApprovalRequired || !response.ApprovalRequired {
 		t.Fatalf("expected approval-required denial without execution, got %#v", response)
 	}
 	if _, err := os.Stat(filepath.Join(repoRoot, "blocked.txt")); !errors.Is(err, os.ErrNotExist) {
@@ -575,9 +576,9 @@ func TestExecuteCapabilityRequest_ApprovalRollbackIsNeverVisibleToReaders(t *tes
 		}
 	}()
 
-	responseCh := make(chan CapabilityResponse, 1)
+	responseCh := make(chan controlapipkg.CapabilityResponse, 1)
 	go func() {
-		responseCh <- server.executeCapabilityRequest(context.Background(), baseToken, CapabilityRequest{
+		responseCh <- server.executeCapabilityRequest(context.Background(), baseToken, controlapipkg.CapabilityRequest{
 			RequestID:  "req-approval-rollback-hidden",
 			Capability: "fs_write",
 			Arguments: map[string]string{
@@ -594,7 +595,7 @@ func TestExecuteCapabilityRequest_ApprovalRollbackIsNeverVisibleToReaders(t *tes
 	response := <-responseCh
 	close(stopReader)
 
-	if response.Status != ResponseStatusError || response.DenialCode != DenialCodeAuditUnavailable {
+	if response.Status != controlapipkg.ResponseStatusError || response.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected audit unavailable response, got %#v", response)
 	}
 	if sawPendingApproval.Load() {
@@ -612,7 +613,7 @@ func TestCapabilityResponseJSONDoesNotExposeProviderTokenFields(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-json",
 		Capability: "fs_list",
 		Arguments: map[string]string{

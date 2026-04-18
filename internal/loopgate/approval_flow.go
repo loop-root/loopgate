@@ -3,6 +3,7 @@ package loopgate
 import (
 	"crypto/subtle"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 	"time"
@@ -24,7 +25,7 @@ const (
 	approvalStateCancelled = approvalpkg.StateCancelled
 	// approvalStateConsumed is set atomically when an approved decision is recorded, before
 	// execution begins. A concurrent decision that finds this state returns
-	// DenialCodeApprovalStateConflict rather than DenialCodeApprovalStateInvalid to distinguish
+	// controlapipkg.DenialCodeApprovalStateConflict rather than controlapipkg.DenialCodeApprovalStateInvalid to distinguish
 	// a lost execution race from a genuine state violation such as an expired or denied approval.
 	approvalStateConsumed        = approvalpkg.StateConsumed
 	approvalStateExecutionFailed = approvalpkg.StateExecutionFailed
@@ -46,20 +47,20 @@ func setApprovalStateLocked(approvalRecords map[string]pendingApproval, approval
 func (server *Server) authenticateApproval(writer http.ResponseWriter, request *http.Request) (controlSession, bool) {
 	requestPeerIdentity, ok := peerIdentityFromContext(request.Context())
 	if !ok {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "missing authenticated peer identity",
-			DenialCode:   DenialCodeApprovalTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeApprovalTokenInvalid,
 		}, authDeniedAuditOptions{authKind: "approval_token"})
 		return controlSession{}, false
 	}
 
 	approvalToken := strings.TrimSpace(request.Header.Get("X-Loopgate-Approval-Token"))
 	if approvalToken == "" {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "missing approval token",
-			DenialCode:   DenialCodeApprovalTokenMissing,
+			DenialCode:   controlapipkg.DenialCodeApprovalTokenMissing,
 		}, authDeniedAuditOptions{
 			authKind:    "approval_token",
 			requestPeer: &requestPeerIdentity,
@@ -74,10 +75,10 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	controlSessionID, indexed := server.approvalState.tokenIndex[tokenHash]
 	if !indexed {
 		server.mu.Unlock()
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "invalid approval token",
-			DenialCode:   DenialCodeApprovalTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeApprovalTokenInvalid,
 		}, authDeniedAuditOptions{
 			authKind:    "approval_token",
 			requestPeer: &requestPeerIdentity,
@@ -88,10 +89,10 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	if !sessionExists {
 		delete(server.approvalState.tokenIndex, tokenHash)
 		server.mu.Unlock()
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "invalid approval token",
-			DenialCode:   DenialCodeApprovalTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeApprovalTokenInvalid,
 		}, authDeniedAuditOptions{
 			authKind:         "approval_token",
 			controlSessionID: controlSessionID,
@@ -103,10 +104,10 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	// Constant-time comparison to prevent timing oracle on the raw token value.
 	if subtle.ConstantTimeCompare([]byte(activeSession.ApprovalToken), []byte(approvalToken)) != 1 {
 		server.mu.Unlock()
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "invalid approval token",
-			DenialCode:   DenialCodeApprovalTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeApprovalTokenInvalid,
 		}, authDeniedAuditOptions{
 			authKind:           "approval_token",
 			controlSessionID:   activeSession.ID,
@@ -123,10 +124,10 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 		delete(server.sessionState.sessions, controlSessionID)
 		delete(server.approvalState.tokenIndex, tokenHash)
 		server.mu.Unlock()
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "expired approval token",
-			DenialCode:   DenialCodeApprovalTokenExpired,
+			DenialCode:   controlapipkg.DenialCodeApprovalTokenExpired,
 		}, authDeniedAuditOptions{
 			authKind:           "approval_token",
 			controlSessionID:   activeSession.ID,
@@ -140,10 +141,10 @@ func (server *Server) authenticateApproval(writer http.ResponseWriter, request *
 	}
 	if activeSession.PeerIdentity != requestPeerIdentity {
 		server.mu.Unlock()
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "approval token peer binding mismatch",
-			DenialCode:   DenialCodeApprovalTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeApprovalTokenInvalid,
 		}, authDeniedAuditOptions{
 			authKind:           "approval_token",
 			controlSessionID:   activeSession.ID,
@@ -167,7 +168,7 @@ func interfaceStringValue(rawValue interface{}) string {
 	return stringValue
 }
 
-func (server *Server) approvalMetadata(controlSessionID string, capabilityRequest CapabilityRequest) map[string]interface{} {
+func (server *Server) approvalMetadata(controlSessionID string, capabilityRequest controlapipkg.CapabilityRequest) map[string]interface{} {
 	metadata := map[string]interface{}{
 		"capability": capabilityRequest.Capability,
 	}
@@ -199,7 +200,7 @@ func (server *Server) approvalMetadata(controlSessionID string, capabilityReques
 	return metadata
 }
 
-func approvalReasonForCapability(policyDecision policypkg.CheckResult, metadata map[string]interface{}, capabilityRequest CapabilityRequest) string {
+func approvalReasonForCapability(policyDecision policypkg.CheckResult, metadata map[string]interface{}, capabilityRequest controlapipkg.CapabilityRequest) string {
 	grantRootPath := strings.TrimSpace(stringMetadataValue(metadata, "grant_root"))
 	if grantRootPath == "" {
 		return policyDecision.Reason
@@ -256,29 +257,29 @@ func buildApprovalOperatorDeniedAuditData(approvalID string, pendingApproval pen
 	return auditData
 }
 
-func approvalDecisionValidationResponse(approvalID string, pendingApproval pendingApproval, validationError *approvalpkg.DecisionValidationError) CapabilityResponse {
+func approvalDecisionValidationResponse(approvalID string, pendingApproval pendingApproval, validationError *approvalpkg.DecisionValidationError) controlapipkg.CapabilityResponse {
 	requestID := pendingApproval.Request.RequestID
-	denialCode := DenialCodeApprovalStateInvalid
+	denialCode := controlapipkg.DenialCodeApprovalStateInvalid
 	switch validationError.Code {
 	case approvalpkg.DecisionValidationNotFound:
 		requestID = approvalID
-		denialCode = DenialCodeApprovalNotFound
+		denialCode = controlapipkg.DenialCodeApprovalNotFound
 	case approvalpkg.DecisionValidationOwnerMismatch:
-		denialCode = DenialCodeApprovalOwnerMismatch
+		denialCode = controlapipkg.DenialCodeApprovalOwnerMismatch
 	case approvalpkg.DecisionValidationStateConflict:
-		denialCode = DenialCodeApprovalStateConflict
+		denialCode = controlapipkg.DenialCodeApprovalStateConflict
 	case approvalpkg.DecisionValidationStateInvalid:
-		denialCode = DenialCodeApprovalStateInvalid
+		denialCode = controlapipkg.DenialCodeApprovalStateInvalid
 	case approvalpkg.DecisionValidationNonceMissing:
-		denialCode = DenialCodeApprovalDecisionNonceMissing
+		denialCode = controlapipkg.DenialCodeApprovalDecisionNonceMissing
 	case approvalpkg.DecisionValidationNonceInvalid:
-		denialCode = DenialCodeApprovalDecisionNonceInvalid
+		denialCode = controlapipkg.DenialCodeApprovalDecisionNonceInvalid
 	case approvalpkg.DecisionValidationManifestInvalid:
-		denialCode = DenialCodeApprovalManifestMismatch
+		denialCode = controlapipkg.DenialCodeApprovalManifestMismatch
 	}
-	return CapabilityResponse{
+	return controlapipkg.CapabilityResponse{
 		RequestID:         requestID,
-		Status:            ResponseStatusDenied,
+		Status:            controlapipkg.ResponseStatusDenied,
 		DenialReason:      validationError.Reason,
 		DenialCode:        denialCode,
 		ApprovalRequestID: approvalID,
@@ -288,45 +289,45 @@ func approvalDecisionValidationResponse(approvalID string, pendingApproval pendi
 // validatePendingApprovalDecisionLocked performs session, expiry, nonce, and manifest checks
 // for a pending approval without writing audit events or changing approval state.
 // Must be called with server.mu held.
-func (server *Server) loadPendingApprovalForDecisionLocked(approvalID string) (pendingApproval, CapabilityResponse, bool) {
+func (server *Server) loadPendingApprovalForDecisionLocked(approvalID string) (pendingApproval, controlapipkg.CapabilityResponse, bool) {
 	server.pruneExpiredLocked()
 	pendingApproval, found := server.approvalState.records[approvalID]
 	if !found {
-		return pendingApproval, CapabilityResponse{
+		return pendingApproval, controlapipkg.CapabilityResponse{
 			RequestID:    approvalID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "approval request not found",
-			DenialCode:   DenialCodeApprovalNotFound,
+			DenialCode:   controlapipkg.DenialCodeApprovalNotFound,
 		}, false
 	}
 
 	if pendingApproval.ExpiresAt.Before(server.now().UTC()) {
 		expiredApproval, transitionErr := setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateExpired)
 		if transitionErr != nil {
-			return pendingApproval, CapabilityResponse{
+			return pendingApproval, controlapipkg.CapabilityResponse{
 				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval request is in an invalid state",
-				DenialCode:        DenialCodeApprovalStateInvalid,
+				DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 				ApprovalRequestID: approvalID,
 			}, false
 		}
-		return expiredApproval, CapabilityResponse{
+		return expiredApproval, controlapipkg.CapabilityResponse{
 			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request expired",
-			DenialCode:        DenialCodeApprovalDenied,
+			DenialCode:        controlapipkg.DenialCodeApprovalDenied,
 			ApprovalRequestID: approvalID,
 		}, false
 	}
 
 	pendingApproval = backfillApprovalManifestLocked(server.approvalState.records, approvalID, pendingApproval)
-	return pendingApproval, CapabilityResponse{}, true
+	return pendingApproval, controlapipkg.CapabilityResponse{}, true
 }
 
 // validatePendingApprovalDecisionLocked performs session, expiry, nonce, and manifest checks
 // for an approval-token decision path. Must be called with server.mu held.
-func (server *Server) validatePendingApprovalDecisionLocked(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+func (server *Server) validatePendingApprovalDecisionLocked(controlSession controlSession, approvalID string, decisionRequest controlapipkg.ApprovalDecisionRequest) (pendingApproval, controlapipkg.CapabilityResponse, bool) {
 	pendingApproval, denialResponse, ok := server.loadPendingApprovalForDecisionLocked(approvalID)
 	if !ok {
 		return pendingApproval, denialResponse, false
@@ -337,10 +338,10 @@ func (server *Server) validatePendingApprovalDecisionLocked(controlSession contr
 	if validationError != nil {
 		return pendingApproval, approvalDecisionValidationResponse(approvalID, pendingApproval, validationError), false
 	}
-	return pendingApproval, CapabilityResponse{}, true
+	return pendingApproval, controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) validatePendingApprovalDecisionLockedForOperator(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+func (server *Server) validatePendingApprovalDecisionLockedForOperator(controlSession controlSession, approvalID string, decisionRequest controlapipkg.ApprovalDecisionRequest) (pendingApproval, controlapipkg.CapabilityResponse, bool) {
 	pendingApproval, denialResponse, ok := server.loadPendingApprovalForDecisionLocked(approvalID)
 	if !ok {
 		return pendingApproval, denialResponse, false
@@ -352,16 +353,16 @@ func (server *Server) validatePendingApprovalDecisionLockedForOperator(controlSe
 	if validationError != nil {
 		return pendingApproval, approvalDecisionValidationResponse(approvalID, pendingApproval, validationError), false
 	}
-	return pendingApproval, CapabilityResponse{}, true
+	return pendingApproval, controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) validatePendingApprovalDecision(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+func (server *Server) validatePendingApprovalDecision(controlSession controlSession, approvalID string, decisionRequest controlapipkg.ApprovalDecisionRequest) (pendingApproval, controlapipkg.CapabilityResponse, bool) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	return server.validatePendingApprovalDecisionLocked(controlSession, approvalID, decisionRequest)
 }
 
-func (server *Server) validatePendingApprovalDecisionForOperator(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, bool) {
+func (server *Server) validatePendingApprovalDecisionForOperator(controlSession controlSession, approvalID string, decisionRequest controlapipkg.ApprovalDecisionRequest) (pendingApproval, controlapipkg.CapabilityResponse, bool) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	return server.validatePendingApprovalDecisionLockedForOperator(controlSession, approvalID, decisionRequest)
@@ -419,65 +420,65 @@ func (server *Server) commitApprovalGrantConsumed(approvalID string, expectedDec
 	return auditEventHash, nil
 }
 
-func (server *Server) recordPendingApprovalDecisionLocked(controlSession controlSession, approvalID string, pendingApproval pendingApproval, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, string, bool) {
+func (server *Server) recordPendingApprovalDecisionLocked(controlSession controlSession, approvalID string, pendingApproval pendingApproval, decisionRequest controlapipkg.ApprovalDecisionRequest) (pendingApproval, controlapipkg.CapabilityResponse, string, bool) {
 	if decisionRequest.Approved {
 		grantAuditData := buildApprovalGrantedAuditData(approvalID, pendingApproval, decisionRequest.Reason)
 		mergeAuditTenancyFromControlSession(grantAuditData, controlSession)
 		auditEventHash, err := server.logEventWithHash("approval.granted", pendingApproval.ControlSessionID, grantAuditData)
 		if err != nil {
-			return pendingApproval, CapabilityResponse{
+			return pendingApproval, controlapipkg.CapabilityResponse{
 				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalID,
 			}, "", false
 		}
 		pendingApproval, err = setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateConsumed)
 		if err != nil {
-			return pendingApproval, CapabilityResponse{
+			return pendingApproval, controlapipkg.CapabilityResponse{
 				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval request is in an invalid state",
-				DenialCode:        DenialCodeApprovalStateInvalid,
+				DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 				ApprovalRequestID: approvalID,
 			}, "", false
 		}
 		pendingApproval.DecisionSubmittedAt = server.now().UTC()
 		pendingApproval.DecisionNonce = ""
 		server.approvalState.records[approvalID] = pendingApproval
-		return pendingApproval, CapabilityResponse{}, auditEventHash, true
+		return pendingApproval, controlapipkg.CapabilityResponse{}, auditEventHash, true
 	}
 
 	deniedAuditData := buildApprovalOperatorDeniedAuditData(approvalID, pendingApproval, decisionRequest.Reason)
 	mergeAuditTenancyFromControlSession(deniedAuditData, controlSession)
 	auditEventHash, err := server.logEventWithHash("approval.denied", pendingApproval.ControlSessionID, deniedAuditData)
 	if err != nil {
-		return pendingApproval, CapabilityResponse{
+		return pendingApproval, controlapipkg.CapabilityResponse{
 			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusError,
+			Status:            controlapipkg.ResponseStatusError,
 			DenialReason:      "control-plane audit is unavailable",
-			DenialCode:        DenialCodeAuditUnavailable,
+			DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 			ApprovalRequestID: approvalID,
 		}, "", false
 	}
 	pendingApproval, err = setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateDenied)
 	if err != nil {
-		return pendingApproval, CapabilityResponse{
+		return pendingApproval, controlapipkg.CapabilityResponse{
 			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request is in an invalid state",
-			DenialCode:        DenialCodeApprovalStateInvalid,
+			DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 			ApprovalRequestID: approvalID,
 		}, "", false
 	}
 	pendingApproval.DecisionSubmittedAt = server.now().UTC()
 	pendingApproval.DecisionNonce = ""
 	server.approvalState.records[approvalID] = pendingApproval
-	return pendingApproval, CapabilityResponse{}, auditEventHash, true
+	return pendingApproval, controlapipkg.CapabilityResponse{}, auditEventHash, true
 }
 
-func (server *Server) validateAndRecordApprovalDecision(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, string, bool) {
+func (server *Server) validateAndRecordApprovalDecision(controlSession controlSession, approvalID string, decisionRequest controlapipkg.ApprovalDecisionRequest) (pendingApproval, controlapipkg.CapabilityResponse, string, bool) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
@@ -488,7 +489,7 @@ func (server *Server) validateAndRecordApprovalDecision(controlSession controlSe
 	return server.recordPendingApprovalDecisionLocked(controlSession, approvalID, pendingApproval, decisionRequest)
 }
 
-func (server *Server) validateAndRecordOperatorApprovalDecision(controlSession controlSession, approvalID string, decisionRequest ApprovalDecisionRequest) (pendingApproval, CapabilityResponse, string, bool) {
+func (server *Server) validateAndRecordOperatorApprovalDecision(controlSession controlSession, approvalID string, decisionRequest controlapipkg.ApprovalDecisionRequest) (pendingApproval, controlapipkg.CapabilityResponse, string, bool) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
@@ -499,18 +500,18 @@ func (server *Server) validateAndRecordOperatorApprovalDecision(controlSession c
 	return server.recordPendingApprovalDecisionLocked(controlSession, approvalID, pendingApproval, decisionRequest)
 }
 
-func (server *Server) approvedExecutionTokenForPendingApproval(approvalID string, pendingApproval pendingApproval) (capabilityToken, CapabilityResponse, bool) {
+func (server *Server) approvedExecutionTokenForPendingApproval(approvalID string, pendingApproval pendingApproval) (capabilityToken, controlapipkg.CapabilityResponse, bool) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
 	server.pruneExpiredLocked()
 	ownerSession, found := server.sessionState.sessions[pendingApproval.ExecutionContext.ControlSessionID]
 	if !found {
-		return capabilityToken{}, CapabilityResponse{
+		return capabilityToken{}, controlapipkg.CapabilityResponse{
 			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval owner session is no longer active",
-			DenialCode:        DenialCodeApprovalStateInvalid,
+			DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 			ApprovalRequestID: approvalID,
 		}, false
 	}
@@ -528,11 +529,11 @@ func (server *Server) approvedExecutionTokenForPendingApproval(approvalID string
 		ApprovedExecution:   true,
 		BoundCapability:     pendingApproval.Request.Capability,
 		BoundArgumentHash:   normalizedArgumentHash(pendingApproval.Request.Arguments),
-	}, CapabilityResponse{}, true
+	}, controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) auditApprovalDecisionDenial(controlSession controlSession, approvalID string, pendingApproval pendingApproval, denialResponse CapabilityResponse) error {
-	if strings.TrimSpace(denialResponse.DenialCode) == "" || denialResponse.DenialCode == DenialCodeAuditUnavailable {
+func (server *Server) auditApprovalDecisionDenial(controlSession controlSession, approvalID string, pendingApproval pendingApproval, denialResponse controlapipkg.CapabilityResponse) error {
+	if strings.TrimSpace(denialResponse.DenialCode) == "" || denialResponse.DenialCode == controlapipkg.DenialCodeAuditUnavailable {
 		return nil
 	}
 	approvalDeniedAuditData := map[string]interface{}{
@@ -565,7 +566,7 @@ func (server *Server) markApprovalExecutionResult(approvalID string, executionSt
 	if !found {
 		return
 	}
-	if executionStatus != ResponseStatusSuccess {
+	if executionStatus != controlapipkg.ResponseStatusSuccess {
 		updatedApproval, err := setApprovalStateLocked(server.approvalState.records, approvalID, pendingApproval, approvalStateExecutionFailed)
 		if err != nil {
 			if server.reportSecurityWarning != nil {
@@ -581,9 +582,9 @@ func (server *Server) markApprovalExecutionResult(approvalID string, executionSt
 
 func approvalDecisionHTTPStatus(denialCode string) int {
 	switch denialCode {
-	case DenialCodeApprovalNotFound:
+	case controlapipkg.DenialCodeApprovalNotFound:
 		return http.StatusNotFound
-	case DenialCodeApprovalTokenMissing, DenialCodeApprovalTokenInvalid, DenialCodeApprovalTokenExpired:
+	case controlapipkg.DenialCodeApprovalTokenMissing, controlapipkg.DenialCodeApprovalTokenInvalid, controlapipkg.DenialCodeApprovalTokenExpired:
 		return http.StatusUnauthorized
 	default:
 		return http.StatusForbidden

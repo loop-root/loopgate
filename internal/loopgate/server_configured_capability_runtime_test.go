@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,21 +34,21 @@ func TestSandboxExportDeniesNonOutputsPath(t *testing.T) {
 	if err := os.WriteFile(hostSourcePath, []byte("sandbox flow"), 0o600); err != nil {
 		t.Fatalf("write host source: %v", err)
 	}
-	if _, err := client.SandboxImport(context.Background(), SandboxImportRequest{
+	if _, err := client.SandboxImport(context.Background(), controlapipkg.SandboxImportRequest{
 		HostSourcePath:  hostSourcePath,
 		DestinationName: "example.txt",
 	}); err != nil {
 		t.Fatalf("sandbox import: %v", err)
 	}
 
-	_, err := client.SandboxExport(context.Background(), SandboxExportRequest{
+	_, err := client.SandboxExport(context.Background(), controlapipkg.SandboxExportRequest{
 		SandboxSourcePath:   "/morph/home/imports/example.txt",
 		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
 	})
 	if err == nil {
 		t.Fatal("expected sandbox export denial for non-outputs path")
 	}
-	if !strings.Contains(err.Error(), DenialCodeSandboxPathInvalid) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeSandboxPathInvalid) {
 		t.Fatalf("expected sandbox path invalid denial, got %v", err)
 	}
 }
@@ -69,14 +71,14 @@ func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 		t.Fatalf("write orphan output: %v", err)
 	}
 
-	_, err := client.SandboxExport(context.Background(), SandboxExportRequest{
+	_, err := client.SandboxExport(context.Background(), controlapipkg.SandboxExportRequest{
 		SandboxSourcePath:   "/morph/home/outputs/orphan.txt",
 		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
 	})
 	if err == nil {
 		t.Fatal("expected sandbox export denial for orphaned output")
 	}
-	if !strings.Contains(err.Error(), DenialCodeSandboxArtifactNotStaged) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeSandboxArtifactNotStaged) {
 		t.Fatalf("expected sandbox artifact not staged denial, got %v", err)
 	}
 }
@@ -85,20 +87,20 @@ func TestClientExecuteCapability_DeniesSecretExportRequests(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-secret",
 		Capability: "secret.export",
 	})
 	if err != nil {
 		t.Fatalf("execute secret export denial: %v", err)
 	}
-	if response.Status != ResponseStatusDenied {
+	if response.Status != controlapipkg.ResponseStatusDenied {
 		t.Fatalf("expected denied response, got %#v", response)
 	}
 	if !strings.Contains(response.DenialReason, "raw secret export is prohibited") {
 		t.Fatalf("unexpected denial reason: %#v", response)
 	}
-	if response.DenialCode != DenialCodeSecretExportProhibited {
+	if response.DenialCode != controlapipkg.DenialCodeSecretExportProhibited {
 		t.Fatalf("unexpected denial code: %#v", response)
 	}
 }
@@ -130,7 +132,7 @@ func TestConfiguredClientCredentialsCapability_ExecutesThroughLoopgateOnly(t *te
 			if err := request.ParseForm(); err != nil {
 				t.Fatalf("parse token form: %v", err)
 			}
-			if gotGrantType := request.Form.Get("grant_type"); gotGrantType != GrantTypeClientCredentials {
+			if gotGrantType := request.Form.Get("grant_type"); gotGrantType != controlapipkg.GrantTypeClientCredentials {
 				t.Fatalf("unexpected grant_type: %q", gotGrantType)
 			}
 			if gotClientID := request.Form.Get("client_id"); gotClientID != "example-client" {
@@ -162,7 +164,7 @@ func TestConfiguredClientCredentialsCapability_ExecutesThroughLoopgateOnly(t *te
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "example",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "service-bot",
 		Scopes:    []string{"status.read"},
 		Credential: secrets.SecretRef{
@@ -179,14 +181,14 @@ func TestConfiguredClientCredentialsCapability_ExecutesThroughLoopgateOnly(t *te
 		t.Fatalf("expected configured capability in status, got %#v", status.Capabilities)
 	}
 
-	firstResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	firstResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-example-1",
 		Capability: "example.status_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if firstResponse.Status != ResponseStatusSuccess {
+	if firstResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("unexpected configured capability response: %#v", firstResponse)
 	}
 	if firstResponse.StructuredResult["service"] != "example-api" {
@@ -223,14 +225,14 @@ func TestConfiguredClientCredentialsCapability_ExecutesThroughLoopgateOnly(t *te
 		t.Fatalf("expected derived quarantine ref to match response quarantine ref, got %#v", firstResponse.Metadata)
 	}
 
-	secondResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	secondResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-example-2",
 		Capability: "example.status_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability second time: %v", err)
 	}
-	if secondResponse.Status != ResponseStatusSuccess {
+	if secondResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("unexpected second response: %#v", secondResponse)
 	}
 	if tokenRequests != 1 {
@@ -266,7 +268,7 @@ func TestConfiguredCapability_DeniesUnexpectedResponseContentType(t *testing.T) 
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "example",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "service-bot",
 		Scopes:    []string{"status.read"},
 		Credential: secrets.SecretRef{
@@ -279,14 +281,14 @@ func TestConfiguredCapability_DeniesUnexpectedResponseContentType(t *testing.T) 
 		t.Fatalf("register configured connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-example-bad-content-type",
 		Capability: "example.status_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if response.Status != ResponseStatusError {
+	if response.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected error response for content-type mismatch, got %#v", response)
 	}
 	if !strings.Contains(response.DenialReason, "content type") {
@@ -319,7 +321,7 @@ func TestConfiguredCapability_DeniesOversizedInlineField(t *testing.T) {
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "example",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "service-bot",
 		Scopes:    []string{"status.read"},
 		Credential: secrets.SecretRef{
@@ -332,14 +334,14 @@ func TestConfiguredCapability_DeniesOversizedInlineField(t *testing.T) {
 		t.Fatalf("register configured connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-example-oversized-field",
 		Capability: "example.status_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if response.Status != ResponseStatusError {
+	if response.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected error response for oversized field, got %#v", response)
 	}
 	if !strings.Contains(response.DenialReason, "max_inline_bytes") {
@@ -372,7 +374,7 @@ func TestConfiguredCapability_UsesBlobRefForOversizedFieldWhenAllowed(t *testing
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "example",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "service-bot",
 		Scopes:    []string{"status.read"},
 		Credential: secrets.SecretRef{
@@ -385,14 +387,14 @@ func TestConfiguredCapability_UsesBlobRefForOversizedFieldWhenAllowed(t *testing
 		t.Fatalf("register configured connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-example-oversized-field-blob",
 		Capability: "example.status_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful response with blob_ref fallback, got %#v", response)
 	}
 	serviceField, found := response.StructuredResult["service"]
@@ -403,7 +405,7 @@ func TestConfiguredCapability_UsesBlobRefForOversizedFieldWhenAllowed(t *testing
 	if !ok {
 		t.Fatalf("expected service field blob_ref object, got %#v", serviceField)
 	}
-	if serviceBlobRef["kind"] != ResultFieldKindBlobRef {
+	if serviceBlobRef["kind"] != controlapipkg.ResultFieldKindBlobRef {
 		t.Fatalf("expected blob_ref kind, got %#v", serviceBlobRef)
 	}
 	if serviceBlobRef["quarantine_ref"] != response.QuarantineRef {
@@ -419,7 +421,7 @@ func TestConfiguredCapability_UsesBlobRefForOversizedFieldWhenAllowed(t *testing
 	if !found {
 		t.Fatalf("expected fields_meta for blob_ref field, got %#v", response.FieldsMeta)
 	}
-	if serviceFieldMeta.Kind != ResultFieldKindBlobRef {
+	if serviceFieldMeta.Kind != controlapipkg.ResultFieldKindBlobRef {
 		t.Fatalf("expected blob_ref field kind metadata, got %#v", serviceFieldMeta)
 	}
 	if serviceFieldMeta.PromptEligible {
@@ -452,7 +454,7 @@ func TestConfiguredMarkdownFrontmatterCapability_ExtractsScalarFields(t *testing
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "docs",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "docs-bot",
 		Scopes:    []string{"docs.read"},
 		Credential: secrets.SecretRef{
@@ -465,14 +467,14 @@ func TestConfiguredMarkdownFrontmatterCapability_ExtractsScalarFields(t *testing
 		t.Fatalf("register configured connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-docs-frontmatter",
 		Capability: "docs.release_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful markdown frontmatter response, got %#v", response)
 	}
 	if gotVersion := response.StructuredResult["version"]; gotVersion != "rel_2026_03" {
@@ -488,7 +490,7 @@ func TestConfiguredMarkdownFrontmatterCapability_ExtractsScalarFields(t *testing
 		t.Fatalf("expected markdown_frontmatter_keys extractor, got %#v", response.Metadata)
 	}
 	versionFieldMeta := response.FieldsMeta["version"]
-	if versionFieldMeta.Kind != ResultFieldKindScalar || versionFieldMeta.PromptEligible {
+	if versionFieldMeta.Kind != controlapipkg.ResultFieldKindScalar || versionFieldMeta.PromptEligible {
 		t.Fatalf("unexpected version field metadata: %#v", versionFieldMeta)
 	}
 }
@@ -518,7 +520,7 @@ func TestConfiguredMarkdownSectionCapability_ExtractsDisplayOnlyTaintedText(t *t
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "docs",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "docs-bot",
 		Scopes:    []string{"docs.read"},
 		Credential: secrets.SecretRef{
@@ -531,21 +533,21 @@ func TestConfiguredMarkdownSectionCapability_ExtractsDisplayOnlyTaintedText(t *t
 		t.Fatalf("register configured connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-docs-section",
 		Capability: "docs.section_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful markdown section response, got %#v", response)
 	}
 	if gotSummary := response.StructuredResult["summary"]; gotSummary != "Hostile but displayable text.\n" {
 		t.Fatalf("unexpected markdown section output: %#v", response.StructuredResult)
 	}
 	summaryFieldMeta := response.FieldsMeta["summary"]
-	if summaryFieldMeta.Sensitivity != ResultFieldSensitivityTaintedText {
+	if summaryFieldMeta.Sensitivity != controlapipkg.ResultFieldSensitivityTaintedText {
 		t.Fatalf("expected tainted text sensitivity, got %#v", summaryFieldMeta)
 	}
 	if summaryFieldMeta.PromptEligible {
@@ -578,7 +580,7 @@ func TestConfiguredMarkdownSectionCapability_DeniesAmbiguousHeadingPath(t *testi
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "docs",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "docs-bot",
 		Scopes:    []string{"docs.read"},
 		Credential: secrets.SecretRef{
@@ -591,14 +593,14 @@ func TestConfiguredMarkdownSectionCapability_DeniesAmbiguousHeadingPath(t *testi
 		t.Fatalf("register configured connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-docs-section-ambiguous",
 		Capability: "docs.section_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if response.Status != ResponseStatusError {
+	if response.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected markdown section ambiguity to fail, got %#v", response)
 	}
 	if !strings.Contains(response.DenialReason, "ambiguously") {
@@ -631,7 +633,7 @@ func TestConfiguredHTMLMetaCapability_ExtractsDisplayOnlyTaintedMetadata(t *test
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "docshtml",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "docs-bot",
 		Scopes:    []string{"docs.read"},
 		Credential: secrets.SecretRef{
@@ -644,14 +646,14 @@ func TestConfiguredHTMLMetaCapability_ExtractsDisplayOnlyTaintedMetadata(t *test
 		t.Fatalf("register configured html connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-docs-html",
 		Capability: "docshtml.page_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured html capability: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful html metadata response, got %#v", response)
 	}
 	if response.StructuredResult["page_title"] != "Release Notes" {
@@ -670,7 +672,7 @@ func TestConfiguredHTMLMetaCapability_ExtractsDisplayOnlyTaintedMetadata(t *test
 		t.Fatalf("expected html_meta_allowlist extractor, got %#v", response.Metadata)
 	}
 	descriptionFieldMeta := response.FieldsMeta["description"]
-	if descriptionFieldMeta.Sensitivity != ResultFieldSensitivityTaintedText || descriptionFieldMeta.PromptEligible {
+	if descriptionFieldMeta.Sensitivity != controlapipkg.ResultFieldSensitivityTaintedText || descriptionFieldMeta.PromptEligible {
 		t.Fatalf("unexpected html description field metadata: %#v", descriptionFieldMeta)
 	}
 }
@@ -692,18 +694,18 @@ func TestConfiguredPublicHTMLMetaCapability_ExecutesWithoutSecretResolution(t *t
 	client, status, server := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
 	server.httpClient = providerServer.Client()
 
-	if len(status.Connections) != 1 || status.Connections[0].GrantType != GrantTypePublicRead {
+	if len(status.Connections) != 1 || status.Connections[0].GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("expected public_read connection summary, got %#v", status.Connections)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-status-html",
 		Capability: "statuspage.summary_get",
 	})
 	if err != nil {
 		t.Fatalf("execute public html capability: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful public html response, got %#v", response)
 	}
 	if response.StructuredResult["page_title"] != "Stripe Status" {
@@ -734,18 +736,18 @@ func TestConfiguredPublicJSONNestedCapability_ExecutesWithoutSecretResolution(t 
 	client, status, server := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
 	server.httpClient = providerServer.Client()
 
-	if len(status.Connections) != 1 || status.Connections[0].GrantType != GrantTypePublicRead {
+	if len(status.Connections) != 1 || status.Connections[0].GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("expected public_read connection summary, got %#v", status.Connections)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-status-json-nested",
 		Capability: "statuspage.summary_get",
 	})
 	if err != nil {
 		t.Fatalf("execute public nested json capability: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful public nested json response, got %#v", response)
 	}
 	if response.StructuredResult["status_description"] != "All Systems Operational" {
@@ -776,18 +778,18 @@ func TestConfiguredPublicJSONIssueListCapability_ExecutesWithoutSecretResolution
 	client, status, server := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
 	server.httpClient = providerServer.Client()
 
-	if len(status.Connections) != 1 || status.Connections[0].GrantType != GrantTypePublicRead {
+	if len(status.Connections) != 1 || status.Connections[0].GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("expected public_read connection summary, got %#v", status.Connections)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-repo-issues",
 		Capability: "repo.issues_list",
 	})
 	if err != nil {
 		t.Fatalf("execute public issue list capability: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful public issue list response, got %#v", response)
 	}
 	rawIssuesValue, found := response.StructuredResult["issues"]
@@ -802,7 +804,7 @@ func TestConfiguredPublicJSONIssueListCapability_ExecutesWithoutSecretResolution
 		t.Fatalf("expected bounded issue list of 2 items, got %#v", issueItems)
 	}
 	issuesFieldMeta := response.FieldsMeta["issues"]
-	if issuesFieldMeta.Kind != ResultFieldKindArray || issuesFieldMeta.PromptEligible {
+	if issuesFieldMeta.Kind != controlapipkg.ResultFieldKindArray || issuesFieldMeta.PromptEligible {
 		t.Fatalf("unexpected issues field metadata: %#v", issuesFieldMeta)
 	}
 	if response.Metadata["extractor"] != extractorJSONObjectList {
@@ -821,7 +823,7 @@ func TestInspectSite_HTTPSReturnsCertificateInfo(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
 	server.httpClient = providerServer.Client()
 
-	inspectionResponse, err := client.InspectSite(context.Background(), SiteInspectionRequest{URL: providerServer.URL})
+	inspectionResponse, err := client.InspectSite(context.Background(), controlapipkg.SiteInspectionRequest{URL: providerServer.URL})
 	if err != nil {
 		t.Fatalf("inspect site: %v", err)
 	}
@@ -849,7 +851,7 @@ func TestInspectSite_UntrustedHTTPSReturnsCertificateWithoutDraftSuggestion(t *t
 
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
 
-	inspectionResponse, err := client.InspectSite(context.Background(), SiteInspectionRequest{URL: providerServer.URL})
+	inspectionResponse, err := client.InspectSite(context.Background(), controlapipkg.SiteInspectionRequest{URL: providerServer.URL})
 	if err != nil {
 		t.Fatalf("inspect untrusted https site: %v", err)
 	}
@@ -880,7 +882,7 @@ func TestCreateTrustDraft_WritesLocalhostStatusDraft(t *testing.T) {
 
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
 
-	trustDraftResponse, err := client.CreateTrustDraft(context.Background(), SiteTrustDraftRequest{URL: providerServer.URL})
+	trustDraftResponse, err := client.CreateTrustDraft(context.Background(), controlapipkg.SiteTrustDraftRequest{URL: providerServer.URL})
 	if err != nil {
 		t.Fatalf("create trust draft: %v", err)
 	}
@@ -925,14 +927,14 @@ func TestCreateTrustDraft_DeniesOverwrite(t *testing.T) {
 
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
 
-	if _, err := client.CreateTrustDraft(context.Background(), SiteTrustDraftRequest{URL: providerServer.URL}); err != nil {
+	if _, err := client.CreateTrustDraft(context.Background(), controlapipkg.SiteTrustDraftRequest{URL: providerServer.URL}); err != nil {
 		t.Fatalf("create first trust draft: %v", err)
 	}
-	_, err := client.CreateTrustDraft(context.Background(), SiteTrustDraftRequest{URL: providerServer.URL})
+	_, err := client.CreateTrustDraft(context.Background(), controlapipkg.SiteTrustDraftRequest{URL: providerServer.URL})
 	if err == nil {
 		t.Fatal("expected second trust draft creation to fail")
 	}
-	if !strings.Contains(err.Error(), DenialCodeSiteTrustDraftExists) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeSiteTrustDraftExists) {
 		t.Fatalf("expected trust-draft-exists denial, got %v", err)
 	}
 }
@@ -950,11 +952,11 @@ func TestInspectSite_FailsClosedOnAuditFailure(t *testing.T) {
 		return errors.New("audit down")
 	}
 
-	_, err := client.InspectSite(context.Background(), SiteInspectionRequest{URL: providerServer.URL})
+	_, err := client.InspectSite(context.Background(), controlapipkg.SiteInspectionRequest{URL: providerServer.URL})
 	if err == nil {
 		t.Fatal("expected inspect audit failure")
 	}
-	if !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected audit unavailable denial, got %v", err)
 	}
 }
@@ -984,7 +986,7 @@ func TestConfiguredHTMLMetaCapability_DeniesDuplicateMetaName(t *testing.T) {
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "docshtml",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "docs-bot",
 		Scopes:    []string{"docs.read"},
 		Credential: secrets.SecretRef{
@@ -997,14 +999,14 @@ func TestConfiguredHTMLMetaCapability_DeniesDuplicateMetaName(t *testing.T) {
 		t.Fatalf("register configured html connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-docs-html-duplicate",
 		Capability: "docshtml.page_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured html capability: %v", err)
 	}
-	if response.Status != ResponseStatusError {
+	if response.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected duplicate meta denial, got %#v", response)
 	}
 	if !strings.Contains(response.DenialReason, "duplicate meta_name") {
@@ -1037,7 +1039,7 @@ func TestConfiguredHTMLMetaCapability_DeniesMissingConfiguredMeta(t *testing.T) 
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "docshtml",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "docs-bot",
 		Scopes:    []string{"docs.read"},
 		Credential: secrets.SecretRef{
@@ -1050,14 +1052,14 @@ func TestConfiguredHTMLMetaCapability_DeniesMissingConfiguredMeta(t *testing.T) 
 		t.Fatalf("register configured html connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-docs-html-missing",
 		Capability: "docshtml.page_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured html capability: %v", err)
 	}
-	if response.Status != ResponseStatusError {
+	if response.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected missing meta denial, got %#v", response)
 	}
 	if !strings.Contains(response.DenialReason, "missing meta_name") {
@@ -1090,7 +1092,7 @@ func TestConfiguredCapability_DeniesNonScalarField(t *testing.T) {
 
 	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "example",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "service-bot",
 		Scopes:    []string{"status.read"},
 		Credential: secrets.SecretRef{
@@ -1103,14 +1105,14 @@ func TestConfiguredCapability_DeniesNonScalarField(t *testing.T) {
 		t.Fatalf("register configured connection: %v", err)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-example-array-field",
 		Capability: "example.status_get",
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if response.Status != ResponseStatusError {
+	if response.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected error response for non-scalar field, got %#v", response)
 	}
 	if !strings.Contains(response.DenialReason, "must be scalar") {
@@ -1136,7 +1138,7 @@ func TestConfiguredPKCECapability_ExchangesAndRefreshesInsideLoopgate(t *testing
 				t.Fatalf("parse pkce token form: %v", err)
 			}
 			switch request.Form.Get("grant_type") {
-			case GrantTypeAuthorizationCode:
+			case controlapipkg.GrantTypeAuthorizationCode:
 				if request.Form.Get("client_id") != "pkce-client" {
 					t.Fatalf("unexpected pkce client_id: %q", request.Form.Get("client_id"))
 				}
@@ -1187,7 +1189,7 @@ func TestConfiguredPKCECapability_ExchangesAndRefreshesInsideLoopgate(t *testing
 		return fakeStore, nil
 	}
 
-	startResponse, err := client.StartPKCEConnection(context.Background(), PKCEStartRequest{
+	startResponse, err := client.StartPKCEConnection(context.Background(), controlapipkg.PKCEStartRequest{
 		Provider: "examplepkce",
 		Subject:  "workspace-user",
 	})
@@ -1208,7 +1210,7 @@ func TestConfiguredPKCECapability_ExchangesAndRefreshesInsideLoopgate(t *testing
 		t.Fatal("expected code_challenge in auth URL")
 	}
 
-	connectionStatus, err := client.CompletePKCEConnection(context.Background(), PKCECompleteRequest{
+	connectionStatus, err := client.CompletePKCEConnection(context.Background(), controlapipkg.PKCECompleteRequest{
 		Provider: "examplepkce",
 		Subject:  "workspace-user",
 		State:    startResponse.State,
@@ -1224,7 +1226,7 @@ func TestConfiguredPKCECapability_ExchangesAndRefreshesInsideLoopgate(t *testing
 		t.Fatalf("expected refresh token in secure backend only, got %q", storedRefreshToken)
 	}
 
-	firstResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	firstResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-pkce-1",
 		Capability: "examplepkce.status_get",
 	})
@@ -1254,7 +1256,7 @@ func TestConfiguredPKCECapability_ExchangesAndRefreshesInsideLoopgate(t *testing
 	server.providerRuntime.tokens[connectionKey] = cachedToken
 	server.providerRuntime.mu.Unlock()
 
-	secondResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	secondResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-pkce-2",
 		Capability: "examplepkce.status_get",
 	})
@@ -1278,5 +1280,94 @@ func TestConfiguredPKCECapability_ExchangesAndRefreshesInsideLoopgate(t *testing
 	}
 	if authorizationRequests != 0 {
 		t.Fatalf("authorization endpoint should not be called by Loopgate start flow, got %d", authorizationRequests)
+	}
+}
+
+func TestConfiguredPKCECapability_CompletionRequiresInitiatingControlSession(t *testing.T) {
+	repoRoot := t.TempDir()
+	var tokenExchangeRequests int32
+	providerServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/oauth/authorize":
+			http.Error(writer, "authorization endpoint should not be called directly in tests", http.StatusBadRequest)
+		case "/oauth/token":
+			atomic.AddInt32(&tokenExchangeRequests, 1)
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(writer, `{"access_token":"pkce-access-1","token_type":"Bearer","expires_in":300,"refresh_token":"pkce-refresh-1"}`)
+		case "/api/status":
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(writer, `{"healthy":"yes","generation":1,"secret":"remote-secret-1"}`)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer providerServer.Close()
+
+	writeConfiguredPKCEYAML(t, repoRoot, providerServer.URL)
+	client, status, server := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
+	server.httpClient = providerServer.Client()
+	fakeStore := &fakeConnectionSecretStore{}
+	server.resolveSecretStore = func(validatedRef secrets.SecretRef) (secrets.SecretStore, error) {
+		return fakeStore, nil
+	}
+
+	startResponse, err := client.StartPKCEConnection(context.Background(), controlapipkg.PKCEStartRequest{
+		Provider: "examplepkce",
+		Subject:  "workspace-user",
+	})
+	if err != nil {
+		t.Fatalf("start pkce: %v", err)
+	}
+
+	otherClient := NewClient(client.socketPath)
+	otherClient.ConfigureSession("other-actor", "other-session", advertisedSessionCapabilityNames(status))
+	if _, err := otherClient.ensureCapabilityToken(context.Background()); err != nil {
+		t.Fatalf("ensure other client capability token: %v", err)
+	}
+
+	_, err = otherClient.CompletePKCEConnection(context.Background(), controlapipkg.PKCECompleteRequest{
+		Provider: "examplepkce",
+		Subject:  "workspace-user",
+		State:    startResponse.State,
+		Code:     "auth-code-cross-session",
+	})
+	var denied RequestDeniedError
+	if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeExecutionFailed {
+		t.Fatalf("expected pkce completion denial, got %v", err)
+	}
+	if !strings.Contains(denied.DenialReason, "different control session") {
+		t.Fatalf("expected control-session binding reason, got %v", denied)
+	}
+	if got := atomic.LoadInt32(&tokenExchangeRequests); got != 0 {
+		t.Fatalf("expected no token exchange for cross-session completion, got %d", got)
+	}
+
+	server.pkceRuntime.mu.Lock()
+	pendingSession, found := server.pkceRuntime.sessions[startResponse.State]
+	server.pkceRuntime.mu.Unlock()
+	if !found {
+		t.Fatalf("expected pending PKCE session to remain after denied completion")
+	}
+	if pendingSession.ControlSessionID != client.controlSessionID {
+		t.Fatalf("expected pending PKCE session to remain bound to original control session, got %#v", pendingSession)
+	}
+
+	connectionStatus, err := client.CompletePKCEConnection(context.Background(), controlapipkg.PKCECompleteRequest{
+		Provider: "examplepkce",
+		Subject:  "workspace-user",
+		State:    startResponse.State,
+		Code:     "auth-code-1",
+	})
+	if err != nil {
+		t.Fatalf("complete pkce with original client: %v", err)
+	}
+	if connectionStatus.Status != "stored" {
+		t.Fatalf("unexpected connection status after original completion: %#v", connectionStatus)
+	}
+	if got := atomic.LoadInt32(&tokenExchangeRequests); got != 1 {
+		t.Fatalf("expected exactly one token exchange after original completion, got %d", got)
+	}
+	if storedRefreshToken := string(fakeStore.storedSecret["pkce-refresh-token"]); storedRefreshToken != "pkce-refresh-1" {
+		t.Fatalf("expected refresh token in secure backend only, got %q", storedRefreshToken)
 	}
 }

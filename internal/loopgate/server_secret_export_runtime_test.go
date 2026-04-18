@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"testing"
 
 	policypkg "loopgate/internal/policy"
@@ -72,7 +73,7 @@ func TestCapabilityProhibitsRawSecretExport_OptOutAllowsRegisteredTool(t *testin
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure capability token: %v", err)
 	}
-	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	resp, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-optout",
 		Capability: "secret.notexport",
 		Arguments:  map[string]string{"path": "."},
@@ -80,7 +81,7 @@ func TestCapabilityProhibitsRawSecretExport_OptOutAllowsRegisteredTool(t *testin
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if resp.Status != ResponseStatusSuccess {
+	if resp.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful read for heuristic opt-out tool, got %#v", resp)
 	}
 }
@@ -91,7 +92,7 @@ func TestCapabilityProhibitsRawSecretExport_UnregisteredHeuristicNameDenied(t *t
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure capability token: %v", err)
 	}
-	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	resp, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-heur",
 		Capability: "secret.no.such.tool",
 		Arguments:  map[string]string{},
@@ -99,7 +100,7 @@ func TestCapabilityProhibitsRawSecretExport_UnregisteredHeuristicNameDenied(t *t
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if resp.Status != ResponseStatusDenied || resp.DenialCode != DenialCodeSecretExportProhibited {
+	if resp.Status != controlapipkg.ResponseStatusDenied || resp.DenialCode != controlapipkg.DenialCodeSecretExportProhibited {
 		t.Fatalf("expected secret export prohibition for unregistered heuristic name, got %#v", resp)
 	}
 }
@@ -119,7 +120,7 @@ func TestCapabilityProhibitsRawSecretExport_RegisteredBlockedNameStillDenied(t *
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {
 		t.Fatalf("ensure capability token: %v", err)
 	}
-	resp, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	resp, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-blocked",
 		Capability: "secret.blocked",
 		Arguments:  map[string]string{},
@@ -127,7 +128,7 @@ func TestCapabilityProhibitsRawSecretExport_RegisteredBlockedNameStillDenied(t *
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if resp.Status != ResponseStatusDenied || resp.DenialCode != DenialCodeSecretExportProhibited {
+	if resp.Status != controlapipkg.ResponseStatusDenied || resp.DenialCode != controlapipkg.DenialCodeSecretExportProhibited {
 		t.Fatalf("expected secret export prohibition, got %#v", resp)
 	}
 }

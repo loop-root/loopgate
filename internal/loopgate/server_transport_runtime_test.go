@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -12,32 +13,32 @@ import (
 func TestHTTPStatusForResponseMapsTypedCapabilityResponses(t *testing.T) {
 	testCases := []struct {
 		name         string
-		response     CapabilityResponse
+		response     controlapipkg.CapabilityResponse
 		expectedHTTP int
 	}{
 		{
 			name:         "success",
-			response:     CapabilityResponse{Status: ResponseStatusSuccess},
+			response:     controlapipkg.CapabilityResponse{Status: controlapipkg.ResponseStatusSuccess},
 			expectedHTTP: http.StatusOK,
 		},
 		{
 			name:         "pending approval",
-			response:     CapabilityResponse{Status: ResponseStatusPendingApproval},
+			response:     controlapipkg.CapabilityResponse{Status: controlapipkg.ResponseStatusPendingApproval},
 			expectedHTTP: http.StatusAccepted,
 		},
 		{
 			name:         "denied unauthorized",
-			response:     CapabilityResponse{Status: ResponseStatusDenied, DenialCode: DenialCodeCapabilityTokenInvalid},
+			response:     controlapipkg.CapabilityResponse{Status: controlapipkg.ResponseStatusDenied, DenialCode: controlapipkg.DenialCodeCapabilityTokenInvalid},
 			expectedHTTP: http.StatusUnauthorized,
 		},
 		{
 			name:         "denied rate limited",
-			response:     CapabilityResponse{Status: ResponseStatusDenied, DenialCode: DenialCodeSessionOpenRateLimited},
+			response:     controlapipkg.CapabilityResponse{Status: controlapipkg.ResponseStatusDenied, DenialCode: controlapipkg.DenialCodeSessionOpenRateLimited},
 			expectedHTTP: http.StatusTooManyRequests,
 		},
 		{
 			name:         "error audit unavailable",
-			response:     CapabilityResponse{Status: ResponseStatusError, DenialCode: DenialCodeAuditUnavailable},
+			response:     controlapipkg.CapabilityResponse{Status: controlapipkg.ResponseStatusError, DenialCode: controlapipkg.DenialCodeAuditUnavailable},
 			expectedHTTP: http.StatusServiceUnavailable,
 		},
 	}

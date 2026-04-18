@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 
 	"loopgate/internal/secrets"
@@ -11,7 +12,7 @@ func (server *Server) handleHealth(writer http.ResponseWriter, request *http.Req
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	server.writeJSON(writer, http.StatusOK, HealthResponse{
+	server.writeJSON(writer, http.StatusOK, controlapipkg.HealthResponse{
 		Version: statusVersion,
 		OK:      true,
 	})
@@ -61,7 +62,7 @@ func (server *Server) handleStatus(writer http.ResponseWriter, request *http.Req
 	}
 	server.mu.Unlock()
 
-	response := StatusResponse{
+	response := controlapipkg.StatusResponse{
 		Version: statusVersion,
 		Policy:  server.currentPolicyRuntime().policy,
 		// Keep control-plane route scopes separate from executable tool capabilities.
@@ -94,7 +95,7 @@ func (server *Server) handleConnectionsStatus(writer http.ResponseWriter, reques
 		return
 	}
 
-	server.writeJSON(writer, http.StatusOK, ConnectionsStatusResponse{
+	server.writeJSON(writer, http.StatusOK, controlapipkg.ConnectionsStatusResponse{
 		Connections: server.connectionStatuses(),
 	})
 }
@@ -118,21 +119,21 @@ func (server *Server) handleConnectionValidate(writer http.ResponseWriter, reque
 		return
 	}
 
-	var validateRequest ConnectionKeyRequest
+	var validateRequest controlapipkg.ConnectionKeyRequest
 	if err := decodeJSONBytes(requestBodyBytes, &validateRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	connectionStatus, err := server.ValidateConnection(request.Context(), validateRequest.Provider, validateRequest.Subject)
 	if err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: secrets.RedactText(err.Error()),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		})
 		return
@@ -159,21 +160,21 @@ func (server *Server) handleConnectionPKCEStart(writer http.ResponseWriter, requ
 		return
 	}
 
-	var startRequest PKCEStartRequest
+	var startRequest controlapipkg.PKCEStartRequest
 	if err := decodeJSONBytes(requestBodyBytes, &startRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	startResponse, err := server.startPKCEConnection(request.Context(), tokenClaims, startRequest)
 	if err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: secrets.RedactText(err.Error()),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		})
 		return
@@ -200,21 +201,21 @@ func (server *Server) handleConnectionPKCEComplete(writer http.ResponseWriter, r
 		return
 	}
 
-	var completeRequest PKCECompleteRequest
+	var completeRequest controlapipkg.PKCECompleteRequest
 	if err := decodeJSONBytes(requestBodyBytes, &completeRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	connectionStatus, err := server.completePKCEConnection(request.Context(), tokenClaims, completeRequest)
 	if err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: secrets.RedactText(err.Error()),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		})
 		return
@@ -241,28 +242,28 @@ func (server *Server) handleSiteInspect(writer http.ResponseWriter, request *htt
 		return
 	}
 
-	var inspectionRequest SiteInspectionRequest
+	var inspectionRequest controlapipkg.SiteInspectionRequest
 	if err := decodeJSONBytes(requestBodyBytes, &inspectionRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := inspectionRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	inspectionResponse, err := server.inspectSite(request.Context(), inspectionRequest.URL)
 	if err != nil {
-		server.writeJSON(writer, siteInspectionHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, siteInspectionHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactSiteTrustError(err),
 			DenialCode:   siteTrustDenialCode(err),
 			Redacted:     true,
@@ -283,10 +284,10 @@ func (server *Server) handleSiteInspect(writer http.ResponseWriter, request *htt
 		"actor_label":          tokenClaims.ActorLabel,
 		"client_session_label": tokenClaims.ClientSessionLabel,
 	}); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 		})
 		return
 	}
@@ -312,28 +313,28 @@ func (server *Server) handleSiteTrustDraft(writer http.ResponseWriter, request *
 		return
 	}
 
-	var trustDraftRequest SiteTrustDraftRequest
+	var trustDraftRequest controlapipkg.SiteTrustDraftRequest
 	if err := decodeJSONBytes(requestBodyBytes, &trustDraftRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := trustDraftRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 
 	trustDraftResponse, err := server.createSiteTrustDraft(request.Context(), tokenClaims, trustDraftRequest.URL)
 	if err != nil {
-		server.writeJSON(writer, siteInspectionHTTPStatus(err), CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, siteInspectionHTTPStatus(err), controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: redactSiteTrustError(err),
 			DenialCode:   siteTrustDenialCode(err),
 			Redacted:     true,

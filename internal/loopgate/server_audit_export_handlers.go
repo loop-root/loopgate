@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 
@@ -28,10 +29,10 @@ func (server *Server) handleAuditExportFlush(writer http.ResponseWriter, request
 
 	requestSuffix, err := randomHex(8)
 	if err != nil {
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "audit export flush request id generation failed",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
@@ -59,11 +60,11 @@ func (server *Server) handleAuditExportFlush(writer http.ResponseWriter, request
 			server.writeJSON(writer, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(flushRequestID))
 			return
 		}
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
 			RequestID:    flushRequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "audit export flush failed",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		})
 		return
@@ -96,8 +97,8 @@ func (server *Server) handleAuditExportFlush(writer http.ResponseWriter, request
 	server.writeJSON(writer, http.StatusOK, flushResponse)
 }
 
-func (server *Server) performAuditExportFlush(ctx context.Context, flushRequestID string) (AuditExportFlushResponse, error) {
-	response := AuditExportFlushResponse{
+func (server *Server) performAuditExportFlush(ctx context.Context, flushRequestID string) (controlapipkg.AuditExportFlushResponse, error) {
+	response := controlapipkg.AuditExportFlushResponse{
 		FlushRequestID:   strings.TrimSpace(flushRequestID),
 		DestinationKind:  strings.TrimSpace(server.runtimeConfig.Logging.AuditExport.DestinationKind),
 		DestinationLabel: strings.TrimSpace(server.runtimeConfig.Logging.AuditExport.DestinationLabel),

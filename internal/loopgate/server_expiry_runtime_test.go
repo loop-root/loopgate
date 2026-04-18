@@ -132,6 +132,48 @@ func TestPruneExpiredLocked_PrunesReplayStateAfterSessionTTL(t *testing.T) {
 	}
 }
 
+func TestPruneExpiredLocked_PrunesRateLimitBucketsOutsideTheirWindows(t *testing.T) {
+	repoRoot := t.TempDir()
+	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	nowUTC := server.now().UTC()
+	expiredFsReadTimestamp := nowUTC.Add(-fsReadRateWindow - time.Second)
+	retainedFsReadTimestamp := nowUTC.Add(-30 * time.Second)
+	expiredHookTimestamp := nowUTC.Add(-hookPreValidateRateWindow - time.Second)
+	retainedHookTimestamp := nowUTC.Add(-30 * time.Second)
+
+	server.mu.Lock()
+	server.expirySweepMaxInterval = 0
+	server.replayState.sessionReadCounts["session-expired"] = []time.Time{expiredFsReadTimestamp}
+	server.replayState.sessionReadCounts["session-retained"] = []time.Time{retainedFsReadTimestamp}
+	server.replayState.hookPreValidateCounts[1001] = []time.Time{expiredHookTimestamp}
+	server.replayState.hookPreValidateCounts[2002] = []time.Time{retainedHookTimestamp}
+	server.replayState.hookPeerAuthFailureCounts["missing:peer-a"] = []time.Time{expiredHookTimestamp}
+	server.replayState.hookPeerAuthFailureCounts["missing:peer-b"] = []time.Time{retainedHookTimestamp}
+	server.pruneExpiredLocked()
+
+	_, expiredSessionReadsFound := server.replayState.sessionReadCounts["session-expired"]
+	retainedSessionReads := server.replayState.sessionReadCounts["session-retained"]
+	_, expiredHookReadsFound := server.replayState.hookPreValidateCounts[1001]
+	retainedHookReads := server.replayState.hookPreValidateCounts[2002]
+	_, expiredPeerAuthFailuresFound := server.replayState.hookPeerAuthFailureCounts["missing:peer-a"]
+	retainedPeerAuthFailures := server.replayState.hookPeerAuthFailureCounts["missing:peer-b"]
+	server.mu.Unlock()
+
+	if expiredSessionReadsFound || expiredHookReadsFound || expiredPeerAuthFailuresFound {
+		t.Fatalf("expected expired rate-limit buckets to be pruned, got session=%v hook=%v peer_auth=%v", expiredSessionReadsFound, expiredHookReadsFound, expiredPeerAuthFailuresFound)
+	}
+	if len(retainedSessionReads) != 1 || !retainedSessionReads[0].Equal(retainedFsReadTimestamp) {
+		t.Fatalf("expected retained session fs_read bucket to survive, got %#v", retainedSessionReads)
+	}
+	if len(retainedHookReads) != 1 || !retainedHookReads[0].Equal(retainedHookTimestamp) {
+		t.Fatalf("expected retained hook bucket to survive, got %#v", retainedHookReads)
+	}
+	if len(retainedPeerAuthFailures) != 1 || !retainedPeerAuthFailures[0].Equal(retainedHookTimestamp) {
+		t.Fatalf("expected retained hook peer-auth bucket to survive, got %#v", retainedPeerAuthFailures)
+	}
+}
+
 func TestPruneExpiredLocked_PrunesTerminalApprovalsAfterSessionTTL(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

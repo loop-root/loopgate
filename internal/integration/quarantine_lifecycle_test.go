@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 )
 
 const integrationQuarantineRefPrefix = "quarantine://payloads/"
@@ -61,14 +61,14 @@ func TestQuarantineLifecycleOverRealSocket(t *testing.T) {
 	}
 
 	client := harness.newClient("integration-actor", "integration-quarantine", advertisedSessionCapabilityNames(status))
-	executeResponse, err := client.ExecuteCapability(context.Background(), loopgate.CapabilityRequest{
+	executeResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-quarantine",
 		Capability: capabilityName,
 	})
 	if err != nil {
 		t.Fatalf("execute configured capability: %v", err)
 	}
-	if executeResponse.Status != loopgate.ResponseStatusSuccess {
+	if executeResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected configured capability success, got %#v", executeResponse)
 	}
 	if !strings.HasPrefix(executeResponse.QuarantineRef, integrationQuarantineRefPrefix) {
@@ -152,7 +152,7 @@ func TestQuarantineLifecycleOverRealSocket(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected view after prune to be denied")
 	}
-	if !strings.Contains(err.Error(), loopgate.DenialCodeSourceBytesUnavailable) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeSourceBytesUnavailable) {
 		t.Fatalf("expected source bytes unavailable denial after prune, got %v", err)
 	}
 

@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 	"testing"
@@ -38,7 +39,7 @@ func TestClientRefreshSessionMACKeyFromServer_alignsWithMacKeysCurrentSlot(t *te
 		t.Fatalf("after refresh want current derived key %q, got %q", keys.Current.DerivedSessionMACKey, got)
 	}
 
-	resp, err := client.ExecuteCapability(ctx, CapabilityRequest{
+	resp, err := client.ExecuteCapability(ctx, controlapipkg.CapabilityRequest{
 		RequestID:  "req-mac-refresh-align",
 		Capability: "fs_list",
 		Arguments:  map[string]string{"path": "."},
@@ -46,7 +47,7 @@ func TestClientRefreshSessionMACKeyFromServer_alignsWithMacKeysCurrentSlot(t *te
 	if err != nil {
 		t.Fatalf("execute after refresh: %v", err)
 	}
-	if resp.Status != ResponseStatusSuccess {
+	if resp.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected success after refresh, got %#v", resp)
 	}
 }

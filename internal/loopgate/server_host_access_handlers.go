@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"sort"
@@ -255,21 +256,21 @@ func validateOrganizePlanOperations(ops []hostOrganizePlanOp) error {
 	return nil
 }
 
-func (server *Server) executeHostFolderListCapability(tokenClaims capabilityToken, capabilityRequest CapabilityRequest) CapabilityResponse {
+func (server *Server) executeHostFolderListCapability(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) controlapipkg.CapabilityResponse {
 	preset, ok := lookupFolderAccessPresetByKey(capabilityRequest.Arguments["folder_name"])
 	if !ok {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "unknown folder_name", DenialCodeInvalidCapabilityArguments)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "unknown folder_name", controlapipkg.DenialCodeInvalidCapabilityArguments)
 	}
 	granted, err := server.hostFolderPresetGranted(preset.ID)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 	if !granted {
 		return hostAccessDeniedResponse(server, tokenClaims, capabilityRequest, "folder is not granted for host access")
 	}
 	rootPath, err := server.resolveFolderHostPathForAccess(preset)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 	directoryHandle, listPath, err := openHostPathReadOnly(rootPath, capabilityRequest.Arguments["path"], true)
 	if err != nil {
@@ -279,7 +280,7 @@ func (server *Server) executeHostFolderListCapability(tokenClaims capabilityToke
 
 	entries, err := directoryHandle.ReadDir(-1)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 
 	type listEntry struct {
@@ -327,21 +328,21 @@ func (server *Server) executeHostFolderListCapability(tokenClaims capabilityToke
 	return server.hostAccessStructuredSuccess(tokenClaims, capabilityRequest, structured, hostAccessListClassification())
 }
 
-func (server *Server) executeHostFolderReadCapability(tokenClaims capabilityToken, capabilityRequest CapabilityRequest) CapabilityResponse {
+func (server *Server) executeHostFolderReadCapability(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) controlapipkg.CapabilityResponse {
 	preset, ok := lookupFolderAccessPresetByKey(capabilityRequest.Arguments["folder_name"])
 	if !ok {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "unknown folder_name", DenialCodeInvalidCapabilityArguments)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "unknown folder_name", controlapipkg.DenialCodeInvalidCapabilityArguments)
 	}
 	granted, err := server.hostFolderPresetGranted(preset.ID)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 	if !granted {
 		return hostAccessDeniedResponse(server, tokenClaims, capabilityRequest, "folder is not granted for host access")
 	}
 	rootPath, err := server.resolveFolderHostPathForAccess(preset)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 	fileHandle, filePath, err := openHostPathReadOnly(rootPath, capabilityRequest.Arguments["path"], false)
 	if err != nil {
@@ -352,10 +353,10 @@ func (server *Server) executeHostFolderReadCapability(tokenClaims capabilityToke
 	limitedReader := io.LimitReader(fileHandle, hostFolderReadMaxBytes+1)
 	raw, err := io.ReadAll(limitedReader)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 	if int64(len(raw)) > hostFolderReadMaxBytes {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "file exceeds host read size limit", DenialCodeFsReadSizeLimitExceeded)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "file exceeds host read size limit", controlapipkg.DenialCodeFsReadSizeLimitExceeded)
 	}
 
 	structured := map[string]interface{}{
@@ -375,33 +376,33 @@ func (server *Server) executeHostFolderReadCapability(tokenClaims capabilityToke
 	return server.hostAccessStructuredSuccess(tokenClaims, capabilityRequest, structured, hostAccessReadClassification())
 }
 
-func (server *Server) executeHostOrganizePlanCapability(tokenClaims capabilityToken, capabilityRequest CapabilityRequest) CapabilityResponse {
+func (server *Server) executeHostOrganizePlanCapability(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) controlapipkg.CapabilityResponse {
 	preset, ok := lookupFolderAccessPresetByKey(capabilityRequest.Arguments["folder_name"])
 	if !ok {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "unknown folder_name", DenialCodeInvalidCapabilityArguments)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "unknown folder_name", controlapipkg.DenialCodeInvalidCapabilityArguments)
 	}
 	granted, err := server.hostFolderPresetGranted(preset.ID)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 	if !granted {
 		return hostAccessDeniedResponse(server, tokenClaims, capabilityRequest, "folder is not granted for host access")
 	}
 	if _, err := server.resolveFolderHostPathForAccess(preset); err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 
 	ops, err := parseHostOrganizePlanJSON(capabilityRequest.Arguments["plan_json"])
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeInvalidCapabilityArguments)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeInvalidCapabilityArguments)
 	}
 	if err := validateOrganizePlanOperations(ops); err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeInvalidCapabilityArguments)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeInvalidCapabilityArguments)
 	}
 
 	planID, err := randomHostPlanID()
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "failed to mint plan id", DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "failed to mint plan id", controlapipkg.DenialCodeExecutionFailed)
 	}
 
 	server.hostAccessRuntime.mu.Lock()
@@ -425,10 +426,10 @@ func (server *Server) executeHostOrganizePlanCapability(tokenClaims capabilityTo
 	return server.hostAccessStructuredSuccess(tokenClaims, capabilityRequest, structured, hostAccessPlanClassification())
 }
 
-func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken, capabilityRequest CapabilityRequest) CapabilityResponse {
+func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) controlapipkg.CapabilityResponse {
 	planID := strings.TrimSpace(capabilityRequest.Arguments["plan_id"])
 	if planID == "" {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "missing plan_id", DenialCodeInvalidCapabilityArguments)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "missing plan_id", controlapipkg.DenialCodeInvalidCapabilityArguments)
 	}
 
 	server.hostAccessRuntime.mu.Lock()
@@ -440,11 +441,11 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 		if alreadyApplied {
 			return hostAccessErrorResponse(server, tokenClaims, capabilityRequest,
 				"plan_id was already used: host.plan.apply succeeded earlier and each plan_id is single-use. If you need more host folder changes, call host.organize.plan again to mint a new plan_id, then approve host.plan.apply for that new id.",
-				DenialCodeInvalidCapabilityArguments)
+				controlapipkg.DenialCodeInvalidCapabilityArguments)
 		}
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest,
 			"no stored plan matches this plan_id (wrong id, plan expired, Loopgate restarted, or it was evicted). Call host.organize.plan again with the same folder_name and an updated plan_json to mint a fresh plan_id.",
-			DenialCodeInvalidCapabilityArguments)
+			controlapipkg.DenialCodeInvalidCapabilityArguments)
 	}
 	if plan.ControlSessionID != tokenClaims.ControlSessionID {
 		return hostAccessDeniedResponse(server, tokenClaims, capabilityRequest, "plan belongs to a different control session")
@@ -453,7 +454,7 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 		server.hostAccessRuntime.mu.Lock()
 		delete(server.hostAccessRuntime.plans, planID)
 		server.hostAccessRuntime.mu.Unlock()
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "plan has expired", DenialCodeInvalidCapabilityArguments)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "plan has expired", controlapipkg.DenialCodeInvalidCapabilityArguments)
 	}
 
 	presetByID := make(map[string]folderAccessPreset)
@@ -462,18 +463,18 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 	}
 	preset, ok := presetByID[plan.FolderPresetID]
 	if !ok {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "stored plan references unknown folder", DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "stored plan references unknown folder", controlapipkg.DenialCodeExecutionFailed)
 	}
 	granted, err := server.hostFolderPresetGranted(preset.ID)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 	if !granted {
 		return hostAccessDeniedResponse(server, tokenClaims, capabilityRequest, "folder is no longer granted")
 	}
 	rootPath, err := server.resolveFolderHostPathForAccess(preset)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
 
 	type applyResult struct {
@@ -570,7 +571,7 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 	return server.hostAccessStructuredSuccess(tokenClaims, capabilityRequest, structured, hostAccessApplyClassification())
 }
 
-func (server *Server) autoAllowLowRiskHostPlanApply(controlSessionID string, capabilityRequest CapabilityRequest, current policypkg.CheckResult) (policypkg.CheckResult, bool) {
+func (server *Server) autoAllowLowRiskHostPlanApply(controlSessionID string, capabilityRequest controlapipkg.CapabilityRequest, current policypkg.CheckResult) (policypkg.CheckResult, bool) {
 	if current.Decision != policypkg.NeedsApproval || strings.TrimSpace(capabilityRequest.Capability) != "host.plan.apply" {
 		return current, false
 	}
@@ -756,46 +757,46 @@ func depthScore(p string) int {
 	return strings.Count(filepath.ToSlash(p), "/") + 1
 }
 
-func hostAccessListClassification() ResultClassification {
-	return ResultClassification{
-		Exposure: ResultExposureDisplay,
-		Eligibility: ResultEligibility{
+func hostAccessListClassification() controlapipkg.ResultClassification {
+	return controlapipkg.ResultClassification{
+		Exposure: controlapipkg.ResultExposureDisplay,
+		Eligibility: controlapipkg.ResultEligibility{
 			Prompt: true,
 		},
 	}
 }
 
-func hostAccessReadClassification() ResultClassification {
-	return ResultClassification{
-		Exposure: ResultExposureDisplay,
-		Eligibility: ResultEligibility{
+func hostAccessReadClassification() controlapipkg.ResultClassification {
+	return controlapipkg.ResultClassification{
+		Exposure: controlapipkg.ResultExposureDisplay,
+		Eligibility: controlapipkg.ResultEligibility{
 			Prompt: true,
 		},
 	}
 }
 
-func hostAccessPlanClassification() ResultClassification {
-	return ResultClassification{
-		Exposure: ResultExposureDisplay,
-		Eligibility: ResultEligibility{
+func hostAccessPlanClassification() controlapipkg.ResultClassification {
+	return controlapipkg.ResultClassification{
+		Exposure: controlapipkg.ResultExposureDisplay,
+		Eligibility: controlapipkg.ResultEligibility{
 			Prompt: true,
 		},
 	}
 }
 
-func hostAccessApplyClassification() ResultClassification {
-	return ResultClassification{
-		Exposure: ResultExposureDisplay,
-		Eligibility: ResultEligibility{
+func hostAccessApplyClassification() controlapipkg.ResultClassification {
+	return controlapipkg.ResultClassification{
+		Exposure: controlapipkg.ResultExposureDisplay,
+		Eligibility: controlapipkg.ResultEligibility{
 			Prompt: true,
 		},
 	}
 }
 
-func (server *Server) hostAccessStructuredSuccess(tokenClaims capabilityToken, capabilityRequest CapabilityRequest, structured map[string]interface{}, classification ResultClassification) CapabilityResponse {
-	fieldsMeta, err := fieldsMetadataForStructuredResult(structured, ResultFieldOriginLocal, classification)
+func (server *Server) hostAccessStructuredSuccess(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, structured map[string]interface{}, classification controlapipkg.ResultClassification) controlapipkg.CapabilityResponse {
+	fieldsMeta, err := fieldsMetadataForStructuredResult(structured, controlapipkg.ResultFieldOriginLocal, classification)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "internal result metadata error", DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "internal result metadata error", controlapipkg.DenialCodeExecutionFailed)
 	}
 	resultMetadata := map[string]interface{}{
 		"prompt_eligible": classification.PromptEligible(),
@@ -806,7 +807,7 @@ func (server *Server) hostAccessStructuredSuccess(tokenClaims capabilityToken, c
 	if err := server.logEvent("capability.executed", tokenClaims.ControlSessionID, map[string]interface{}{
 		"request_id":            capabilityRequest.RequestID,
 		"capability":            capabilityRequest.Capability,
-		"status":                ResponseStatusSuccess,
+		"status":                controlapipkg.ResponseStatusSuccess,
 		"result_classification": classification,
 		"result_provenance":     resultMetadata,
 		"actor_label":           tokenClaims.ActorLabel,
@@ -817,9 +818,9 @@ func (server *Server) hostAccessStructuredSuccess(tokenClaims capabilityToken, c
 	}); err != nil {
 		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 	}
-	successResponse := CapabilityResponse{
+	successResponse := controlapipkg.CapabilityResponse{
 		RequestID:        capabilityRequest.RequestID,
-		Status:           ResponseStatusSuccess,
+		Status:           controlapipkg.ResponseStatusSuccess,
 		StructuredResult: structured,
 		FieldsMeta:       fieldsMeta,
 		Classification:   classification,
@@ -829,15 +830,15 @@ func (server *Server) hostAccessStructuredSuccess(tokenClaims capabilityToken, c
 	return successResponse
 }
 
-func hostAccessApplyPartialFailure(server *Server, tokenClaims capabilityToken, capabilityRequest CapabilityRequest, results interface{}) CapabilityResponse {
+func hostAccessApplyPartialFailure(server *Server, tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, results interface{}) controlapipkg.CapabilityResponse {
 	structured := map[string]interface{}{
 		"partial": true,
 		"results": toJSONSlice(results),
 	}
 	classification := hostAccessApplyClassification()
-	fieldsMeta, err := fieldsMetadataForStructuredResult(structured, ResultFieldOriginLocal, classification)
+	fieldsMeta, err := fieldsMetadataForStructuredResult(structured, controlapipkg.ResultFieldOriginLocal, classification)
 	if err != nil {
-		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "internal result metadata error", DenialCodeExecutionFailed)
+		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, "internal result metadata error", controlapipkg.DenialCodeExecutionFailed)
 	}
 	if auditErr := server.logEvent("capability.error", tokenClaims.ControlSessionID, map[string]interface{}{
 		"request_id":           capabilityRequest.RequestID,
@@ -850,11 +851,11 @@ func hostAccessApplyPartialFailure(server *Server, tokenClaims capabilityToken, 
 	}); auditErr != nil {
 		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 	}
-	resp := CapabilityResponse{
+	resp := controlapipkg.CapabilityResponse{
 		RequestID:        capabilityRequest.RequestID,
-		Status:           ResponseStatusError,
+		Status:           controlapipkg.ResponseStatusError,
 		DenialReason:     "host plan apply failed partway through; some operations may have succeeded",
-		DenialCode:       DenialCodeExecutionFailed,
+		DenialCode:       controlapipkg.DenialCodeExecutionFailed,
 		StructuredResult: structured,
 		FieldsMeta:       fieldsMeta,
 		Classification:   classification,
@@ -864,7 +865,7 @@ func hostAccessApplyPartialFailure(server *Server, tokenClaims capabilityToken, 
 	return resp
 }
 
-func hostAccessErrorResponse(server *Server, tokenClaims capabilityToken, capabilityRequest CapabilityRequest, message string, code string) CapabilityResponse {
+func hostAccessErrorResponse(server *Server, tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, message string, code string) controlapipkg.CapabilityResponse {
 	if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 		"request_id":           capabilityRequest.RequestID,
 		"capability":           capabilityRequest.Capability,
@@ -876,9 +877,9 @@ func hostAccessErrorResponse(server *Server, tokenClaims capabilityToken, capabi
 	}); err != nil {
 		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 	}
-	resp := CapabilityResponse{
+	resp := controlapipkg.CapabilityResponse{
 		RequestID:    capabilityRequest.RequestID,
-		Status:       ResponseStatusError,
+		Status:       controlapipkg.ResponseStatusError,
 		DenialReason: message,
 		DenialCode:   code,
 		Redacted:     true,
@@ -887,24 +888,24 @@ func hostAccessErrorResponse(server *Server, tokenClaims capabilityToken, capabi
 	return resp
 }
 
-func hostAccessDeniedResponse(server *Server, tokenClaims capabilityToken, capabilityRequest CapabilityRequest, message string) CapabilityResponse {
+func hostAccessDeniedResponse(server *Server, tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, message string) controlapipkg.CapabilityResponse {
 	if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 		"request_id":           capabilityRequest.RequestID,
 		"capability":           capabilityRequest.Capability,
 		"reason":               secrets.RedactText(message),
-		"denial_code":          DenialCodePolicyDenied,
+		"denial_code":          controlapipkg.DenialCodePolicyDenied,
 		"actor_label":          tokenClaims.ActorLabel,
 		"client_session_label": tokenClaims.ClientSessionLabel,
 		"control_session_id":   tokenClaims.ControlSessionID,
 	}); err != nil {
 		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 	}
-	resp := CapabilityResponse{
+	resp := controlapipkg.CapabilityResponse{
 		RequestID:    capabilityRequest.RequestID,
-		Status:       ResponseStatusDenied,
+		Status:       controlapipkg.ResponseStatusDenied,
 		DenialReason: message,
-		DenialCode:   DenialCodePolicyDenied,
+		DenialCode:   controlapipkg.DenialCodePolicyDenied,
 	}
-	server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, DenialCodePolicyDenied, message)
+	server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, controlapipkg.DenialCodePolicyDenied, message)
 	return resp
 }

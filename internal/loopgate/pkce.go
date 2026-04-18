@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,11 +17,12 @@ import (
 const pkceSessionTTL = 10 * time.Minute
 
 type pendingPKCESession struct {
-	State         string
-	ConnectionKey string
-	CodeVerifier  string
-	CreatedAt     time.Time
-	ExpiresAt     time.Time
+	State            string
+	ConnectionKey    string
+	ControlSessionID string
+	CodeVerifier     string
+	CreatedAt        time.Time
+	ExpiresAt        time.Time
 }
 
 type oauthTokenResponse struct {
@@ -31,22 +33,22 @@ type oauthTokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-func (server *Server) startPKCEConnection(ctx context.Context, tokenClaims capabilityToken, request PKCEStartRequest) (PKCEStartResponse, error) {
+func (server *Server) startPKCEConnection(ctx context.Context, tokenClaims capabilityToken, request controlapipkg.PKCEStartRequest) (controlapipkg.PKCEStartResponse, error) {
 	if err := request.Validate(); err != nil {
-		return PKCEStartResponse{}, err
+		return controlapipkg.PKCEStartResponse{}, err
 	}
-	configuredConnectionDefinition, connectionKey, err := server.lookupConfiguredConnection(request.Provider, request.Subject, GrantTypePKCE)
+	configuredConnectionDefinition, connectionKey, err := server.lookupConfiguredConnection(request.Provider, request.Subject, controlapipkg.GrantTypePKCE)
 	if err != nil {
-		return PKCEStartResponse{}, err
+		return controlapipkg.PKCEStartResponse{}, err
 	}
 
 	codeVerifier, err := randomHex(32)
 	if err != nil {
-		return PKCEStartResponse{}, fmt.Errorf("generate pkce code verifier: %w", err)
+		return controlapipkg.PKCEStartResponse{}, fmt.Errorf("generate pkce code verifier: %w", err)
 	}
 	state, err := randomHex(16)
 	if err != nil {
-		return PKCEStartResponse{}, fmt.Errorf("generate pkce state: %w", err)
+		return controlapipkg.PKCEStartResponse{}, fmt.Errorf("generate pkce state: %w", err)
 	}
 
 	server.pkceRuntime.mu.Lock()
@@ -54,16 +56,17 @@ func (server *Server) startPKCEConnection(ctx context.Context, tokenClaims capab
 	for _, existingSession := range server.pkceRuntime.sessions {
 		if existingSession.ConnectionKey == connectionKey && server.now().UTC().Before(existingSession.ExpiresAt) {
 			server.pkceRuntime.mu.Unlock()
-			return PKCEStartResponse{}, fmt.Errorf("pkce session already pending for provider %q subject %q", request.Provider, request.Subject)
+			return controlapipkg.PKCEStartResponse{}, fmt.Errorf("pkce session already pending for provider %q subject %q", request.Provider, request.Subject)
 		}
 	}
 	expiresAt := server.now().UTC().Add(pkceSessionTTL)
 	server.pkceRuntime.sessions[state] = pendingPKCESession{
-		State:         state,
-		ConnectionKey: connectionKey,
-		CodeVerifier:  codeVerifier,
-		CreatedAt:     server.now().UTC(),
-		ExpiresAt:     expiresAt,
+		State:            state,
+		ConnectionKey:    connectionKey,
+		ControlSessionID: tokenClaims.ControlSessionID,
+		CodeVerifier:     codeVerifier,
+		CreatedAt:        server.now().UTC(),
+		ExpiresAt:        expiresAt,
 	}
 	server.pkceRuntime.mu.Unlock()
 
@@ -83,7 +86,7 @@ func (server *Server) startPKCEConnection(ctx context.Context, tokenClaims capab
 	if err := server.logEvent("connection.pkce_started", tokenClaims.ControlSessionID, map[string]interface{}{
 		"provider":             request.Provider,
 		"subject":              request.Subject,
-		"grant_type":           GrantTypePKCE,
+		"grant_type":           controlapipkg.GrantTypePKCE,
 		"control_session_id":   tokenClaims.ControlSessionID,
 		"actor_label":          tokenClaims.ActorLabel,
 		"client_session_label": tokenClaims.ClientSessionLabel,
@@ -92,10 +95,10 @@ func (server *Server) startPKCEConnection(ctx context.Context, tokenClaims capab
 		server.pkceRuntime.mu.Lock()
 		delete(server.pkceRuntime.sessions, state)
 		server.pkceRuntime.mu.Unlock()
-		return PKCEStartResponse{}, err
+		return controlapipkg.PKCEStartResponse{}, err
 	}
 
-	return PKCEStartResponse{
+	return controlapipkg.PKCEStartResponse{
 		Provider:         request.Provider,
 		Subject:          request.Subject,
 		AuthorizationURL: authorizationURL.String(),
@@ -104,13 +107,13 @@ func (server *Server) startPKCEConnection(ctx context.Context, tokenClaims capab
 	}, nil
 }
 
-func (server *Server) completePKCEConnection(ctx context.Context, tokenClaims capabilityToken, request PKCECompleteRequest) (ConnectionStatus, error) {
+func (server *Server) completePKCEConnection(ctx context.Context, tokenClaims capabilityToken, request controlapipkg.PKCECompleteRequest) (controlapipkg.ConnectionStatus, error) {
 	if err := request.Validate(); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
-	configuredConnectionDefinition, connectionKey, err := server.lookupConfiguredConnection(request.Provider, request.Subject, GrantTypePKCE)
+	configuredConnectionDefinition, connectionKey, err := server.lookupConfiguredConnection(request.Provider, request.Subject, controlapipkg.GrantTypePKCE)
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 
 	server.pkceRuntime.mu.Lock()
@@ -118,23 +121,26 @@ func (server *Server) completePKCEConnection(ctx context.Context, tokenClaims ca
 	pendingSession, found := server.pkceRuntime.sessions[request.State]
 	server.pkceRuntime.mu.Unlock()
 	if !found {
-		return ConnectionStatus{}, fmt.Errorf("pkce session not found for state %q", request.State)
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("pkce session not found for state %q", request.State)
 	}
 	if pendingSession.ConnectionKey != connectionKey {
-		return ConnectionStatus{}, fmt.Errorf("pkce session connection mismatch")
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("pkce session connection mismatch")
+	}
+	if pendingSession.ControlSessionID != tokenClaims.ControlSessionID {
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("pkce session belongs to a different control session")
 	}
 
 	tokenResponse, err := server.exchangePKCEAuthorizationCode(ctx, configuredConnectionDefinition, pendingSession.CodeVerifier, request.Code)
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	if strings.TrimSpace(tokenResponse.RefreshToken) == "" {
-		return ConnectionStatus{}, fmt.Errorf("pkce token response did not include refresh_token")
+		return controlapipkg.ConnectionStatus{}, fmt.Errorf("pkce token response did not include refresh_token")
 	}
 
 	connectionStatus, err := server.UpsertConnectionCredential(ctx, configuredConnectionDefinition.Registration, []byte(tokenResponse.RefreshToken))
 	if err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 	expiresAt := server.now().UTC().Add(time.Duration(defaultInt(tokenResponse.ExpiresIn, 300)) * time.Second)
 	server.providerRuntime.mu.Lock()
@@ -153,14 +159,14 @@ func (server *Server) completePKCEConnection(ctx context.Context, tokenClaims ca
 	if err := server.logEvent("connection.pkce_completed", tokenClaims.ControlSessionID, map[string]interface{}{
 		"provider":             request.Provider,
 		"subject":              request.Subject,
-		"grant_type":           GrantTypePKCE,
+		"grant_type":           controlapipkg.GrantTypePKCE,
 		"control_session_id":   tokenClaims.ControlSessionID,
 		"actor_label":          tokenClaims.ActorLabel,
 		"client_session_label": tokenClaims.ClientSessionLabel,
 		"status":               connectionStatus.Status,
 		"expires_at_utc":       expiresAt.Format(time.RFC3339Nano),
 	}); err != nil {
-		return ConnectionStatus{}, err
+		return controlapipkg.ConnectionStatus{}, err
 	}
 
 	return connectionStatus, nil
@@ -168,7 +174,7 @@ func (server *Server) completePKCEConnection(ctx context.Context, tokenClaims ca
 
 func (server *Server) exchangePKCEAuthorizationCode(ctx context.Context, configuredConnectionDefinition configuredConnection, codeVerifier string, code string) (oauthTokenResponse, error) {
 	formValues := url.Values{}
-	formValues.Set("grant_type", GrantTypeAuthorizationCode)
+	formValues.Set("grant_type", controlapipkg.GrantTypeAuthorizationCode)
 	formValues.Set("client_id", configuredConnectionDefinition.ClientID)
 	formValues.Set("code", code)
 	formValues.Set("code_verifier", codeVerifier)

@@ -21,6 +21,7 @@ import (
 
 	"loopgate/internal/ledger"
 	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"loopgate/internal/testutil"
 )
 
@@ -150,7 +151,7 @@ func (harness *loopgateHarness) waitForHealth(t *testing.T) {
 		statusCode, responseBody, err := harness.doJSONBytesResult(http.MethodGet, "/v1/health", "", nil, nil)
 		lastCode, lastErr = statusCode, err
 		if err == nil && statusCode == http.StatusOK {
-			var health loopgate.HealthResponse
+			var health controlapipkg.HealthResponse
 			if json.Unmarshal(responseBody, &health) == nil && health.OK {
 				return
 			}
@@ -160,7 +161,7 @@ func (harness *loopgateHarness) waitForHealth(t *testing.T) {
 	t.Fatalf("timed out waiting for /v1/health (last code=%d err=%v)", lastCode, lastErr)
 }
 
-func (harness *loopgateHarness) getStatusAuthenticated(t *testing.T, creds sessionCredentials) loopgate.StatusResponse {
+func (harness *loopgateHarness) getStatusAuthenticated(t *testing.T, creds sessionCredentials) controlapipkg.StatusResponse {
 	t.Helper()
 	requestTimestamp := time.Now().UTC().Format(time.RFC3339Nano)
 	nonceBytes := make([]byte, 12)
@@ -172,12 +173,12 @@ func (harness *loopgateHarness) getStatusAuthenticated(t *testing.T, creds sessi
 	if statusCode != http.StatusOK {
 		t.Fatalf("authenticated /v1/status: status=%d body=%s", statusCode, string(responseBody))
 	}
-	var status loopgate.StatusResponse
+	var status controlapipkg.StatusResponse
 	decodeJSON(t, responseBody, &status)
 	return status
 }
 
-func (harness *loopgateHarness) waitForStatus(t *testing.T) loopgate.StatusResponse {
+func (harness *loopgateHarness) waitForStatus(t *testing.T) controlapipkg.StatusResponse {
 	t.Helper()
 	harness.waitForHealth(t)
 	bootstrapCreds := harness.openSession(t, "integration-bootstrap", "integration-bootstrap-session", []string{"fs_list"})
@@ -214,7 +215,7 @@ func TestWaitForHealth_AllowsSlowServerStartupWithinTimeout(t *testing.T) {
 	for {
 		statusCode, responseBody, err := harness.doJSONBytesResult(http.MethodGet, "/v1/health", "", nil, nil)
 		if err == nil && statusCode == http.StatusOK {
-			var health loopgate.HealthResponse
+			var health controlapipkg.HealthResponse
 			if json.Unmarshal(responseBody, &health) == nil && health.OK {
 				break
 			}
@@ -229,7 +230,7 @@ func TestWaitForHealth_AllowsSlowServerStartupWithinTimeout(t *testing.T) {
 func (harness *loopgateHarness) openSession(t *testing.T, actor string, sessionID string, requestedCapabilities []string) sessionCredentials {
 	t.Helper()
 
-	statusCode, responseBody := harness.doJSON(t, http.MethodPost, "/v1/session/open", "", nil, loopgate.OpenSessionRequest{
+	statusCode, responseBody := harness.doJSON(t, http.MethodPost, "/v1/session/open", "", nil, controlapipkg.OpenSessionRequest{
 		Actor:                 actor,
 		SessionID:             sessionID,
 		RequestedCapabilities: append([]string(nil), requestedCapabilities...),
@@ -238,7 +239,7 @@ func (harness *loopgateHarness) openSession(t *testing.T, actor string, sessionI
 		t.Fatalf("open session failed: status=%d body=%s", statusCode, string(responseBody))
 	}
 
-	var openResponse loopgate.OpenSessionResponse
+	var openResponse controlapipkg.OpenSessionResponse
 	decodeJSON(t, responseBody, &openResponse)
 	return sessionCredentials{
 		ControlSessionID: openResponse.ControlSessionID,
@@ -366,7 +367,7 @@ func (harness *loopgateHarness) verifyAuditChain(t *testing.T) int64 {
 	return lastSequence
 }
 
-func capabilityNames(capabilities []loopgate.CapabilitySummary) []string {
+func capabilityNames(capabilities []controlapipkg.CapabilitySummary) []string {
 	names := make([]string, 0, len(capabilities))
 	for _, capability := range capabilities {
 		names = append(names, capability.Name)
@@ -374,7 +375,7 @@ func capabilityNames(capabilities []loopgate.CapabilitySummary) []string {
 	return names
 }
 
-func advertisedSessionCapabilityNames(status loopgate.StatusResponse) []string {
+func advertisedSessionCapabilityNames(status controlapipkg.StatusResponse) []string {
 	advertisedCapabilities := capabilityNames(status.Capabilities)
 	advertisedCapabilities = append(advertisedCapabilities, capabilityNames(status.ControlCapabilities)...)
 	return advertisedCapabilities

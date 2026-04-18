@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 	"time"
@@ -10,14 +11,14 @@ import (
 
 // SessionMACKeys returns previous, current, and next 12-hour epoch MAC material for this control session.
 // Same transport requirements as Status (Bearer token + signed GET).
-func (client *Client) SessionMACKeys(ctx context.Context) (SessionMACKeysResponse, error) {
+func (client *Client) SessionMACKeys(ctx context.Context) (controlapipkg.SessionMACKeysResponse, error) {
 	capabilityToken, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return SessionMACKeysResponse{}, err
+		return controlapipkg.SessionMACKeysResponse{}, err
 	}
-	var response SessionMACKeysResponse
+	var response controlapipkg.SessionMACKeysResponse
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/session/mac-keys", capabilityToken, nil, &response, nil); err != nil {
-		return SessionMACKeysResponse{}, err
+		return controlapipkg.SessionMACKeysResponse{}, err
 	}
 	return response, nil
 }
@@ -57,7 +58,7 @@ func (client *Client) CloseSession(ctx context.Context) error {
 		return err
 	}
 
-	var response CloseSessionResponse
+	var response controlapipkg.CloseSessionResponse
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/session/close", capabilityToken, nil, &response, nil); err != nil {
 		return err
 	}
@@ -128,10 +129,10 @@ func (client *Client) DelegatedSessionHealth(now time.Time) (DelegatedSessionSta
 	return EvaluateDelegatedSessionState(now, client.tokenExpiresAt), client.tokenExpiresAt, true
 }
 
-func (client *Client) ExecuteCapability(ctx context.Context, capabilityRequest CapabilityRequest) (CapabilityResponse, error) {
+func (client *Client) ExecuteCapability(ctx context.Context, capabilityRequest controlapipkg.CapabilityRequest) (controlapipkg.CapabilityResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return CapabilityResponse{}, err
+		return controlapipkg.CapabilityResponse{}, err
 	}
 
 	client.mu.Lock()
@@ -143,26 +144,26 @@ func (client *Client) ExecuteCapability(ctx context.Context, capabilityRequest C
 	}
 	client.mu.Unlock()
 
-	var response CapabilityResponse
+	var response controlapipkg.CapabilityResponse
 	if err := client.doCapabilityJSON(ctx, client.defaultRequestTimeout, http.MethodPost, "/v1/capabilities/execute", token, capabilityRequest, &response, nil); err != nil {
-		return CapabilityResponse{}, err
+		return controlapipkg.CapabilityResponse{}, err
 	}
 	client.cacheApprovalDecisionNonce(response)
 	return response, nil
 }
 
-func (client *Client) DecideApproval(ctx context.Context, approvalRequestID string, approved bool) (CapabilityResponse, error) {
+func (client *Client) DecideApproval(ctx context.Context, approvalRequestID string, approved bool) (controlapipkg.CapabilityResponse, error) {
 	return client.DecideApprovalWithReason(ctx, approvalRequestID, approved, "")
 }
 
-func (client *Client) DecideApprovalWithReason(ctx context.Context, approvalRequestID string, approved bool, reason string) (CapabilityResponse, error) {
+func (client *Client) DecideApprovalWithReason(ctx context.Context, approvalRequestID string, approved bool, reason string) (controlapipkg.CapabilityResponse, error) {
 	approvalToken, err := client.ensureApprovalToken(ctx)
 	if err != nil {
-		return CapabilityResponse{}, err
+		return controlapipkg.CapabilityResponse{}, err
 	}
 	decisionNonce, err := client.lookupApprovalDecisionNonce(approvalRequestID)
 	if err != nil {
-		return CapabilityResponse{}, err
+		return controlapipkg.CapabilityResponse{}, err
 	}
 
 	// Include the manifest SHA256 cached from the pending approval response. This binds the
@@ -171,9 +172,9 @@ func (client *Client) DecideApprovalWithReason(ctx context.Context, approvalRequ
 	manifestSHA256 := client.approvalManifestSHA256[approvalRequestID]
 	client.mu.Unlock()
 
-	var response CapabilityResponse
+	var response controlapipkg.CapabilityResponse
 	path := fmt.Sprintf("/v1/approvals/%s/decision", approvalRequestID)
-	if err := client.doCapabilityJSON(ctx, client.defaultRequestTimeout, http.MethodPost, path, "", ApprovalDecisionRequest{
+	if err := client.doCapabilityJSON(ctx, client.defaultRequestTimeout, http.MethodPost, path, "", controlapipkg.ApprovalDecisionRequest{
 		Approved:               approved,
 		Reason:                 strings.TrimSpace(reason),
 		DecisionNonce:          decisionNonce,
@@ -181,7 +182,7 @@ func (client *Client) DecideApprovalWithReason(ctx context.Context, approvalRequ
 	}, &response, map[string]string{
 		"X-Loopgate-Approval-Token": approvalToken,
 	}); err != nil {
-		return CapabilityResponse{}, err
+		return controlapipkg.CapabilityResponse{}, err
 	}
 	client.mu.Lock()
 	delete(client.approvalDecisionNonce, approvalRequestID)
@@ -220,7 +221,7 @@ func (client *Client) ensureCapabilityToken(ctx context.Context) (string, error)
 		client.mu.Unlock()
 		return token, nil
 	}
-	openRequest := OpenSessionRequest{
+	openRequest := controlapipkg.OpenSessionRequest{
 		Actor:                    client.actor,
 		SessionID:                client.clientSessionID,
 		RequestedCapabilities:    append([]string(nil), client.requestedCapabilities...),
@@ -230,7 +231,7 @@ func (client *Client) ensureCapabilityToken(ctx context.Context) (string, error)
 	}
 	client.mu.Unlock()
 
-	var openResponse OpenSessionResponse
+	var openResponse controlapipkg.OpenSessionResponse
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/session/open", "", openRequest, &openResponse, nil); err != nil {
 		return "", err
 	}
@@ -262,7 +263,7 @@ func (client *Client) resetSessionCredentialsLocked() {
 	client.tokenExpiresAt = time.Time{}
 }
 
-func (client *Client) cacheApprovalDecisionNonce(capabilityResponse CapabilityResponse) {
+func (client *Client) cacheApprovalDecisionNonce(capabilityResponse controlapipkg.CapabilityResponse) {
 	if !capabilityResponse.ApprovalRequired || strings.TrimSpace(capabilityResponse.ApprovalRequestID) == "" {
 		return
 	}
@@ -308,7 +309,7 @@ func (client *Client) lookupApprovalDecisionNonce(approvalRequestID string) (str
 }
 
 func (client *Client) canRetryCapabilityToken(denialCode string) bool {
-	if denialCode != DenialCodeCapabilityTokenInvalid && denialCode != DenialCodeCapabilityTokenExpired {
+	if denialCode != controlapipkg.DenialCodeCapabilityTokenInvalid && denialCode != controlapipkg.DenialCodeCapabilityTokenExpired {
 		return false
 	}
 	client.mu.Lock()

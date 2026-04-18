@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,14 +30,14 @@ type stagedArtifactRecord struct {
 	SizeBytes           int64  `json:"size_bytes"`
 }
 
-func (server *Server) stageArtifactMetadata(sandboxSourcePath string) (SandboxArtifactMetadataResponse, error) {
+func (server *Server) stageArtifactMetadata(sandboxSourcePath string) (controlapipkg.SandboxArtifactMetadataResponse, error) {
 	_, sandboxRelativePath, err := server.sandboxPaths.ResolveOutputsPath(sandboxSourcePath)
 	if err != nil {
-		return SandboxArtifactMetadataResponse{}, err
+		return controlapipkg.SandboxArtifactMetadataResponse{}, err
 	}
 	artifactRecord, err := loadStagedArtifactRecord(server.repoRoot, sandboxRelativePath)
 	if err != nil {
-		return SandboxArtifactMetadataResponse{}, err
+		return controlapipkg.SandboxArtifactMetadataResponse{}, err
 	}
 	return sandboxArtifactMetadataResponse(artifactRecord), nil
 }
@@ -170,8 +171,8 @@ func (artifactRecord stagedArtifactRecord) Validate() error {
 	return nil
 }
 
-func sandboxArtifactMetadataResponse(artifactRecord stagedArtifactRecord) SandboxArtifactMetadataResponse {
-	return SandboxArtifactMetadataResponse{
+func sandboxArtifactMetadataResponse(artifactRecord stagedArtifactRecord) controlapipkg.SandboxArtifactMetadataResponse {
+	return controlapipkg.SandboxArtifactMetadataResponse{
 		ArtifactRef:         stagedArtifactRef(artifactRecord.ArtifactID),
 		EntryType:           artifactRecord.EntryType,
 		SandboxRelativePath: artifactRecord.SandboxRelativePath,

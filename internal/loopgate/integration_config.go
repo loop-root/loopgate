@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"mime"
 	"net"
 	"net/url"
@@ -289,14 +290,14 @@ func loadConfiguredConnectionFile(configPath string) (configuredConnection, map[
 	}
 
 	var authorizationURL *url.URL
-	if normalizedConfig.GrantType == GrantTypePKCE {
+	if normalizedConfig.GrantType == controlapipkg.GrantTypePKCE {
 		authorizationURL, err = parseAndValidateConfiguredURL("authorization_url", normalizedConfig.AuthorizationURL, allowedHosts)
 		if err != nil {
 			return configuredConnection{}, nil, fmt.Errorf("%s: %w", configPath, err)
 		}
 	}
 	var tokenURL *url.URL
-	if normalizedConfig.GrantType != GrantTypePublicRead {
+	if normalizedConfig.GrantType != controlapipkg.GrantTypePublicRead {
 		tokenURL, err = parseAndValidateConfiguredURL("token_url", normalizedConfig.TokenURL, allowedHosts)
 		if err != nil {
 			return configuredConnection{}, nil, fmt.Errorf("%s: %w", configPath, err)
@@ -388,14 +389,14 @@ func loadConfiguredConnectionsFromJSON(data []byte) (map[string]configuredConnec
 		}
 
 		var authorizationURL *url.URL
-		if normalizedConfig.GrantType == GrantTypePKCE {
+		if normalizedConfig.GrantType == controlapipkg.GrantTypePKCE {
 			authorizationURL, err = parseAndValidateConfiguredURL("authorization_url", normalizedConfig.AuthorizationURL, allowedHosts)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
 		var tokenURL *url.URL
-		if normalizedConfig.GrantType != GrantTypePublicRead {
+		if normalizedConfig.GrantType != controlapipkg.GrantTypePublicRead {
 			tokenURL, err = parseAndValidateConfiguredURL("token_url", normalizedConfig.TokenURL, allowedHosts)
 			if err != nil {
 				return nil, nil, err
@@ -458,15 +459,15 @@ func normalizeConnectionConfig(rawConfig connectionConfigFile) (connectionConfig
 		return connectionConfigFile{}, err
 	}
 	switch rawConfig.GrantType {
-	case GrantTypePublicRead:
+	case controlapipkg.GrantTypePublicRead:
 		if rawConfig.ClientID != "" || rawConfig.AuthorizationURL != "" || rawConfig.TokenURL != "" || rawConfig.RedirectURL != "" {
 			return connectionConfigFile{}, fmt.Errorf("public_read connections must not set client_id, authorization_url, token_url, or redirect_url")
 		}
 		if !secretRefIsEmpty(rawConfig.Credential) {
 			return connectionConfigFile{}, fmt.Errorf("public_read connections must not define a credential ref")
 		}
-	case GrantTypeClientCredentials:
-	case GrantTypePKCE:
+	case controlapipkg.GrantTypeClientCredentials:
+	case controlapipkg.GrantTypePKCE:
 		if _, err := parseAndValidateRedirectURL(rawConfig.RedirectURL); err != nil {
 			return connectionConfigFile{}, err
 		}
@@ -571,9 +572,9 @@ func normalizeConnectionCapabilityField(contentClass string, extractorType strin
 		return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q uses a suspicious remote field name; set allow_suspicious_name explicitly to permit it", rawFieldConfig.Name)
 	}
 	switch rawFieldConfig.Sensitivity {
-	case ResultFieldSensitivityBenign, ResultFieldSensitivityTaintedText:
+	case controlapipkg.ResultFieldSensitivityBenign, controlapipkg.ResultFieldSensitivityTaintedText:
 	default:
-		return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field sensitivity must be %q or %q", ResultFieldSensitivityBenign, ResultFieldSensitivityTaintedText)
+		return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field sensitivity must be %q or %q", controlapipkg.ResultFieldSensitivityBenign, controlapipkg.ResultFieldSensitivityTaintedText)
 	}
 	if rawFieldConfig.MaxInlineBytes <= 0 || rawFieldConfig.MaxInlineBytes > maxResponseBodyBytes {
 		return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field max_inline_bytes must be between 1 and %d", maxResponseBodyBytes)
@@ -658,8 +659,8 @@ func normalizeConnectionCapabilityField(contentClass string, extractorType strin
 		if rawFieldConfig.HTMLTitle || rawFieldConfig.MetaName != "" || rawFieldConfig.MetaProperty != "" {
 			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q must not set html selectors for json object list extraction", rawFieldConfig.Name)
 		}
-		if rawFieldConfig.Sensitivity != ResultFieldSensitivityTaintedText {
-			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q json object list extraction must use sensitivity %q", rawFieldConfig.Name, ResultFieldSensitivityTaintedText)
+		if rawFieldConfig.Sensitivity != controlapipkg.ResultFieldSensitivityTaintedText {
+			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q json object list extraction must use sensitivity %q", rawFieldConfig.Name, controlapipkg.ResultFieldSensitivityTaintedText)
 		}
 	case contentClass == contentClassMarkdownConfig && extractorType == extractorMarkdownFrontmatterKeys:
 		if strings.TrimSpace(rawFieldConfig.FrontmatterKey) == "" {
@@ -704,8 +705,8 @@ func normalizeConnectionCapabilityField(contentClass string, extractorType strin
 		if len(rawFieldConfig.JSONListItemFields) != 0 || rawFieldConfig.MaxItems != 0 {
 			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q must not set json list fields for markdown section extraction", rawFieldConfig.Name)
 		}
-		if rawFieldConfig.Sensitivity != ResultFieldSensitivityTaintedText {
-			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q markdown section extraction must use sensitivity %q", rawFieldConfig.Name, ResultFieldSensitivityTaintedText)
+		if rawFieldConfig.Sensitivity != controlapipkg.ResultFieldSensitivityTaintedText {
+			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q markdown section extraction must use sensitivity %q", rawFieldConfig.Name, controlapipkg.ResultFieldSensitivityTaintedText)
 		}
 	case contentClass == contentClassHTMLConfig && extractorType == extractorHTMLMetaAllowlistConfig:
 		selectorCount := 0
@@ -739,8 +740,8 @@ func normalizeConnectionCapabilityField(contentClass string, extractorType strin
 		if len(rawFieldConfig.JSONListItemFields) != 0 || rawFieldConfig.MaxItems != 0 {
 			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q must not set json list fields for html metadata extraction", rawFieldConfig.Name)
 		}
-		if rawFieldConfig.Sensitivity != ResultFieldSensitivityTaintedText {
-			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q html metadata extraction must use sensitivity %q", rawFieldConfig.Name, ResultFieldSensitivityTaintedText)
+		if rawFieldConfig.Sensitivity != controlapipkg.ResultFieldSensitivityTaintedText {
+			return connectionCapabilityFieldConfig{}, fmt.Errorf("configured capability response field %q html metadata extraction must use sensitivity %q", rawFieldConfig.Name, controlapipkg.ResultFieldSensitivityTaintedText)
 		}
 	default:
 		return connectionCapabilityFieldConfig{}, fmt.Errorf("unsupported configured capability extractor combination")

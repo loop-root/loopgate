@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 )
 
 func TestE2EApprovalWriteAuditFlow(t *testing.T) {
@@ -18,7 +19,7 @@ func TestE2EApprovalWriteAuditFlow(t *testing.T) {
 
 	targetPath := "approved-e2e.txt"
 	requestID := "req-e2e-approval-write"
-	pendingResponse, err := client.ExecuteCapability(context.Background(), loopgate.CapabilityRequest{
+	pendingResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  requestID,
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -32,7 +33,7 @@ func TestE2EApprovalWriteAuditFlow(t *testing.T) {
 	if !pendingResponse.ApprovalRequired {
 		t.Fatalf("expected approval required response, got %#v", pendingResponse)
 	}
-	if pendingResponse.DenialCode != loopgate.DenialCodeApprovalRequired {
+	if pendingResponse.DenialCode != controlapipkg.DenialCodeApprovalRequired {
 		t.Fatalf("expected approval required denial code, got %#v", pendingResponse)
 	}
 	if pendingResponse.ApprovalRequestID == "" {
@@ -46,11 +47,11 @@ func TestE2EApprovalWriteAuditFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("approve pending request: %v", err)
 	}
-	if approvedResponse.Status != loopgate.ResponseStatusSuccess {
+	if approvedResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful approval resolution, got %#v", approvedResponse)
 	}
 
-	readResponse, err := client.ExecuteCapability(context.Background(), loopgate.CapabilityRequest{
+	readResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-e2e-approval-readback",
 		Capability: "fs_read",
 		Arguments: map[string]string{
@@ -60,7 +61,7 @@ func TestE2EApprovalWriteAuditFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read back approved file: %v", err)
 	}
-	if readResponse.Status != loopgate.ResponseStatusSuccess {
+	if readResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful readback response, got %#v", readResponse)
 	}
 	if readResponse.StructuredResult["content"] != "approved through governed e2e flow" {

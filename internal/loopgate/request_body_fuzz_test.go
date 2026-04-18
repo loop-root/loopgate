@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"encoding/json"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"strings"
 	"testing"
 )
@@ -13,7 +14,7 @@ func FuzzDecodeJSONBytesCapabilityRequest(f *testing.F) {
 	f.Add([]byte(`{"request_id":"req-trailing","capability":"fs_read"} {"second":true}`))
 
 	f.Fuzz(func(t *testing.T, rawBytes []byte) {
-		var capabilityRequest CapabilityRequest
+		var capabilityRequest controlapipkg.CapabilityRequest
 		if err := decodeJSONBytes(rawBytes, &capabilityRequest); err != nil {
 			return
 		}
@@ -40,7 +41,7 @@ func FuzzDecodeJSONBytesCapabilityRequest(f *testing.F) {
 			}
 		}
 
-		var reparsed CapabilityRequest
+		var reparsed controlapipkg.CapabilityRequest
 		if err := decodeJSONBytes(canonicalBytes, &reparsed); err != nil {
 			t.Fatalf("reparse canonical capability request: %v", err)
 		}

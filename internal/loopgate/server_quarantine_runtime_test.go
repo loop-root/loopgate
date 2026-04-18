@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,14 +56,14 @@ func TestExecuteCapabilityRequest_PersistsQuarantinedPayload(t *testing.T) {
 	server.registry.Register(remoteTool)
 	client.ConfigureSession("test-actor", "test-session", append(capabilityNames(server.capabilitySummaries()), "remote_fetch"))
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-remote",
 		Capability: "remote_fetch",
 	})
 	if err != nil {
 		t.Fatalf("execute remote_fetch: %v", err)
 	}
-	if response.Status != ResponseStatusSuccess {
+	if response.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful quarantined response, got %#v", response)
 	}
 	if len(response.StructuredResult) != 0 {
@@ -119,7 +120,7 @@ func TestPromoteQuarantinedArtifact_CreatesDerivedArtifactAndAuditEvent(t *testi
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote",
 		Capability: "remote_fetch",
 	}, `{"summary":"safe display summary","healthy":true}`)
@@ -169,7 +170,7 @@ func TestPromoteQuarantinedArtifact_CreatesDerivedArtifactAndAuditEvent(t *testi
 	if gotSummary := derivedArtifactRecord.DerivedArtifact["summary"]; gotSummary != "safe display summary" {
 		t.Fatalf("unexpected derived artifact payload: %#v", derivedArtifactRecord)
 	}
-	if gotFieldMeta := derivedArtifactRecord.DerivedFieldsMeta["summary"]; gotFieldMeta.Sensitivity != ResultFieldSensitivityTaintedText {
+	if gotFieldMeta := derivedArtifactRecord.DerivedFieldsMeta["summary"]; gotFieldMeta.Sensitivity != controlapipkg.ResultFieldSensitivityTaintedText {
 		t.Fatalf("expected promoted text field to remain tainted, got %#v", gotFieldMeta)
 	}
 }
@@ -178,7 +179,7 @@ func TestPromoteQuarantinedArtifact_DeniesHashMismatch(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote",
 		Capability: "remote_fetch",
 	}, `{"summary":"safe display summary"}`)
@@ -238,7 +239,7 @@ func TestPromoteQuarantinedArtifact_FailsClosedOnAuditFailure(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote",
 		Capability: "remote_fetch",
 	}, `{"summary":"safe display summary"}`)
@@ -287,7 +288,7 @@ func TestPromoteQuarantinedArtifact_DeniesExactDuplicatePromotion(t *testing.T) 
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary","healthy":true}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -328,7 +329,7 @@ func TestPromoteQuarantinedArtifact_DeniesExactDuplicatePromotionFromInMemoryInd
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary","healthy":true}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote-index",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -378,7 +379,7 @@ func TestPromoteQuarantinedArtifact_DeniesExactDuplicatePromotionAfterRestart(t 
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary","healthy":true}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote-restart",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -444,7 +445,7 @@ func TestPruneQuarantinedPayload_PreservesLineageAndDeniesPromotion(t *testing.T
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-prune",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -516,7 +517,7 @@ func TestQuarantineMetadata_RemainsAvailableAfterPrune(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-prune-metadata",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -557,7 +558,7 @@ func TestQuarantineMetadata_ReportsPruneEligibility(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-prune-eligibility",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -598,7 +599,7 @@ func TestQuarantinePrune_DeniesIneligibleBlob(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-prune-ineligible",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -610,7 +611,7 @@ func TestQuarantinePrune_DeniesIneligibleBlob(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected ineligible prune to be denied")
 	}
-	if !strings.Contains(err.Error(), DenialCodeQuarantinePruneNotEligible) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeQuarantinePruneNotEligible) {
 		t.Fatalf("expected quarantine_prune_not_eligible denial, got %v", err)
 	}
 }
@@ -620,7 +621,7 @@ func TestQuarantinePrune_DeniesDoublePrune(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-prune-double",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -637,7 +638,7 @@ func TestQuarantinePrune_DeniesDoublePrune(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected second prune to be denied")
 	}
-	if !strings.Contains(err.Error(), DenialCodeQuarantinePruneNotEligible) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeQuarantinePruneNotEligible) {
 		t.Fatalf("expected quarantine_prune_not_eligible denial, got %v", err)
 	}
 }
@@ -647,7 +648,7 @@ func TestQuarantineView_LogsViewedEvent(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-view",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -680,7 +681,7 @@ func TestQuarantineView_DeniesPrunedBlob(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-view-pruned",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -696,7 +697,7 @@ func TestQuarantineView_DeniesPrunedBlob(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected pruned blob view to be denied")
 	}
-	if !strings.Contains(err.Error(), DenialCodeSourceBytesUnavailable) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeSourceBytesUnavailable) {
 		t.Fatalf("expected source_bytes_unavailable denial, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "blob_pruned") {
@@ -709,7 +710,7 @@ func TestQuarantineView_FailsClosedOnAuditFailure(t *testing.T) {
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-view-audit-failure",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -726,7 +727,7 @@ func TestQuarantineView_FailsClosedOnAuditFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected view audit failure to deny content access")
 	}
-	if !strings.Contains(err.Error(), DenialCodeAuditUnavailable) {
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {
 		t.Fatalf("expected audit_unavailable denial, got %v", err)
 	}
 }
@@ -736,7 +737,7 @@ func TestPruneQuarantinedPayload_FailsClosedOnAuditFailure(t *testing.T) {
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-prune",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -778,7 +779,7 @@ func TestPromoteQuarantinedArtifact_DeniesNonIdentityTransform(t *testing.T) {
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -813,7 +814,7 @@ func TestPromoteQuarantinedArtifact_DeniesNestedOrNonScalarSelection(t *testing.
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"nested":{"value":"nope"},"summary":"safe display summary"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -864,7 +865,7 @@ func TestPromoteQuarantinedArtifact_DeniesTaintedTextForPromptTarget(t *testing.
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	sourcePayload := `{"summary":"tainted remote text"}`
-	sourceQuarantineRef, err := server.storeQuarantinedPayload(CapabilityRequest{
+	sourceQuarantineRef, err := server.storeQuarantinedPayload(controlapipkg.CapabilityRequest{
 		RequestID:  "req-promote-prompt",
 		Capability: "remote_fetch",
 	}, sourcePayload)
@@ -895,9 +896,9 @@ func TestPromoteQuarantinedArtifact_DeniesTaintedTextForPromptTarget(t *testing.
 }
 
 func TestContradictoryClassificationIsRejected(t *testing.T) {
-	_, err := normalizeResultClassification(ResultClassification{
-		Exposure: ResultExposureDisplay,
-		Eligibility: ResultEligibility{
+	_, err := normalizeResultClassification(controlapipkg.ResultClassification{
+		Exposure: controlapipkg.ResultExposureDisplay,
+		Eligibility: controlapipkg.ResultEligibility{
 			Prompt: true,
 		},
 	}, "quarantine://bad")
@@ -905,9 +906,9 @@ func TestContradictoryClassificationIsRejected(t *testing.T) {
 		t.Fatal("expected contradictory prompt_eligible + quarantined classification to be denied")
 	}
 
-	_, err = normalizeResultClassification(ResultClassification{
-		Exposure: ResultExposureAudit,
-		Eligibility: ResultEligibility{
+	_, err = normalizeResultClassification(controlapipkg.ResultClassification{
+		Exposure: controlapipkg.ResultExposureAudit,
+		Eligibility: controlapipkg.ResultEligibility{
 			Prompt: true,
 		},
 	}, "")

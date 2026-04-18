@@ -10,7 +10,7 @@ Use it when changing:
 
 ## Core Role
 
-`internal/loopgateresult/` turns `loopgate.CapabilityResponse` and structured maps into **operator-safe strings**, without leaking nonces or quarantined source material. It bridges Loopgate’s classification (`AuditOnly`, `Quarantined`) to user-facing copy.
+`internal/loopgateresult/` turns `controlapi.CapabilityResponse` and structured maps into **operator-safe strings**, without leaking nonces or quarantined source material. It bridges Loopgate’s classification (`AuditOnly`, `Quarantined`) to user-facing copy.
 
 ## Key Files
 
@@ -23,7 +23,7 @@ Use it when changing:
 
 ## Relationship Notes
 
-- Types: `internal/loopgate` (`CapabilityResponse`, status enums)
+- Types: `internal/loopgate/controlapi` (`CapabilityResponse`, status enums)
 - Used by: local operator surfaces that render governed capability output,
   including current CLI and HTTP-adjacent display paths
 

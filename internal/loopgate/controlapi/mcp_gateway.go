@@ -1,4 +1,4 @@
-package loopgate
+package controlapi
 
 import (
 	"bytes"
@@ -187,7 +187,7 @@ type MCPGatewayExecutionResponse struct {
 	RemoteErrorMessage     string          `json:"remote_error_message,omitempty"`
 }
 
-type validatedMCPGatewayInvocationRequest struct {
+type ValidatedMCPGatewayInvocationRequest struct {
 	ServerID         string
 	ToolName         string
 	Arguments        map[string]json.RawMessage
@@ -195,7 +195,7 @@ type validatedMCPGatewayInvocationRequest struct {
 }
 
 func (mcpGatewayInvocationRequest MCPGatewayInvocationRequest) Validate() error {
-	_, err := validateMCPGatewayInvocationRequest(mcpGatewayInvocationRequest)
+	_, err := ValidateMCPGatewayInvocationRequest(mcpGatewayInvocationRequest)
 	return err
 }
 
@@ -225,7 +225,7 @@ func (executionRequest MCPGatewayExecutionRequest) Validate() error {
 	if strings.TrimSpace(executionRequest.ApprovalManifestSHA256) == "" {
 		return fmt.Errorf("approval_manifest_sha256 is required")
 	}
-	if _, err := validateMCPGatewayInvocationRequest(MCPGatewayInvocationRequest{
+	if _, err := ValidateMCPGatewayInvocationRequest(MCPGatewayInvocationRequest{
 		ServerID:  executionRequest.ServerID,
 		ToolName:  executionRequest.ToolName,
 		Arguments: executionRequest.Arguments,
@@ -235,22 +235,22 @@ func (executionRequest MCPGatewayExecutionRequest) Validate() error {
 	return nil
 }
 
-func validateMCPGatewayInvocationRequest(mcpGatewayInvocationRequest MCPGatewayInvocationRequest) (validatedMCPGatewayInvocationRequest, error) {
-	validatedRequest := validatedMCPGatewayInvocationRequest{
+func ValidateMCPGatewayInvocationRequest(mcpGatewayInvocationRequest MCPGatewayInvocationRequest) (ValidatedMCPGatewayInvocationRequest, error) {
+	validatedRequest := ValidatedMCPGatewayInvocationRequest{
 		ServerID: strings.TrimSpace(mcpGatewayInvocationRequest.ServerID),
 		ToolName: strings.TrimSpace(mcpGatewayInvocationRequest.ToolName),
 	}
 	if err := identifiers.ValidateSafeIdentifier("mcp gateway server id", validatedRequest.ServerID); err != nil {
-		return validatedMCPGatewayInvocationRequest{}, err
+		return ValidatedMCPGatewayInvocationRequest{}, err
 	}
 	if err := identifiers.ValidateSafeIdentifier("mcp gateway tool name", validatedRequest.ToolName); err != nil {
-		return validatedMCPGatewayInvocationRequest{}, err
+		return ValidatedMCPGatewayInvocationRequest{}, err
 	}
 	if mcpGatewayInvocationRequest.Arguments == nil {
-		return validatedMCPGatewayInvocationRequest{}, fmt.Errorf("arguments object is required")
+		return ValidatedMCPGatewayInvocationRequest{}, fmt.Errorf("arguments object is required")
 	}
 	if len(mcpGatewayInvocationRequest.Arguments) > maxMCPGatewayInvocationArgumentCount {
-		return validatedMCPGatewayInvocationRequest{}, fmt.Errorf("arguments exceeds maximum count")
+		return ValidatedMCPGatewayInvocationRequest{}, fmt.Errorf("arguments exceeds maximum count")
 	}
 
 	validatedArguments := make(map[string]json.RawMessage, len(mcpGatewayInvocationRequest.Arguments))
@@ -258,11 +258,11 @@ func validateMCPGatewayInvocationRequest(mcpGatewayInvocationRequest MCPGatewayI
 	for rawArgumentName, rawArgumentValue := range mcpGatewayInvocationRequest.Arguments {
 		argumentName := strings.TrimSpace(rawArgumentName)
 		if !mcpGatewayArgumentNamePattern.MatchString(argumentName) {
-			return validatedMCPGatewayInvocationRequest{}, fmt.Errorf("argument name %q is invalid", rawArgumentName)
+			return ValidatedMCPGatewayInvocationRequest{}, fmt.Errorf("argument name %q is invalid", rawArgumentName)
 		}
 		trimmedArgumentValue := bytes.TrimSpace(rawArgumentValue)
 		if len(trimmedArgumentValue) == 0 || !json.Valid(trimmedArgumentValue) {
-			return validatedMCPGatewayInvocationRequest{}, fmt.Errorf("argument %q must contain valid JSON", argumentName)
+			return ValidatedMCPGatewayInvocationRequest{}, fmt.Errorf("argument %q must contain valid JSON", argumentName)
 		}
 		validatedArguments[argumentName] = append(json.RawMessage(nil), trimmedArgumentValue...)
 		validatedArgumentKeys = append(validatedArgumentKeys, argumentName)

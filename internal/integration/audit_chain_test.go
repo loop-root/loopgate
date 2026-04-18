@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 )
 
 func TestAuditChainAndRedactionRoundTrip(t *testing.T) {
@@ -16,7 +16,7 @@ func TestAuditChainAndRedactionRoundTrip(t *testing.T) {
 	status := harness.waitForStatus(t)
 	credentials := harness.openSession(t, "integration-actor", "integration-audit", capabilityNames(status.Capabilities))
 
-	allowedRequestBody := mustJSON(t, loopgate.CapabilityRequest{
+	allowedRequestBody := mustJSON(t, controlapipkg.CapabilityRequest{
 		RequestID:  "req-audit-allowed",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -35,13 +35,13 @@ func TestAuditChainAndRedactionRoundTrip(t *testing.T) {
 	if allowedStatusCode != http.StatusOK {
 		t.Fatalf("allowed request returned status %d: %s", allowedStatusCode, string(allowedResponseBody))
 	}
-	var allowedResponse loopgate.CapabilityResponse
+	var allowedResponse controlapipkg.CapabilityResponse
 	decodeJSON(t, allowedResponseBody, &allowedResponse)
-	if allowedResponse.Status != loopgate.ResponseStatusSuccess {
+	if allowedResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected allowed request success, got %#v", allowedResponse)
 	}
 
-	deniedRequestBody := mustJSON(t, loopgate.CapabilityRequest{
+	deniedRequestBody := mustJSON(t, controlapipkg.CapabilityRequest{
 		RequestID:  "req-audit-denied",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -61,9 +61,9 @@ func TestAuditChainAndRedactionRoundTrip(t *testing.T) {
 	if deniedStatusCode != http.StatusInternalServerError {
 		t.Fatalf("denied request returned status %d: %s", deniedStatusCode, string(deniedResponseBody))
 	}
-	var deniedResponse loopgate.CapabilityResponse
+	var deniedResponse controlapipkg.CapabilityResponse
 	decodeJSON(t, deniedResponseBody, &deniedResponse)
-	if deniedResponse.Status != loopgate.ResponseStatusError {
+	if deniedResponse.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected denied request error status, got %#v", deniedResponse)
 	}
 
@@ -140,7 +140,7 @@ func TestAuditFailureBlocksExecution(t *testing.T) {
 		t.Fatalf("write test file: %v", err)
 	}
 
-	requestBody := mustJSON(t, loopgate.CapabilityRequest{
+	requestBody := mustJSON(t, controlapipkg.CapabilityRequest{
 		RequestID:  "req-audit-blocked",
 		Capability: "fs_read",
 		Arguments: map[string]string{
@@ -157,14 +157,14 @@ func TestAuditFailureBlocksExecution(t *testing.T) {
 		requestBody,
 	)
 
-	var response loopgate.CapabilityResponse
+	var response controlapipkg.CapabilityResponse
 	decodeJSON(t, responseBody, &response)
 
-	if response.DenialCode != loopgate.DenialCodeAuditUnavailable {
+	if response.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected denial code %q, got status=%d denial_code=%q reason=%q body=%s",
-			loopgate.DenialCodeAuditUnavailable, statusCode, response.DenialCode, response.DenialReason, string(responseBody))
+			controlapipkg.DenialCodeAuditUnavailable, statusCode, response.DenialCode, response.DenialReason, string(responseBody))
 	}
-	if response.Status != loopgate.ResponseStatusError {
+	if response.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected error status, got %q", response.Status)
 	}
 }

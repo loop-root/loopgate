@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 
 	"loopgate/internal/troubleshoot"
@@ -27,10 +28,10 @@ func (server *Server) handleDiagnosticReport(writer http.ResponseWriter, request
 	}
 	report, err := troubleshoot.BuildReport(server.repoRoot, server.runtimeConfig)
 	if err != nil {
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		})
 		return

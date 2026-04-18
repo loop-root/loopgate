@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"sort"
@@ -64,7 +65,7 @@ type claudeHookApprovalRecord struct {
 	HookInterrupted          bool
 }
 
-func claudeHookApprovalFingerprint(req HookPreValidateRequest) (string, error) {
+func claudeHookApprovalFingerprint(req controlapipkg.HookPreValidateRequest) (string, error) {
 	canonicalToolInputBytes, err := json.Marshal(req.ToolInput)
 	if err != nil {
 		return "", fmt.Errorf("marshal tool input fingerprint: %w", err)
@@ -86,7 +87,7 @@ func claudeHookApprovalFingerprint(req HookPreValidateRequest) (string, error) {
 	return hex.EncodeToString(hashState.Sum(nil)), nil
 }
 
-func claudeHookApprovalRequestFingerprint(req HookPreValidateRequest) (string, error) {
+func claudeHookApprovalRequestFingerprint(req controlapipkg.HookPreValidateRequest) (string, error) {
 	canonicalToolInputBytes, err := json.Marshal(req.ToolInput)
 	if err != nil {
 		return "", fmt.Errorf("marshal tool request fingerprint: %w", err)
@@ -117,7 +118,7 @@ func cloneClaudeHookApprovalRecords(recordsByToolUseID map[string]claudeHookAppr
 	return clonedRecords
 }
 
-func (server *Server) createClaudeHookApprovalRequest(req HookPreValidateRequest, approvalReason string) (claudeHookApprovalRecord, claudeHookSessionRecord, bool, map[string]claudeHookApprovalRecord, error) {
+func (server *Server) createClaudeHookApprovalRequest(req controlapipkg.HookPreValidateRequest, approvalReason string) (claudeHookApprovalRecord, claudeHookSessionRecord, bool, map[string]claudeHookApprovalRecord, error) {
 	validatedSessionID := strings.TrimSpace(req.SessionID)
 	validatedToolUseID := strings.TrimSpace(req.ToolUseID)
 	if validatedSessionID == "" {
@@ -180,7 +181,7 @@ func (server *Server) createClaudeHookApprovalRequest(req HookPreValidateRequest
 	return approvalRecord, sessionRecord, true, previousRecordsByToolUseID, nil
 }
 
-func (server *Server) transitionClaudeHookApproval(req HookPreValidateRequest, resolutionState string, resolutionReason string) (claudeHookApprovalRecord, claudeHookSessionRecord, bool, bool, map[string]claudeHookApprovalRecord, error) {
+func (server *Server) transitionClaudeHookApproval(req controlapipkg.HookPreValidateRequest, resolutionState string, resolutionReason string) (claudeHookApprovalRecord, claudeHookSessionRecord, bool, bool, map[string]claudeHookApprovalRecord, error) {
 	validatedSessionID := strings.TrimSpace(req.SessionID)
 	validatedToolUseID := strings.TrimSpace(req.ToolUseID)
 	if validatedSessionID == "" || validatedToolUseID == "" {
@@ -292,7 +293,7 @@ func (server *Server) restoreClaudeHookApprovalState(rawSessionID string, previo
 	return server.saveClaudeHookApprovalStateLocked(storageKey, previousRecordsByToolUseID)
 }
 
-func (server *Server) findClaudeHookApprovalByRequest(req HookPreValidateRequest) (claudeHookApprovalRecord, claudeHookSessionRecord, bool, error) {
+func (server *Server) findClaudeHookApprovalByRequest(req controlapipkg.HookPreValidateRequest) (claudeHookApprovalRecord, claudeHookSessionRecord, bool, error) {
 	validatedSessionID := strings.TrimSpace(req.SessionID)
 	if validatedSessionID == "" {
 		return claudeHookApprovalRecord{}, claudeHookSessionRecord{}, false, nil

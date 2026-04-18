@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"loopgate/internal/secrets"
 )
 
@@ -29,9 +29,9 @@ func StructuredPromptText(structuredResult map[string]interface{}) string {
 	return structuredText(structuredResult, false)
 }
 
-func FormatDisplayResponse(capabilityResponse loopgate.CapabilityResponse) string {
+func FormatDisplayResponse(capabilityResponse controlapipkg.CapabilityResponse) string {
 	switch capabilityResponse.Status {
-	case loopgate.ResponseStatusSuccess:
+	case controlapipkg.ResponseStatusSuccess:
 		resultClassification, err := capabilityResponse.ResultClassification()
 		if err != nil {
 			return "Error: invalid result classification from Loopgate."
@@ -50,17 +50,17 @@ func FormatDisplayResponse(capabilityResponse loopgate.CapabilityResponse) strin
 			return "Result quarantined by Loopgate."
 		}
 		return displayText
-	case loopgate.ResponseStatusDenied:
+	case controlapipkg.ResponseStatusDenied:
 		return "Denied: " + secrets.RedactText(capabilityResponse.DenialReason)
-	case loopgate.ResponseStatusError:
+	case controlapipkg.ResponseStatusError:
 		return "Error: " + secrets.RedactText(capabilityResponse.DenialReason)
 	default:
 		return StructuredDisplayText(SanitizedApprovalMetadata(capabilityResponse.Metadata))
 	}
 }
 
-func PromptEligibleOutput(capabilityResponse loopgate.CapabilityResponse) (string, error) {
-	if capabilityResponse.Status != loopgate.ResponseStatusSuccess {
+func PromptEligibleOutput(capabilityResponse controlapipkg.CapabilityResponse) (string, error) {
+	if capabilityResponse.Status != controlapipkg.ResponseStatusSuccess {
 		return "", nil
 	}
 
@@ -75,9 +75,9 @@ func PromptEligibleOutput(capabilityResponse loopgate.CapabilityResponse) (strin
 	return StructuredPromptText(promptStructuredResult), nil
 }
 
-func ToolResultFromCapabilityResponse(callID string, capabilityResponse loopgate.CapabilityResponse) (ToolResult, error) {
+func ToolResultFromCapabilityResponse(callID string, capabilityResponse controlapipkg.CapabilityResponse) (ToolResult, error) {
 	switch capabilityResponse.Status {
-	case loopgate.ResponseStatusSuccess:
+	case controlapipkg.ResponseStatusSuccess:
 		promptOutput, err := PromptEligibleOutput(capabilityResponse)
 		if err != nil {
 			return ToolResult{
@@ -91,14 +91,14 @@ func ToolResultFromCapabilityResponse(callID string, capabilityResponse loopgate
 			Status: StatusSuccess,
 			Output: promptOutput,
 		}, nil
-	case loopgate.ResponseStatusDenied:
+	case controlapipkg.ResponseStatusDenied:
 		return ToolResult{
 			CallID:     callID,
 			Status:     StatusDenied,
 			Reason:     secrets.RedactText(capabilityResponse.DenialReason),
 			DenialCode: strings.TrimSpace(capabilityResponse.DenialCode),
 		}, nil
-	case loopgate.ResponseStatusError:
+	case controlapipkg.ResponseStatusError:
 		return ToolResult{
 			CallID:     callID,
 			Status:     StatusError,
@@ -246,7 +246,7 @@ func structuredText(structuredResult map[string]interface{}, prettyJSON bool) st
 	return string(encodedBytes)
 }
 
-func promptEligibleStructuredResult(capabilityResponse loopgate.CapabilityResponse) map[string]interface{} {
+func promptEligibleStructuredResult(capabilityResponse controlapipkg.CapabilityResponse) map[string]interface{} {
 	if len(capabilityResponse.StructuredResult) == 0 || len(capabilityResponse.FieldsMeta) == 0 {
 		return map[string]interface{}{}
 	}

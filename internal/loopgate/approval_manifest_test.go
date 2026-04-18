@@ -1,10 +1,13 @@
 package loopgate
 
-import "testing"
+import (
+	controlapipkg "loopgate/internal/loopgate/controlapi"
+	"testing"
+)
 
 func TestCloneCapabilityRequest_DeepCopiesArgumentsMap(t *testing.T) {
 	sharedArguments := map[string]string{"path": "original.txt", "content": "a"}
-	original := CapabilityRequest{
+	original := controlapipkg.CapabilityRequest{
 		RequestID:  "req-clone",
 		Capability: "fs_write",
 		Arguments:  sharedArguments,
@@ -24,7 +27,7 @@ func TestVerifyPendingApprovalStoredExecutionBody_SkipsWhenNoStoredHash(t *testi
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	pending := pendingApproval{
-		Request: CapabilityRequest{
+		Request: controlapipkg.CapabilityRequest{
 			RequestID:  "r1",
 			Capability: "fs_read",
 			Arguments:  map[string]string{"path": "."},
@@ -40,7 +43,7 @@ func TestVerifyPendingApprovalStoredExecutionBody_SkipsWhenNoStoredHash(t *testi
 func TestVerifyPendingApprovalStoredExecutionBody_DetectsMismatch(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	req := CapabilityRequest{
+	req := controlapipkg.CapabilityRequest{
 		RequestID:  "r1",
 		Capability: "fs_write",
 		Arguments:  map[string]string{"path": "a.txt", "content": "x"},
@@ -55,7 +58,7 @@ func TestVerifyPendingApprovalStoredExecutionBody_DetectsMismatch(t *testing.T) 
 		ExecutionBodySHA256: hash,
 	}
 	denial, ok := server.verifyPendingApprovalStoredExecutionBody(pending)
-	if ok || denial.DenialCode != DenialCodeApprovalExecutionBodyMismatch {
+	if ok || denial.DenialCode != controlapipkg.DenialCodeApprovalExecutionBodyMismatch {
 		t.Fatalf("expected execution body mismatch, ok=%v denial=%#v", ok, denial)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"strconv"
 	"strings"
 )
@@ -14,6 +15,7 @@ const (
 	mcpGatewayProtocolVersion       = "2025-03-26"
 	mcpGatewayMaxMessageHeaderBytes = 8 * 1024
 	mcpGatewayMaxMessageBodyBytes   = 1024 * 1024
+	mcpGatewayMaxNotificationFrames = 64
 )
 
 type mcpGatewayJSONRPCError struct {
@@ -116,7 +118,23 @@ func decodeMCPGatewayJSONRPCResponseID(rawID json.RawMessage) (string, error) {
 	return responseID, nil
 }
 
-func performMCPGatewayJSONRPCRoundTrip(launchedServer *mcpGatewayLaunchedServer, method string, params interface{}) (json.RawMessage, *mcpGatewayJSONRPCError, error) {
+func mcpGatewayRoundTripContextError(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
+func performMCPGatewayJSONRPCRoundTrip(ctx context.Context, launchedServer *mcpGatewayLaunchedServer, method string, params interface{}) (json.RawMessage, *mcpGatewayJSONRPCError, error) {
+	if err := mcpGatewayRoundTripContextError(ctx); err != nil {
+		return nil, nil, err
+	}
+
 	requestID, err := randomHex(8)
 	if err != nil {
 		return nil, nil, fmt.Errorf("allocate mcp gateway request id: %w", err)
@@ -134,7 +152,12 @@ func performMCPGatewayJSONRPCRoundTrip(launchedServer *mcpGatewayLaunchedServer,
 		return nil, nil, err
 	}
 
+	notificationFramesSeen := 0
 	for {
+		if err := mcpGatewayRoundTripContextError(ctx); err != nil {
+			return nil, nil, err
+		}
+
 		responseBodyBytes, err := readMCPGatewayJSONRPCFrame(launchedServer)
 		if err != nil {
 			return nil, nil, err
@@ -147,6 +170,10 @@ func performMCPGatewayJSONRPCRoundTrip(launchedServer *mcpGatewayLaunchedServer,
 			return nil, nil, fmt.Errorf("mcp gateway response jsonrpc version is invalid")
 		}
 		if strings.TrimSpace(responseEnvelope.Method) != "" && len(responseEnvelope.ID) == 0 {
+			notificationFramesSeen++
+			if notificationFramesSeen > mcpGatewayMaxNotificationFrames {
+				return nil, nil, fmt.Errorf("mcp gateway notification flood exceeded maximum frames per request")
+			}
 			continue
 		}
 		responseID, err := decodeMCPGatewayJSONRPCResponseID(responseEnvelope.ID)
@@ -163,7 +190,7 @@ func performMCPGatewayJSONRPCRoundTrip(launchedServer *mcpGatewayLaunchedServer,
 	}
 }
 
-func initializeMCPGatewayLaunchedServer(launchedServer *mcpGatewayLaunchedServer) error {
+func initializeMCPGatewayLaunchedServer(ctx context.Context, launchedServer *mcpGatewayLaunchedServer) error {
 	if launchedServer == nil {
 		return fmt.Errorf("mcp gateway server is unavailable")
 	}
@@ -171,7 +198,7 @@ func initializeMCPGatewayLaunchedServer(launchedServer *mcpGatewayLaunchedServer
 		return nil
 	}
 
-	initializeResult, remoteError, err := performMCPGatewayJSONRPCRoundTrip(launchedServer, "initialize", map[string]interface{}{
+	initializeResult, remoteError, err := performMCPGatewayJSONRPCRoundTrip(ctx, launchedServer, "initialize", map[string]interface{}{
 		"protocolVersion": mcpGatewayProtocolVersion,
 		"capabilities":    map[string]interface{}{},
 		"clientInfo": map[string]interface{}{
@@ -187,6 +214,9 @@ func initializeMCPGatewayLaunchedServer(launchedServer *mcpGatewayLaunchedServer
 	}
 	if len(initializeResult) == 0 || !json.Valid(initializeResult) {
 		return fmt.Errorf("mcp gateway initialize result is invalid")
+	}
+	if err := mcpGatewayRoundTripContextError(ctx); err != nil {
+		return err
 	}
 
 	initializedNotificationBytes, err := json.Marshal(mcpGatewayJSONRPCRequest{
@@ -205,7 +235,7 @@ func initializeMCPGatewayLaunchedServer(launchedServer *mcpGatewayLaunchedServer
 	return nil
 }
 
-func (server *Server) resolveMCPGatewayLaunchedServer(serverID string) (*mcpGatewayLaunchedServer, CapabilityResponse, bool) {
+func (server *Server) resolveMCPGatewayLaunchedServer(serverID string) (*mcpGatewayLaunchedServer, controlapipkg.CapabilityResponse, bool) {
 	server.cleanupDeadMCPGatewayServerIfNeeded(serverID)
 
 	server.mu.Lock()
@@ -213,14 +243,14 @@ func (server *Server) resolveMCPGatewayLaunchedServer(serverID string) (*mcpGate
 
 	launchedServer, found := server.mcpGatewayLaunchedServers[strings.TrimSpace(serverID)]
 	if !found || launchedServer == nil || launchedServer.LaunchState != mcpGatewayServerStateLaunched || launchedServer.PID <= 0 {
-		return nil, CapabilityResponse{
+		return nil, controlapipkg.CapabilityResponse{
 			RequestID:    strings.TrimSpace(serverID),
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "mcp gateway server is not launched",
-			DenialCode:   DenialCodeMCPGatewayServerNotLaunched,
+			DenialCode:   controlapipkg.DenialCodeMCPGatewayServerNotLaunched,
 		}, false
 	}
-	return launchedServer, CapabilityResponse{}, true
+	return launchedServer, controlapipkg.CapabilityResponse{}, true
 }
 
 func (server *Server) dropMCPGatewayLaunchedServer(serverID string, launchedServer *mcpGatewayLaunchedServer) {
@@ -237,25 +267,23 @@ func (server *Server) dropMCPGatewayLaunchedServer(serverID string, launchedServ
 	}
 }
 
-func (server *Server) executeMCPGatewayInvocation(ctx context.Context, tokenClaims capabilityToken, executionRequest MCPGatewayExecutionRequest) (MCPGatewayExecutionResponse, CapabilityResponse, bool) {
-	_ = ctx
-
+func (server *Server) executeMCPGatewayInvocation(ctx context.Context, tokenClaims capabilityToken, executionRequest controlapipkg.MCPGatewayExecutionRequest) (controlapipkg.MCPGatewayExecutionResponse, controlapipkg.CapabilityResponse, bool) {
 	approvalRequest, validationResponse, denialResponse, ok := server.validateMCPGatewayExecutionRequestWithApproval(tokenClaims, executionRequest)
 	if !ok {
-		return MCPGatewayExecutionResponse{}, denialResponse, false
+		return controlapipkg.MCPGatewayExecutionResponse{}, denialResponse, false
 	}
 
 	launchedServer, denialResponse, ok := server.resolveMCPGatewayLaunchedServer(validationResponse.ServerID)
 	if !ok {
-		return MCPGatewayExecutionResponse{}, denialResponse, false
+		return controlapipkg.MCPGatewayExecutionResponse{}, denialResponse, false
 	}
 
 	if err := server.logEvent("mcp_gateway.execution_started", tokenClaims.ControlSessionID, buildMCPGatewayExecutionStartedAuditData(tokenClaims, approvalRequest, launchedServer)); err != nil {
-		return MCPGatewayExecutionResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayExecutionResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequest.ID,
-			Status:            ResponseStatusError,
+			Status:            controlapipkg.ResponseStatusError,
 			DenialReason:      "control-plane audit is unavailable",
-			DenialCode:        DenialCodeAuditUnavailable,
+			DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 			ApprovalRequestID: approvalRequest.ID,
 			Redacted:          true,
 		}, false
@@ -263,72 +291,110 @@ func (server *Server) executeMCPGatewayInvocation(ctx context.Context, tokenClai
 
 	consumedApproval, denialResponse, ok := server.consumeGrantedMCPGatewayApprovalForExecution(tokenClaims, executionRequest)
 	if !ok {
-		return MCPGatewayExecutionResponse{}, denialResponse, false
+		return controlapipkg.MCPGatewayExecutionResponse{}, denialResponse, false
 	}
-
-	launchedServer.ioMu.Lock()
-	defer launchedServer.ioMu.Unlock()
-
-	if err := initializeMCPGatewayLaunchedServer(launchedServer); err != nil {
+	if err := mcpGatewayRoundTripContextError(ctx); err != nil {
 		server.markMCPGatewayApprovalExecutionFailed(consumedApproval.ID, consumedApproval.ApprovalManifestSHA256)
-		server.dropMCPGatewayLaunchedServer(consumedApproval.ServerID, launchedServer)
-		if auditErr := server.logEvent("mcp_gateway.execution_failed", tokenClaims.ControlSessionID, buildMCPGatewayExecutionFailedAuditData(tokenClaims, consumedApproval, launchedServer, DenialCodeExecutionFailed)); auditErr != nil {
-			return MCPGatewayExecutionResponse{}, CapabilityResponse{
+		if auditErr := server.logEvent("mcp_gateway.execution_failed", tokenClaims.ControlSessionID, buildMCPGatewayExecutionFailedAuditData(tokenClaims, consumedApproval, launchedServer, controlapipkg.DenialCodeExecutionFailed)); auditErr != nil {
+			return controlapipkg.MCPGatewayExecutionResponse{}, controlapipkg.CapabilityResponse{
 				RequestID:         consumedApproval.ID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: consumedApproval.ID,
 				Redacted:          true,
 			}, false
 		}
-		return MCPGatewayExecutionResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayExecutionResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         consumedApproval.ID,
-			Status:            ResponseStatusError,
-			DenialReason:      "failed to initialize launched MCP gateway server",
-			DenialCode:        DenialCodeExecutionFailed,
+			Status:            controlapipkg.ResponseStatusError,
+			DenialReason:      "mcp gateway execution context canceled before dispatch",
+			DenialCode:        controlapipkg.DenialCodeExecutionFailed,
 			ApprovalRequestID: consumedApproval.ID,
 			Redacted:          true,
 		}, false
 	}
 
-	toolResult, remoteError, err := performMCPGatewayJSONRPCRoundTrip(launchedServer, "tools/call", map[string]interface{}{
+	launchedServer.ioMu.Lock()
+	defer launchedServer.ioMu.Unlock()
+
+	stopCancellationWatch := func() {}
+	if ctx != nil && ctx.Done() != nil {
+		cancellationWatchDone := make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				closeMCPGatewayLaunchedServerPipes(launchedServer)
+				killMCPGatewayProcessByPID(launchedServer.PID)
+			case <-cancellationWatchDone:
+			}
+		}()
+		stopCancellationWatch = func() {
+			close(cancellationWatchDone)
+		}
+	}
+	defer stopCancellationWatch()
+
+	if err := initializeMCPGatewayLaunchedServer(ctx, launchedServer); err != nil {
+		server.markMCPGatewayApprovalExecutionFailed(consumedApproval.ID, consumedApproval.ApprovalManifestSHA256)
+		server.dropMCPGatewayLaunchedServer(consumedApproval.ServerID, launchedServer)
+		if auditErr := server.logEvent("mcp_gateway.execution_failed", tokenClaims.ControlSessionID, buildMCPGatewayExecutionFailedAuditData(tokenClaims, consumedApproval, launchedServer, controlapipkg.DenialCodeExecutionFailed)); auditErr != nil {
+			return controlapipkg.MCPGatewayExecutionResponse{}, controlapipkg.CapabilityResponse{
+				RequestID:         consumedApproval.ID,
+				Status:            controlapipkg.ResponseStatusError,
+				DenialReason:      "control-plane audit is unavailable",
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
+				ApprovalRequestID: consumedApproval.ID,
+				Redacted:          true,
+			}, false
+		}
+		return controlapipkg.MCPGatewayExecutionResponse{}, controlapipkg.CapabilityResponse{
+			RequestID:         consumedApproval.ID,
+			Status:            controlapipkg.ResponseStatusError,
+			DenialReason:      "failed to initialize launched MCP gateway server",
+			DenialCode:        controlapipkg.DenialCodeExecutionFailed,
+			ApprovalRequestID: consumedApproval.ID,
+			Redacted:          true,
+		}, false
+	}
+
+	toolResult, remoteError, err := performMCPGatewayJSONRPCRoundTrip(ctx, launchedServer, "tools/call", map[string]interface{}{
 		"name":      validationResponse.ToolName,
 		"arguments": executionRequest.Arguments,
 	})
 	if err != nil {
 		server.markMCPGatewayApprovalExecutionFailed(consumedApproval.ID, consumedApproval.ApprovalManifestSHA256)
 		server.dropMCPGatewayLaunchedServer(consumedApproval.ServerID, launchedServer)
-		if auditErr := server.logEvent("mcp_gateway.execution_failed", tokenClaims.ControlSessionID, buildMCPGatewayExecutionFailedAuditData(tokenClaims, consumedApproval, launchedServer, DenialCodeExecutionFailed)); auditErr != nil {
-			return MCPGatewayExecutionResponse{}, CapabilityResponse{
+		if auditErr := server.logEvent("mcp_gateway.execution_failed", tokenClaims.ControlSessionID, buildMCPGatewayExecutionFailedAuditData(tokenClaims, consumedApproval, launchedServer, controlapipkg.DenialCodeExecutionFailed)); auditErr != nil {
+			return controlapipkg.MCPGatewayExecutionResponse{}, controlapipkg.CapabilityResponse{
 				RequestID:         consumedApproval.ID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: consumedApproval.ID,
 				Redacted:          true,
 			}, false
 		}
-		return MCPGatewayExecutionResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayExecutionResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         consumedApproval.ID,
-			Status:            ResponseStatusError,
+			Status:            controlapipkg.ResponseStatusError,
 			DenialReason:      "failed to execute MCP gateway tool call",
-			DenialCode:        DenialCodeExecutionFailed,
+			DenialCode:        controlapipkg.DenialCodeExecutionFailed,
 			ApprovalRequestID: consumedApproval.ID,
 			Redacted:          true,
 		}, false
 	}
 
 	if err := server.logEvent("mcp_gateway.execution_completed", tokenClaims.ControlSessionID, buildMCPGatewayExecutionCompletedAuditData(tokenClaims, consumedApproval, launchedServer, toolResult, remoteError)); err != nil {
-		return MCPGatewayExecutionResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayExecutionResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         consumedApproval.ID,
-			Status:            ResponseStatusError,
+			Status:            controlapipkg.ResponseStatusError,
 			DenialReason:      "control-plane audit is unavailable",
-			DenialCode:        DenialCodeAuditUnavailable,
+			DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 			ApprovalRequestID: consumedApproval.ID,
 			Redacted:          true,
 		}, false
 	}
 
-	return buildMCPGatewayExecutionResponse(consumedApproval, launchedServer.PID, toolResult, remoteError), CapabilityResponse{}, true
+	return buildMCPGatewayExecutionResponse(consumedApproval, launchedServer.PID, toolResult, remoteError), controlapipkg.CapabilityResponse{}, true
 }

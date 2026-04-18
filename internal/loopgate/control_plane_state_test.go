@@ -2,7 +2,10 @@ package loopgate
 
 import (
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -104,7 +107,7 @@ func TestRecordAuthNonce_RollsBackWhenReplayPersistenceFails(t *testing.T) {
 	if denial == nil {
 		t.Fatal("expected persistence failure denial")
 	}
-	if denial.Status != ResponseStatusError || denial.DenialCode != DenialCodeAuditUnavailable {
+	if denial.Status != controlapipkg.ResponseStatusError || denial.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected audit unavailable denial, got %#v", denial)
 	}
 	if len(server.replayState.seenAuthNonces) != 0 {
@@ -212,5 +215,67 @@ func TestAppendOnlyNonceReplayStore_LoadsLegacySnapshotWhenLogMissing(t *testing
 	}
 	if _, found := got["legacy-session:legacy-nonce"]; !found {
 		t.Fatalf("expected legacy nonce to load, got %#v", got)
+	}
+}
+
+func TestAppendOnlyNonceReplayStore_CompactRewritesLiveSet(t *testing.T) {
+	nowUTC := time.Date(2026, time.April, 16, 12, 0, 0, 0, time.UTC)
+	storePath := filepath.Join(t.TempDir(), "nonce_replay.jsonl")
+	store := appendOnlyNonceReplayStore{path: storePath}
+
+	if err := store.Record("stale-session:nonce-a", seenRequest{
+		ControlSessionID: "stale-session",
+		SeenAt:           nowUTC.Add(-20 * time.Minute),
+	}); err != nil {
+		t.Fatalf("record stale nonce: %v", err)
+	}
+	if err := store.Record("live-session:nonce-b", seenRequest{
+		ControlSessionID: "live-session",
+		SeenAt:           nowUTC.Add(-10 * time.Minute),
+	}); err != nil {
+		t.Fatalf("record live nonce: %v", err)
+	}
+	if err := store.Record("live-session:nonce-b", seenRequest{
+		ControlSessionID: "live-session",
+		SeenAt:           nowUTC.Add(-5 * time.Minute),
+	}); err != nil {
+		t.Fatalf("record duplicate live nonce: %v", err)
+	}
+
+	liveSnapshot := map[string]seenRequest{
+		"live-session:nonce-b": {
+			ControlSessionID: "live-session",
+			SeenAt:           nowUTC.Add(-5 * time.Minute),
+		},
+	}
+	if err := store.Compact(liveSnapshot); err != nil {
+		t.Fatalf("compact append-only nonce replay store: %v", err)
+	}
+
+	got, err := store.Load(nowUTC)
+	if err != nil {
+		t.Fatalf("load compacted append-only nonce replay store: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected one compacted nonce entry, got %#v", got)
+	}
+	seenNonce, found := got["live-session:nonce-b"]
+	if !found {
+		t.Fatalf("expected compacted live nonce, got %#v", got)
+	}
+	if seenNonce.ControlSessionID != "live-session" || !seenNonce.SeenAt.Equal(nowUTC.Add(-5*time.Minute)) {
+		t.Fatalf("unexpected compacted nonce entry: %#v", seenNonce)
+	}
+
+	logBytes, err := os.ReadFile(storePath)
+	if err != nil {
+		t.Fatalf("read compacted append-only nonce replay log: %v", err)
+	}
+	logLines := strings.Split(strings.TrimSpace(string(logBytes)), "\n")
+	if len(logLines) != 1 {
+		t.Fatalf("expected compacted log to contain one line, got %d: %q", len(logLines), string(logBytes))
+	}
+	if strings.Contains(logLines[0], "stale-session:nonce-a") {
+		t.Fatalf("stale nonce survived compaction: %q", logLines[0])
 	}
 }

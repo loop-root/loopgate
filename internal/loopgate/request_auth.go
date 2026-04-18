@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 	"time"
@@ -29,7 +30,58 @@ type signedControlPlaneHeaders struct {
 	RequestSignature string
 }
 
-func (server *Server) writeAuditedAuthDenial(writer http.ResponseWriter, request *http.Request, denial CapabilityResponse, options authDeniedAuditOptions) bool {
+// parseCapabilityTokenAuthorizationHeader accepts RFC-agnostic but explicit
+// bearer forms used by local clients. It tolerates mixed-case scheme names and
+// arbitrary ASCII whitespace between scheme and token, but it rejects malformed
+// "Bearer..." headers before token lookup so operators get a precise denial.
+func parseCapabilityTokenAuthorizationHeader(authorizationHeader string) (string, controlapipkg.CapabilityResponse, bool) {
+	trimmedAuthorizationHeader := strings.TrimSpace(authorizationHeader)
+	if trimmedAuthorizationHeader == "" {
+		return "", controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialReason: "missing capability token",
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenMissing,
+		}, false
+	}
+
+	normalizedAuthorizationHeader := strings.ToLower(trimmedAuthorizationHeader)
+	if strings.HasPrefix(normalizedAuthorizationHeader, "bearer") &&
+		!strings.HasPrefix(normalizedAuthorizationHeader, "bearer ") &&
+		!strings.HasPrefix(normalizedAuthorizationHeader, "bearer\t") {
+		return "", controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialReason: "malformed capability token authorization header",
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenInvalid,
+		}, false
+	}
+
+	authorizationFields := strings.Fields(trimmedAuthorizationHeader)
+	if len(authorizationFields) != 2 {
+		if len(authorizationFields) > 0 && strings.EqualFold(authorizationFields[0], "Bearer") {
+			return "", controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusDenied,
+				DenialReason: "malformed capability token authorization header",
+				DenialCode:   controlapipkg.DenialCodeCapabilityTokenInvalid,
+			}, false
+		}
+		return "", controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialReason: "missing capability token",
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenMissing,
+		}, false
+	}
+	if !strings.EqualFold(authorizationFields[0], "Bearer") {
+		return "", controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialReason: "missing capability token",
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenMissing,
+		}, false
+	}
+
+	return authorizationFields[1], controlapipkg.CapabilityResponse{}, true
+}
+
+func (server *Server) writeAuditedAuthDenial(writer http.ResponseWriter, request *http.Request, denial controlapipkg.CapabilityResponse, options authDeniedAuditOptions) bool {
 	auditData := map[string]interface{}{
 		"auth_kind":      options.authKind,
 		"denial_code":    denial.DenialCode,
@@ -69,28 +121,22 @@ func (server *Server) writeAuditedAuthDenial(writer http.ResponseWriter, request
 func (server *Server) authenticate(writer http.ResponseWriter, request *http.Request) (capabilityToken, bool) {
 	requestPeerIdentity, ok := peerIdentityFromContext(request.Context())
 	if !ok {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "missing authenticated peer identity",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenInvalid,
 		}, authDeniedAuditOptions{authKind: "capability_token"})
 		return capabilityToken{}, false
 	}
 
-	authorizationHeader := strings.TrimSpace(request.Header.Get("Authorization"))
-	if !strings.HasPrefix(strings.ToLower(authorizationHeader), "bearer ") {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialReason: "missing capability token",
-			DenialCode:   DenialCodeCapabilityTokenMissing,
-		}, authDeniedAuditOptions{
+	tokenString, denialResponse, ok := parseCapabilityTokenAuthorizationHeader(request.Header.Get("Authorization"))
+	if !ok {
+		server.writeAuditedAuthDenial(writer, request, denialResponse, authDeniedAuditOptions{
 			authKind:    "capability_token",
 			requestPeer: &requestPeerIdentity,
 		})
 		return capabilityToken{}, false
 	}
-
-	tokenString := strings.TrimSpace(authorizationHeader[len("Bearer "):])
 
 	// Take a consistent now snapshot and perform all expiry checks inside a
 	// single lock acquisition to eliminate the TOCTOU window between reading
@@ -116,10 +162,10 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 	server.mu.Unlock()
 
 	if !found {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "invalid capability token",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenInvalid,
 		}, authDeniedAuditOptions{
 			authKind:    "capability_token",
 			requestPeer: &requestPeerIdentity,
@@ -127,10 +173,10 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 		return capabilityToken{}, false
 	}
 	if tokenExpired {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "expired capability token",
-			DenialCode:   DenialCodeCapabilityTokenExpired,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenExpired,
 		}, authDeniedAuditOptions{
 			authKind:           "capability_token",
 			controlSessionID:   tokenClaims.ControlSessionID,
@@ -143,10 +189,10 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 		return capabilityToken{}, false
 	}
 	if sessionExpired {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "expired capability token",
-			DenialCode:   DenialCodeCapabilityTokenExpired,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenExpired,
 		}, authDeniedAuditOptions{
 			authKind:           "capability_token",
 			controlSessionID:   tokenClaims.ControlSessionID,
@@ -159,10 +205,10 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 		return capabilityToken{}, false
 	}
 	if !sessionFound {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "invalid capability token",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenInvalid,
 		}, authDeniedAuditOptions{
 			authKind:           "capability_token",
 			controlSessionID:   tokenClaims.ControlSessionID,
@@ -175,10 +221,10 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 		return capabilityToken{}, false
 	}
 	if tokenClaims.PeerIdentity != requestPeerIdentity {
-		server.writeAuditedAuthDenial(writer, request, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeAuditedAuthDenial(writer, request, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "capability token peer binding mismatch",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenInvalid,
 		}, authDeniedAuditOptions{
 			authKind:           "capability_token",
 			controlSessionID:   tokenClaims.ControlSessionID,
@@ -198,7 +244,7 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 // It does not verify the HMAC. Callers supply expectedControlSessionID (for
 // example, a scoped worker session id from a compatibility table); those ids
 // are not necessarily rows in server.sessionState.sessions.
-func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expectedControlSessionID string) (signedControlPlaneHeaders, CapabilityResponse, bool) {
+func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expectedControlSessionID string) (signedControlPlaneHeaders, controlapipkg.CapabilityResponse, bool) {
 	headers := signedControlPlaneHeaders{
 		ControlSessionID: strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session")),
 		RequestTimestamp: strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp")),
@@ -207,41 +253,41 @@ func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expe
 	}
 
 	if headers.ControlSessionID == "" || headers.RequestTimestamp == "" || headers.RequestNonce == "" || headers.RequestSignature == "" {
-		return signedControlPlaneHeaders{}, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return signedControlPlaneHeaders{}, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "signed control-plane headers are required",
-			DenialCode:   DenialCodeRequestSignatureMissing,
+			DenialCode:   controlapipkg.DenialCodeRequestSignatureMissing,
 		}, false
 	}
 	if headers.ControlSessionID != expectedControlSessionID {
-		return signedControlPlaneHeaders{}, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return signedControlPlaneHeaders{}, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "control session binding is invalid",
-			DenialCode:   DenialCodeControlSessionBindingInvalid,
+			DenialCode:   controlapipkg.DenialCodeControlSessionBindingInvalid,
 		}, false
 	}
 
 	parsedTimestamp, err := time.Parse(time.RFC3339Nano, headers.RequestTimestamp)
 	if err != nil {
-		return signedControlPlaneHeaders{}, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return signedControlPlaneHeaders{}, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "request timestamp is invalid",
-			DenialCode:   DenialCodeRequestTimestampInvalid,
+			DenialCode:   controlapipkg.DenialCodeRequestTimestampInvalid,
 		}, false
 	}
 	nowUTC := server.now().UTC()
 	if parsedTimestamp.Before(nowUTC.Add(-requestSignatureSkew)) || parsedTimestamp.After(nowUTC.Add(requestSignatureSkew)) {
-		return signedControlPlaneHeaders{}, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return signedControlPlaneHeaders{}, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "request timestamp is outside the allowed skew window",
-			DenialCode:   DenialCodeRequestTimestampInvalid,
+			DenialCode:   controlapipkg.DenialCodeRequestTimestampInvalid,
 		}, false
 	}
 
-	return headers, CapabilityResponse{}, true
+	return headers, controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) verifySignedRequest(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string) (CapabilityResponse, bool) {
+func (server *Server) verifySignedRequest(request *http.Request, requestBodyBytes []byte, expectedControlSessionID string) (controlapipkg.CapabilityResponse, bool) {
 	headers, denial, ok := server.parseSignedControlPlaneHeaders(request, expectedControlSessionID)
 	if !ok {
 		return denial, false
@@ -253,10 +299,10 @@ func (server *Server) verifySignedRequest(request *http.Request, requestBodyByte
 	sessionMACRotationMaster := append([]byte(nil), server.sessionMACRotationMaster...)
 	server.mu.Unlock()
 	if !found || strings.TrimSpace(activeSession.SessionMACKey) == "" {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "control session binding is invalid",
-			DenialCode:   DenialCodeControlSessionBindingInvalid,
+			DenialCode:   controlapipkg.DenialCodeControlSessionBindingInvalid,
 		}, false
 	}
 
@@ -266,12 +312,12 @@ func (server *Server) verifySignedRequest(request *http.Request, requestBodyByte
 	return server.verifySignedRequestWithMACKey(request, requestBodyBytes, headers, activeSession.SessionMACKey)
 }
 
-func (server *Server) verifySignedRequestWithMACKey(request *http.Request, requestBodyBytes []byte, headers signedControlPlaneHeaders, sessionMACKey string) (CapabilityResponse, bool) {
+func (server *Server) verifySignedRequestWithMACKey(request *http.Request, requestBodyBytes []byte, headers signedControlPlaneHeaders, sessionMACKey string) (controlapipkg.CapabilityResponse, bool) {
 	if !requestSignatureBytesMatchMACKey(headers.RequestSignature, request.Method, request.URL.Path, headers.ControlSessionID, headers.RequestTimestamp, headers.RequestNonce, requestBodyBytes, sessionMACKey) {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "request signature is invalid",
-			DenialCode:   DenialCodeRequestSignatureInvalid,
+			DenialCode:   controlapipkg.DenialCodeRequestSignatureInvalid,
 		}, false
 	}
 
@@ -279,7 +325,7 @@ func (server *Server) verifySignedRequestWithMACKey(request *http.Request, reque
 		return *nonceDenial, false
 	}
 
-	return CapabilityResponse{}, true
+	return controlapipkg.CapabilityResponse{}, true
 }
 
 func peerIdentityFromContext(ctx context.Context) (peerIdentity, bool) {
@@ -289,11 +335,11 @@ func peerIdentityFromContext(ctx context.Context) (peerIdentity, bool) {
 
 func signedRequestHTTPStatus(denialCode string) int {
 	switch denialCode {
-	case DenialCodeRequestSignatureMissing, DenialCodeRequestSignatureInvalid, DenialCodeRequestTimestampInvalid, DenialCodeRequestNonceReplayDetected, DenialCodeControlSessionBindingInvalid:
+	case controlapipkg.DenialCodeRequestSignatureMissing, controlapipkg.DenialCodeRequestSignatureInvalid, controlapipkg.DenialCodeRequestTimestampInvalid, controlapipkg.DenialCodeRequestNonceReplayDetected, controlapipkg.DenialCodeControlSessionBindingInvalid:
 		return http.StatusUnauthorized
-	case DenialCodeReplayStateSaturated:
+	case controlapipkg.DenialCodeReplayStateSaturated:
 		return http.StatusTooManyRequests
-	case DenialCodeAuditUnavailable:
+	case controlapipkg.DenialCodeAuditUnavailable:
 		return http.StatusServiceUnavailable
 	default:
 		return http.StatusBadRequest

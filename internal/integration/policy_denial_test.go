@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 )
 
 func TestDeniedPolicyPathWriteOverRealSocketDoesNotChangeFile(t *testing.T) {
@@ -23,7 +23,7 @@ func TestDeniedPolicyPathWriteOverRealSocketDoesNotChangeFile(t *testing.T) {
 	}
 
 	requestID := "req-denied-policy-path"
-	requestBody := mustJSON(t, loopgate.CapabilityRequest{
+	requestBody := mustJSON(t, controlapipkg.CapabilityRequest{
 		RequestID:  requestID,
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -44,13 +44,13 @@ func TestDeniedPolicyPathWriteOverRealSocketDoesNotChangeFile(t *testing.T) {
 		t.Fatalf("expected denied path request to return transport status 500, got %d: %s", statusCode, string(responseBody))
 	}
 
-	var capabilityResponse loopgate.CapabilityResponse
+	var capabilityResponse controlapipkg.CapabilityResponse
 	decodeJSON(t, responseBody, &capabilityResponse)
-	if capabilityResponse.Status != loopgate.ResponseStatusError {
+	if capabilityResponse.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected denied path request to return error status, got %#v", capabilityResponse)
 	}
-	if capabilityResponse.DenialCode != loopgate.DenialCodeExecutionFailed {
-		t.Fatalf("expected denied path request to use denial code %q, got %#v", loopgate.DenialCodeExecutionFailed, capabilityResponse)
+	if capabilityResponse.DenialCode != controlapipkg.DenialCodeExecutionFailed {
+		t.Fatalf("expected denied path request to use denial code %q, got %#v", controlapipkg.DenialCodeExecutionFailed, capabilityResponse)
 	}
 	if !strings.Contains(capabilityResponse.DenialReason, "path denied") {
 		t.Fatalf("expected denied path reason to mention path denial, got %#v", capabilityResponse)

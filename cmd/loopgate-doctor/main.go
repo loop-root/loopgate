@@ -14,10 +14,11 @@ import (
 	"strings"
 
 	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"loopgate/internal/troubleshoot"
 )
 
-var checkAuditExportTrust = func(socketPath string) (loopgate.AuditExportTrustCheckResponse, error) {
+var checkAuditExportTrust = func(socketPath string) (controlapipkg.AuditExportTrustCheckResponse, error) {
 	client := loopgate.NewClient(socketPath)
 	client.ConfigureSession("loopgate-doctor", defaultDoctorSessionID("trust-check"), []string{"diagnostic.read"})
 	return client.CheckAuditExportTrust(context.Background())

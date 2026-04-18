@@ -3,6 +3,7 @@ package loopgate
 import (
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"slices"
 	"strings"
 
@@ -169,7 +170,7 @@ func (server *Server) evaluateMCPGatewayInvocationPolicy(serverID string, toolNa
 	}, nil
 }
 
-func (server *Server) buildMCPGatewayInventoryResponse() MCPGatewayInventoryResponse {
+func (server *Server) buildMCPGatewayInventoryResponse() controlapipkg.MCPGatewayInventoryResponse {
 	policyRuntime := server.currentPolicyRuntime()
 	serverIDs := make([]string, 0, len(policyRuntime.mcpGatewayManifests))
 	for serverID := range policyRuntime.mcpGatewayManifests {
@@ -177,9 +178,9 @@ func (server *Server) buildMCPGatewayInventoryResponse() MCPGatewayInventoryResp
 	}
 	slices.Sort(serverIDs)
 
-	response := MCPGatewayInventoryResponse{
+	response := controlapipkg.MCPGatewayInventoryResponse{
 		DenyUnknownServers: policyRuntime.policy.MCPGatewayDenyUnknownServers(),
-		Servers:            make([]MCPGatewayDeclaredServerView, 0, len(serverIDs)),
+		Servers:            make([]controlapipkg.MCPGatewayDeclaredServerView, 0, len(serverIDs)),
 	}
 	for _, serverID := range serverIDs {
 		serverManifest := policyRuntime.mcpGatewayManifests[serverID]
@@ -188,7 +189,7 @@ func (server *Server) buildMCPGatewayInventoryResponse() MCPGatewayInventoryResp
 	return response
 }
 
-func buildMCPGatewayDeclaredServerView(serverManifest mcpGatewayServerManifest) MCPGatewayDeclaredServerView {
+func buildMCPGatewayDeclaredServerView(serverManifest mcpGatewayServerManifest) controlapipkg.MCPGatewayDeclaredServerView {
 	toolNames := make([]string, 0, len(serverManifest.ToolManifests))
 	for toolName := range serverManifest.ToolManifests {
 		toolNames = append(toolNames, toolName)
@@ -201,7 +202,7 @@ func buildMCPGatewayDeclaredServerView(serverManifest mcpGatewayServerManifest) 
 	}
 	slices.Sort(secretEnvironmentVariables)
 
-	serverView := MCPGatewayDeclaredServerView{
+	serverView := controlapipkg.MCPGatewayDeclaredServerView{
 		ServerID:                   serverManifest.ServerID,
 		Enabled:                    serverManifest.Enabled,
 		RequiresApproval:           serverManifest.RequiresApproval,
@@ -212,11 +213,11 @@ func buildMCPGatewayDeclaredServerView(serverManifest mcpGatewayServerManifest) 
 		WorkingDirectory:           serverManifest.WorkingDirectory,
 		AllowedEnvironment:         append([]string(nil), serverManifest.AllowedEnvironment...),
 		SecretEnvironmentVariables: secretEnvironmentVariables,
-		Tools:                      make([]MCPGatewayDeclaredToolView, 0, len(toolNames)),
+		Tools:                      make([]controlapipkg.MCPGatewayDeclaredToolView, 0, len(toolNames)),
 	}
 	for _, toolName := range toolNames {
 		toolManifest := serverManifest.ToolManifests[toolName]
-		serverView.Tools = append(serverView.Tools, MCPGatewayDeclaredToolView{
+		serverView.Tools = append(serverView.Tools, controlapipkg.MCPGatewayDeclaredToolView{
 			ToolName:          toolManifest.ToolName,
 			Enabled:           toolManifest.Enabled,
 			RequiresApproval:  toolManifest.RequiresApproval,
@@ -226,8 +227,8 @@ func buildMCPGatewayDeclaredServerView(serverManifest mcpGatewayServerManifest) 
 	return serverView
 }
 
-func (server *Server) buildMCPGatewayDecisionResponse(request MCPGatewayDecisionRequest) MCPGatewayDecisionResponse {
-	response := MCPGatewayDecisionResponse{
+func (server *Server) buildMCPGatewayDecisionResponse(request controlapipkg.MCPGatewayDecisionRequest) controlapipkg.MCPGatewayDecisionResponse {
+	response := controlapipkg.MCPGatewayDecisionResponse{
 		ServerID: strings.TrimSpace(request.ServerID),
 		ToolName: strings.TrimSpace(request.ToolName),
 	}
@@ -247,13 +248,13 @@ func (server *Server) buildMCPGatewayDecisionResponse(request MCPGatewayDecision
 	return response
 }
 
-func (server *Server) buildMCPGatewayInvocationValidationResponse(request MCPGatewayInvocationRequest) (MCPGatewayInvocationValidationResponse, error) {
-	validatedRequest, err := validateMCPGatewayInvocationRequest(request)
+func (server *Server) buildMCPGatewayInvocationValidationResponse(request controlapipkg.MCPGatewayInvocationRequest) (controlapipkg.MCPGatewayInvocationValidationResponse, error) {
+	validatedRequest, err := controlapipkg.ValidateMCPGatewayInvocationRequest(request)
 	if err != nil {
-		return MCPGatewayInvocationValidationResponse{}, err
+		return controlapipkg.MCPGatewayInvocationValidationResponse{}, err
 	}
 
-	response := MCPGatewayInvocationValidationResponse{
+	response := controlapipkg.MCPGatewayInvocationValidationResponse{
 		ServerID:               validatedRequest.ServerID,
 		ToolName:               validatedRequest.ToolName,
 		ValidatedArgumentCount: len(validatedRequest.ValidatedArgKeys),
@@ -269,7 +270,7 @@ func (server *Server) buildMCPGatewayInvocationValidationResponse(request MCPGat
 	}
 	if argumentValidationErr := validateMCPGatewayToolArguments(decision.ToolManifest, validatedRequest); argumentValidationErr != nil {
 		response.Decision = "deny"
-		response.DenialCode = DenialCodeMCPGatewayArgumentsInvalid
+		response.DenialCode = controlapipkg.DenialCodeMCPGatewayArgumentsInvalid
 		response.DenialReason = argumentValidationErr.Error()
 		return response, nil
 	}
@@ -294,19 +295,19 @@ func mcpGatewayEffectiveDecision(enabled bool, requiresApproval bool) string {
 func mcpGatewayDecisionDenialCode(err error) string {
 	switch {
 	case errors.Is(err, errMCPGatewayServerNotFound):
-		return DenialCodeMCPGatewayServerNotFound
+		return controlapipkg.DenialCodeMCPGatewayServerNotFound
 	case errors.Is(err, errMCPGatewayServerDisabled):
-		return DenialCodeMCPGatewayServerDisabled
+		return controlapipkg.DenialCodeMCPGatewayServerDisabled
 	case errors.Is(err, errMCPGatewayToolNotFound):
-		return DenialCodeMCPGatewayToolNotFound
+		return controlapipkg.DenialCodeMCPGatewayToolNotFound
 	case errors.Is(err, errMCPGatewayToolDisabled):
-		return DenialCodeMCPGatewayToolDisabled
+		return controlapipkg.DenialCodeMCPGatewayToolDisabled
 	default:
-		return DenialCodePolicyDenied
+		return controlapipkg.DenialCodePolicyDenied
 	}
 }
 
-func buildMCPGatewayInvocationAuditData(tokenClaims capabilityToken, response MCPGatewayInvocationValidationResponse) map[string]interface{} {
+func buildMCPGatewayInvocationAuditData(tokenClaims capabilityToken, response controlapipkg.MCPGatewayInvocationValidationResponse) map[string]interface{} {
 	auditData := map[string]interface{}{
 		"server_id":                strings.TrimSpace(response.ServerID),
 		"tool_name":                strings.TrimSpace(response.ToolName),
@@ -324,7 +325,7 @@ func buildMCPGatewayInvocationAuditData(tokenClaims capabilityToken, response MC
 	return auditData
 }
 
-func validateMCPGatewayToolArguments(toolManifest mcpGatewayToolManifest, validatedRequest validatedMCPGatewayInvocationRequest) error {
+func validateMCPGatewayToolArguments(toolManifest mcpGatewayToolManifest, validatedRequest controlapipkg.ValidatedMCPGatewayInvocationRequest) error {
 	validatedArgumentSet := make(map[string]struct{}, len(validatedRequest.ValidatedArgKeys))
 	for _, argumentName := range validatedRequest.ValidatedArgKeys {
 		validatedArgumentSet[argumentName] = struct{}{}

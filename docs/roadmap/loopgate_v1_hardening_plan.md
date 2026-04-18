@@ -83,7 +83,8 @@ Rollback:
 
 Completed in this phase:
 - mapped the Phase B slice to:
-  - `internal/loopgate/types.go`
+  - `internal/loopgate/controlapi/core.go`
+  - `internal/loopgate/protocol/capability.go`
   - `internal/loopgate/server.go`
   - `internal/loopgate/request_auth.go`
   - `internal/loopgate/approval_flow.go`

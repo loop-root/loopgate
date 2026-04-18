@@ -3,6 +3,7 @@ package loopgate
 import (
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,9 +35,9 @@ func isHostAccessPathPolicyError(err error) bool {
 
 func hostAccessPathErrorCode(err error) string {
 	if isHostAccessPathPolicyError(err) {
-		return DenialCodeInvalidCapabilityArguments
+		return controlapipkg.DenialCodeInvalidCapabilityArguments
 	}
-	return DenialCodeExecutionFailed
+	return controlapipkg.DenialCodeExecutionFailed
 }
 
 func normalizeHostAccessRelativePath(raw string) (hostAccessRelativePath, error) {

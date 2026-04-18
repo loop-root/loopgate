@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,8 +50,8 @@ type mcpGatewayLaunchedServer struct {
 	ioMu sync.Mutex
 }
 
-func buildMCPGatewayEnsureLaunchResponse(launchedServer *mcpGatewayLaunchedServer, reused bool) MCPGatewayEnsureLaunchResponse {
-	return MCPGatewayEnsureLaunchResponse{
+func buildMCPGatewayEnsureLaunchResponse(launchedServer *mcpGatewayLaunchedServer, reused bool) controlapipkg.MCPGatewayEnsureLaunchResponse {
+	return controlapipkg.MCPGatewayEnsureLaunchResponse{
 		ServerID:                   launchedServer.ServerID,
 		Transport:                  launchedServer.Transport,
 		LaunchState:                launchedServer.LaunchState,
@@ -65,8 +66,8 @@ func buildMCPGatewayEnsureLaunchResponse(launchedServer *mcpGatewayLaunchedServe
 	}
 }
 
-func buildMCPGatewayStopResponse(launchedServer *mcpGatewayLaunchedServer, stopped bool, serverID string) MCPGatewayStopResponse {
-	stopResponse := MCPGatewayStopResponse{
+func buildMCPGatewayStopResponse(launchedServer *mcpGatewayLaunchedServer, stopped bool, serverID string) controlapipkg.MCPGatewayStopResponse {
+	stopResponse := controlapipkg.MCPGatewayStopResponse{
 		ServerID: strings.TrimSpace(serverID),
 		Stopped:  stopped,
 	}
@@ -80,8 +81,8 @@ func buildMCPGatewayStopResponse(launchedServer *mcpGatewayLaunchedServer, stopp
 	return stopResponse
 }
 
-func buildMCPGatewayServerRuntimeView(serverManifest mcpGatewayServerManifest, launchedServer *mcpGatewayLaunchedServer) MCPGatewayServerRuntimeView {
-	runtimeView := MCPGatewayServerRuntimeView{
+func buildMCPGatewayServerRuntimeView(serverManifest mcpGatewayServerManifest, launchedServer *mcpGatewayLaunchedServer) controlapipkg.MCPGatewayServerRuntimeView {
+	runtimeView := controlapipkg.MCPGatewayServerRuntimeView{
 		ServerID:        serverManifest.ServerID,
 		DeclaredEnabled: serverManifest.Enabled,
 		Transport:       serverManifest.Transport,
@@ -247,22 +248,22 @@ func (server *Server) cleanupDeadMCPGatewayServerIfNeeded(serverID string) {
 	closeMCPGatewayLaunchedServerPipes(launchedServer)
 }
 
-func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenClaims capabilityToken, ensureLaunchRequest MCPGatewayEnsureLaunchRequest) (MCPGatewayEnsureLaunchResponse, CapabilityResponse, bool) {
+func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenClaims capabilityToken, ensureLaunchRequest controlapipkg.MCPGatewayEnsureLaunchRequest) (controlapipkg.MCPGatewayEnsureLaunchResponse, controlapipkg.CapabilityResponse, bool) {
 	serverManifest, err := server.resolveMCPGatewayServerManifest(ensureLaunchRequest.ServerID)
 	if err != nil {
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    strings.TrimSpace(ensureLaunchRequest.ServerID),
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: err.Error(),
 			DenialCode:   mcpGatewayDecisionDenialCode(err),
 		}, false
 	}
 	if serverManifest.Transport != "stdio" {
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "only stdio MCP transports are supported in the current broker launch slice",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 
@@ -273,14 +274,14 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 		switch launchedServer.LaunchState {
 		case mcpGatewayServerStateLaunched:
 			server.mu.Unlock()
-			return buildMCPGatewayEnsureLaunchResponse(launchedServer, true), CapabilityResponse{}, true
+			return buildMCPGatewayEnsureLaunchResponse(launchedServer, true), controlapipkg.CapabilityResponse{}, true
 		case mcpGatewayServerStateStarting:
 			server.mu.Unlock()
-			return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+			return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 				RequestID:    serverManifest.ServerID,
-				Status:       ResponseStatusError,
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: "mcp gateway server launch is already in progress",
-				DenialCode:   DenialCodeExecutionFailed,
+				DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			}, false
 		}
 	}
@@ -288,11 +289,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 	launchAttemptID, err := randomHex(12)
 	if err != nil {
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to allocate mcp gateway launch attempt id",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 	startingRecord := mcpGatewayLaunchedServer{
@@ -316,11 +317,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 				delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 			}
 			server.mu.Unlock()
-			return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+			return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 				RequestID:    serverManifest.ServerID,
-				Status:       ResponseStatusError,
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: "failed to resolve mcp gateway launch command",
-				DenialCode:   DenialCodeExecutionFailed,
+				DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 				Redacted:     true,
 			}, false
 		}
@@ -335,11 +336,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 			delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 		}
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to resolve mcp gateway launch environment",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		}, false
 	}
@@ -351,11 +352,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 			delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 		}
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to create mcp gateway log directory",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 	stderrPath := filepath.Join(server.repoRoot, "runtime", "logs", "mcp_gateway", serverManifest.ServerID+".stderr.log")
@@ -367,11 +368,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 			delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 		}
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to open mcp gateway stderr log",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 
@@ -384,11 +385,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 			delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 		}
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to create mcp gateway stdout pipe",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 	childReadStdin, parentWriteStdin, err := os.Pipe()
@@ -402,11 +403,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 			delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 		}
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to create mcp gateway stdin pipe",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 
@@ -434,11 +435,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 			delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 		}
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to launch MCP gateway server",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		}, false
 	}
@@ -470,11 +471,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 			delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 		}
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to detach MCP gateway process handle",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 
@@ -487,11 +488,11 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 			delete(server.mcpGatewayLaunchedServers, serverManifest.ServerID)
 		}
 		server.mu.Unlock()
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 			Redacted:     true,
 		}, false
 	}
@@ -502,20 +503,20 @@ func (server *Server) ensureMCPGatewayServerLaunched(ctx context.Context, tokenC
 		server.mu.Unlock()
 		closeMCPGatewayLaunchedServerPipes(&launchedServer)
 		killMCPGatewayProcessByPID(launchedServer.PID)
-		return MCPGatewayEnsureLaunchResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayEnsureLaunchResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    serverManifest.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "mcp gateway launch state changed unexpectedly",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		}, false
 	}
 	server.mcpGatewayLaunchedServers[serverManifest.ServerID] = &launchedServer
 	server.mu.Unlock()
 
-	return buildMCPGatewayEnsureLaunchResponse(&launchedServer, false), CapabilityResponse{}, true
+	return buildMCPGatewayEnsureLaunchResponse(&launchedServer, false), controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) stopMCPGatewayServer(_ context.Context, tokenClaims capabilityToken, stopRequest MCPGatewayStopRequest) (MCPGatewayStopResponse, CapabilityResponse, bool) {
+func (server *Server) stopMCPGatewayServer(_ context.Context, tokenClaims capabilityToken, stopRequest controlapipkg.MCPGatewayStopRequest) (controlapipkg.MCPGatewayStopResponse, controlapipkg.CapabilityResponse, bool) {
 	serverID := strings.TrimSpace(stopRequest.ServerID)
 	server.cleanupDeadMCPGatewayServerIfNeeded(serverID)
 
@@ -527,7 +528,7 @@ func (server *Server) stopMCPGatewayServer(_ context.Context, tokenClaims capabi
 	server.mu.Unlock()
 
 	if !found || launchedServer == nil {
-		return buildMCPGatewayStopResponse(nil, false, serverID), CapabilityResponse{}, true
+		return buildMCPGatewayStopResponse(nil, false, serverID), controlapipkg.CapabilityResponse{}, true
 	}
 
 	launchedServer.ioMu.Lock()
@@ -536,19 +537,19 @@ func (server *Server) stopMCPGatewayServer(_ context.Context, tokenClaims capabi
 	launchedServer.ioMu.Unlock()
 
 	if err := server.logEvent("mcp_gateway.server_stopped", tokenClaims.ControlSessionID, buildMCPGatewayServerStoppedAuditData(tokenClaims, launchedServer)); err != nil {
-		return MCPGatewayStopResponse{}, CapabilityResponse{
+		return controlapipkg.MCPGatewayStopResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:    launchedServer.ServerID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 			Redacted:     true,
 		}, false
 	}
 
-	return buildMCPGatewayStopResponse(launchedServer, true, serverID), CapabilityResponse{}, true
+	return buildMCPGatewayStopResponse(launchedServer, true, serverID), controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) buildMCPGatewayServerStatusResponse() MCPGatewayServerStatusResponse {
+func (server *Server) buildMCPGatewayServerStatusResponse() controlapipkg.MCPGatewayServerStatusResponse {
 	policyRuntime := server.currentPolicyRuntime()
 	serverIDs := make([]string, 0, len(policyRuntime.mcpGatewayManifests))
 	for serverID := range policyRuntime.mcpGatewayManifests {
@@ -562,8 +563,8 @@ func (server *Server) buildMCPGatewayServerStatusResponse() MCPGatewayServerStat
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
-	response := MCPGatewayServerStatusResponse{
-		Servers: make([]MCPGatewayServerRuntimeView, 0, len(serverIDs)),
+	response := controlapipkg.MCPGatewayServerStatusResponse{
+		Servers: make([]controlapipkg.MCPGatewayServerRuntimeView, 0, len(serverIDs)),
 	}
 	for _, serverID := range serverIDs {
 		serverManifest := policyRuntime.mcpGatewayManifests[serverID]

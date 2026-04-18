@@ -1,6 +1,7 @@
 package loopgate
 
 import (
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"sort"
 	"strings"
@@ -26,7 +27,7 @@ func (server *Server) handleControlApprovals(writer http.ResponseWriter, request
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	approvalSummaries := make([]OperatorApprovalSummary, 0, len(server.approvalState.records))
+	approvalSummaries := make([]controlapipkg.OperatorApprovalSummary, 0, len(server.approvalState.records))
 	for approvalID, pendingApproval := range server.approvalState.records {
 		if pendingApproval.State != approvalStatePending {
 			continue
@@ -42,7 +43,7 @@ func (server *Server) handleControlApprovals(writer http.ResponseWriter, request
 	sort.Slice(approvalSummaries, func(leftIndex int, rightIndex int) bool {
 		return approvalSummaries[leftIndex].ApprovalRequestID < approvalSummaries[rightIndex].ApprovalRequestID
 	})
-	server.writeJSON(writer, http.StatusOK, OperatorApprovalsResponse{Approvals: approvalSummaries})
+	server.writeJSON(writer, http.StatusOK, controlapipkg.OperatorApprovalsResponse{Approvals: approvalSummaries})
 }
 
 func (server *Server) handleControlApprovalDecision(writer http.ResponseWriter, request *http.Request) {
@@ -62,10 +63,10 @@ func (server *Server) handleControlApprovalDecision(writer http.ResponseWriter, 
 	approvalID := strings.TrimPrefix(request.URL.Path, "/v1/control/approvals/")
 	approvalID = strings.TrimSuffix(approvalID, "/decision")
 	if strings.TrimSpace(approvalID) == "" || strings.Contains(approvalID, "/") {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "invalid approval id",
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
@@ -76,20 +77,20 @@ func (server *Server) handleControlApprovalDecision(writer http.ResponseWriter, 
 		return
 	}
 
-	var decisionRequest ApprovalDecisionRequest
+	var decisionRequest controlapipkg.ApprovalDecisionRequest
 	if err := decodeJSONBytes(requestBodyBytes, &decisionRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := decisionRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
@@ -106,11 +107,11 @@ func (server *Server) handleControlApprovalDecision(writer http.ResponseWriter, 
 		pendingApproval, denialResponse, ok := server.validatePendingApprovalDecisionForOperator(operatorSession, approvalID, decisionRequest)
 		if !ok {
 			if err := server.auditApprovalDecisionDenial(operatorSession, approvalID, pendingApproval, denialResponse); err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+				server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 					RequestID:         approvalID,
-					Status:            ResponseStatusError,
+					Status:            controlapipkg.ResponseStatusError,
 					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
+					DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 					ApprovalRequestID: approvalID,
 				})
 				return
@@ -124,11 +125,11 @@ func (server *Server) handleControlApprovalDecision(writer http.ResponseWriter, 
 		}
 		auditEventHash, err := server.commitApprovalGrantConsumed(approvalID, decisionRequest.DecisionNonce, decisionRequest.Reason)
 		if err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalID,
 			})
 			return
@@ -142,7 +143,7 @@ func (server *Server) handleControlApprovalDecision(writer http.ResponseWriter, 
 		response.ApprovalRequestID = approvalID
 		server.markApprovalExecutionResult(approvalID, response.Status)
 		server.emitUIApprovalResolved(pendingApproval, approvalID, "approved", response.Status)
-		server.writeJSON(writer, httpStatusForResponse(response), OperatorApprovalDecisionResponse{
+		server.writeJSON(writer, httpStatusForResponse(response), controlapipkg.OperatorApprovalDecisionResponse{
 			CapabilityResponse: response,
 			AuditEventHash:     auditEventHash,
 		})
@@ -152,11 +153,11 @@ func (server *Server) handleControlApprovalDecision(writer http.ResponseWriter, 
 	pendingApproval, denialResponse, auditEventHash, ok := server.validateAndRecordOperatorApprovalDecision(operatorSession, approvalID, decisionRequest)
 	if !ok {
 		if err := server.auditApprovalDecisionDenial(operatorSession, approvalID, pendingApproval, denialResponse); err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 				RequestID:         approvalID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalID,
 			})
 			return
@@ -164,21 +165,21 @@ func (server *Server) handleControlApprovalDecision(writer http.ResponseWriter, 
 		server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
-	server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
-	server.writeJSON(writer, http.StatusOK, OperatorApprovalDecisionResponse{
-		CapabilityResponse: CapabilityResponse{
+	server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", controlapipkg.ResponseStatusDenied)
+	server.writeJSON(writer, http.StatusOK, controlapipkg.OperatorApprovalDecisionResponse{
+		CapabilityResponse: controlapipkg.CapabilityResponse{
 			RequestID:         pendingApproval.Request.RequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval denied",
-			DenialCode:        DenialCodeApprovalDenied,
+			DenialCode:        controlapipkg.DenialCodeApprovalDenied,
 			ApprovalRequestID: approvalID,
 		},
 		AuditEventHash: auditEventHash,
 	})
 }
 
-func operatorApprovalSummaryFromPending(pendingApproval pendingApproval) OperatorApprovalSummary {
-	return OperatorApprovalSummary{
+func operatorApprovalSummaryFromPending(pendingApproval pendingApproval) controlapipkg.OperatorApprovalSummary {
+	return controlapipkg.OperatorApprovalSummary{
 		UIApprovalSummary:      uiApprovalSummaryFromPending(pendingApproval),
 		DecisionNonce:          pendingApproval.DecisionNonce,
 		ApprovalManifestSHA256: pendingApproval.ApprovalManifestSHA256,

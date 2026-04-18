@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 )
@@ -64,20 +65,20 @@ func (server *Server) handleMCPGatewayDecision(writer http.ResponseWriter, reque
 		return
 	}
 
-	var decisionRequest MCPGatewayDecisionRequest
+	var decisionRequest controlapipkg.MCPGatewayDecisionRequest
 	if err := decodeJSONBytes(requestBodyBytes, &decisionRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
 		return
 	}
 	if strings.TrimSpace(decisionRequest.ServerID) == "" || strings.TrimSpace(decisionRequest.ToolName) == "" {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: "server_id and tool_name are required",
 			Redacted:     true,
 		})
@@ -105,20 +106,20 @@ func (server *Server) handleMCPGatewayEnsureLaunched(writer http.ResponseWriter,
 		return
 	}
 
-	var ensureLaunchRequest MCPGatewayEnsureLaunchRequest
+	var ensureLaunchRequest controlapipkg.MCPGatewayEnsureLaunchRequest
 	if err := decodeJSONBytes(requestBodyBytes, &ensureLaunchRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
 		return
 	}
 	if err := ensureLaunchRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
@@ -151,20 +152,20 @@ func (server *Server) handleMCPGatewayServerStop(writer http.ResponseWriter, req
 		return
 	}
 
-	var stopRequest MCPGatewayStopRequest
+	var stopRequest controlapipkg.MCPGatewayStopRequest
 	if err := decodeJSONBytes(requestBodyBytes, &stopRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
 		return
 	}
 	if err := stopRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
@@ -197,11 +198,11 @@ func (server *Server) handleMCPGatewayInvocationValidate(writer http.ResponseWri
 		return
 	}
 
-	var invocationRequest MCPGatewayInvocationRequest
+	var invocationRequest controlapipkg.MCPGatewayInvocationRequest
 	if err := decodeJSONBytes(requestBodyBytes, &invocationRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
@@ -210,18 +211,18 @@ func (server *Server) handleMCPGatewayInvocationValidate(writer http.ResponseWri
 
 	validationResponse, err := server.buildMCPGatewayInvocationValidationResponse(invocationRequest)
 	if err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
 		return
 	}
 	if err := server.logEvent("mcp_gateway.invocation_checked", tokenClaims.ControlSessionID, buildMCPGatewayInvocationAuditData(tokenClaims, validationResponse)); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialCode:   DenialCodeAuditUnavailable,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 			DenialReason: "control-plane audit is unavailable",
 			Redacted:     true,
 		})
@@ -249,11 +250,11 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 		return
 	}
 
-	var invocationRequest MCPGatewayInvocationRequest
+	var invocationRequest controlapipkg.MCPGatewayInvocationRequest
 	if err := decodeJSONBytes(requestBodyBytes, &invocationRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
@@ -262,9 +263,9 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 
 	validationResponse, err := server.buildMCPGatewayInvocationValidationResponse(invocationRequest)
 	if err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
@@ -273,15 +274,15 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 
 	if validationResponse.Decision != "needs_approval" || !validationResponse.RequiresApproval {
 		if err := server.logEvent("mcp_gateway.invocation_checked", tokenClaims.ControlSessionID, buildMCPGatewayInvocationAuditData(tokenClaims, validationResponse)); err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				Status:       ResponseStatusError,
-				DenialCode:   DenialCodeAuditUnavailable,
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
+				DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 				DenialReason: "control-plane audit is unavailable",
 				Redacted:     true,
 			})
 			return
 		}
-		server.writeJSON(writer, http.StatusOK, MCPGatewayInvocationApprovalResponse{
+		server.writeJSON(writer, http.StatusOK, controlapipkg.MCPGatewayInvocationApprovalResponse{
 			ServerID:               validationResponse.ServerID,
 			ToolName:               validationResponse.ToolName,
 			Decision:               validationResponse.Decision,
@@ -298,8 +299,8 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 	switch {
 	case err == nil:
 	case errors.Is(err, errMCPGatewayApprovalStoreSaturated):
-		deniedResponse := buildDeniedMCPGatewayInvocationApprovalResponse(validationResponse, DenialCodeControlPlaneStateSaturated, "control-plane approval store is at capacity")
-		if auditErr := server.logEvent("mcp_gateway.invocation_checked", tokenClaims.ControlSessionID, buildMCPGatewayInvocationAuditData(tokenClaims, MCPGatewayInvocationValidationResponse{
+		deniedResponse := buildDeniedMCPGatewayInvocationApprovalResponse(validationResponse, controlapipkg.DenialCodeControlPlaneStateSaturated, "control-plane approval store is at capacity")
+		if auditErr := server.logEvent("mcp_gateway.invocation_checked", tokenClaims.ControlSessionID, buildMCPGatewayInvocationAuditData(tokenClaims, controlapipkg.MCPGatewayInvocationValidationResponse{
 			ServerID:               deniedResponse.ServerID,
 			ToolName:               deniedResponse.ToolName,
 			Decision:               deniedResponse.Decision,
@@ -309,9 +310,9 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 			DenialCode:             deniedResponse.DenialCode,
 			DenialReason:           deniedResponse.DenialReason,
 		})); auditErr != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				Status:       ResponseStatusError,
-				DenialCode:   DenialCodeAuditUnavailable,
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
+				DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 				DenialReason: "control-plane audit is unavailable",
 				Redacted:     true,
 			})
@@ -320,8 +321,8 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 		server.writeJSON(writer, http.StatusOK, deniedResponse)
 		return
 	case errors.Is(err, errMCPGatewayApprovalSessionLimitReached):
-		deniedResponse := buildDeniedMCPGatewayInvocationApprovalResponse(validationResponse, DenialCodeMCPGatewayApprovalLimit, "pending approval limit reached for control session")
-		if auditErr := server.logEvent("mcp_gateway.invocation_checked", tokenClaims.ControlSessionID, buildMCPGatewayInvocationAuditData(tokenClaims, MCPGatewayInvocationValidationResponse{
+		deniedResponse := buildDeniedMCPGatewayInvocationApprovalResponse(validationResponse, controlapipkg.DenialCodeMCPGatewayApprovalLimit, "pending approval limit reached for control session")
+		if auditErr := server.logEvent("mcp_gateway.invocation_checked", tokenClaims.ControlSessionID, buildMCPGatewayInvocationAuditData(tokenClaims, controlapipkg.MCPGatewayInvocationValidationResponse{
 			ServerID:               deniedResponse.ServerID,
 			ToolName:               deniedResponse.ToolName,
 			Decision:               deniedResponse.Decision,
@@ -331,9 +332,9 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 			DenialCode:             deniedResponse.DenialCode,
 			DenialReason:           deniedResponse.DenialReason,
 		})); auditErr != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				Status:       ResponseStatusError,
-				DenialCode:   DenialCodeAuditUnavailable,
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
+				DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 				DenialReason: "control-plane audit is unavailable",
 				Redacted:     true,
 			})
@@ -342,9 +343,9 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 		server.writeJSON(writer, http.StatusOK, deniedResponse)
 		return
 	default:
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
-			DenialCode:   DenialCodeExecutionFailed,
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			DenialReason: "failed to prepare MCP gateway approval",
 			Redacted:     true,
 		})
@@ -354,9 +355,9 @@ func (server *Server) handleMCPGatewayInvocationRequestApproval(writer http.Resp
 	if createdApprovalRequest {
 		if err := server.logEvent("approval.created", tokenClaims.ControlSessionID, buildMCPGatewayApprovalCreatedAuditData(approvalRequest)); err != nil {
 			server.rollbackMCPGatewayApprovalRequestAfterAuditFailure(approvalRequest)
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-				Status:       ResponseStatusError,
-				DenialCode:   DenialCodeAuditUnavailable,
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
+				DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 				DenialReason: "control-plane audit is unavailable",
 				Redacted:     true,
 			})
@@ -385,20 +386,20 @@ func (server *Server) handleMCPGatewayInvocationDecideApproval(writer http.Respo
 		return
 	}
 
-	var decisionRequest MCPGatewayApprovalDecisionRequest
+	var decisionRequest controlapipkg.MCPGatewayApprovalDecisionRequest
 	if err := decodeJSONBytes(requestBodyBytes, &decisionRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
 		return
 	}
 	if err := decisionRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
@@ -407,14 +408,14 @@ func (server *Server) handleMCPGatewayInvocationDecideApproval(writer http.Respo
 
 	approvalRequest, denialResponse, resolved := server.validateAndRecordMCPGatewayApprovalDecision(tokenClaims, decisionRequest)
 	if !resolved {
-		if strings.TrimSpace(denialResponse.DenialCode) != "" && denialResponse.DenialCode != DenialCodeAuditUnavailable {
+		if strings.TrimSpace(denialResponse.DenialCode) != "" && denialResponse.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 			decisionAuditData := buildMCPGatewayApprovalDeniedAuditData(approvalRequest, denialResponse.DenialCode, denialResponse.DenialReason)
 			if err := server.logEvent("approval.denied", tokenClaims.ControlSessionID, decisionAuditData); err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+				server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 					RequestID:         strings.TrimSpace(decisionRequest.ApprovalRequestID),
-					Status:            ResponseStatusError,
+					Status:            controlapipkg.ResponseStatusError,
 					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
+					DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 					ApprovalRequestID: strings.TrimSpace(decisionRequest.ApprovalRequestID),
 					Redacted:          true,
 				})
@@ -446,20 +447,20 @@ func (server *Server) handleMCPGatewayInvocationValidateExecution(writer http.Re
 		return
 	}
 
-	var executionRequest MCPGatewayExecutionRequest
+	var executionRequest controlapipkg.MCPGatewayExecutionRequest
 	if err := decodeJSONBytes(requestBodyBytes, &executionRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
 		return
 	}
 	if err := executionRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
@@ -472,11 +473,11 @@ func (server *Server) handleMCPGatewayInvocationValidateExecution(writer http.Re
 		return
 	}
 	if err := server.logEvent("mcp_gateway.execution_checked", tokenClaims.ControlSessionID, buildMCPGatewayExecutionAuditData(tokenClaims, validationResponse)); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 			RequestID:         validationResponse.ApprovalRequestID,
-			Status:            ResponseStatusError,
+			Status:            controlapipkg.ResponseStatusError,
 			DenialReason:      "control-plane audit is unavailable",
-			DenialCode:        DenialCodeAuditUnavailable,
+			DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 			ApprovalRequestID: validationResponse.ApprovalRequestID,
 			Redacted:          true,
 		})
@@ -504,20 +505,20 @@ func (server *Server) handleMCPGatewayInvocationExecute(writer http.ResponseWrit
 		return
 	}
 
-	var executionRequest MCPGatewayExecutionRequest
+	var executionRequest controlapipkg.MCPGatewayExecutionRequest
 	if err := decodeJSONBytes(requestBodyBytes, &executionRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})
 		return
 	}
 	if err := executionRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusDenied,
-			DenialCode:   DenialCodeMalformedRequest,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			DenialReason: err.Error(),
 			Redacted:     true,
 		})

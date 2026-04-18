@@ -3,6 +3,7 @@ package loopgate
 import (
 	"encoding/json"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 
@@ -102,7 +103,7 @@ func (server *Server) requireScopedCapability(writer http.ResponseWriter, tokenC
 	if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 		"capability":           requiredCapability,
 		"reason":               fmt.Sprintf("capability token scope denied %s", denialContext),
-		"denial_code":          DenialCodeCapabilityTokenScopeDenied,
+		"denial_code":          controlapipkg.DenialCodeCapabilityTokenScopeDenied,
 		"actor_label":          tokenClaims.ActorLabel,
 		"client_session_label": tokenClaims.ClientSessionLabel,
 		"control_session_id":   tokenClaims.ControlSessionID,
@@ -110,10 +111,10 @@ func (server *Server) requireScopedCapability(writer http.ResponseWriter, tokenC
 		server.writeJSON(writer, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
 		return false
 	}
-	server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-		Status:       ResponseStatusDenied,
+	server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+		Status:       controlapipkg.ResponseStatusDenied,
 		DenialReason: "capability token scope denied requested capability",
-		DenialCode:   DenialCodeCapabilityTokenScopeDenied,
+		DenialCode:   controlapipkg.DenialCodeCapabilityTokenScopeDenied,
 	})
 	return false
 }
@@ -142,7 +143,7 @@ func (server *Server) handleConfigPutPolicy(w http.ResponseWriter, tokenClaims c
 
 	server.storePolicyRuntime(reloadedPolicyRuntime)
 
-	server.writeJSON(w, http.StatusOK, ConfigPolicyReloadResponse{
+	server.writeJSON(w, http.StatusOK, controlapipkg.ConfigPolicyReloadResponse{
 		Status:               "ok",
 		PreviousPolicySHA256: currentPolicyRuntime.policyContentSHA256,
 		PolicySHA256:         reloadedPolicyRuntime.policyContentSHA256,

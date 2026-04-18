@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,7 +19,7 @@ func TestOpenSessionRejectedWhenExecutablePinMismatch(t *testing.T) {
 	client.ConfigureSession("test-actor", "test-session", []string{"fs_list"})
 	_, err := client.ensureCapabilityToken(context.Background())
 	var denied RequestDeniedError
-	if !errors.As(err, &denied) || denied.DenialCode != DenialCodeProcessBindingRejected {
+	if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeProcessBindingRejected {
 		t.Fatalf("expected process binding denial, got %v", err)
 	}
 }

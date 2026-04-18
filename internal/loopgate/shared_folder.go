@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,10 +33,10 @@ func (server *Server) handleSharedFolderStatus(writer http.ResponseWriter, reque
 
 	statusResponse, err := server.sharedFolderStatus()
 	if err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
@@ -63,10 +64,10 @@ func (server *Server) handleSharedFolderSync(writer http.ResponseWriter, request
 	if len(requestBodyBytes) > 0 {
 		var emptyRequest struct{}
 		if err := decodeJSONBytes(requestBodyBytes, &emptyRequest); err != nil {
-			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
-				DenialCode:   DenialCodeMalformedRequest,
+				DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			})
 			return
 		}
@@ -74,23 +75,23 @@ func (server *Server) handleSharedFolderSync(writer http.ResponseWriter, request
 
 	statusResponse, err := server.syncDefaultSharedFolder(tokenClaims)
 	if err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
 	server.writeJSON(writer, http.StatusOK, statusResponse)
 }
 
-func (server *Server) syncDefaultSharedFolder(tokenClaims capabilityToken) (SharedFolderStatusResponse, error) {
+func (server *Server) syncDefaultSharedFolder(tokenClaims capabilityToken) (controlapipkg.SharedFolderStatusResponse, error) {
 	preset, _ := folderAccessPresetByID(folderAccessSharedID)
 	status, err := server.syncFolderAccessPreset(preset, true, tokenClaims)
 	if err != nil {
-		return SharedFolderStatusResponse{}, err
+		return controlapipkg.SharedFolderStatusResponse{}, err
 	}
-	return SharedFolderStatusResponse{
+	return controlapipkg.SharedFolderStatusResponse{
 		Name:                status.Name,
 		HostPath:            status.HostPath,
 		SandboxRelativePath: status.SandboxRelativePath,
@@ -101,13 +102,13 @@ func (server *Server) syncDefaultSharedFolder(tokenClaims capabilityToken) (Shar
 	}, nil
 }
 
-func (server *Server) sharedFolderStatus() (SharedFolderStatusResponse, error) {
+func (server *Server) sharedFolderStatus() (controlapipkg.SharedFolderStatusResponse, error) {
 	preset, _ := folderAccessPresetByID(folderAccessSharedID)
 	status, err := server.folderAccessStatusForPreset(preset, true)
 	if err != nil {
-		return SharedFolderStatusResponse{}, err
+		return controlapipkg.SharedFolderStatusResponse{}, err
 	}
-	return SharedFolderStatusResponse{
+	return controlapipkg.SharedFolderStatusResponse{
 		Name:                status.Name,
 		HostPath:            status.HostPath,
 		SandboxRelativePath: status.SandboxRelativePath,

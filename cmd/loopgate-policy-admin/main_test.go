@@ -18,6 +18,7 @@ import (
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
 	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 )
 
 type testPolicySignerFixture struct {
@@ -395,7 +396,7 @@ func TestRunApprovalsList_PrintsPendingApprovals(t *testing.T) {
 
 	requestClient := loopgate.NewClient(socketPath)
 	requestClient.ConfigureSession("approval-requester", "approval-requester-session", []string{"fs_write"})
-	pendingResponse, err := requestClient.ExecuteCapability(context.Background(), loopgate.CapabilityRequest{
+	pendingResponse, err := requestClient.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-policy-admin-list",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -436,7 +437,7 @@ func TestRunApprovalsApprove_CompletesApprovalAndWritesAuditReason(t *testing.T)
 
 	requestClient := loopgate.NewClient(socketPath)
 	requestClient.ConfigureSession("approval-requester", "approval-requester-session", []string{"fs_write"})
-	pendingResponse, err := requestClient.ExecuteCapability(context.Background(), loopgate.CapabilityRequest{
+	pendingResponse, err := requestClient.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-policy-admin-approve",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -488,7 +489,7 @@ func TestRunApprovalsDeny_RecordsAuditReason(t *testing.T) {
 
 	requestClient := loopgate.NewClient(socketPath)
 	requestClient.ConfigureSession("approval-requester", "approval-requester-session", []string{"fs_write"})
-	pendingResponse, err := requestClient.ExecuteCapability(context.Background(), loopgate.CapabilityRequest{
+	pendingResponse, err := requestClient.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-policy-admin-deny",
 		Capability: "fs_write",
 		Arguments: map[string]string{

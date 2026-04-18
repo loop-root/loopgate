@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net"
 	"net/http"
 	"os"
@@ -78,7 +79,7 @@ type uiState struct {
 	mu sync.Mutex
 
 	sequence         uint64
-	events           []UIEventEnvelope
+	events           []controlapipkg.UIEventEnvelope
 	subscribers      map[int]uiEventSubscriber
 	nextSubscriberID int
 }
@@ -200,6 +201,8 @@ type replayControlState struct {
 	sessionReadCounts map[string][]time.Time
 	// hookPreValidateCounts tracks PreToolUse hook timestamps per peer UID under server.mu.
 	hookPreValidateCounts map[uint32][]time.Time
+	// hookPeerAuthFailureCounts tracks repeated hook peer-binding failures under server.mu.
+	hookPeerAuthFailureCounts map[string][]time.Time
 }
 
 type sessionControlState struct {
@@ -383,9 +386,14 @@ type Server struct {
 	sessionOpenMinInterval    time.Duration
 	maxActiveSessionsPerUID   int
 	expirySweepMaxInterval    time.Duration
+	fsReadRateLimit           int
 	hookPreValidateRateLimit  int
 	hookPreValidateRateWindow time.Duration
-	nextExpirySweepAt         time.Time
+	// hookPeerAuthFailureRateLimit throttles repeated hook auth failures so a
+	// local hammering loop cannot turn peer-binding rejects into an easy CPU path.
+	hookPeerAuthFailureRateLimit int
+	hookPeerAuthFailureWindow    time.Duration
+	nextExpirySweepAt            time.Time
 	// maxPendingApprovalsPerControlSession limits pending (state=pending) approvals per session.
 	maxPendingApprovalsPerControlSession int
 	maxSeenRequestReplayEntries          int
@@ -448,19 +456,21 @@ const (
 	// Replay-tracked request IDs, auth nonces, used single-use tokens, and terminal approval
 	// rows only need to outlive the authoritative session lifetime. Keeping them longer than the
 	// 1-hour control-session TTL inflates in-memory state without adding meaningful protection.
-	requestReplayWindow             = sessionTTL
-	requestSignatureSkew            = 2 * time.Minute
-	maxOpenSessionBodyBytes         = 16 * 1024
-	maxCapabilityBodyBytes          = 512 * 1024
-	maxApprovalBodyBytes            = 8 * 1024
-	maxHeaderBytes                  = 8 * 1024
-	defaultSessionOpenMinInterval   = 500 * time.Millisecond
-	defaultMaxActiveSessionsPerUID  = 8
-	defaultExpirySweepMaxInterval   = 250 * time.Millisecond
-	defaultFsReadRateLimit          = 60 // reads per minute per session
-	fsReadRateWindow                = 1 * time.Minute
-	defaultHookPreValidateRateLimit = 600 // hook checks per minute per peer UID
-	hookPreValidateRateWindow       = 1 * time.Minute
+	requestReplayWindow                 = sessionTTL
+	requestSignatureSkew                = 2 * time.Minute
+	maxOpenSessionBodyBytes             = 16 * 1024
+	maxCapabilityBodyBytes              = 512 * 1024
+	maxApprovalBodyBytes                = 8 * 1024
+	maxHeaderBytes                      = 8 * 1024
+	defaultSessionOpenMinInterval       = 500 * time.Millisecond
+	defaultMaxActiveSessionsPerUID      = 8
+	defaultExpirySweepMaxInterval       = 250 * time.Millisecond
+	defaultFsReadRateLimit              = 60 // reads per minute per session
+	fsReadRateWindow                    = 1 * time.Minute
+	defaultHookPreValidateRateLimit     = 600 // hook checks per minute per peer UID
+	hookPreValidateRateWindow           = 1 * time.Minute
+	defaultHookPeerAuthFailureRateLimit = 60
+	hookPeerAuthFailureRateWindow       = 1 * time.Minute
 	// In-memory bounds (DoS): single-session pending approvals, replay maps, and global tables.
 	defaultMaxPendingApprovalsPerControlSession = 64
 	defaultMaxSeenRequestReplayEntries          = 65536
@@ -567,17 +577,21 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 			tokenIndex: make(map[string]string),
 		},
 		replayState: replayControlState{
-			seenRequests:          make(map[string]seenRequest),
-			seenAuthNonces:        make(map[string]seenRequest),
-			usedTokens:            make(map[string]usedToken),
-			sessionReadCounts:     make(map[string][]time.Time),
-			hookPreValidateCounts: make(map[uint32][]time.Time),
+			seenRequests:              make(map[string]seenRequest),
+			seenAuthNonces:            make(map[string]seenRequest),
+			usedTokens:                make(map[string]usedToken),
+			sessionReadCounts:         make(map[string][]time.Time),
+			hookPreValidateCounts:     make(map[uint32][]time.Time),
+			hookPeerAuthFailureCounts: make(map[string][]time.Time),
 		},
 		sessionOpenMinInterval:               defaultSessionOpenMinInterval,
 		maxActiveSessionsPerUID:              defaultMaxActiveSessionsPerUID,
 		expirySweepMaxInterval:               defaultExpirySweepMaxInterval,
+		fsReadRateLimit:                      defaultFsReadRateLimit,
 		hookPreValidateRateLimit:             defaultHookPreValidateRateLimit,
 		hookPreValidateRateWindow:            hookPreValidateRateWindow,
+		hookPeerAuthFailureRateLimit:         defaultHookPeerAuthFailureRateLimit,
+		hookPeerAuthFailureWindow:            hookPeerAuthFailureRateWindow,
 		maxPendingApprovalsPerControlSession: defaultMaxPendingApprovalsPerControlSession,
 		maxSeenRequestReplayEntries:          defaultMaxSeenRequestReplayEntries,
 		maxAuthNonceReplayEntries:            defaultMaxAuthNonceReplayEntries,
@@ -801,7 +815,7 @@ func (server *Server) Serve(ctx context.Context) error {
 	return serveErr
 }
 
-func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims capabilityToken, capabilityRequest CapabilityRequest, allowApprovalCreation bool) CapabilityResponse {
+func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, allowApprovalCreation bool) controlapipkg.CapabilityResponse {
 	normalizedRequest, earlyResponse := server.prepareCapabilityRequestExecution(tokenClaims, capabilityRequest, allowApprovalCreation)
 	if earlyResponse != nil {
 		return *earlyResponse
@@ -835,11 +849,11 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 		"client_session_label": tokenClaims.ClientSessionLabel,
 		"control_session_id":   tokenClaims.ControlSessionID,
 	}); err != nil {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 		}
 	}
 
@@ -848,18 +862,18 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
 			"reason":               secrets.RedactText(policyDecision.Reason),
-			"denial_code":          DenialCodePolicyDenied,
+			"denial_code":          controlapipkg.DenialCodePolicyDenied,
 			"actor_label":          tokenClaims.ActorLabel,
 			"client_session_label": tokenClaims.ClientSessionLabel,
 			"control_session_id":   tokenClaims.ControlSessionID,
 		}); err != nil {
 			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 		}
-		deniedResponse := CapabilityResponse{
+		deniedResponse := controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: policyDecision.Reason,
-			DenialCode:   DenialCodePolicyDenied,
+			DenialCode:   controlapipkg.DenialCodePolicyDenied,
 		}
 		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
 		return deniedResponse
@@ -873,18 +887,18 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
 			"reason":               "capability requires approval and this route does not support approval creation",
-			"denial_code":          DenialCodeApprovalRequired,
+			"denial_code":          controlapipkg.DenialCodeApprovalRequired,
 			"actor_label":          tokenClaims.ActorLabel,
 			"client_session_label": tokenClaims.ClientSessionLabel,
 			"control_session_id":   tokenClaims.ControlSessionID,
 		}); err != nil {
 			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 		}
-		deniedResponse := CapabilityResponse{
+		deniedResponse := controlapipkg.CapabilityResponse{
 			RequestID:        capabilityRequest.RequestID,
-			Status:           ResponseStatusDenied,
+			Status:           controlapipkg.ResponseStatusDenied,
 			DenialReason:     "capability requires approval and this route does not support approval creation",
-			DenialCode:       DenialCodeApprovalRequired,
+			DenialCode:       controlapipkg.DenialCodeApprovalRequired,
 			ApprovalRequired: true,
 		}
 		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
@@ -908,7 +922,7 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 	return server.finalizeCapabilityExecution(effectiveTokenClaims, capabilityRequest, output)
 }
 
-func (server *Server) prepareCapabilityRequestExecution(tokenClaims capabilityToken, capabilityRequest CapabilityRequest, allowApprovalCreation bool) (CapabilityRequest, *CapabilityResponse) {
+func (server *Server) prepareCapabilityRequestExecution(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, allowApprovalCreation bool) (controlapipkg.CapabilityRequest, *controlapipkg.CapabilityResponse) {
 	if strings.TrimSpace(capabilityRequest.RequestID) == "" {
 		requestID, _ := randomHex(8)
 		capabilityRequest.RequestID = "req_" + requestID
@@ -920,11 +934,11 @@ func (server *Server) prepareCapabilityRequestExecution(tokenClaims capabilityTo
 	capabilityRequest.Actor = tokenClaims.ActorLabel
 	capabilityRequest.SessionID = tokenClaims.ControlSessionID
 	if err := capabilityRequest.Validate(); err != nil {
-		return capabilityRequest, &CapabilityResponse{
+		return capabilityRequest, &controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		}
 	}
 	if allowApprovalCreation {
@@ -935,14 +949,14 @@ func (server *Server) prepareCapabilityRequestExecution(tokenClaims capabilityTo
 	return capabilityRequest, nil
 }
 
-func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyRuntime, tokenClaims capabilityToken, capabilityRequest CapabilityRequest) (toolspkg.Tool, *CapabilityResponse) {
+func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyRuntime, tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) (toolspkg.Tool, *controlapipkg.CapabilityResponse) {
 	tool := policyRuntime.registry.Get(capabilityRequest.Capability)
 	if server.capabilityProhibitsRawSecretExport(tool, capabilityRequest.Capability) {
 		if err := server.logEvent("capability.denied", tokenClaims.ControlSessionID, map[string]interface{}{
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
 			"reason":               "raw secret export is prohibited",
-			"denial_code":          DenialCodeSecretExportProhibited,
+			"denial_code":          controlapipkg.DenialCodeSecretExportProhibited,
 			"actor_label":          tokenClaims.ActorLabel,
 			"client_session_label": tokenClaims.ClientSessionLabel,
 			"control_session_id":   tokenClaims.ControlSessionID,
@@ -950,11 +964,11 @@ func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyR
 			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 			return nil, &auditUnavailable
 		}
-		deniedResponse := CapabilityResponse{
+		deniedResponse := controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "raw secret export is prohibited",
-			DenialCode:   DenialCodeSecretExportProhibited,
+			DenialCode:   controlapipkg.DenialCodeSecretExportProhibited,
 			Redacted:     true,
 		}
 		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
@@ -966,7 +980,7 @@ func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyR
 				"request_id":           capabilityRequest.RequestID,
 				"capability":           capabilityRequest.Capability,
 				"reason":               "capability token scope denied requested capability",
-				"denial_code":          DenialCodeCapabilityTokenScopeDenied,
+				"denial_code":          controlapipkg.DenialCodeCapabilityTokenScopeDenied,
 				"actor_label":          tokenClaims.ActorLabel,
 				"client_session_label": tokenClaims.ClientSessionLabel,
 				"control_session_id":   tokenClaims.ControlSessionID,
@@ -974,11 +988,11 @@ func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyR
 				auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 				return nil, &auditUnavailable
 			}
-			deniedResponse := CapabilityResponse{
+			deniedResponse := controlapipkg.CapabilityResponse{
 				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusDenied,
+				Status:       controlapipkg.ResponseStatusDenied,
 				DenialReason: "capability token scope denied requested capability",
-				DenialCode:   DenialCodeCapabilityTokenScopeDenied,
+				DenialCode:   controlapipkg.DenialCodeCapabilityTokenScopeDenied,
 			}
 			server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
 			return nil, &deniedResponse
@@ -989,7 +1003,7 @@ func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyR
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
 			"reason":               "unknown capability",
-			"denial_code":          DenialCodeUnknownCapability,
+			"denial_code":          controlapipkg.DenialCodeUnknownCapability,
 			"actor_label":          tokenClaims.ActorLabel,
 			"client_session_label": tokenClaims.ClientSessionLabel,
 			"control_session_id":   tokenClaims.ControlSessionID,
@@ -997,11 +1011,11 @@ func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyR
 			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 			return nil, &auditUnavailable
 		}
-		deniedResponse := CapabilityResponse{
+		deniedResponse := controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "unknown capability",
-			DenialCode:   DenialCodeUnknownCapability,
+			DenialCode:   controlapipkg.DenialCodeUnknownCapability,
 		}
 		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
 		return nil, &deniedResponse
@@ -1011,7 +1025,7 @@ func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyR
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
 			"reason":               secrets.RedactText(err.Error()),
-			"denial_code":          DenialCodeInvalidCapabilityArguments,
+			"denial_code":          controlapipkg.DenialCodeInvalidCapabilityArguments,
 			"actor_label":          tokenClaims.ActorLabel,
 			"client_session_label": tokenClaims.ClientSessionLabel,
 			"control_session_id":   tokenClaims.ControlSessionID,
@@ -1019,11 +1033,11 @@ func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyR
 			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 			return nil, &auditUnavailable
 		}
-		errorResponse := CapabilityResponse{
+		errorResponse := controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeInvalidCapabilityArguments,
+			DenialCode:   controlapipkg.DenialCodeInvalidCapabilityArguments,
 			Redacted:     true,
 		}
 		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, errorResponse.DenialCode, errorResponse.DenialReason)
@@ -1032,7 +1046,7 @@ func (server *Server) resolveCapabilityExecutionTool(policyRuntime serverPolicyR
 	return tool, nil
 }
 
-func (server *Server) evaluateCapabilityPolicyDecision(policyRuntime serverPolicyRuntime, tool toolspkg.Tool, tokenClaims capabilityToken, capabilityRequest CapabilityRequest) (policypkg.CheckResult, policypkg.CheckResult, bool) {
+func (server *Server) evaluateCapabilityPolicyDecision(policyRuntime serverPolicyRuntime, tool toolspkg.Tool, tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) (policypkg.CheckResult, policypkg.CheckResult, bool) {
 	policyDecision := policyRuntime.checker.Check(tool)
 	if argumentValidator, ok := tool.(toolspkg.PolicyArgumentValidator); ok && policyDecision.Decision != policypkg.Deny {
 		if err := argumentValidator.ValidatePolicyArguments(capabilityRequest.Arguments); err != nil {
@@ -1057,24 +1071,24 @@ func (server *Server) evaluateCapabilityPolicyDecision(policyRuntime serverPolic
 	return originalPolicyDecision, policyDecision, lowRiskHostPlanAutoAllowed
 }
 
-func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityToken, capabilityRequest CapabilityRequest, policyDecision policypkg.CheckResult) CapabilityResponse {
+func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, policyDecision policypkg.CheckResult) controlapipkg.CapabilityResponse {
 	approvalID, err := randomHex(8)
 	if err != nil {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to create approval request",
-			DenialCode:   DenialCodeApprovalCreationFailed,
+			DenialCode:   controlapipkg.DenialCodeApprovalCreationFailed,
 		}
 	}
 
 	decisionNonce, err := randomHex(16)
 	if err != nil {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to create approval decision nonce",
-			DenialCode:   DenialCodeApprovalCreationFailed,
+			DenialCode:   controlapipkg.DenialCodeApprovalCreationFailed,
 		}
 	}
 
@@ -1083,11 +1097,11 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 	expiresAt := server.now().UTC().Add(approvalTTL)
 	manifestSHA256, bodySHA256, manifestErr := buildCapabilityApprovalManifest(capabilityRequest, expiresAt.UnixMilli())
 	if manifestErr != nil {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to compute approval manifest",
-			DenialCode:   DenialCodeApprovalCreationFailed,
+			DenialCode:   controlapipkg.DenialCodeApprovalCreationFailed,
 		}
 	}
 	server.mu.Lock()
@@ -1098,18 +1112,18 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
 			"reason":               "control-plane approval store is at capacity",
-			"denial_code":          DenialCodeControlPlaneStateSaturated,
+			"denial_code":          controlapipkg.DenialCodeControlPlaneStateSaturated,
 			"actor_label":          tokenClaims.ActorLabel,
 			"client_session_label": tokenClaims.ClientSessionLabel,
 			"control_session_id":   tokenClaims.ControlSessionID,
 		}); err != nil {
 			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 		}
-		deniedResponse := CapabilityResponse{
+		deniedResponse := controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "control-plane approval store is at capacity",
-			DenialCode:   DenialCodeControlPlaneStateSaturated,
+			DenialCode:   controlapipkg.DenialCodeControlPlaneStateSaturated,
 		}
 		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
 		return deniedResponse
@@ -1120,18 +1134,18 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 			"request_id":           capabilityRequest.RequestID,
 			"capability":           capabilityRequest.Capability,
 			"reason":               "pending approval limit reached for control session",
-			"denial_code":          DenialCodePendingApprovalLimitReached,
+			"denial_code":          controlapipkg.DenialCodePendingApprovalLimitReached,
 			"actor_label":          tokenClaims.ActorLabel,
 			"client_session_label": tokenClaims.ClientSessionLabel,
 			"control_session_id":   tokenClaims.ControlSessionID,
 		}); err != nil {
 			return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 		}
-		deniedResponse := CapabilityResponse{
+		deniedResponse := controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusDenied,
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "pending approval limit reached for control session",
-			DenialCode:   DenialCodePendingApprovalLimitReached,
+			DenialCode:   controlapipkg.DenialCodePendingApprovalLimitReached,
 		}
 		server.emitUIToolDenied(tokenClaims.ControlSessionID, capabilityRequest, deniedResponse.DenialCode, deniedResponse.DenialReason)
 		return deniedResponse
@@ -1179,11 +1193,11 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 	if err := server.logEvent("approval.created", tokenClaims.ControlSessionID, approvalCreatedAuditData); err != nil {
 		delete(server.approvalState.records, approvalID)
 		server.mu.Unlock()
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 		}
 	}
 	server.mu.Unlock()
@@ -1192,10 +1206,10 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 	metadata["approval_expires_at_utc"] = expiresAt.Format(time.RFC3339Nano)
 	metadata["approval_decision_nonce"] = decisionNonce
 	metadata["approval_manifest_sha256"] = manifestSHA256
-	pendingResponse := CapabilityResponse{
+	pendingResponse := controlapipkg.CapabilityResponse{
 		RequestID:              capabilityRequest.RequestID,
-		Status:                 ResponseStatusPendingApproval,
-		DenialCode:             DenialCodeApprovalRequired,
+		Status:                 controlapipkg.ResponseStatusPendingApproval,
+		DenialCode:             controlapipkg.DenialCodeApprovalRequired,
 		ApprovalRequired:       true,
 		ApprovalRequestID:      approvalID,
 		ApprovalManifestSHA256: manifestSHA256,
@@ -1207,7 +1221,7 @@ func (server *Server) createCapabilityApprovalResponse(tokenClaims capabilityTok
 	return pendingResponse
 }
 
-func (server *Server) prepareCapabilityExecution(tokenClaims capabilityToken, capabilityRequest CapabilityRequest, policyDecision policypkg.CheckResult, tool toolspkg.Tool) (capabilityToken, *CapabilityResponse) {
+func (server *Server) prepareCapabilityExecution(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, policyDecision policypkg.CheckResult, tool toolspkg.Tool) (capabilityToken, *controlapipkg.CapabilityResponse) {
 	effectiveTokenClaims := tokenClaims
 	if isHighRiskCapability(tool, policyDecision) && !tokenClaims.SingleUse {
 		effectiveTokenClaims = deriveExecutionToken(tokenClaims, capabilityRequest)
@@ -1236,7 +1250,7 @@ func (server *Server) prepareCapabilityExecution(tokenClaims capabilityToken, ca
 				"request_id":           capabilityRequest.RequestID,
 				"capability":           capabilityRequest.Capability,
 				"reason":               "fs_read rate limit exceeded",
-				"denial_code":          DenialCodeFsReadRateLimitExceeded,
+				"denial_code":          controlapipkg.DenialCodeFsReadRateLimitExceeded,
 				"actor_label":          effectiveTokenClaims.ActorLabel,
 				"client_session_label": effectiveTokenClaims.ClientSessionLabel,
 				"control_session_id":   effectiveTokenClaims.ControlSessionID,
@@ -1244,11 +1258,11 @@ func (server *Server) prepareCapabilityExecution(tokenClaims capabilityToken, ca
 				auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 				return effectiveTokenClaims, &auditUnavailable
 			}
-			deniedResponse := CapabilityResponse{
+			deniedResponse := controlapipkg.CapabilityResponse{
 				RequestID:    capabilityRequest.RequestID,
-				Status:       ResponseStatusDenied,
+				Status:       controlapipkg.ResponseStatusDenied,
 				DenialReason: "fs_read rate limit exceeded",
-				DenialCode:   DenialCodeFsReadRateLimitExceeded,
+				DenialCode:   controlapipkg.DenialCodeFsReadRateLimitExceeded,
 			}
 			return effectiveTokenClaims, &deniedResponse
 		}
@@ -1256,7 +1270,7 @@ func (server *Server) prepareCapabilityExecution(tokenClaims capabilityToken, ca
 	return effectiveTokenClaims, nil
 }
 
-func (server *Server) dispatchDirectCapabilityExecution(effectiveTokenClaims capabilityToken, capabilityRequest CapabilityRequest) (CapabilityResponse, bool) {
+func (server *Server) dispatchDirectCapabilityExecution(effectiveTokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) (controlapipkg.CapabilityResponse, bool) {
 	switch capabilityRequest.Capability {
 	case "host.folder.list":
 		return server.executeHostFolderListCapability(effectiveTokenClaims, capabilityRequest), true
@@ -1267,11 +1281,11 @@ func (server *Server) dispatchDirectCapabilityExecution(effectiveTokenClaims cap
 	case "host.plan.apply":
 		return server.executeHostPlanApplyCapability(effectiveTokenClaims, capabilityRequest), true
 	default:
-		return CapabilityResponse{}, false
+		return controlapipkg.CapabilityResponse{}, false
 	}
 }
 
-func (server *Server) executeCapabilityTool(ctx context.Context, tool toolspkg.Tool, effectiveTokenClaims capabilityToken, capabilityRequest CapabilityRequest) (string, *CapabilityResponse) {
+func (server *Server) executeCapabilityTool(ctx context.Context, tool toolspkg.Tool, effectiveTokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest) (string, *controlapipkg.CapabilityResponse) {
 	executionContext := ctx
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
@@ -1296,14 +1310,14 @@ func (server *Server) executeCapabilityTool(ctx context.Context, tool toolspkg.T
 			auditUnavailable := auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 			return "", &auditUnavailable
 		}
-		errorResponse := CapabilityResponse{
+		errorResponse := controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		}
-		server.emitUIEvent(effectiveTokenClaims.ControlSessionID, UIEventTypeWarning, UIEventWarning{
+		server.emitUIEvent(effectiveTokenClaims.ControlSessionID, controlapipkg.UIEventTypeWarning, controlapipkg.UIEventWarning{
 			Message: "capability execution failed: " + secrets.RedactText(err.Error()),
 		})
 		return "", &errorResponse
@@ -1311,7 +1325,7 @@ func (server *Server) executeCapabilityTool(ctx context.Context, tool toolspkg.T
 	return output, nil
 }
 
-func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilityToken, capabilityRequest CapabilityRequest, output string) CapabilityResponse {
+func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, output string) controlapipkg.CapabilityResponse {
 	var (
 		quarantineRef string
 		err           error
@@ -1325,11 +1339,11 @@ func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilit
 
 	structuredResult, fieldsMeta, classification, builtQuarantineRef, err := server.buildCapabilityResult(capabilityRequest, output, quarantineRef)
 	if err != nil {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		}
 	}
@@ -1344,11 +1358,11 @@ func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilit
 	}
 	classification, err = normalizeResultClassification(classification, quarantineRef)
 	if err != nil {
-		return CapabilityResponse{
+		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
-			Status:       ResponseStatusError,
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "capability result classification is invalid",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 			Redacted:     true,
 		}
 	}
@@ -1363,7 +1377,7 @@ func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilit
 	if err := server.logEvent("capability.executed", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
 		"request_id":            capabilityRequest.RequestID,
 		"capability":            capabilityRequest.Capability,
-		"status":                ResponseStatusSuccess,
+		"status":                controlapipkg.ResponseStatusSuccess,
 		"result_classification": classification,
 		"result_provenance":     resultMetadata,
 		"quarantine_ref":        quarantineRef,
@@ -1375,9 +1389,9 @@ func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilit
 	}); err != nil {
 		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 	}
-	successResponse := CapabilityResponse{
+	successResponse := controlapipkg.CapabilityResponse{
 		RequestID:        capabilityRequest.RequestID,
-		Status:           ResponseStatusSuccess,
+		Status:           controlapipkg.ResponseStatusSuccess,
 		StructuredResult: structuredResult,
 		FieldsMeta:       fieldsMeta,
 		Classification:   classification,
@@ -1390,7 +1404,7 @@ func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilit
 	return successResponse
 }
 
-func (server *Server) capabilityQuarantinePersistenceFailureResponse(effectiveTokenClaims capabilityToken, capabilityRequest CapabilityRequest, quarantineErr error) CapabilityResponse {
+func (server *Server) capabilityQuarantinePersistenceFailureResponse(effectiveTokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, quarantineErr error) controlapipkg.CapabilityResponse {
 	wrappedErr := fmt.Errorf("quarantine persistence failed: %w", quarantineErr)
 	if auditErr := server.logEvent("capability.error", effectiveTokenClaims.ControlSessionID, map[string]interface{}{
 		"request_id":           capabilityRequest.RequestID,
@@ -1405,23 +1419,23 @@ func (server *Server) capabilityQuarantinePersistenceFailureResponse(effectiveTo
 	}); auditErr != nil {
 		return auditUnavailableCapabilityResponse(capabilityRequest.RequestID)
 	}
-	server.emitUIEvent(effectiveTokenClaims.ControlSessionID, UIEventTypeWarning, UIEventWarning{
+	server.emitUIEvent(effectiveTokenClaims.ControlSessionID, controlapipkg.UIEventTypeWarning, controlapipkg.UIEventWarning{
 		Message: "capability quarantine persistence failed",
 	})
-	return CapabilityResponse{
+	return controlapipkg.CapabilityResponse{
 		RequestID:    capabilityRequest.RequestID,
-		Status:       ResponseStatusError,
+		Status:       controlapipkg.ResponseStatusError,
 		DenialReason: "capability quarantine persistence failed",
-		DenialCode:   DenialCodeExecutionFailed,
+		DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		Redacted:     true,
 	}
 }
 
-func (server *Server) capabilitySummaries() []CapabilitySummary {
+func (server *Server) capabilitySummaries() []controlapipkg.CapabilitySummary {
 	registeredTools := server.currentPolicyRuntime().registry.All()
-	capabilities := make([]CapabilitySummary, 0, len(registeredTools))
+	capabilities := make([]controlapipkg.CapabilitySummary, 0, len(registeredTools))
 	for _, registeredTool := range registeredTools {
-		capabilities = append(capabilities, CapabilitySummary{
+		capabilities = append(capabilities, controlapipkg.CapabilitySummary{
 			Name:        registeredTool.Name(),
 			Category:    registeredTool.Category(),
 			Operation:   registeredTool.Operation(),
@@ -1462,6 +1476,10 @@ func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
+	if server.fsReadRateLimit <= 0 {
+		return false
+	}
+
 	nowUTC := server.now().UTC()
 	cutoff := nowUTC.Add(-fsReadRateWindow)
 
@@ -1473,7 +1491,7 @@ func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
 			pruned = append(pruned, ts)
 		}
 	}
-	if len(pruned) >= defaultFsReadRateLimit {
+	if len(pruned) >= server.fsReadRateLimit {
 		server.replayState.sessionReadCounts[controlSessionID] = pruned
 		return true
 	}
@@ -1507,6 +1525,37 @@ func (server *Server) checkHookPreValidateRateLimit(peerUID uint32) bool {
 	return false
 }
 
+func (server *Server) checkHookPeerAuthFailureRateLimit(rateLimitKey string) bool {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	if server.hookPeerAuthFailureRateLimit <= 0 || server.hookPeerAuthFailureWindow <= 0 {
+		return false
+	}
+
+	trimmedRateLimitKey := strings.TrimSpace(rateLimitKey)
+	if trimmedRateLimitKey == "" {
+		trimmedRateLimitKey = "unknown"
+	}
+
+	nowUTC := server.now().UTC()
+	cutoff := nowUTC.Add(-server.hookPeerAuthFailureWindow)
+
+	timestamps := server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey]
+	pruned := make([]time.Time, 0, len(timestamps))
+	for _, timestamp := range timestamps {
+		if timestamp.After(cutoff) {
+			pruned = append(pruned, timestamp)
+		}
+	}
+	if len(pruned) >= server.hookPeerAuthFailureRateLimit {
+		server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey] = pruned
+		return true
+	}
+	server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey] = append(pruned, nowUTC)
+	return false
+}
+
 func randomHex(byteCount int) (string, error) {
 	randomBytes := make([]byte, byteCount)
 	if _, err := rand.Read(randomBytes); err != nil {
@@ -1531,11 +1580,11 @@ func quarantineHTTPStatus(quarantineErr error) int {
 func quarantineDenialCode(quarantineErr error) string {
 	switch {
 	case errors.Is(quarantineErr, errQuarantinePruneNotEligible):
-		return DenialCodeQuarantinePruneNotEligible
+		return controlapipkg.DenialCodeQuarantinePruneNotEligible
 	case errors.Is(quarantineErr, errQuarantinedSourceBytesRetained):
-		return DenialCodeSourceBytesUnavailable
+		return controlapipkg.DenialCodeSourceBytesUnavailable
 	default:
-		return DenialCodeExecutionFailed
+		return controlapipkg.DenialCodeExecutionFailed
 	}
 }
 

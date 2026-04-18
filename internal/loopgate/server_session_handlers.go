@@ -3,6 +3,7 @@ package loopgate
 import (
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 	"time"
@@ -16,12 +17,12 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		return
 	}
 
-	var openRequest OpenSessionRequest
+	var openRequest controlapipkg.OpenSessionRequest
 	if err := server.decodeJSONBody(writer, request, maxOpenSessionBodyBytes, &openRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
@@ -31,52 +32,52 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	normalizedCapabilities := normalizedCapabilityList(openRequest.RequestedCapabilities)
 	openRequest.RequestedCapabilities = normalizedCapabilities
 	if err := openRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := identifiers.ValidateSafeIdentifier("actor", defaultLabel(openRequest.Actor, "client")); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := identifiers.ValidateSafeIdentifier("session_id", defaultLabel(openRequest.SessionID, "session")); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	normalizedOperatorMounts, mountErr := normalizeOperatorMountPathsForSession(openRequest.Actor, openRequest.OperatorMountPaths)
 	if mountErr != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: mountErr.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	normalizedPrimaryOperatorMount, primaryMountErr := normalizePrimaryOperatorMountPathForSession(openRequest.Actor, openRequest.PrimaryOperatorMountPath, normalizedOperatorMounts)
 	if primaryMountErr != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: primaryMountErr.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if len(normalizedCapabilities) == 0 {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "requested_capabilities must not be empty",
-			DenialCode:   DenialCodeCapabilityScopeRequired,
+			DenialCode:   controlapipkg.DenialCodeCapabilityScopeRequired,
 		})
 		return
 	}
@@ -86,55 +87,55 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	// Unknown capabilities are rejected; the client cannot escalate beyond what the server offers.
 	grantedCapabilities, unknownCapabilities := server.filterGrantedCapabilities(normalizedCapabilities)
 	if len(unknownCapabilities) > 0 {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: fmt.Sprintf("unknown capabilities requested: %s", strings.Join(unknownCapabilities, ", ")),
-			DenialCode:   DenialCodeCapabilityTokenScopeDenied,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenScopeDenied,
 		})
 		return
 	}
 	if len(grantedCapabilities) == 0 {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "no requested capabilities are available",
-			DenialCode:   DenialCodeCapabilityScopeRequired,
+			DenialCode:   controlapipkg.DenialCodeCapabilityScopeRequired,
 		})
 		return
 	}
 
 	requestPeerIdentity, ok := peerIdentityFromContext(request.Context())
 	if !ok {
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusUnauthorized, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "missing authenticated peer identity",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenInvalid,
 		})
 		return
 	}
 	if len(normalizedOperatorMounts) > 0 && strings.TrimSpace(server.expectedClientPath) == "" {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "operator mount binding requires expected client executable pinning",
-			DenialCode:   DenialCodeControlSessionBindingInvalid,
+			DenialCode:   controlapipkg.DenialCodeControlSessionBindingInvalid,
 		})
 		return
 	}
 
 	if server.expectedClientPath != "" {
 		if server.resolveExePath == nil {
-			server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-				Status:       ResponseStatusDenied,
+			server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusDenied,
 				DenialReason: "cannot resolve connecting process executable",
-				DenialCode:   DenialCodeProcessBindingRejected,
+				DenialCode:   controlapipkg.DenialCodeProcessBindingRejected,
 			})
 			return
 		}
 		exePath, exeErr := server.resolveExePath(requestPeerIdentity.PID)
 		if exeErr != nil {
-			server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-				Status:       ResponseStatusDenied,
+			server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusDenied,
 				DenialReason: "cannot resolve connecting process executable",
-				DenialCode:   DenialCodeProcessBindingRejected,
+				DenialCode:   controlapipkg.DenialCodeProcessBindingRejected,
 			})
 			return
 		}
@@ -142,10 +143,10 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 			if server.reportSecurityWarning != nil {
 				server.reportSecurityWarning("session_client_executable_mismatch", errors.New("executable path mismatch"))
 			}
-			server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-				Status:       ResponseStatusDenied,
+			server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusDenied,
 				DenialReason: "connecting process does not match expected client executable",
-				DenialCode:   DenialCodeProcessBindingRejected,
+				DenialCode:   controlapipkg.DenialCodeProcessBindingRejected,
 			})
 			return
 		}
@@ -155,18 +156,18 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	authoritativeWorkspaceID := server.deriveWorkspaceIDFromRepoRoot()
 	requestedWorkspaceID := strings.TrimSpace(openRequest.WorkspaceID)
 	if requestedWorkspaceID != "" && requestedWorkspaceID != authoritativeWorkspaceID {
-		server.writeJSON(writer, http.StatusForbidden, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusForbidden, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "workspace binding does not match this Loopgate runtime",
-			DenialCode:   DenialCodeControlSessionBindingInvalid,
+			DenialCode:   controlapipkg.DenialCodeControlSessionBindingInvalid,
 		})
 		return
 	}
 	if err := server.retireDeadPeerSessionsForUID(requestPeerIdentity.UID); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane orphan session recovery failed",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
@@ -209,20 +210,20 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 
 	if server.maxTotalControlSessions > 0 && totalSessionCount >= server.maxTotalControlSessions {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusTooManyRequests, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusTooManyRequests, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "control-plane session store is at capacity",
-			DenialCode:   DenialCodeControlPlaneStateSaturated,
+			DenialCode:   controlapipkg.DenialCodeControlPlaneStateSaturated,
 		})
 		return
 	}
 
 	if server.maxActiveSessionsPerUID > 0 && activeSessionCountForUID >= server.maxActiveSessionsPerUID {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusTooManyRequests, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusTooManyRequests, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "active control session limit reached for this peer identity",
-			DenialCode:   DenialCodeSessionActiveLimitReached,
+			DenialCode:   controlapipkg.DenialCodeSessionActiveLimitReached,
 		})
 		return
 	}
@@ -232,10 +233,10 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 			elapsed := nowUTC.Sub(lastOpenedAtUTC)
 			if elapsed < server.sessionOpenMinInterval {
 				server.mu.Unlock()
-				server.writeJSON(writer, http.StatusTooManyRequests, CapabilityResponse{
-					Status:       ResponseStatusDenied,
+				server.writeJSON(writer, http.StatusTooManyRequests, controlapipkg.CapabilityResponse{
+					Status:       controlapipkg.ResponseStatusDenied,
 					DenialReason: fmt.Sprintf("session open rate limit exceeded; retry after %s", (server.sessionOpenMinInterval - elapsed).Round(time.Millisecond)),
-					DenialCode:   DenialCodeSessionOpenRateLimited,
+					DenialCode:   controlapipkg.DenialCodeSessionOpenRateLimited,
 				})
 				return
 			}
@@ -245,50 +246,50 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 	controlSessionID, err := randomHex(16)
 	if err != nil {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to create control session",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
 	capabilityTokenString, err := randomHex(24)
 	if err != nil {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to mint capability token",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
 	approvalTokenString, err := randomHex(24)
 	if err != nil {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to mint approval token",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
 	approvalTokenID, err := randomHex(8)
 	if err != nil {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to mint approval token identifier",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
 	tokenID, err := randomHex(8)
 	if err != nil {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusInternalServerError, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusInternalServerError, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "failed to mint token identifier",
-			DenialCode:   DenialCodeExecutionFailed,
+			DenialCode:   controlapipkg.DenialCodeExecutionFailed,
 		})
 		return
 	}
@@ -371,15 +372,15 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 			delete(server.sessionState.openByUID, requestPeerIdentity.UID)
 		}
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 		})
 		return
 	}
 
-	server.writeJSON(writer, http.StatusOK, OpenSessionResponse{
+	server.writeJSON(writer, http.StatusOK, controlapipkg.OpenSessionResponse{
 		ControlSessionID: controlSessionID,
 		CapabilityToken:  capabilityTokenString,
 		ApprovalToken:    approvalTokenString,
@@ -387,7 +388,7 @@ func (server *Server) handleSessionOpen(writer http.ResponseWriter, request *htt
 		ExpiresAtUTC:     expiresAt.Format(time.RFC3339Nano),
 	})
 	personaName, personaVersion := server.loadPersonaDisplaySummary()
-	server.emitUIEvent(controlSessionID, UIEventTypeSessionInfo, UIEventSessionInfo{
+	server.emitUIEvent(controlSessionID, controlapipkg.UIEventTypeSessionInfo, controlapipkg.UIEventSessionInfo{
 		ControlSessionID:   controlSessionID,
 		ActorLabel:         tokenClaims.ActorLabel,
 		ClientSessionLabel: tokenClaims.ClientSessionLabel,
@@ -417,10 +418,10 @@ func (server *Server) handleSessionClose(writer http.ResponseWriter, request *ht
 
 	if _, found := server.sessionState.sessions[tokenClaims.ControlSessionID]; !found {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusUnauthorized, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusUnauthorized, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "invalid capability token",
-			DenialCode:   DenialCodeCapabilityTokenInvalid,
+			DenialCode:   controlapipkg.DenialCodeCapabilityTokenInvalid,
 		})
 		return
 	}
@@ -434,10 +435,10 @@ func (server *Server) handleSessionClose(writer http.ResponseWriter, request *ht
 	}
 	if pendingApprovalCount > 0 {
 		server.mu.Unlock()
-		server.writeJSON(writer, http.StatusConflict, CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		server.writeJSON(writer, http.StatusConflict, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: fmt.Sprintf("control session has %d pending approvals; resolve or wait for them before closing the session", pendingApprovalCount),
-			DenialCode:   DenialCodeSessionCloseBlocked,
+			DenialCode:   controlapipkg.DenialCodeSessionCloseBlocked,
 		})
 		return
 	}
@@ -448,16 +449,16 @@ func (server *Server) handleSessionClose(writer http.ResponseWriter, request *ht
 		"closed_at_utc": closedAtUTC.Format(time.RFC3339Nano),
 	}
 	if err := server.retireControlSession(tokenClaims.ControlSessionID, closedAtUTC, "session.closed", auditData); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "control-plane audit is unavailable",
-			DenialCode:   DenialCodeAuditUnavailable,
+			DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 		})
 		return
 	}
 
-	server.writeJSON(writer, http.StatusOK, CloseSessionResponse{
-		Status:           ResponseStatusSuccess,
+	server.writeJSON(writer, http.StatusOK, controlapipkg.CloseSessionResponse{
+		Status:           controlapipkg.ResponseStatusSuccess,
 		ControlSessionID: tokenClaims.ControlSessionID,
 		ClosedAtUTC:      closedAtUTC.Format(time.RFC3339Nano),
 	})

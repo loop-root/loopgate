@@ -50,7 +50,7 @@ The TOCTOU fix at [request_auth.go:88-109](../../../../internal/loopgate/request
 
 **Audit ledger integrity** — The [ledger](../../../../internal/ledger/ledger.go) is append-only with hash-chain linking (`SHA-256(event sans event_hash)`), monotonic sequence enforcement, and file-level `flock` serialization. The segmented rotation in [segmented.go](../../../../internal/ledger/segmented.go) maintains manifest-level hash chains across segment boundaries.
 
-**Secret redaction** — [redact.go](../../../../internal/secrets/redact.go) covers bearer tokens, basic auth, JWT patterns, URL query parameters, and structured field keys. The `CapabilityRequest.MarshalJSON` defense-in-depth at [types.go:278-295](../../../../internal/loopgate/types.go#L278-L295) strips provider-echo metadata on serialization — nice touch.
+**Secret redaction** — [redact.go](../../../../internal/secrets/redact.go) covers bearer tokens, basic auth, JWT patterns, URL query parameters, and structured field keys. The `CapabilityRequest.MarshalJSON` defense-in-depth at [protocol/capability.go:32-50](../../../../internal/loopgate/protocol/capability.go#L32-L50) strips provider-echo metadata on serialization — nice touch.
 
 ### Security findings to address
 
@@ -115,7 +115,7 @@ Approval states (`pending`, `expired`, `granted`, `denied`, `consumed`) are stri
 
 ### Finding D-4: `normalizeCapabilityRequest` silently strips echoed fields (Low)
 
-[types.go:267-273](../../../../internal/loopgate/types.go#L267-L273) accepts optional echoed provider-native fields (`ToolName`, `tool_name`, `toolName`, `ToolUseID`, etc.) and silently strips them. This is documented as defense-in-depth, which is correct. But if a bug ever causes the wrong field to be used as the capability name, the silent stripping means you'll never see it in the audit trail.
+[protocol/capability.go:20-29](../../../../internal/loopgate/protocol/capability.go#L20-L29) accepts optional echoed provider-native fields (`ToolName`, `tool_name`, `toolName`, `ToolUseID`, etc.) and silently strips them. This is documented as defense-in-depth, which is correct. But if a bug ever causes the wrong field to be used as the capability name, the silent stripping means you'll never see it in the audit trail.
 
 ---
 

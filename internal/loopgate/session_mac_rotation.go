@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -187,14 +188,14 @@ func createPrivateStateFileExclusive(path string, contents []byte) error {
 	return nil
 }
 
-func (server *Server) buildSessionMACKeysResponse(controlSessionID string) SessionMACKeysResponse {
+func (server *Server) buildSessionMACKeysResponse(controlSessionID string) controlapipkg.SessionMACKeysResponse {
 	cur := server.currentSessionMACEpochIndex()
 	prevIdx, nextIdx := cur-1, cur+1
 
-	buildSlot := func(slot string, epochIndex int64) SessionMACKeySlotInfo {
+	buildSlot := func(slot string, epochIndex int64) controlapipkg.SessionMACKeySlotInfo {
 		validFrom, validUntil := sessionMACEpochWallRange(epochIndex)
 		mat := deriveEpochKeyMaterial(server.sessionMACRotationMaster, epochIndex)
-		return SessionMACKeySlotInfo{
+		return controlapipkg.SessionMACKeySlotInfo{
 			Slot:                 slot,
 			EpochIndex:           epochIndex,
 			ValidFromUTC:         validFrom.Format(time.RFC3339Nano),
@@ -203,7 +204,7 @@ func (server *Server) buildSessionMACKeysResponse(controlSessionID string) Sessi
 		}
 	}
 
-	return SessionMACKeysResponse{
+	return controlapipkg.SessionMACKeysResponse{
 		SchemaVersion:         sessionMACKeysWireSchemaV1,
 		RotationPeriodSeconds: int64(sessionMACEpochDuration / time.Second),
 		DerivedKeySchema:      sessionMACDerivedKeySchemaV1,
@@ -234,12 +235,12 @@ func requestSignatureBytesMatchMACKey(requestSignatureHex string, method string,
 // verifySignedRequestAgainstRotatingSessionMAC tries HMAC keys derived from previous, current, and next
 // 12-hour epochs so clients can cross rotation boundaries without immediately refreshing session_mac_key.
 // boundControlSessionID must match X-Loopgate-Control-Session and is used for both derivation and signing_payload.
-func (server *Server) verifySignedRequestAgainstRotatingSessionMAC(request *http.Request, requestBodyBytes []byte, headers signedControlPlaneHeaders, sessionMACRotationMaster []byte) (CapabilityResponse, bool) {
+func (server *Server) verifySignedRequestAgainstRotatingSessionMAC(request *http.Request, requestBodyBytes []byte, headers signedControlPlaneHeaders, sessionMACRotationMaster []byte) (controlapipkg.CapabilityResponse, bool) {
 	if len(sessionMACRotationMaster) == 0 {
-		return CapabilityResponse{
-			Status:       ResponseStatusDenied,
+		return controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "session mac rotation is not initialized",
-			DenialCode:   DenialCodeRequestSignatureInvalid,
+			DenialCode:   controlapipkg.DenialCodeRequestSignatureInvalid,
 		}, false
 	}
 	cur := server.currentSessionMACEpochIndex()
@@ -252,12 +253,12 @@ func (server *Server) verifySignedRequestAgainstRotatingSessionMAC(request *http
 			if nonceDenial := server.recordAuthNonce(headers.ControlSessionID, headers.RequestNonce); nonceDenial != nil {
 				return *nonceDenial, false
 			}
-			return CapabilityResponse{}, true
+			return controlapipkg.CapabilityResponse{}, true
 		}
 	}
-	return CapabilityResponse{
-		Status:       ResponseStatusDenied,
+	return controlapipkg.CapabilityResponse{
+		Status:       controlapipkg.ResponseStatusDenied,
 		DenialReason: "request signature is invalid",
-		DenialCode:   DenialCodeRequestSignatureInvalid,
+		DenialCode:   controlapipkg.DenialCodeRequestSignatureInvalid,
 	}, false
 }

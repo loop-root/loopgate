@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -100,9 +101,9 @@ func TestUpdateUIOperatorMountWriteGrantRevokesAndRenews(t *testing.T) {
 	server.sessionState.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
-	revokedResponse, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+	revokedResponse, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), controlapipkg.UIOperatorMountWriteGrantUpdateRequest{
 		RootPath: resolvedRepoRoot,
-		Action:   OperatorMountWriteGrantActionRevoke,
+		Action:   controlapipkg.OperatorMountWriteGrantActionRevoke,
 	})
 	if err != nil {
 		t.Fatalf("revoke write grant: %v", err)
@@ -117,10 +118,10 @@ func TestUpdateUIOperatorMountWriteGrantRevokesAndRenews(t *testing.T) {
 	server.sessionState.sessions[client.controlSessionID] = controlSession
 	server.mu.Unlock()
 
-	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), controlapipkg.UIOperatorMountWriteGrantUpdateRequest{
 		RootPath: resolvedRepoRoot,
-		Action:   OperatorMountWriteGrantActionRenew,
-	}); err == nil || !strings.Contains(err.Error(), DenialCodeApprovalRequired) {
+		Action:   controlapipkg.OperatorMountWriteGrantActionRenew,
+	}); err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeApprovalRequired) {
 		t.Fatalf("expected renew to require fresh approval, got %v", err)
 	}
 }
@@ -155,9 +156,9 @@ func TestUpdateUIOperatorMountWriteGrantFailsClosedWhenAuditUnavailable(t *testi
 		return appendAuditEvent(path, ledgerEvent)
 	}
 
-	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), UIOperatorMountWriteGrantUpdateRequest{
+	if _, err := client.UpdateUIOperatorMountWriteGrant(context.Background(), controlapipkg.UIOperatorMountWriteGrantUpdateRequest{
 		RootPath: resolvedRepoRoot,
-		Action:   OperatorMountWriteGrantActionRevoke,
+		Action:   controlapipkg.OperatorMountWriteGrantActionRevoke,
 	}); err == nil {
 		t.Fatal("expected revoke error when audit unavailable")
 	}
@@ -182,7 +183,7 @@ func TestApprovalDecisionFailsClosedWhenAuditUnavailable(t *testing.T) {
 		return appendAuditEvent(path, ledgerEvent)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-approval-deny",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -201,7 +202,7 @@ func TestApprovalDecisionFailsClosedWhenAuditUnavailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decide approval: %v", err)
 	}
-	if decisionResponse.Status != ResponseStatusError || decisionResponse.DenialCode != DenialCodeAuditUnavailable {
+	if decisionResponse.Status != controlapipkg.ResponseStatusError || decisionResponse.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected audit_unavailable approval failure, got %#v", decisionResponse)
 	}
 }
@@ -218,7 +219,7 @@ func TestUIApprovalDecisionFailsClosedWhenAuditUnavailable(t *testing.T) {
 		return appendAuditEvent(path, ledgerEvent)
 	}
 
-	response, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-ui-approval-deny",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -237,7 +238,7 @@ func TestUIApprovalDecisionFailsClosedWhenAuditUnavailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ui decide approval: %v", err)
 	}
-	if decisionResponse.Status != ResponseStatusError || decisionResponse.DenialCode != DenialCodeAuditUnavailable {
+	if decisionResponse.Status != controlapipkg.ResponseStatusError || decisionResponse.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected ui audit_unavailable approval failure, got %#v", decisionResponse)
 	}
 }
@@ -272,7 +273,7 @@ func TestUIApprovalsHideDecisionNonceAndAllowDecision(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	pendingResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	pendingResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-ui-approval",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -313,7 +314,7 @@ func TestUIApprovalsHideDecisionNonceAndAllowDecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ui approval decision: %v", err)
 	}
-	if approvedResponse.Status != ResponseStatusSuccess {
+	if approvedResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected successful ui approval resolution, got %#v", approvedResponse)
 	}
 }
@@ -322,7 +323,7 @@ func TestUIApprovalDecisionRejectsUnknownFields(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	pendingResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	pendingResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-ui-unknown",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -339,14 +340,14 @@ func TestUIApprovalDecisionRejectsUnknownFields(t *testing.T) {
 		t.Fatalf("approval token: %v", err)
 	}
 
-	var response CapabilityResponse
+	var response controlapipkg.CapabilityResponse
 	err = client.doJSON(context.Background(), http.MethodPost, "/v1/ui/approvals/"+pendingResponse.ApprovalRequestID+"/decision", "", map[string]interface{}{
 		"approved": true,
 		"extra":    "forbidden",
 	}, &response, map[string]string{
 		"X-Loopgate-Approval-Token": approvalToken,
 	})
-	if err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed-request denial for unknown field, got %v", err)
 	}
 }
@@ -355,7 +356,7 @@ func TestUIApprovalDecisionRejectsMissingApprovedField(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	pendingResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	pendingResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-ui-missing-approved",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -372,11 +373,11 @@ func TestUIApprovalDecisionRejectsMissingApprovedField(t *testing.T) {
 		t.Fatalf("approval token: %v", err)
 	}
 
-	var response CapabilityResponse
+	var response controlapipkg.CapabilityResponse
 	err = client.doJSON(context.Background(), http.MethodPost, "/v1/ui/approvals/"+pendingResponse.ApprovalRequestID+"/decision", "", map[string]interface{}{}, &response, map[string]string{
 		"X-Loopgate-Approval-Token": approvalToken,
 	})
-	if err == nil || !strings.Contains(err.Error(), DenialCodeMalformedRequest) {
+	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeMalformedRequest) {
 		t.Fatalf("expected malformed-request denial for missing approved field, got %v", err)
 	}
 }
@@ -398,7 +399,7 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 		t.Fatalf("ensure capability token: %v", err)
 	}
 
-	if _, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	if _, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-ui-fs-list",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -408,7 +409,7 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 		t.Fatalf("execute fs_list: %v", err)
 	}
 
-	pendingResponse, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	pendingResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-ui-pending",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -423,7 +424,7 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 		t.Fatalf("expected approval-required response, got %#v", pendingResponse)
 	}
 
-	if _, err := client.ExecuteCapability(context.Background(), CapabilityRequest{
+	if _, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-ui-audit-only",
 		Capability: "remote_fetch",
 	}); err != nil {
@@ -434,13 +435,13 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 	if len(replayedEvents) < 3 {
 		t.Fatalf("expected replayed ui events, got %#v", replayedEvents)
 	}
-	if !containsUIEventType(replayedEvents, UIEventTypeSessionInfo) {
+	if !containsUIEventType(replayedEvents, controlapipkg.UIEventTypeSessionInfo) {
 		t.Fatalf("expected session.info event, got %#v", replayedEvents)
 	}
-	if !containsUIEventType(replayedEvents, UIEventTypeToolResult) {
+	if !containsUIEventType(replayedEvents, controlapipkg.UIEventTypeToolResult) {
 		t.Fatalf("expected tool.result event, got %#v", replayedEvents)
 	}
-	if !containsUIEventType(replayedEvents, UIEventTypeApprovalPending) {
+	if !containsUIEventType(replayedEvents, controlapipkg.UIEventTypeApprovalPending) {
 		t.Fatalf("expected approval.pending event, got %#v", replayedEvents)
 	}
 	if containsUICapabilityEvent(replayedEvents, "remote_fetch") {
@@ -456,7 +457,7 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 	if len(recentEvents) != len(replayedEvents) {
 		t.Fatalf("expected recent ui events endpoint to mirror replay buffer, got %#v", recentEvents)
 	}
-	if !containsUIEventType(recentEvents, UIEventTypeApprovalPending) {
+	if !containsUIEventType(recentEvents, controlapipkg.UIEventTypeApprovalPending) {
 		t.Fatalf("expected approval.pending event in recent ui events, got %#v", recentEvents)
 	}
 }

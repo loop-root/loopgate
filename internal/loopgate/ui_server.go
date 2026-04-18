@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,7 +22,7 @@ const maxUIEventBuffer = 200
 type uiEventSubscriber struct {
 	controlSessionID string
 	id               int
-	events           chan UIEventEnvelope
+	events           chan controlapipkg.UIEventEnvelope
 }
 
 var errOperatorMountWriteGrantNotFound = errors.New("operator mount write grant not found")
@@ -53,7 +54,7 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 	server.pruneExpiredLocked()
 	nowUTC := server.now().UTC()
 	pendingCount := 0
-	writeGrants := make([]UIOperatorMountWriteGrant, 0)
+	writeGrants := make([]controlapipkg.UIOperatorMountWriteGrant, 0)
 	for _, pendingApproval := range server.approvalState.records {
 		if pendingApproval.ControlSessionID == tokenClaims.ControlSessionID && pendingApproval.State == approvalStatePending {
 			pendingCount++
@@ -64,7 +65,7 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 	}
 	server.mu.Unlock()
 
-	response := UIStatusResponse{
+	response := controlapipkg.UIStatusResponse{
 		Version:                  statusVersion,
 		PersonaName:              personaName,
 		PersonaVersion:           personaVersion,
@@ -78,7 +79,7 @@ func (server *Server) handleUIStatus(writer http.ResponseWriter, request *http.R
 		CapabilityCount:          len(tokenClaims.AllowedCapabilities),
 		ConnectionCount:          len(server.connectionStatuses()),
 		OperatorMountWriteGrants: writeGrants,
-		Policy: UIStatusPolicySummary{
+		Policy: controlapipkg.UIStatusPolicySummary{
 			ReadEnabled:           policyRuntime.policy.Tools.Filesystem.ReadEnabled,
 			WriteEnabled:          policyRuntime.policy.Tools.Filesystem.WriteEnabled,
 			WriteRequiresApproval: policyRuntime.policy.Tools.Filesystem.WriteRequiresApproval,
@@ -103,36 +104,36 @@ func (server *Server) handleUIOperatorMountWriteGrants(writer http.ResponseWrite
 			server.writeJSON(writer, signedRequestHTTPStatus(denialResponse.DenialCode), denialResponse)
 			return
 		}
-		var updateRequest UIOperatorMountWriteGrantUpdateRequest
+		var updateRequest controlapipkg.UIOperatorMountWriteGrantUpdateRequest
 		if err := decodeJSONBytes(requestBodyBytes, &updateRequest); err != nil {
-			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
-				DenialCode:   DenialCodeMalformedRequest,
+				DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			})
 			return
 		}
 		if err := updateRequest.Validate(); err != nil {
-			server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
-				DenialCode:   DenialCodeMalformedRequest,
+				DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 			})
 			return
 		}
 		statusResponse, err := server.updateOperatorMountWriteGrant(tokenClaims, updateRequest)
 		if err != nil {
 			statusCode := http.StatusServiceUnavailable
-			denialCode := DenialCodeExecutionFailed
+			denialCode := controlapipkg.DenialCodeExecutionFailed
 			if errors.Is(err, errOperatorMountWriteGrantNotFound) {
 				statusCode = http.StatusNotFound
-				denialCode = DenialCodeMalformedRequest
+				denialCode = controlapipkg.DenialCodeMalformedRequest
 			} else if errors.Is(err, errOperatorMountWriteGrantRenewalRequiresApproval) {
 				statusCode = http.StatusForbidden
-				denialCode = DenialCodeApprovalRequired
+				denialCode = controlapipkg.DenialCodeApprovalRequired
 			}
-			server.writeJSON(writer, statusCode, CapabilityResponse{
-				Status:       ResponseStatusError,
+			server.writeJSON(writer, statusCode, controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
 				DenialReason: err.Error(),
 				DenialCode:   denialCode,
 			})
@@ -144,8 +145,8 @@ func (server *Server) handleUIOperatorMountWriteGrants(writer http.ResponseWrite
 	}
 }
 
-func uiOperatorMountWriteGrantsLocked(controlSession controlSession, nowUTC time.Time) []UIOperatorMountWriteGrant {
-	writeGrants := make([]UIOperatorMountWriteGrant, 0, len(controlSession.OperatorMountWriteGrants))
+func uiOperatorMountWriteGrantsLocked(controlSession controlSession, nowUTC time.Time) []controlapipkg.UIOperatorMountWriteGrant {
+	writeGrants := make([]controlapipkg.UIOperatorMountWriteGrant, 0, len(controlSession.OperatorMountWriteGrants))
 	for grantRootPath, grantExpiresAtUTC := range controlSession.OperatorMountWriteGrants {
 		if strings.TrimSpace(grantRootPath) == "" {
 			continue
@@ -154,7 +155,7 @@ func uiOperatorMountWriteGrantsLocked(controlSession controlSession, nowUTC time
 			delete(controlSession.OperatorMountWriteGrants, grantRootPath)
 			continue
 		}
-		writeGrant := UIOperatorMountWriteGrant{
+		writeGrant := controlapipkg.UIOperatorMountWriteGrant{
 			RootPath: strings.TrimSpace(grantRootPath),
 		}
 		if !grantExpiresAtUTC.IsZero() {
@@ -168,7 +169,7 @@ func uiOperatorMountWriteGrantsLocked(controlSession controlSession, nowUTC time
 	return writeGrants
 }
 
-func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken, updateRequest UIOperatorMountWriteGrantUpdateRequest) (UIOperatorMountWriteGrantStatusResponse, error) {
+func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken, updateRequest controlapipkg.UIOperatorMountWriteGrantUpdateRequest) (controlapipkg.UIOperatorMountWriteGrantStatusResponse, error) {
 	nowUTC := server.now().UTC()
 	normalizedRootPath := filepath.Clean(strings.TrimSpace(updateRequest.RootPath))
 
@@ -178,7 +179,7 @@ func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken,
 	server.pruneExpiredLocked()
 	controlSession, found := server.sessionState.sessions[tokenClaims.ControlSessionID]
 	if !found {
-		return UIOperatorMountWriteGrantStatusResponse{}, errOperatorMountWriteGrantNotFound
+		return controlapipkg.UIOperatorMountWriteGrantStatusResponse{}, errOperatorMountWriteGrantNotFound
 	}
 
 	mountedRootFound := false
@@ -189,23 +190,23 @@ func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken,
 		}
 	}
 	if !mountedRootFound {
-		return UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("%w: %s", errOperatorMountWriteGrantNotFound, normalizedRootPath)
+		return controlapipkg.UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("%w: %s", errOperatorMountWriteGrantNotFound, normalizedRootPath)
 	}
 
 	currentGrantExpiresAtUTC, grantFound := controlSession.OperatorMountWriteGrants[normalizedRootPath]
 	if !grantFound || (!currentGrantExpiresAtUTC.IsZero() && !currentGrantExpiresAtUTC.After(nowUTC)) {
 		delete(controlSession.OperatorMountWriteGrants, normalizedRootPath)
-		return UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("%w: %s", errOperatorMountWriteGrantNotFound, normalizedRootPath)
+		return controlapipkg.UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("%w: %s", errOperatorMountWriteGrantNotFound, normalizedRootPath)
 	}
 
 	updatedGrantExpiresAtUTC := currentGrantExpiresAtUTC
 	switch strings.TrimSpace(updateRequest.Action) {
-	case OperatorMountWriteGrantActionRevoke:
+	case controlapipkg.OperatorMountWriteGrantActionRevoke:
 		delete(controlSession.OperatorMountWriteGrants, normalizedRootPath)
-	case OperatorMountWriteGrantActionRenew:
-		return UIOperatorMountWriteGrantStatusResponse{}, errOperatorMountWriteGrantRenewalRequiresApproval
+	case controlapipkg.OperatorMountWriteGrantActionRenew:
+		return controlapipkg.UIOperatorMountWriteGrantStatusResponse{}, errOperatorMountWriteGrantRenewalRequiresApproval
 	default:
-		return UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("unsupported operator mount write grant action %q", updateRequest.Action)
+		return controlapipkg.UIOperatorMountWriteGrantStatusResponse{}, fmt.Errorf("unsupported operator mount write grant action %q", updateRequest.Action)
 	}
 
 	auditData := map[string]interface{}{
@@ -218,21 +219,21 @@ func (server *Server) updateOperatorMountWriteGrant(tokenClaims capabilityToken,
 		"tenant_id":            controlSession.TenantID,
 		"user_id":              controlSession.UserID,
 	}
-	if strings.TrimSpace(updateRequest.Action) == OperatorMountWriteGrantActionRenew {
+	if strings.TrimSpace(updateRequest.Action) == controlapipkg.OperatorMountWriteGrantActionRenew {
 		auditData["expires_at_utc"] = updatedGrantExpiresAtUTC.UTC().Format(time.RFC3339Nano)
 	}
 	if err := server.logEvent("operator_mount.write_grant.updated", tokenClaims.ControlSessionID, auditData); err != nil {
-		if strings.TrimSpace(updateRequest.Action) == OperatorMountWriteGrantActionRevoke {
+		if strings.TrimSpace(updateRequest.Action) == controlapipkg.OperatorMountWriteGrantActionRevoke {
 			controlSession.OperatorMountWriteGrants[normalizedRootPath] = currentGrantExpiresAtUTC
 		} else {
 			controlSession.OperatorMountWriteGrants[normalizedRootPath] = currentGrantExpiresAtUTC
 		}
 		server.sessionState.sessions[tokenClaims.ControlSessionID] = controlSession
-		return UIOperatorMountWriteGrantStatusResponse{}, err
+		return controlapipkg.UIOperatorMountWriteGrantStatusResponse{}, err
 	}
 
 	server.sessionState.sessions[tokenClaims.ControlSessionID] = controlSession
-	return UIOperatorMountWriteGrantStatusResponse{
+	return controlapipkg.UIOperatorMountWriteGrantStatusResponse{
 		Grants: uiOperatorMountWriteGrantsLocked(controlSession, nowUTC),
 	}, nil
 }
@@ -254,7 +255,7 @@ func (server *Server) handleUIApprovals(writer http.ResponseWriter, request *htt
 
 	server.mu.Lock()
 	server.pruneExpiredLocked()
-	approvalSummaries := make([]UIApprovalSummary, 0, len(server.approvalState.records))
+	approvalSummaries := make([]controlapipkg.UIApprovalSummary, 0, len(server.approvalState.records))
 	for _, pendingApproval := range server.approvalState.records {
 		if pendingApproval.ControlSessionID != controlSession.ID || pendingApproval.State != approvalStatePending {
 			continue
@@ -266,7 +267,7 @@ func (server *Server) handleUIApprovals(writer http.ResponseWriter, request *htt
 	sort.Slice(approvalSummaries, func(leftIndex int, rightIndex int) bool {
 		return approvalSummaries[leftIndex].ApprovalRequestID < approvalSummaries[rightIndex].ApprovalRequestID
 	})
-	server.writeJSON(writer, http.StatusOK, UIApprovalsResponse{Approvals: approvalSummaries})
+	server.writeJSON(writer, http.StatusOK, controlapipkg.UIApprovalsResponse{Approvals: approvalSummaries})
 }
 
 func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, request *http.Request) {
@@ -283,10 +284,10 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 	approvalID := strings.TrimPrefix(request.URL.Path, "/v1/ui/approvals/")
 	approvalID = strings.TrimSuffix(approvalID, "/decision")
 	if strings.TrimSpace(approvalID) == "" || strings.Contains(approvalID, "/") {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: "invalid approval id",
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
@@ -297,36 +298,36 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 		return
 	}
 
-	var uiDecisionRequest UIApprovalDecisionRequest
+	var uiDecisionRequest controlapipkg.UIApprovalDecisionRequest
 	if err := decodeJSONBytes(requestBodyBytes, &uiDecisionRequest); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	if err := uiDecisionRequest.Validate(); err != nil {
-		server.writeJSON(writer, http.StatusBadRequest, CapabilityResponse{
-			Status:       ResponseStatusError,
+		server.writeJSON(writer, http.StatusBadRequest, controlapipkg.CapabilityResponse{
+			Status:       controlapipkg.ResponseStatusError,
 			DenialReason: err.Error(),
-			DenialCode:   DenialCodeMalformedRequest,
+			DenialCode:   controlapipkg.DenialCodeMalformedRequest,
 		})
 		return
 	}
 	decisionNonce, manifestSHA256, found := server.currentApprovalDecisionState(approvalID)
 	if !found {
-		server.writeJSON(writer, http.StatusNotFound, CapabilityResponse{
+		server.writeJSON(writer, http.StatusNotFound, controlapipkg.CapabilityResponse{
 			RequestID:         approvalID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request not found",
-			DenialCode:        DenialCodeApprovalNotFound,
+			DenialCode:        controlapipkg.DenialCodeApprovalNotFound,
 			ApprovalRequestID: approvalID,
 		})
 		return
 	}
 
-	approvalDecisionPayload := ApprovalDecisionRequest{
+	approvalDecisionPayload := controlapipkg.ApprovalDecisionRequest{
 		Approved:               *uiDecisionRequest.Approved,
 		Reason:                 strings.TrimSpace(uiDecisionRequest.Reason),
 		DecisionNonce:          decisionNonce,
@@ -337,16 +338,16 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 		pendingApproval, denialResponse, ok := server.validatePendingApprovalDecision(controlSession, approvalID, approvalDecisionPayload)
 		if !ok {
 			if err := server.auditApprovalDecisionDenial(controlSession, approvalID, pendingApproval, denialResponse); err != nil {
-				server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+				server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 					RequestID:         approvalID,
-					Status:            ResponseStatusError,
+					Status:            controlapipkg.ResponseStatusError,
 					DenialReason:      "control-plane audit is unavailable",
-					DenialCode:        DenialCodeAuditUnavailable,
+					DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 					ApprovalRequestID: approvalID,
 				})
 				return
 			}
-			server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
+			server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", controlapipkg.ResponseStatusDenied)
 			server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 			return
 		}
@@ -355,11 +356,11 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 			return
 		}
 		if _, err := server.commitApprovalGrantConsumed(approvalID, decisionNonce, approvalDecisionPayload.Reason); err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 				RequestID:         pendingApproval.Request.RequestID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalID,
 			})
 			return
@@ -382,25 +383,25 @@ func (server *Server) handleUIApprovalDecision(writer http.ResponseWriter, reque
 	pendingApproval, denialResponse, _, validated := server.validateAndRecordApprovalDecision(controlSession, approvalID, approvalDecisionPayload)
 	if !validated {
 		if err := server.auditApprovalDecisionDenial(controlSession, approvalID, pendingApproval, denialResponse); err != nil {
-			server.writeJSON(writer, http.StatusServiceUnavailable, CapabilityResponse{
+			server.writeJSON(writer, http.StatusServiceUnavailable, controlapipkg.CapabilityResponse{
 				RequestID:         approvalID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalID,
 			})
 			return
 		}
-		server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
+		server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", controlapipkg.ResponseStatusDenied)
 		server.writeJSON(writer, approvalDecisionHTTPStatus(denialResponse.DenialCode), denialResponse)
 		return
 	}
-	server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", ResponseStatusDenied)
-	server.writeJSON(writer, http.StatusOK, CapabilityResponse{
+	server.emitUIApprovalResolved(pendingApproval, approvalID, "denied", controlapipkg.ResponseStatusDenied)
+	server.writeJSON(writer, http.StatusOK, controlapipkg.CapabilityResponse{
 		RequestID:         pendingApproval.Request.RequestID,
-		Status:            ResponseStatusDenied,
+		Status:            controlapipkg.ResponseStatusDenied,
 		DenialReason:      "approval denied",
-		DenialCode:        DenialCodeApprovalDenied,
+		DenialCode:        controlapipkg.DenialCodeApprovalDenied,
 		ApprovalRequestID: approvalID,
 	})
 }
@@ -477,12 +478,12 @@ func (server *Server) handleUIRecentEvents(writer http.ResponseWriter, request *
 	}
 
 	lastEventID := strings.TrimSpace(request.Header.Get("Last-Event-ID"))
-	server.writeJSON(writer, http.StatusOK, UIRecentEventsResponse{
+	server.writeJSON(writer, http.StatusOK, controlapipkg.UIRecentEventsResponse{
 		Events: server.uiReplayEvents(tokenClaims.ControlSessionID, lastEventID),
 	})
 }
 
-func writeSSEEvent(writer http.ResponseWriter, uiEventEnvelope UIEventEnvelope) error {
+func writeSSEEvent(writer http.ResponseWriter, uiEventEnvelope controlapipkg.UIEventEnvelope) error {
 	encodedEvent, err := json.Marshal(uiEventEnvelope)
 	if err != nil {
 		return err
@@ -499,13 +500,13 @@ func writeSSEEvent(writer http.ResponseWriter, uiEventEnvelope UIEventEnvelope) 
 	return nil
 }
 
-func (server *Server) verifySignedRequestWithoutBody(request *http.Request, controlSessionID string) ([]byte, CapabilityResponse, bool) {
+func (server *Server) verifySignedRequestWithoutBody(request *http.Request, controlSessionID string) ([]byte, controlapipkg.CapabilityResponse, bool) {
 	requestBodyBytes := []byte{}
 	denialResponse, verified := server.verifySignedRequest(request, requestBodyBytes, controlSessionID)
 	if !verified {
 		return nil, denialResponse, false
 	}
-	return requestBodyBytes, CapabilityResponse{}, true
+	return requestBodyBytes, controlapipkg.CapabilityResponse{}, true
 }
 
 // currentApprovalDecisionState returns the decision nonce and manifest SHA256 for a pending approval.
@@ -545,7 +546,7 @@ func (server *Server) loadRuntimeStateDisplaySummary() statepkg.RuntimeState {
 	return runtimeState
 }
 
-func uiApprovalSummaryFromPending(pendingApproval pendingApproval) UIApprovalSummary {
+func uiApprovalSummaryFromPending(pendingApproval pendingApproval) controlapipkg.UIApprovalSummary {
 	preview := ""
 	redacted := false
 	if contentBytes, ok := pendingApproval.Metadata["content_bytes"].(int); ok && contentBytes > 0 {
@@ -556,7 +557,7 @@ func uiApprovalSummaryFromPending(pendingApproval pendingApproval) UIApprovalSum
 		redacted = true
 	}
 
-	summary := UIApprovalSummary{
+	summary := controlapipkg.UIApprovalSummary{
 		ApprovalRequestID: pendingApproval.ID,
 		ControlSessionID:  pendingApproval.ControlSessionID,
 		Requester:         pendingApproval.ExecutionContext.ActorLabel,
@@ -620,7 +621,7 @@ func (server *Server) addUISubscriber(controlSessionID string) uiEventSubscriber
 	subscriber := uiEventSubscriber{
 		controlSessionID: controlSessionID,
 		id:               server.ui.nextSubscriberID,
-		events:           make(chan UIEventEnvelope, 16),
+		events:           make(chan controlapipkg.UIEventEnvelope, 16),
 	}
 	if server.ui.subscribers == nil {
 		server.ui.subscribers = make(map[int]uiEventSubscriber)
@@ -636,7 +637,7 @@ func (server *Server) removeUISubscriber(subscriberID int) {
 	delete(server.ui.subscribers, subscriberID)
 }
 
-func (server *Server) uiReplayEvents(controlSessionID string, lastEventID string) []UIEventEnvelope {
+func (server *Server) uiReplayEvents(controlSessionID string, lastEventID string) []controlapipkg.UIEventEnvelope {
 	server.ui.mu.Lock()
 	defer server.ui.mu.Unlock()
 
@@ -645,7 +646,7 @@ func (server *Server) uiReplayEvents(controlSessionID string, lastEventID string
 	}
 
 	if strings.TrimSpace(lastEventID) == "" {
-		replayedEvents := make([]UIEventEnvelope, 0, len(server.ui.events))
+		replayedEvents := make([]controlapipkg.UIEventEnvelope, 0, len(server.ui.events))
 		for _, uiEventEnvelope := range server.ui.events {
 			if uiEventBelongsToControlSession(uiEventEnvelope, controlSessionID) {
 				replayedEvents = append(replayedEvents, uiEventEnvelope)
@@ -659,7 +660,7 @@ func (server *Server) uiReplayEvents(controlSessionID string, lastEventID string
 		return nil
 	}
 
-	replayedEvents := make([]UIEventEnvelope, 0, len(server.ui.events))
+	replayedEvents := make([]controlapipkg.UIEventEnvelope, 0, len(server.ui.events))
 	for _, uiEventEnvelope := range server.ui.events {
 		eventSequence, err := strconv.ParseUint(uiEventEnvelope.ID, 10, 64)
 		if err != nil || eventSequence <= lastSeenSequence {
@@ -673,13 +674,13 @@ func (server *Server) uiReplayEvents(controlSessionID string, lastEventID string
 }
 
 func (server *Server) emitUIEvent(controlSessionID string, eventType string, eventData interface{}) {
-	uiEventEnvelope := UIEventEnvelope{
+	uiEventEnvelope := controlapipkg.UIEventEnvelope{
 		ControlSessionID: controlSessionID,
 		Type:             eventType,
 		TS:               server.now().UTC().Format(timeLayoutRFC3339Nano),
 		Data:             eventData,
 	}
-	if err := validateUIEventEnvelope(UIEventEnvelope{
+	if err := controlapipkg.ValidateUIEventEnvelope(controlapipkg.UIEventEnvelope{
 		ID:   "pending",
 		Type: uiEventEnvelope.Type,
 		TS:   uiEventEnvelope.TS,
@@ -693,7 +694,7 @@ func (server *Server) emitUIEvent(controlSessionID string, eventType string, eve
 	uiEventEnvelope.ID = strconv.FormatUint(server.ui.sequence, 10)
 	server.ui.events = append(server.ui.events, uiEventEnvelope)
 	if len(server.ui.events) > maxUIEventBuffer {
-		server.ui.events = append([]UIEventEnvelope(nil), server.ui.events[len(server.ui.events)-maxUIEventBuffer:]...)
+		server.ui.events = append([]controlapipkg.UIEventEnvelope(nil), server.ui.events[len(server.ui.events)-maxUIEventBuffer:]...)
 	}
 	subscribers := make([]uiEventSubscriber, 0, len(server.ui.subscribers))
 	for _, subscriber := range server.ui.subscribers {
@@ -712,12 +713,12 @@ func (server *Server) emitUIEvent(controlSessionID string, eventType string, eve
 	}
 }
 
-func uiEventBelongsToControlSession(uiEventEnvelope UIEventEnvelope, controlSessionID string) bool {
+func uiEventBelongsToControlSession(uiEventEnvelope controlapipkg.UIEventEnvelope, controlSessionID string) bool {
 	return uiEventEnvelope.ControlSessionID == controlSessionID
 }
 
-func buildUIToolResultEvent(capability string, capabilityResponse CapabilityResponse) UIEventToolResult {
-	uiEventToolResult := UIEventToolResult{
+func buildUIToolResultEvent(capability string, capabilityResponse controlapipkg.CapabilityResponse) controlapipkg.UIEventToolResult {
+	uiEventToolResult := controlapipkg.UIEventToolResult{
 		RequestID:  capabilityResponse.RequestID,
 		Capability: capability,
 	}
@@ -761,7 +762,7 @@ func buildUIToolResultEvent(capability string, capabilityResponse CapabilityResp
 }
 
 func (server *Server) emitUIApprovalResolved(pendingApproval pendingApproval, approvalID string, decision string, status string) {
-	server.emitUIEvent(pendingApproval.ControlSessionID, UIEventTypeApprovalResolved, UIEventApprovalResolved{
+	server.emitUIEvent(pendingApproval.ControlSessionID, controlapipkg.UIEventTypeApprovalResolved, controlapipkg.UIEventApprovalResolved{
 		ApprovalRequestID: approvalID,
 		Capability:        pendingApproval.Request.Capability,
 		Decision:          decision,
@@ -769,8 +770,8 @@ func (server *Server) emitUIApprovalResolved(pendingApproval pendingApproval, ap
 	})
 }
 
-func (server *Server) emitUIToolDenied(controlSessionID string, capabilityRequest CapabilityRequest, denialCode string, denialReason string) {
-	server.emitUIEvent(controlSessionID, UIEventTypeToolDenied, UIEventToolDenied{
+func (server *Server) emitUIToolDenied(controlSessionID string, capabilityRequest controlapipkg.CapabilityRequest, denialCode string, denialReason string) {
+	server.emitUIEvent(controlSessionID, controlapipkg.UIEventTypeToolDenied, controlapipkg.UIEventToolDenied{
 		RequestID:    capabilityRequest.RequestID,
 		Capability:   capabilityRequest.Capability,
 		DenialCode:   denialCode,
@@ -778,12 +779,12 @@ func (server *Server) emitUIToolDenied(controlSessionID string, capabilityReques
 	})
 }
 
-func (server *Server) emitUIToolResult(controlSessionID string, capabilityRequest CapabilityRequest, capabilityResponse CapabilityResponse) {
-	server.emitUIEvent(controlSessionID, UIEventTypeToolResult, buildUIToolResultEvent(capabilityRequest.Capability, capabilityResponse))
+func (server *Server) emitUIToolResult(controlSessionID string, capabilityRequest controlapipkg.CapabilityRequest, capabilityResponse controlapipkg.CapabilityResponse) {
+	server.emitUIEvent(controlSessionID, controlapipkg.UIEventTypeToolResult, buildUIToolResultEvent(capabilityRequest.Capability, capabilityResponse))
 }
 
 func (server *Server) emitUIApprovalPending(pendingApproval pendingApproval) {
-	server.emitUIEvent(pendingApproval.ControlSessionID, UIEventTypeApprovalPending, UIEventApprovalPending{
+	server.emitUIEvent(pendingApproval.ControlSessionID, controlapipkg.UIEventTypeApprovalPending, controlapipkg.UIEventApprovalPending{
 		ApprovalRequestID: pendingApproval.ID,
 		Capability:        pendingApproval.Request.Capability,
 		Path:              stringMetadataValue(pendingApproval.Metadata, "path"),

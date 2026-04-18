@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"strings"
 	"time"
 
@@ -56,7 +57,7 @@ func setMCPGatewayApprovalStateLocked(approvalRequests map[string]pendingMCPGate
 	return approvalRequest, nil
 }
 
-func mcpGatewayInvocationRequestBodySHA256(validatedRequest validatedMCPGatewayInvocationRequest) (string, error) {
+func mcpGatewayInvocationRequestBodySHA256(validatedRequest controlapipkg.ValidatedMCPGatewayInvocationRequest) (string, error) {
 	type canonicalInvocationRequest struct {
 		ServerID  string                     `json:"server_id"`
 		ToolName  string                     `json:"tool_name"`
@@ -79,7 +80,7 @@ func mcpGatewayApprovalSubjectBinding(serverID string, toolName string) string {
 	return "object-sha256:" + hex.EncodeToString(toolHash[:])
 }
 
-func buildMCPGatewayApprovalManifest(validatedRequest validatedMCPGatewayInvocationRequest, expiresAtUTC time.Time) (manifestSHA256 string, bodySHA256 string, err error) {
+func buildMCPGatewayApprovalManifest(validatedRequest controlapipkg.ValidatedMCPGatewayInvocationRequest, expiresAtUTC time.Time) (manifestSHA256 string, bodySHA256 string, err error) {
 	bodySHA256, err = mcpGatewayInvocationRequestBodySHA256(validatedRequest)
 	if err != nil {
 		return "", "", err
@@ -98,8 +99,8 @@ func buildMCPGatewayApprovalManifest(validatedRequest validatedMCPGatewayInvocat
 	return manifestSHA256, bodySHA256, nil
 }
 
-func buildMCPGatewayInvocationApprovalResponse(validationResponse MCPGatewayInvocationValidationResponse, approvalRequest pendingMCPGatewayApprovalRequest) MCPGatewayInvocationApprovalResponse {
-	return MCPGatewayInvocationApprovalResponse{
+func buildMCPGatewayInvocationApprovalResponse(validationResponse controlapipkg.MCPGatewayInvocationValidationResponse, approvalRequest pendingMCPGatewayApprovalRequest) controlapipkg.MCPGatewayInvocationApprovalResponse {
+	return controlapipkg.MCPGatewayInvocationApprovalResponse{
 		ServerID:               validationResponse.ServerID,
 		ToolName:               validationResponse.ToolName,
 		Decision:               validationResponse.Decision,
@@ -116,8 +117,8 @@ func buildMCPGatewayInvocationApprovalResponse(validationResponse MCPGatewayInvo
 	}
 }
 
-func buildDeniedMCPGatewayInvocationApprovalResponse(validationResponse MCPGatewayInvocationValidationResponse, denialCode string, denialReason string) MCPGatewayInvocationApprovalResponse {
-	deniedResponse := MCPGatewayInvocationApprovalResponse{
+func buildDeniedMCPGatewayInvocationApprovalResponse(validationResponse controlapipkg.MCPGatewayInvocationValidationResponse, denialCode string, denialReason string) controlapipkg.MCPGatewayInvocationApprovalResponse {
+	deniedResponse := controlapipkg.MCPGatewayInvocationApprovalResponse{
 		ServerID:               validationResponse.ServerID,
 		ToolName:               validationResponse.ToolName,
 		Decision:               "deny",
@@ -194,8 +195,8 @@ func buildMCPGatewayApprovalDeniedAuditData(approvalRequest pendingMCPGatewayApp
 	return auditData
 }
 
-func buildMCPGatewayApprovalDecisionResponse(approvalRequest pendingMCPGatewayApprovalRequest, approved bool) MCPGatewayApprovalDecisionResponse {
-	return MCPGatewayApprovalDecisionResponse{
+func buildMCPGatewayApprovalDecisionResponse(approvalRequest pendingMCPGatewayApprovalRequest, approved bool) controlapipkg.MCPGatewayApprovalDecisionResponse {
+	return controlapipkg.MCPGatewayApprovalDecisionResponse{
 		ApprovalRequestID:      approvalRequest.ID,
 		ServerID:               approvalRequest.ServerID,
 		ToolName:               approvalRequest.ToolName,
@@ -206,8 +207,8 @@ func buildMCPGatewayApprovalDecisionResponse(approvalRequest pendingMCPGatewayAp
 	}
 }
 
-func buildMCPGatewayExecutionValidationResponse(approvalRequest pendingMCPGatewayApprovalRequest) MCPGatewayExecutionValidationResponse {
-	return MCPGatewayExecutionValidationResponse{
+func buildMCPGatewayExecutionValidationResponse(approvalRequest pendingMCPGatewayApprovalRequest) controlapipkg.MCPGatewayExecutionValidationResponse {
+	return controlapipkg.MCPGatewayExecutionValidationResponse{
 		ApprovalRequestID:      approvalRequest.ID,
 		ApprovalState:          approvalRequest.State,
 		ServerID:               approvalRequest.ServerID,
@@ -220,8 +221,8 @@ func buildMCPGatewayExecutionValidationResponse(approvalRequest pendingMCPGatewa
 	}
 }
 
-func buildMCPGatewayExecutionResponse(approvalRequest pendingMCPGatewayApprovalRequest, processPID int, toolResult json.RawMessage, remoteError *mcpGatewayJSONRPCError) MCPGatewayExecutionResponse {
-	executionResponse := MCPGatewayExecutionResponse{
+func buildMCPGatewayExecutionResponse(approvalRequest pendingMCPGatewayApprovalRequest, processPID int, toolResult json.RawMessage, remoteError *mcpGatewayJSONRPCError) controlapipkg.MCPGatewayExecutionResponse {
+	executionResponse := controlapipkg.MCPGatewayExecutionResponse{
 		ApprovalRequestID:      approvalRequest.ID,
 		ApprovalState:          approvalRequest.State,
 		ServerID:               approvalRequest.ServerID,
@@ -242,7 +243,7 @@ func buildMCPGatewayExecutionResponse(approvalRequest pendingMCPGatewayApprovalR
 	return executionResponse
 }
 
-func buildMCPGatewayExecutionAuditData(tokenClaims capabilityToken, validationResponse MCPGatewayExecutionValidationResponse) map[string]interface{} {
+func buildMCPGatewayExecutionAuditData(tokenClaims capabilityToken, validationResponse controlapipkg.MCPGatewayExecutionValidationResponse) map[string]interface{} {
 	return map[string]interface{}{
 		"approval_request_id":      validationResponse.ApprovalRequestID,
 		"approval_state":           validationResponse.ApprovalState,
@@ -318,12 +319,12 @@ func (server *Server) rollbackMCPGatewayApprovalRequestAfterAuditFailure(approva
 	delete(server.mcpGatewayApprovalRequests, approvalRequest.ID)
 }
 
-func (server *Server) createOrReuseMCPGatewayApprovalRequest(tokenClaims capabilityToken, invocationRequest MCPGatewayInvocationRequest, validationResponse MCPGatewayInvocationValidationResponse) (pendingMCPGatewayApprovalRequest, bool, error) {
+func (server *Server) createOrReuseMCPGatewayApprovalRequest(tokenClaims capabilityToken, invocationRequest controlapipkg.MCPGatewayInvocationRequest, validationResponse controlapipkg.MCPGatewayInvocationValidationResponse) (pendingMCPGatewayApprovalRequest, bool, error) {
 	if validationResponse.Decision != "needs_approval" || !validationResponse.RequiresApproval {
 		return pendingMCPGatewayApprovalRequest{}, false, errMCPGatewayApprovalPreparationNotRequired
 	}
 
-	validatedRequest, err := validateMCPGatewayInvocationRequest(invocationRequest)
+	validatedRequest, err := controlapipkg.ValidateMCPGatewayInvocationRequest(invocationRequest)
 	if err != nil {
 		return pendingMCPGatewayApprovalRequest{}, false, err
 	}
@@ -393,17 +394,17 @@ func (server *Server) createOrReuseMCPGatewayApprovalRequest(tokenClaims capabil
 	return approvalRequest, true, nil
 }
 
-func (server *Server) validatePendingMCPGatewayApprovalDecisionLocked(tokenClaims capabilityToken, decisionRequest MCPGatewayApprovalDecisionRequest) (pendingMCPGatewayApprovalRequest, CapabilityResponse, bool) {
+func (server *Server) validatePendingMCPGatewayApprovalDecisionLocked(tokenClaims capabilityToken, decisionRequest controlapipkg.MCPGatewayApprovalDecisionRequest) (pendingMCPGatewayApprovalRequest, controlapipkg.CapabilityResponse, bool) {
 	server.pruneExpiredLocked()
 
 	approvalRequestID := strings.TrimSpace(decisionRequest.ApprovalRequestID)
 	approvalRequest, found := server.mcpGatewayApprovalRequests[approvalRequestID]
 	if !found {
-		return pendingMCPGatewayApprovalRequest{}, CapabilityResponse{
+		return pendingMCPGatewayApprovalRequest{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request not found",
-			DenialCode:        DenialCodeApprovalNotFound,
+			DenialCode:        controlapipkg.DenialCodeApprovalNotFound,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
@@ -411,40 +412,40 @@ func (server *Server) validatePendingMCPGatewayApprovalDecisionLocked(tokenClaim
 	if approvalRequest.ExpiresAt.Before(server.now().UTC()) {
 		expiredApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequestID, approvalRequest, approvalStateExpired)
 		if transitionErr != nil {
-			return approvalRequest, CapabilityResponse{
+			return approvalRequest, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequestID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval request is in an invalid state",
-				DenialCode:        DenialCodeApprovalStateInvalid,
+				DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 				ApprovalRequestID: approvalRequestID,
 			}, false
 		}
 		approvalRequest = expiredApprovalRequest
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request expired",
-			DenialCode:        DenialCodeApprovalDenied,
+			DenialCode:        controlapipkg.DenialCodeApprovalDenied,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if tokenClaims.ControlSessionID != approvalRequest.ControlSessionID {
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval token does not match approval owner",
-			DenialCode:        DenialCodeApprovalOwnerMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalOwnerMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.State != approvalStatePending {
-		denialCode := DenialCodeApprovalStateInvalid
+		denialCode := controlapipkg.DenialCodeApprovalStateInvalid
 		if approvalRequest.State == approvalStateGranted || approvalRequest.State == approvalStateConsumed || approvalRequest.State == approvalStateExecutionFailed {
-			denialCode = DenialCodeApprovalStateConflict
+			denialCode = controlapipkg.DenialCodeApprovalStateConflict
 		}
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request is no longer pending",
 			DenialCode:        denialCode,
 			ApprovalRequestID: approvalRequestID,
@@ -453,20 +454,20 @@ func (server *Server) validatePendingMCPGatewayApprovalDecisionLocked(tokenClaim
 
 	decisionNonce := strings.TrimSpace(decisionRequest.DecisionNonce)
 	if decisionNonce == "" {
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval decision nonce is required",
-			DenialCode:        DenialCodeApprovalDecisionNonceMissing,
+			DenialCode:        controlapipkg.DenialCodeApprovalDecisionNonceMissing,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if decisionNonce != approvalRequest.DecisionNonce {
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval decision nonce is invalid",
-			DenialCode:        DenialCodeApprovalDecisionNonceInvalid,
+			DenialCode:        controlapipkg.DenialCodeApprovalDecisionNonceInvalid,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
@@ -474,29 +475,29 @@ func (server *Server) validatePendingMCPGatewayApprovalDecisionLocked(tokenClaim
 	submittedManifest := strings.TrimSpace(decisionRequest.ApprovalManifestSHA256)
 	if decisionRequest.Approved && approvalRequest.ApprovalManifestSHA256 != "" {
 		if submittedManifest == "" {
-			return approvalRequest, CapabilityResponse{
+			return approvalRequest, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequestID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval manifest sha256 is required for this approval",
-				DenialCode:        DenialCodeApprovalManifestMismatch,
+				DenialCode:        controlapipkg.DenialCodeApprovalManifestMismatch,
 				ApprovalRequestID: approvalRequestID,
 			}, false
 		}
 		if submittedManifest != approvalRequest.ApprovalManifestSHA256 {
-			return approvalRequest, CapabilityResponse{
+			return approvalRequest, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequestID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval manifest sha256 does not match the pending approval",
-				DenialCode:        DenialCodeApprovalManifestMismatch,
+				DenialCode:        controlapipkg.DenialCodeApprovalManifestMismatch,
 				ApprovalRequestID: approvalRequestID,
 			}, false
 		}
 	}
 
-	return approvalRequest, CapabilityResponse{}, true
+	return approvalRequest, controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) validateAndRecordMCPGatewayApprovalDecision(tokenClaims capabilityToken, decisionRequest MCPGatewayApprovalDecisionRequest) (pendingMCPGatewayApprovalRequest, CapabilityResponse, bool) {
+func (server *Server) validateAndRecordMCPGatewayApprovalDecision(tokenClaims capabilityToken, decisionRequest controlapipkg.MCPGatewayApprovalDecisionRequest) (pendingMCPGatewayApprovalRequest, controlapipkg.CapabilityResponse, bool) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
@@ -509,43 +510,43 @@ func (server *Server) validateAndRecordMCPGatewayApprovalDecision(tokenClaims ca
 	if decisionRequest.Approved {
 		auditData = buildMCPGatewayApprovalGrantedAuditData(approvalRequest)
 		if err := server.logEvent("approval.granted", approvalRequest.ControlSessionID, auditData); err != nil {
-			return approvalRequest, CapabilityResponse{
+			return approvalRequest, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequest.ID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalRequest.ID,
 			}, false
 		}
 		updatedApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequest.ID, approvalRequest, approvalStateGranted)
 		if transitionErr != nil {
-			return approvalRequest, CapabilityResponse{
+			return approvalRequest, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequest.ID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval request is in an invalid state",
-				DenialCode:        DenialCodeApprovalStateInvalid,
+				DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 				ApprovalRequestID: approvalRequest.ID,
 			}, false
 		}
 		approvalRequest = updatedApprovalRequest
 	} else {
-		auditData = buildMCPGatewayApprovalDeniedAuditData(approvalRequest, DenialCodeApprovalDenied, "approval denied")
+		auditData = buildMCPGatewayApprovalDeniedAuditData(approvalRequest, controlapipkg.DenialCodeApprovalDenied, "approval denied")
 		if err := server.logEvent("approval.denied", approvalRequest.ControlSessionID, auditData); err != nil {
-			return approvalRequest, CapabilityResponse{
+			return approvalRequest, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequest.ID,
-				Status:            ResponseStatusError,
+				Status:            controlapipkg.ResponseStatusError,
 				DenialReason:      "control-plane audit is unavailable",
-				DenialCode:        DenialCodeAuditUnavailable,
+				DenialCode:        controlapipkg.DenialCodeAuditUnavailable,
 				ApprovalRequestID: approvalRequest.ID,
 			}, false
 		}
 		updatedApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequest.ID, approvalRequest, approvalStateDenied)
 		if transitionErr != nil {
-			return approvalRequest, CapabilityResponse{
+			return approvalRequest, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequest.ID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval request is in an invalid state",
-				DenialCode:        DenialCodeApprovalStateInvalid,
+				DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 				ApprovalRequestID: approvalRequest.ID,
 			}, false
 		}
@@ -554,36 +555,36 @@ func (server *Server) validateAndRecordMCPGatewayApprovalDecision(tokenClaims ca
 	approvalRequest.DecisionSubmittedAt = server.now().UTC()
 	approvalRequest.DecisionNonce = ""
 	server.mcpGatewayApprovalRequests[approvalRequest.ID] = approvalRequest
-	return approvalRequest, CapabilityResponse{}, true
+	return approvalRequest, controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) validateMCPGatewayExecutionRequest(tokenClaims capabilityToken, executionRequest MCPGatewayExecutionRequest) (MCPGatewayExecutionValidationResponse, CapabilityResponse, bool) {
+func (server *Server) validateMCPGatewayExecutionRequest(tokenClaims capabilityToken, executionRequest controlapipkg.MCPGatewayExecutionRequest) (controlapipkg.MCPGatewayExecutionValidationResponse, controlapipkg.CapabilityResponse, bool) {
 	_, validationResponse, denialResponse, ok := server.validateMCPGatewayExecutionRequestWithApproval(tokenClaims, executionRequest)
 	return validationResponse, denialResponse, ok
 }
 
-func (server *Server) validateMCPGatewayExecutionRequestWithApproval(tokenClaims capabilityToken, executionRequest MCPGatewayExecutionRequest) (pendingMCPGatewayApprovalRequest, MCPGatewayExecutionValidationResponse, CapabilityResponse, bool) {
-	validatedRequest, err := validateMCPGatewayInvocationRequest(MCPGatewayInvocationRequest{
+func (server *Server) validateMCPGatewayExecutionRequestWithApproval(tokenClaims capabilityToken, executionRequest controlapipkg.MCPGatewayExecutionRequest) (pendingMCPGatewayApprovalRequest, controlapipkg.MCPGatewayExecutionValidationResponse, controlapipkg.CapabilityResponse, bool) {
+	validatedRequest, err := controlapipkg.ValidateMCPGatewayInvocationRequest(controlapipkg.MCPGatewayInvocationRequest{
 		ServerID:  executionRequest.ServerID,
 		ToolName:  executionRequest.ToolName,
 		Arguments: executionRequest.Arguments,
 	})
 	if err != nil {
-		return pendingMCPGatewayApprovalRequest{}, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return pendingMCPGatewayApprovalRequest{}, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         strings.TrimSpace(executionRequest.ApprovalRequestID),
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      err.Error(),
-			DenialCode:        DenialCodeMalformedRequest,
+			DenialCode:        controlapipkg.DenialCodeMalformedRequest,
 			ApprovalRequestID: strings.TrimSpace(executionRequest.ApprovalRequestID),
 		}, false
 	}
 	invocationBodySHA256, err := mcpGatewayInvocationRequestBodySHA256(validatedRequest)
 	if err != nil {
-		return pendingMCPGatewayApprovalRequest{}, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return pendingMCPGatewayApprovalRequest{}, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         strings.TrimSpace(executionRequest.ApprovalRequestID),
-			Status:            ResponseStatusError,
+			Status:            controlapipkg.ResponseStatusError,
 			DenialReason:      "failed to validate MCP gateway execution request",
-			DenialCode:        DenialCodeExecutionFailed,
+			DenialCode:        controlapipkg.DenialCodeExecutionFailed,
 			ApprovalRequestID: strings.TrimSpace(executionRequest.ApprovalRequestID),
 		}, false
 	}
@@ -595,109 +596,109 @@ func (server *Server) validateMCPGatewayExecutionRequestWithApproval(tokenClaims
 	approvalRequestID := strings.TrimSpace(executionRequest.ApprovalRequestID)
 	approvalRequest, found := server.mcpGatewayApprovalRequests[approvalRequestID]
 	if !found {
-		return pendingMCPGatewayApprovalRequest{}, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return pendingMCPGatewayApprovalRequest{}, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request not found",
-			DenialCode:        DenialCodeApprovalNotFound,
+			DenialCode:        controlapipkg.DenialCodeApprovalNotFound,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.ExpiresAt.Before(server.now().UTC()) {
 		expiredApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequestID, approvalRequest, approvalStateExpired)
 		if transitionErr != nil {
-			return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+			return approvalRequest, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequestID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval request is in an invalid state",
-				DenialCode:        DenialCodeApprovalStateInvalid,
+				DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 				ApprovalRequestID: approvalRequestID,
 			}, false
 		}
 		approvalRequest = expiredApprovalRequest
-		return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return approvalRequest, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request expired",
-			DenialCode:        DenialCodeApprovalDenied,
+			DenialCode:        controlapipkg.DenialCodeApprovalDenied,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.ControlSessionID != tokenClaims.ControlSessionID {
-		return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return approvalRequest, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval token does not match approval owner",
-			DenialCode:        DenialCodeApprovalOwnerMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalOwnerMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.State != approvalStateGranted {
-		denialCode := DenialCodeApprovalStateInvalid
+		denialCode := controlapipkg.DenialCodeApprovalStateInvalid
 		if approvalRequest.State == approvalStateConsumed || approvalRequest.State == approvalStateExecutionFailed {
-			denialCode = DenialCodeApprovalStateConflict
+			denialCode = controlapipkg.DenialCodeApprovalStateConflict
 		}
-		return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return approvalRequest, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request is not ready for execution",
 			DenialCode:        denialCode,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if strings.TrimSpace(executionRequest.ApprovalManifestSHA256) != approvalRequest.ApprovalManifestSHA256 {
-		return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return approvalRequest, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval manifest sha256 does not match the granted approval",
-			DenialCode:        DenialCodeApprovalManifestMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalManifestMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.ServerID != validatedRequest.ServerID || approvalRequest.ToolName != validatedRequest.ToolName {
-		return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return approvalRequest, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "execution request does not match the granted approval",
-			DenialCode:        DenialCodeApprovalManifestMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalManifestMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.InvocationBodySHA256 != invocationBodySHA256 {
-		return approvalRequest, MCPGatewayExecutionValidationResponse{}, CapabilityResponse{
+		return approvalRequest, controlapipkg.MCPGatewayExecutionValidationResponse{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "execution request body does not match the granted approval",
-			DenialCode:        DenialCodeApprovalManifestMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalManifestMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 
-	return approvalRequest, buildMCPGatewayExecutionValidationResponse(approvalRequest), CapabilityResponse{}, true
+	return approvalRequest, buildMCPGatewayExecutionValidationResponse(approvalRequest), controlapipkg.CapabilityResponse{}, true
 }
 
-func (server *Server) consumeGrantedMCPGatewayApprovalForExecution(tokenClaims capabilityToken, executionRequest MCPGatewayExecutionRequest) (pendingMCPGatewayApprovalRequest, CapabilityResponse, bool) {
-	validatedRequest, err := validateMCPGatewayInvocationRequest(MCPGatewayInvocationRequest{
+func (server *Server) consumeGrantedMCPGatewayApprovalForExecution(tokenClaims capabilityToken, executionRequest controlapipkg.MCPGatewayExecutionRequest) (pendingMCPGatewayApprovalRequest, controlapipkg.CapabilityResponse, bool) {
+	validatedRequest, err := controlapipkg.ValidateMCPGatewayInvocationRequest(controlapipkg.MCPGatewayInvocationRequest{
 		ServerID:  executionRequest.ServerID,
 		ToolName:  executionRequest.ToolName,
 		Arguments: executionRequest.Arguments,
 	})
 	if err != nil {
-		return pendingMCPGatewayApprovalRequest{}, CapabilityResponse{
+		return pendingMCPGatewayApprovalRequest{}, controlapipkg.CapabilityResponse{
 			RequestID:         strings.TrimSpace(executionRequest.ApprovalRequestID),
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      err.Error(),
-			DenialCode:        DenialCodeMalformedRequest,
+			DenialCode:        controlapipkg.DenialCodeMalformedRequest,
 			ApprovalRequestID: strings.TrimSpace(executionRequest.ApprovalRequestID),
 		}, false
 	}
 	invocationBodySHA256, err := mcpGatewayInvocationRequestBodySHA256(validatedRequest)
 	if err != nil {
-		return pendingMCPGatewayApprovalRequest{}, CapabilityResponse{
+		return pendingMCPGatewayApprovalRequest{}, controlapipkg.CapabilityResponse{
 			RequestID:         strings.TrimSpace(executionRequest.ApprovalRequestID),
-			Status:            ResponseStatusError,
+			Status:            controlapipkg.ResponseStatusError,
 			DenialReason:      "failed to validate MCP gateway execution request",
-			DenialCode:        DenialCodeExecutionFailed,
+			DenialCode:        controlapipkg.DenialCodeExecutionFailed,
 			ApprovalRequestID: strings.TrimSpace(executionRequest.ApprovalRequestID),
 		}, false
 	}
@@ -709,97 +710,97 @@ func (server *Server) consumeGrantedMCPGatewayApprovalForExecution(tokenClaims c
 	approvalRequestID := strings.TrimSpace(executionRequest.ApprovalRequestID)
 	approvalRequest, found := server.mcpGatewayApprovalRequests[approvalRequestID]
 	if !found {
-		return pendingMCPGatewayApprovalRequest{}, CapabilityResponse{
+		return pendingMCPGatewayApprovalRequest{}, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request not found",
-			DenialCode:        DenialCodeApprovalNotFound,
+			DenialCode:        controlapipkg.DenialCodeApprovalNotFound,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.ExpiresAt.Before(server.now().UTC()) {
 		expiredApprovalRequest, transitionErr := setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequestID, approvalRequest, approvalStateExpired)
 		if transitionErr != nil {
-			return approvalRequest, CapabilityResponse{
+			return approvalRequest, controlapipkg.CapabilityResponse{
 				RequestID:         approvalRequestID,
-				Status:            ResponseStatusDenied,
+				Status:            controlapipkg.ResponseStatusDenied,
 				DenialReason:      "approval request is in an invalid state",
-				DenialCode:        DenialCodeApprovalStateInvalid,
+				DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 				ApprovalRequestID: approvalRequestID,
 			}, false
 		}
 		approvalRequest = expiredApprovalRequest
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request expired",
-			DenialCode:        DenialCodeApprovalDenied,
+			DenialCode:        controlapipkg.DenialCodeApprovalDenied,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.ControlSessionID != tokenClaims.ControlSessionID {
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval token does not match approval owner",
-			DenialCode:        DenialCodeApprovalOwnerMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalOwnerMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.State != approvalStateGranted {
-		denialCode := DenialCodeApprovalStateInvalid
+		denialCode := controlapipkg.DenialCodeApprovalStateInvalid
 		if approvalRequest.State == approvalStateConsumed || approvalRequest.State == approvalStateExecutionFailed {
-			denialCode = DenialCodeApprovalStateConflict
+			denialCode = controlapipkg.DenialCodeApprovalStateConflict
 		}
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request is not ready for execution",
 			DenialCode:        denialCode,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if strings.TrimSpace(executionRequest.ApprovalManifestSHA256) != approvalRequest.ApprovalManifestSHA256 {
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval manifest sha256 does not match the granted approval",
-			DenialCode:        DenialCodeApprovalManifestMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalManifestMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.ServerID != validatedRequest.ServerID || approvalRequest.ToolName != validatedRequest.ToolName {
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "execution request does not match the granted approval",
-			DenialCode:        DenialCodeApprovalManifestMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalManifestMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	if approvalRequest.InvocationBodySHA256 != invocationBodySHA256 {
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "execution request body does not match the granted approval",
-			DenialCode:        DenialCodeApprovalManifestMismatch,
+			DenialCode:        controlapipkg.DenialCodeApprovalManifestMismatch,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 
 	approvalRequest, err = setMCPGatewayApprovalStateLocked(server.mcpGatewayApprovalRequests, approvalRequest.ID, approvalRequest, approvalStateConsumed)
 	if err != nil {
-		return approvalRequest, CapabilityResponse{
+		return approvalRequest, controlapipkg.CapabilityResponse{
 			RequestID:         approvalRequestID,
-			Status:            ResponseStatusDenied,
+			Status:            controlapipkg.ResponseStatusDenied,
 			DenialReason:      "approval request is in an invalid state",
-			DenialCode:        DenialCodeApprovalStateInvalid,
+			DenialCode:        controlapipkg.DenialCodeApprovalStateInvalid,
 			ApprovalRequestID: approvalRequestID,
 		}, false
 	}
 	approvalRequest.ExecutedAt = server.now().UTC()
 	server.mcpGatewayApprovalRequests[approvalRequest.ID] = approvalRequest
-	return approvalRequest, CapabilityResponse{}, true
+	return approvalRequest, controlapipkg.CapabilityResponse{}, true
 }
 
 func (server *Server) markMCPGatewayApprovalExecutionFailed(approvalRequestID string, approvalManifestSHA256 string) {

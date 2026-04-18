@@ -1,4 +1,4 @@
-package loopgate
+package controlapi
 
 import (
 	"fmt"
@@ -219,7 +219,7 @@ type UIEventWarning struct {
 	Message string `json:"message"`
 }
 
-func validateUIEventEnvelope(uiEventEnvelope UIEventEnvelope) error {
+func ValidateUIEventEnvelope(uiEventEnvelope UIEventEnvelope) error {
 	if strings.TrimSpace(uiEventEnvelope.ID) == "" {
 		return fmt.Errorf("ui event id is required")
 	}

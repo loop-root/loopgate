@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -32,7 +33,7 @@ func newControlSessionRecoveryTestServer(t *testing.T, repoRoot string) *Server 
 func doSessionOpenWithPeer(t *testing.T, server *Server, requestPeerIdentity peerIdentity, actor string, sessionID string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	requestBody, err := json.Marshal(OpenSessionRequest{
+	requestBody, err := json.Marshal(controlapipkg.OpenSessionRequest{
 		Actor:                 actor,
 		SessionID:             sessionID,
 		RequestedCapabilities: []string{"fs_list"},
@@ -50,17 +51,17 @@ func doSessionOpenWithPeer(t *testing.T, server *Server, requestPeerIdentity pee
 	return recorder
 }
 
-func openSessionWithPeer(t *testing.T, server *Server, requestPeerIdentity peerIdentity, actor string, sessionID string) OpenSessionResponse {
+func openSessionWithPeer(t *testing.T, server *Server, requestPeerIdentity peerIdentity, actor string, sessionID string) controlapipkg.OpenSessionResponse {
 	t.Helper()
 
 	recorder := doSessionOpenWithPeer(t, server, requestPeerIdentity, actor, sessionID)
 	if recorder.Code != http.StatusOK {
-		var denial CapabilityResponse
+		var denial controlapipkg.CapabilityResponse
 		_ = json.Unmarshal(recorder.Body.Bytes(), &denial)
 		t.Fatalf("expected session open success, got status=%d body=%s denial=%#v", recorder.Code, recorder.Body.String(), denial)
 	}
 
-	var response OpenSessionResponse
+	var response controlapipkg.OpenSessionResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode session open response: %v", err)
 	}
@@ -118,7 +119,7 @@ func TestOpenSessionCancelsPendingApprovalsForDeadPeerOrphan(t *testing.T) {
 	server.mu.Lock()
 	server.approvalState.records["approval-orphan"] = pendingApproval{
 		ID:               "approval-orphan",
-		Request:          CapabilityRequest{Capability: "fs_write"},
+		Request:          controlapipkg.CapabilityRequest{Capability: "fs_write"},
 		CreatedAt:        server.now().UTC(),
 		ExpiresAt:        server.now().UTC().Add(time.Minute),
 		ControlSessionID: firstSession.ControlSessionID,
@@ -179,11 +180,11 @@ func TestOpenSessionOrphanRecoveryFailsClosedOnAuditFailure(t *testing.T) {
 		t.Fatalf("expected orphan recovery failure to fail closed with 503, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
 
-	var denial CapabilityResponse
+	var denial controlapipkg.CapabilityResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &denial); err != nil {
 		t.Fatalf("decode denial response: %v", err)
 	}
-	if denial.DenialCode != DenialCodeExecutionFailed {
+	if denial.DenialCode != controlapipkg.DenialCodeExecutionFailed {
 		t.Fatalf("expected execution_failed denial for orphan recovery failure, got %#v", denial)
 	}
 
@@ -204,7 +205,7 @@ func TestCancelPendingApprovalRollbackIsNeverVisibleToReaders(t *testing.T) {
 	server.mu.Lock()
 	server.approvalState.records["approval-hidden-rollback"] = pendingApproval{
 		ID:               "approval-hidden-rollback",
-		Request:          CapabilityRequest{Capability: "fs_write"},
+		Request:          controlapipkg.CapabilityRequest{Capability: "fs_write"},
 		CreatedAt:        server.now().UTC(),
 		ExpiresAt:        server.now().UTC().Add(time.Minute),
 		ControlSessionID: "session-a",

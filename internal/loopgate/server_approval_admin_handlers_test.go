@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +15,7 @@ func TestControlApprovalsApproveExecutesPendingRequest(t *testing.T) {
 
 	requestClient := NewClient(server.socketPath)
 	requestClient.ConfigureSession("approval-requester", "approval-requester-session", []string{"fs_write"})
-	pendingResponse, err := requestClient.ExecuteCapability(context.Background(), CapabilityRequest{
+	pendingResponse, err := requestClient.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-control-approvals-approve",
 		Capability: "fs_write",
 		Arguments: map[string]string{
@@ -43,7 +44,7 @@ func TestControlApprovalsApproveExecutesPendingRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("approve pending approval: %v", err)
 	}
-	if decisionResponse.Status != ResponseStatusSuccess {
+	if decisionResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected success response, got %#v", decisionResponse)
 	}
 	if decisionResponse.AuditEventHash == "" {

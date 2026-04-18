@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"crypto/x509"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/url"
 	"strings"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"loopgate/internal/troubleshoot"
 )
 
-func (server *Server) buildAuditExportTrustCheckResponse(ctx context.Context) AuditExportTrustCheckResponse {
+func (server *Server) buildAuditExportTrustCheckResponse(ctx context.Context) controlapipkg.AuditExportTrustCheckResponse {
 	auditExportReport := server.buildDiagnosticAuditExportReport(ctx, troubleshoot.AuditExportReport{})
 	return buildAuditExportTrustCheckResponseFromReport(auditExportReport)
 }
@@ -51,8 +52,8 @@ func (server *Server) buildDiagnosticAuditExportReport(ctx context.Context, repo
 	return report
 }
 
-func buildAuditExportTrustCheckResponseFromReport(report troubleshoot.AuditExportReport) AuditExportTrustCheckResponse {
-	response := AuditExportTrustCheckResponse{
+func buildAuditExportTrustCheckResponseFromReport(report troubleshoot.AuditExportReport) controlapipkg.AuditExportTrustCheckResponse {
+	response := controlapipkg.AuditExportTrustCheckResponse{
 		DestinationKind:     strings.TrimSpace(report.DestinationKind),
 		DestinationLabel:    strings.TrimSpace(report.DestinationLabel),
 		EndpointScheme:      strings.TrimSpace(report.EndpointScheme),

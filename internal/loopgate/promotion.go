@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"sort"
@@ -29,22 +30,22 @@ type promotionRequest struct {
 	PromotedBy            string
 	SelectedFieldPaths    []string
 	TransformationType    string
-	DerivedClassification ResultClassification
+	DerivedClassification controlapipkg.ResultClassification
 }
 
 type derivedArtifactRecord struct {
-	SchemaVersion         string                         `json:"schema_version"`
-	DerivedArtifactID     string                         `json:"derived_artifact_id"`
-	SourceQuarantineRef   string                         `json:"source_quarantine_ref"`
-	SourceContentSHA256   string                         `json:"source_content_sha256"`
-	PromotionTarget       string                         `json:"promotion_target"`
-	PromotedBy            string                         `json:"promoted_by"`
-	PromotedAtUTC         string                         `json:"promoted_at_utc"`
-	SelectedFieldPaths    []string                       `json:"selected_field_paths,omitempty"`
-	TransformationType    string                         `json:"transformation_type"`
-	DerivedArtifact       map[string]interface{}         `json:"derived_artifact"`
-	DerivedFieldsMeta     map[string]ResultFieldMetadata `json:"derived_fields_meta"`
-	DerivedClassification ResultClassification           `json:"derived_classification"`
+	SchemaVersion         string                                       `json:"schema_version"`
+	DerivedArtifactID     string                                       `json:"derived_artifact_id"`
+	SourceQuarantineRef   string                                       `json:"source_quarantine_ref"`
+	SourceContentSHA256   string                                       `json:"source_content_sha256"`
+	PromotionTarget       string                                       `json:"promotion_target"`
+	PromotedBy            string                                       `json:"promoted_by"`
+	PromotedAtUTC         string                                       `json:"promoted_at_utc"`
+	SelectedFieldPaths    []string                                     `json:"selected_field_paths,omitempty"`
+	TransformationType    string                                       `json:"transformation_type"`
+	DerivedArtifact       map[string]interface{}                       `json:"derived_artifact"`
+	DerivedFieldsMeta     map[string]controlapipkg.ResultFieldMetadata `json:"derived_fields_meta"`
+	DerivedClassification controlapipkg.ResultClassification           `json:"derived_classification"`
 }
 
 type promotionDuplicateFingerprint struct {
@@ -179,7 +180,7 @@ func (server *Server) promoteQuarantinedArtifact(validatedPromotionRequest promo
 	return candidateRecord, nil
 }
 
-func materializeDerivedArtifactFromSource(rawSourcePayload string, selectedFieldPaths []string, promotionTarget string) (map[string]interface{}, map[string]ResultFieldMetadata, error) {
+func materializeDerivedArtifactFromSource(rawSourcePayload string, selectedFieldPaths []string, promotionTarget string) (map[string]interface{}, map[string]controlapipkg.ResultFieldMetadata, error) {
 	validatedFieldPaths, err := canonicalSelectedFieldPaths(selectedFieldPaths)
 	if err != nil {
 		return nil, nil, err
@@ -193,7 +194,7 @@ func materializeDerivedArtifactFromSource(rawSourcePayload string, selectedField
 	}
 
 	derivedArtifact := make(map[string]interface{}, len(validatedFieldPaths))
-	derivedFieldsMeta := make(map[string]ResultFieldMetadata, len(validatedFieldPaths))
+	derivedFieldsMeta := make(map[string]controlapipkg.ResultFieldMetadata, len(validatedFieldPaths))
 	for _, selectedFieldPath := range validatedFieldPaths {
 		sourceFieldValue, found := parsedSource[selectedFieldPath]
 		if !found {
@@ -209,13 +210,13 @@ func materializeDerivedArtifactFromSource(rawSourcePayload string, selectedField
 	return derivedArtifact, derivedFieldsMeta, nil
 }
 
-func derivePromotedFieldMetadata(sourceFieldValue interface{}, promotionTarget string) (ResultFieldMetadata, error) {
-	resultFieldMetadata := ResultFieldMetadata{
-		Origin:      ResultFieldOriginRemote,
-		Trust:       ResultFieldTrustDeterministic,
-		Kind:        ResultFieldKindScalar,
+func derivePromotedFieldMetadata(sourceFieldValue interface{}, promotionTarget string) (controlapipkg.ResultFieldMetadata, error) {
+	resultFieldMetadata := controlapipkg.ResultFieldMetadata{
+		Origin:      controlapipkg.ResultFieldOriginRemote,
+		Trust:       controlapipkg.ResultFieldTrustDeterministic,
+		Kind:        controlapipkg.ResultFieldKindScalar,
 		ContentType: contentTypeApplicationJSON,
-		Sensitivity: ResultFieldSensitivityBenign,
+		Sensitivity: controlapipkg.ResultFieldSensitivityBenign,
 	}
 
 	switch typedSourceFieldValue := sourceFieldValue.(type) {
@@ -223,38 +224,38 @@ func derivePromotedFieldMetadata(sourceFieldValue interface{}, promotionTarget s
 		resultFieldMetadata.ContentType = "text/plain"
 		resultFieldMetadata.SizeBytes = len(typedSourceFieldValue)
 		if normalizedTimestamp, ok := normalizePromotableTimestamp(typedSourceFieldValue); ok {
-			resultFieldMetadata.ScalarSubclass = ResultFieldScalarSubclassTimestamp
+			resultFieldMetadata.ScalarSubclass = controlapipkg.ResultFieldScalarSubclassTimestamp
 			resultFieldMetadata.SizeBytes = len(normalizedTimestamp)
 			break
 		}
 		if identifiers.ValidateSafeIdentifier("promoted strict identifier", typedSourceFieldValue) == nil {
-			resultFieldMetadata.ScalarSubclass = ResultFieldScalarSubclassStrictIdentifier
+			resultFieldMetadata.ScalarSubclass = controlapipkg.ResultFieldScalarSubclassStrictIdentifier
 			break
 		}
-		resultFieldMetadata.Sensitivity = ResultFieldSensitivityTaintedText
-		resultFieldMetadata.ScalarSubclass = ResultFieldScalarSubclassShortTextLabel
+		resultFieldMetadata.Sensitivity = controlapipkg.ResultFieldSensitivityTaintedText
+		resultFieldMetadata.ScalarSubclass = controlapipkg.ResultFieldScalarSubclassShortTextLabel
 		if promotionTarget != PromotionTargetDisplay {
-			return ResultFieldMetadata{}, fmt.Errorf("tainted scalar text is display-only in v1")
+			return controlapipkg.ResultFieldMetadata{}, fmt.Errorf("tainted scalar text is display-only in v1")
 		}
 	case bool:
 		resultFieldMetadata.SizeBytes = len(fmt.Sprintf("%t", typedSourceFieldValue))
-		resultFieldMetadata.ScalarSubclass = ResultFieldScalarSubclassBoolean
+		resultFieldMetadata.ScalarSubclass = controlapipkg.ResultFieldScalarSubclassBoolean
 	case float64:
 		marshaledNumber, err := json.Marshal(typedSourceFieldValue)
 		if err != nil {
-			return ResultFieldMetadata{}, fmt.Errorf("marshal numeric source field: %w", err)
+			return controlapipkg.ResultFieldMetadata{}, fmt.Errorf("marshal numeric source field: %w", err)
 		}
 		resultFieldMetadata.SizeBytes = len(marshaledNumber)
 		if promotionTarget != PromotionTargetDisplay {
-			return ResultFieldMetadata{}, fmt.Errorf("unclassified numeric scalar is display-only until a validated_number policy exists")
+			return controlapipkg.ResultFieldMetadata{}, fmt.Errorf("unclassified numeric scalar is display-only until a validated_number policy exists")
 		}
 	case nil:
 		resultFieldMetadata.SizeBytes = len("null")
 		if promotionTarget != PromotionTargetDisplay {
-			return ResultFieldMetadata{}, fmt.Errorf("null scalar is display-only in v1")
+			return controlapipkg.ResultFieldMetadata{}, fmt.Errorf("null scalar is display-only in v1")
 		}
 	default:
-		return ResultFieldMetadata{}, fmt.Errorf("non-scalar source fields are not promotable in v1")
+		return controlapipkg.ResultFieldMetadata{}, fmt.Errorf("non-scalar source fields are not promotable in v1")
 	}
 
 	switch promotionTarget {
@@ -263,7 +264,7 @@ func derivePromotedFieldMetadata(sourceFieldValue interface{}, promotionTarget s
 	case PromotionTargetPrompt:
 		resultFieldMetadata.PromptEligible = true
 	default:
-		return ResultFieldMetadata{}, fmt.Errorf("invalid promotion target %q", promotionTarget)
+		return controlapipkg.ResultFieldMetadata{}, fmt.Errorf("invalid promotion target %q", promotionTarget)
 	}
 	return resultFieldMetadata, nil
 }
@@ -280,21 +281,21 @@ func normalizePromotableTimestamp(rawValue string) (string, bool) {
 	return parsedTimestamp.UTC().Format(time.RFC3339), true
 }
 
-func canonicalDerivedClassificationForTarget(promotionTarget string) (ResultClassification, error) {
+func canonicalDerivedClassificationForTarget(promotionTarget string) (controlapipkg.ResultClassification, error) {
 	switch promotionTarget {
 	case PromotionTargetDisplay:
-		return normalizeResultClassification(ResultClassification{
-			Exposure: ResultExposureDisplay,
+		return normalizeResultClassification(controlapipkg.ResultClassification{
+			Exposure: controlapipkg.ResultExposureDisplay,
 		}, "")
 	case PromotionTargetPrompt:
-		return normalizeResultClassification(ResultClassification{
-			Exposure: ResultExposureNone,
-			Eligibility: ResultEligibility{
+		return normalizeResultClassification(controlapipkg.ResultClassification{
+			Exposure: controlapipkg.ResultExposureNone,
+			Eligibility: controlapipkg.ResultEligibility{
 				Prompt: true,
 			},
 		}, "")
 	default:
-		return ResultClassification{}, fmt.Errorf("invalid promotion target %q", promotionTarget)
+		return controlapipkg.ResultClassification{}, fmt.Errorf("invalid promotion target %q", promotionTarget)
 	}
 }
 

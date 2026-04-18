@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 )
 
 func TestSessionAuthReplayOverRealSocket(t *testing.T) {
@@ -13,7 +13,7 @@ func TestSessionAuthReplayOverRealSocket(t *testing.T) {
 	status := harness.waitForStatus(t)
 	credentials := harness.openSession(t, "integration-actor", "integration-session", capabilityNames(status.Capabilities))
 
-	requestBody := mustJSON(t, loopgate.CapabilityRequest{
+	requestBody := mustJSON(t, controlapipkg.CapabilityRequest{
 		RequestID:  "req-replayed-nonce",
 		Capability: "fs_list",
 		Arguments: map[string]string{
@@ -35,9 +35,9 @@ func TestSessionAuthReplayOverRealSocket(t *testing.T) {
 	if firstStatusCode != http.StatusOK {
 		t.Fatalf("first signed request returned status %d: %s", firstStatusCode, string(firstBody))
 	}
-	var firstResponse loopgate.CapabilityResponse
+	var firstResponse controlapipkg.CapabilityResponse
 	decodeJSON(t, firstBody, &firstResponse)
-	if firstResponse.Status != loopgate.ResponseStatusSuccess {
+	if firstResponse.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected first signed request success, got %#v", firstResponse)
 	}
 
@@ -53,10 +53,10 @@ func TestSessionAuthReplayOverRealSocket(t *testing.T) {
 	if replayedStatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected replayed request to return %d, got %d with body %s", http.StatusUnauthorized, replayedStatusCode, string(replayedBody))
 	}
-	var replayedResponse loopgate.CapabilityResponse
+	var replayedResponse controlapipkg.CapabilityResponse
 	decodeJSON(t, replayedBody, &replayedResponse)
-	if replayedResponse.DenialCode != loopgate.DenialCodeRequestNonceReplayDetected {
-		t.Fatalf("expected replay denial code %q, got %#v", loopgate.DenialCodeRequestNonceReplayDetected, replayedResponse)
+	if replayedResponse.DenialCode != controlapipkg.DenialCodeRequestNonceReplayDetected {
+		t.Fatalf("expected replay denial code %q, got %#v", controlapipkg.DenialCodeRequestNonceReplayDetected, replayedResponse)
 	}
 
 	invalidNonce := "invalid-signature"
@@ -87,9 +87,9 @@ func TestSessionAuthReplayOverRealSocket(t *testing.T) {
 	if invalidStatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected invalid signature request to return %d, got %d with body %s", http.StatusUnauthorized, invalidStatusCode, string(invalidBody))
 	}
-	var invalidResponse loopgate.CapabilityResponse
+	var invalidResponse controlapipkg.CapabilityResponse
 	decodeJSON(t, invalidBody, &invalidResponse)
-	if invalidResponse.DenialCode != loopgate.DenialCodeRequestSignatureInvalid {
-		t.Fatalf("expected invalid signature denial code %q, got %#v", loopgate.DenialCodeRequestSignatureInvalid, invalidResponse)
+	if invalidResponse.DenialCode != controlapipkg.DenialCodeRequestSignatureInvalid {
+		t.Fatalf("expected invalid signature denial code %q, got %#v", controlapipkg.DenialCodeRequestSignatureInvalid, invalidResponse)
 	}
 }

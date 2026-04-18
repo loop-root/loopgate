@@ -3,70 +3,71 @@ package loopgate
 import (
 	"context"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 )
 
-func (client *Client) UIStatus(ctx context.Context) (UIStatusResponse, error) {
+func (client *Client) UIStatus(ctx context.Context) (controlapipkg.UIStatusResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return UIStatusResponse{}, err
+		return controlapipkg.UIStatusResponse{}, err
 	}
 
-	var response UIStatusResponse
+	var response controlapipkg.UIStatusResponse
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/ui/status", token, nil, &response, nil); err != nil {
-		return UIStatusResponse{}, err
+		return controlapipkg.UIStatusResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) UpdateUIOperatorMountWriteGrant(ctx context.Context, request UIOperatorMountWriteGrantUpdateRequest) (UIOperatorMountWriteGrantStatusResponse, error) {
+func (client *Client) UpdateUIOperatorMountWriteGrant(ctx context.Context, request controlapipkg.UIOperatorMountWriteGrantUpdateRequest) (controlapipkg.UIOperatorMountWriteGrantStatusResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return UIOperatorMountWriteGrantStatusResponse{}, err
+		return controlapipkg.UIOperatorMountWriteGrantStatusResponse{}, err
 	}
 
-	var response UIOperatorMountWriteGrantStatusResponse
+	var response controlapipkg.UIOperatorMountWriteGrantStatusResponse
 	if err := client.doJSON(ctx, http.MethodPut, "/v1/ui/operator-mount-write-grants", token, request, &response, nil); err != nil {
-		return UIOperatorMountWriteGrantStatusResponse{}, err
+		return controlapipkg.UIOperatorMountWriteGrantStatusResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) UIApprovals(ctx context.Context) (UIApprovalsResponse, error) {
+func (client *Client) UIApprovals(ctx context.Context) (controlapipkg.UIApprovalsResponse, error) {
 	approvalToken, err := client.ensureApprovalToken(ctx)
 	if err != nil {
-		return UIApprovalsResponse{}, err
+		return controlapipkg.UIApprovalsResponse{}, err
 	}
 
-	var response UIApprovalsResponse
+	var response controlapipkg.UIApprovalsResponse
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/ui/approvals", "", nil, &response, map[string]string{
 		"X-Loopgate-Approval-Token": approvalToken,
 	}); err != nil {
-		return UIApprovalsResponse{}, err
+		return controlapipkg.UIApprovalsResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) UIDecideApproval(ctx context.Context, approvalRequestID string, approved bool) (CapabilityResponse, error) {
+func (client *Client) UIDecideApproval(ctx context.Context, approvalRequestID string, approved bool) (controlapipkg.CapabilityResponse, error) {
 	return client.UIDecideApprovalWithReason(ctx, approvalRequestID, approved, "")
 }
 
-func (client *Client) UIDecideApprovalWithReason(ctx context.Context, approvalRequestID string, approved bool, reason string) (CapabilityResponse, error) {
+func (client *Client) UIDecideApprovalWithReason(ctx context.Context, approvalRequestID string, approved bool, reason string) (controlapipkg.CapabilityResponse, error) {
 	approvalToken, err := client.ensureApprovalToken(ctx)
 	if err != nil {
-		return CapabilityResponse{}, err
+		return controlapipkg.CapabilityResponse{}, err
 	}
 
-	var response CapabilityResponse
+	var response controlapipkg.CapabilityResponse
 	path := fmt.Sprintf("/v1/ui/approvals/%s/decision", approvalRequestID)
-	if err := client.doCapabilityJSON(ctx, client.defaultRequestTimeout, http.MethodPost, path, "", UIApprovalDecisionRequest{
+	if err := client.doCapabilityJSON(ctx, client.defaultRequestTimeout, http.MethodPost, path, "", controlapipkg.UIApprovalDecisionRequest{
 		Approved: &approved,
 		Reason:   strings.TrimSpace(reason),
 	}, &response, map[string]string{
 		"X-Loopgate-Approval-Token": approvalToken,
 	}); err != nil {
-		return CapabilityResponse{}, err
+		return controlapipkg.CapabilityResponse{}, err
 	}
 	client.mu.Lock()
 	delete(client.approvalDecisionNonce, approvalRequestID)
@@ -74,67 +75,67 @@ func (client *Client) UIDecideApprovalWithReason(ctx context.Context, approvalRe
 	return response, nil
 }
 
-func (client *Client) SharedFolderStatus(ctx context.Context) (SharedFolderStatusResponse, error) {
+func (client *Client) SharedFolderStatus(ctx context.Context) (controlapipkg.SharedFolderStatusResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return SharedFolderStatusResponse{}, err
+		return controlapipkg.SharedFolderStatusResponse{}, err
 	}
 
-	var response SharedFolderStatusResponse
+	var response controlapipkg.SharedFolderStatusResponse
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/ui/shared-folder", token, nil, &response, nil); err != nil {
-		return SharedFolderStatusResponse{}, err
+		return controlapipkg.SharedFolderStatusResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) SyncSharedFolder(ctx context.Context) (SharedFolderStatusResponse, error) {
+func (client *Client) SyncSharedFolder(ctx context.Context) (controlapipkg.SharedFolderStatusResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return SharedFolderStatusResponse{}, err
+		return controlapipkg.SharedFolderStatusResponse{}, err
 	}
 
-	var response SharedFolderStatusResponse
+	var response controlapipkg.SharedFolderStatusResponse
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/ui/shared-folder/sync", token, struct{}{}, &response, nil); err != nil {
-		return SharedFolderStatusResponse{}, err
+		return controlapipkg.SharedFolderStatusResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) FolderAccessStatus(ctx context.Context) (FolderAccessStatusResponse, error) {
+func (client *Client) FolderAccessStatus(ctx context.Context) (controlapipkg.FolderAccessStatusResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return FolderAccessStatusResponse{}, err
+		return controlapipkg.FolderAccessStatusResponse{}, err
 	}
 
-	var response FolderAccessStatusResponse
+	var response controlapipkg.FolderAccessStatusResponse
 	if err := client.doJSON(ctx, http.MethodGet, "/v1/ui/folder-access", token, nil, &response, nil); err != nil {
-		return FolderAccessStatusResponse{}, err
+		return controlapipkg.FolderAccessStatusResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) SyncFolderAccess(ctx context.Context) (FolderAccessSyncResponse, error) {
+func (client *Client) SyncFolderAccess(ctx context.Context) (controlapipkg.FolderAccessSyncResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return FolderAccessSyncResponse{}, err
+		return controlapipkg.FolderAccessSyncResponse{}, err
 	}
 
-	var response FolderAccessSyncResponse
+	var response controlapipkg.FolderAccessSyncResponse
 	if err := client.doJSON(ctx, http.MethodPost, "/v1/ui/folder-access/sync", token, struct{}{}, &response, nil); err != nil {
-		return FolderAccessSyncResponse{}, err
+		return controlapipkg.FolderAccessSyncResponse{}, err
 	}
 	return response, nil
 }
 
-func (client *Client) UpdateFolderAccess(ctx context.Context, request FolderAccessUpdateRequest) (FolderAccessStatusResponse, error) {
+func (client *Client) UpdateFolderAccess(ctx context.Context, request controlapipkg.FolderAccessUpdateRequest) (controlapipkg.FolderAccessStatusResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {
-		return FolderAccessStatusResponse{}, err
+		return controlapipkg.FolderAccessStatusResponse{}, err
 	}
 
-	var response FolderAccessStatusResponse
+	var response controlapipkg.FolderAccessStatusResponse
 	if err := client.doJSON(ctx, http.MethodPut, "/v1/ui/folder-access", token, request, &response, nil); err != nil {
-		return FolderAccessStatusResponse{}, err
+		return controlapipkg.FolderAccessStatusResponse{}, err
 	}
 	return response, nil
 }

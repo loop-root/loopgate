@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,7 @@ import (
 	policypkg "loopgate/internal/policy"
 )
 
-func (server *Server) evaluateClaudeCodeHookPolicy(req HookPreValidateRequest, toolDef struct {
+func (server *Server) evaluateClaudeCodeHookPolicy(req controlapipkg.HookPreValidateRequest, toolDef struct {
 	category  string
 	operation string
 }) policypkg.CheckResult {
@@ -54,7 +55,7 @@ func (server *Server) evaluateClaudeCodeHookPolicy(req HookPreValidateRequest, t
 	return baseResult
 }
 
-func (server *Server) applyClaudeCodeHookConstraints(req HookPreValidateRequest, toolPolicy config.ClaudeCodeToolPolicy) (policypkg.CheckResult, bool) {
+func (server *Server) applyClaudeCodeHookConstraints(req controlapipkg.HookPreValidateRequest, toolPolicy config.ClaudeCodeToolPolicy) (policypkg.CheckResult, bool) {
 	switch req.ToolName {
 	case "Bash":
 		return server.applyClaudeCodeBashConstraints(req, toolPolicy)
@@ -67,7 +68,7 @@ func (server *Server) applyClaudeCodeHookConstraints(req HookPreValidateRequest,
 	}
 }
 
-func (server *Server) applyClaudeCodeBashConstraints(req HookPreValidateRequest, toolPolicy config.ClaudeCodeToolPolicy) (policypkg.CheckResult, bool) {
+func (server *Server) applyClaudeCodeBashConstraints(req controlapipkg.HookPreValidateRequest, toolPolicy config.ClaudeCodeToolPolicy) (policypkg.CheckResult, bool) {
 	if len(toolPolicy.AllowedCommandPrefixes) == 0 && len(toolPolicy.DeniedCommandPrefixes) == 0 {
 		return policypkg.CheckResult{}, false
 	}
@@ -79,9 +80,10 @@ func (server *Server) applyClaudeCodeBashConstraints(req HookPreValidateRequest,
 			Reason:   "bash command policy requires tool_input.command",
 		}, true
 	}
+	normalizedCommandText := normalizeWhitespaceForPrefixMatch(commandText)
 
 	for _, deniedPrefix := range toolPolicy.DeniedCommandPrefixes {
-		if strings.HasPrefix(commandText, deniedPrefix) {
+		if strings.HasPrefix(normalizedCommandText, normalizeWhitespaceForPrefixMatch(deniedPrefix)) {
 			return policypkg.CheckResult{
 				Decision: policypkg.Deny,
 				Reason:   fmt.Sprintf("bash command matches denied prefix %q", deniedPrefix),
@@ -94,7 +96,7 @@ func (server *Server) applyClaudeCodeBashConstraints(req HookPreValidateRequest,
 	}
 
 	for _, allowedPrefix := range toolPolicy.AllowedCommandPrefixes {
-		if strings.HasPrefix(commandText, allowedPrefix) {
+		if strings.HasPrefix(normalizedCommandText, normalizeWhitespaceForPrefixMatch(allowedPrefix)) {
 			return policypkg.CheckResult{}, false
 		}
 	}
@@ -105,7 +107,11 @@ func (server *Server) applyClaudeCodeBashConstraints(req HookPreValidateRequest,
 	}, true
 }
 
-func (server *Server) applyClaudeCodePathConstraints(req HookPreValidateRequest, toolPolicy config.ClaudeCodeToolPolicy) (policypkg.CheckResult, bool) {
+func normalizeWhitespaceForPrefixMatch(rawValue string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(rawValue)), " ")
+}
+
+func (server *Server) applyClaudeCodePathConstraints(req controlapipkg.HookPreValidateRequest, toolPolicy config.ClaudeCodeToolPolicy) (policypkg.CheckResult, bool) {
 	policyRuntime := server.currentPolicyRuntime()
 	allowedRoots := toolPolicy.AllowedRoots
 	if len(allowedRoots) == 0 {
@@ -155,7 +161,7 @@ func (server *Server) applyClaudeCodePathConstraints(req HookPreValidateRequest,
 	return policypkg.CheckResult{}, false
 }
 
-func (server *Server) applyClaudeCodeWebFetchConstraints(req HookPreValidateRequest, toolPolicy config.ClaudeCodeToolPolicy) (policypkg.CheckResult, bool) {
+func (server *Server) applyClaudeCodeWebFetchConstraints(req controlapipkg.HookPreValidateRequest, toolPolicy config.ClaudeCodeToolPolicy) (policypkg.CheckResult, bool) {
 	policyRuntime := server.currentPolicyRuntime()
 	allowedDomains := toolPolicy.AllowedDomains
 	if len(allowedDomains) == 0 {
@@ -210,7 +216,7 @@ func hookInputString(toolInput map[string]interface{}, fieldName string) (string
 	return trimmedValue, true
 }
 
-func hookTargetPaths(req HookPreValidateRequest) ([]string, bool) {
+func hookTargetPaths(req controlapipkg.HookPreValidateRequest) ([]string, bool) {
 	switch req.ToolName {
 	case "Read", "Write", "Edit", "MultiEdit":
 		filePath, ok := hookInputString(req.ToolInput, "file_path")

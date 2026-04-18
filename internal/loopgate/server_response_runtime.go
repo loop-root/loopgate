@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"encoding/json"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 )
 
@@ -17,49 +18,49 @@ func encodeJSONResponse(writer http.ResponseWriter, payload interface{}) error {
 	return json.NewEncoder(writer).Encode(payload)
 }
 
-func auditUnavailableCapabilityResponse(requestID string) CapabilityResponse {
-	return CapabilityResponse{
+func auditUnavailableCapabilityResponse(requestID string) controlapipkg.CapabilityResponse {
+	return controlapipkg.CapabilityResponse{
 		RequestID:    requestID,
-		Status:       ResponseStatusError,
+		Status:       controlapipkg.ResponseStatusError,
 		DenialReason: "control-plane audit is unavailable",
-		DenialCode:   DenialCodeAuditUnavailable,
+		DenialCode:   controlapipkg.DenialCodeAuditUnavailable,
 	}
 }
 
-func httpStatusForResponse(response CapabilityResponse) int {
+func httpStatusForResponse(response controlapipkg.CapabilityResponse) int {
 	switch response.Status {
-	case ResponseStatusSuccess:
+	case controlapipkg.ResponseStatusSuccess:
 		return http.StatusOK
-	case ResponseStatusPendingApproval:
+	case controlapipkg.ResponseStatusPendingApproval:
 		return http.StatusAccepted
-	case ResponseStatusDenied:
+	case controlapipkg.ResponseStatusDenied:
 		switch response.DenialCode {
-		case DenialCodeCapabilityTokenMissing, DenialCodeCapabilityTokenInvalid, DenialCodeCapabilityTokenExpired,
-			DenialCodeApprovalTokenMissing, DenialCodeApprovalTokenInvalid, DenialCodeApprovalTokenExpired,
-			DenialCodeRequestSignatureMissing, DenialCodeRequestSignatureInvalid, DenialCodeRequestTimestampInvalid,
-			DenialCodeRequestNonceReplayDetected, DenialCodeControlSessionBindingInvalid:
+		case controlapipkg.DenialCodeCapabilityTokenMissing, controlapipkg.DenialCodeCapabilityTokenInvalid, controlapipkg.DenialCodeCapabilityTokenExpired,
+			controlapipkg.DenialCodeApprovalTokenMissing, controlapipkg.DenialCodeApprovalTokenInvalid, controlapipkg.DenialCodeApprovalTokenExpired,
+			controlapipkg.DenialCodeRequestSignatureMissing, controlapipkg.DenialCodeRequestSignatureInvalid, controlapipkg.DenialCodeRequestTimestampInvalid,
+			controlapipkg.DenialCodeRequestNonceReplayDetected, controlapipkg.DenialCodeControlSessionBindingInvalid:
 			return http.StatusUnauthorized
-		case DenialCodeApprovalNotFound:
+		case controlapipkg.DenialCodeApprovalNotFound:
 			return http.StatusNotFound
-		case DenialCodeRequestReplayDetected, DenialCodeCapabilityTokenReused, DenialCodeApprovalStateConflict,
-			DenialCodeQuarantinePruneNotEligible:
+		case controlapipkg.DenialCodeRequestReplayDetected, controlapipkg.DenialCodeCapabilityTokenReused, controlapipkg.DenialCodeApprovalStateConflict,
+			controlapipkg.DenialCodeQuarantinePruneNotEligible:
 			return http.StatusConflict
-		case DenialCodeSessionOpenRateLimited, DenialCodeSessionActiveLimitReached, DenialCodeReplayStateSaturated, DenialCodePendingApprovalLimitReached, DenialCodeControlPlaneStateSaturated:
+		case controlapipkg.DenialCodeSessionOpenRateLimited, controlapipkg.DenialCodeSessionActiveLimitReached, controlapipkg.DenialCodeReplayStateSaturated, controlapipkg.DenialCodePendingApprovalLimitReached, controlapipkg.DenialCodeControlPlaneStateSaturated:
 			return http.StatusTooManyRequests
-		case DenialCodeMalformedRequest, DenialCodeInvalidCapabilityArguments, DenialCodeSiteURLInvalid,
-			DenialCodeSiteInspectionUnsupportedType, DenialCodeSandboxPathInvalid, DenialCodeSandboxHostDestinationInvalid,
-			DenialCodeApprovalDecisionNonceMissing, DenialCodeApprovalDecisionNonceInvalid,
-			DenialCodeApprovalManifestMismatch:
+		case controlapipkg.DenialCodeMalformedRequest, controlapipkg.DenialCodeInvalidCapabilityArguments, controlapipkg.DenialCodeSiteURLInvalid,
+			controlapipkg.DenialCodeSiteInspectionUnsupportedType, controlapipkg.DenialCodeSandboxPathInvalid, controlapipkg.DenialCodeSandboxHostDestinationInvalid,
+			controlapipkg.DenialCodeApprovalDecisionNonceMissing, controlapipkg.DenialCodeApprovalDecisionNonceInvalid,
+			controlapipkg.DenialCodeApprovalManifestMismatch:
 			return http.StatusBadRequest
 		default:
 			return http.StatusForbidden
 		}
-	case ResponseStatusError:
+	case controlapipkg.ResponseStatusError:
 		switch response.DenialCode {
-		case DenialCodeMalformedRequest, DenialCodeSiteURLInvalid, DenialCodeSiteInspectionUnsupportedType,
-			DenialCodeSandboxPathInvalid, DenialCodeSandboxHostDestinationInvalid:
+		case controlapipkg.DenialCodeMalformedRequest, controlapipkg.DenialCodeSiteURLInvalid, controlapipkg.DenialCodeSiteInspectionUnsupportedType,
+			controlapipkg.DenialCodeSandboxPathInvalid, controlapipkg.DenialCodeSandboxHostDestinationInvalid:
 			return http.StatusBadRequest
-		case DenialCodeAuditUnavailable:
+		case controlapipkg.DenialCodeAuditUnavailable:
 			return http.StatusServiceUnavailable
 		default:
 			return http.StatusInternalServerError

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, ca
 	return client.doJSONWithTimeout(ctx, client.defaultRequestTimeout, method, path, capabilityToken, requestBody, responseBody, extraHeaders)
 }
 
-func (client *Client) doCapabilityJSON(ctx context.Context, requestTimeout time.Duration, method string, path string, capabilityToken string, requestBody interface{}, responseBody *CapabilityResponse, extraHeaders map[string]string) error {
+func (client *Client) doCapabilityJSON(ctx context.Context, requestTimeout time.Duration, method string, path string, capabilityToken string, requestBody interface{}, responseBody *controlapipkg.CapabilityResponse, extraHeaders map[string]string) error {
 	return client.doCapabilityJSONWithTimeoutRetry(ctx, requestTimeout, method, path, capabilityToken, requestBody, responseBody, extraHeaders, false)
 }
 
@@ -72,7 +73,7 @@ func (client *Client) doJSONWithTimeoutRetry(ctx context.Context, requestTimeout
 	defer httpResponse.Body.Close()
 
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
-		var errorResponse CapabilityResponse
+		var errorResponse controlapipkg.CapabilityResponse
 		if decodeErr := json.NewDecoder(httpResponse.Body).Decode(&errorResponse); decodeErr == nil && strings.TrimSpace(errorResponse.DenialReason) != "" {
 			if !retried && strings.TrimSpace(capabilityToken) != "" && client.canRetryCapabilityToken(errorResponse.DenialCode) {
 				if refreshedToken, retryErr := client.refreshCapabilityToken(requestContext); retryErr == nil {
@@ -96,7 +97,7 @@ func (client *Client) doJSONWithTimeoutRetry(ctx context.Context, requestTimeout
 	return nil
 }
 
-func (client *Client) doCapabilityJSONWithTimeoutRetry(ctx context.Context, requestTimeout time.Duration, method string, path string, capabilityToken string, requestBody interface{}, responseBody *CapabilityResponse, extraHeaders map[string]string, retried bool) error {
+func (client *Client) doCapabilityJSONWithTimeoutRetry(ctx context.Context, requestTimeout time.Duration, method string, path string, capabilityToken string, requestBody interface{}, responseBody *controlapipkg.CapabilityResponse, extraHeaders map[string]string, retried bool) error {
 	requestContext := ctx
 	cancel := func() {}
 	if _, hasDeadline := requestContext.Deadline(); !hasDeadline && requestTimeout > 0 {

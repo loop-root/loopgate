@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -89,7 +90,7 @@ func TestRegisterConnection_PersistsSecretRefOnly(t *testing.T) {
 
 	connectionStatus, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "github",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "repo-bot",
 		Scopes:    []string{"repo.read", "repo.read"},
 		Credential: secrets.SecretRef{
@@ -138,7 +139,7 @@ func TestResolveConnectionSecret_UsesLoopgateOwnedReference(t *testing.T) {
 
 	_, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "slack",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "workspace-bot",
 		Scopes:    []string{"chat.write"},
 		Credential: secrets.SecretRef{
@@ -176,7 +177,7 @@ func TestRegisterConnection_FailsClosedOnUnavailableSecureBackend(t *testing.T) 
 
 	_, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "notion",
-		GrantType: GrantTypeAuthorizationCode,
+		GrantType: controlapipkg.GrantTypeAuthorizationCode,
 		Subject:   "workspace-1",
 		Scopes:    []string{"pages.read"},
 		Credential: secrets.SecretRef{
@@ -213,7 +214,7 @@ func TestConnectionStatuses_IncludesConfiguredPublicReadConnections(t *testing.T
 	if len(status.Connections) != 1 {
 		t.Fatalf("expected one configured public connection, got %#v", status.Connections)
 	}
-	if status.Connections[0].GrantType != GrantTypePublicRead {
+	if status.Connections[0].GrantType != controlapipkg.GrantTypePublicRead {
 		t.Fatalf("unexpected connection summary: %#v", status.Connections[0])
 	}
 	if status.Connections[0].SecureStoreRefID != "none" {
@@ -237,7 +238,7 @@ func TestSaveConnectionRecords_UsesUniqueTempPath(t *testing.T) {
 	connectionRecords := map[string]connectionRecord{
 		connectionRecordKey("github", "repo-bot"): {
 			Provider:  "github",
-			GrantType: GrantTypeClientCredentials,
+			GrantType: controlapipkg.GrantTypeClientCredentials,
 			Subject:   "repo-bot",
 			Scopes:    []string{"repo.read"},
 			Credential: secrets.SecretRef{
@@ -276,7 +277,7 @@ func TestUpsertConnectionCredential_PersistsOnlySecretRefMetadata(t *testing.T) 
 
 	connectionStatus, err := server.UpsertConnectionCredential(context.Background(), connectionRegistration{
 		Provider:  "github",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "repo-bot",
 		Scopes:    []string{"repo.read"},
 		Credential: secrets.SecretRef{
@@ -329,7 +330,7 @@ func TestUpsertConnectionCredential_AuditFailureSurfacesSecretCleanupError(t *te
 
 	_, err := server.UpsertConnectionCredential(context.Background(), connectionRegistration{
 		Provider:  "github",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "repo-bot",
 		Scopes:    []string{"repo.read"},
 		Credential: secrets.SecretRef{
@@ -372,7 +373,7 @@ func TestValidateConnection_UpdatesStatusAndValidationTimestamp(t *testing.T) {
 
 	_, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "slack",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "workspace-bot",
 		Scopes:    []string{"chat.write"},
 		Credential: secrets.SecretRef{
@@ -422,7 +423,7 @@ func TestRotateConnectionCredential_OverwritesExistingSecretSafely(t *testing.T)
 
 	registration := connectionRegistration{
 		Provider:  "github",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "repo-bot",
 		Scopes:    []string{"repo.read"},
 		Credential: secrets.SecretRef{
@@ -463,7 +464,7 @@ func TestRotateConnectionCredential_InvalidatesCachedProviderToken(t *testing.T)
 
 	registration := connectionRegistration{
 		Provider:  "github",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "repo-bot",
 		Scopes:    []string{"repo.read"},
 		Credential: secrets.SecretRef{
@@ -511,7 +512,7 @@ func TestRotateConnectionCredential_RestoresPreviousSecretOnAuditFailure(t *test
 
 	registration := connectionRegistration{
 		Provider:  "github",
-		GrantType: GrantTypeClientCredentials,
+		GrantType: controlapipkg.GrantTypeClientCredentials,
 		Subject:   "repo-bot",
 		Scopes:    []string{"repo.read"},
 		Credential: secrets.SecretRef{

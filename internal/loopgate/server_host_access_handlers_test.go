@@ -3,6 +3,7 @@ package loopgate
 import (
 	"context"
 	"encoding/json"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,14 +55,14 @@ func TestExecuteHostPlanApply_UnknownPlanIDExplainsRecovery(t *testing.T) {
 	}
 
 	tok := capabilityToken{ControlSessionID: "cs-1", ActorLabel: "operator", ClientSessionLabel: "cli-1"}
-	req := CapabilityRequest{
+	req := controlapipkg.CapabilityRequest{
 		RequestID:  "r1",
 		Capability: "host.plan.apply",
 		Arguments:  map[string]string{"plan_id": "nonexistentplanid0000000000000000"},
 	}
 
 	resp := server.executeHostPlanApplyCapability(tok, req)
-	if resp.Status != ResponseStatusError {
+	if resp.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected error status, got %#v", resp)
 	}
 	if want := "no stored plan matches"; !strings.Contains(resp.DenialReason, want) {
@@ -89,14 +90,14 @@ func TestExecuteHostPlanApply_DuplicateApplyAfterSuccessHintsAlreadyUsed(t *test
 	}
 
 	tok := capabilityToken{ControlSessionID: "cs-1", ActorLabel: "operator", ClientSessionLabel: "cli-1"}
-	req := CapabilityRequest{
+	req := controlapipkg.CapabilityRequest{
 		RequestID:  "r2",
 		Capability: "host.plan.apply",
 		Arguments:  map[string]string{"plan_id": planID},
 	}
 
 	resp := server.executeHostPlanApplyCapability(tok, req)
-	if resp.Status != ResponseStatusError {
+	if resp.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected error status, got %#v", resp)
 	}
 	if want := "already used"; !strings.Contains(resp.DenialReason, want) {
@@ -130,7 +131,7 @@ func TestExecuteHostFolderRead_DeniesSymlinkEscape(t *testing.T) {
 
 	resp := server.executeHostFolderReadCapability(
 		capabilityToken{ControlSessionID: "cs-downloads", ActorLabel: "operator", ClientSessionLabel: "operator-session"},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-host-read-symlink",
 			Capability: "host.folder.read",
 			Arguments: map[string]string{
@@ -140,10 +141,10 @@ func TestExecuteHostFolderRead_DeniesSymlinkEscape(t *testing.T) {
 		},
 	)
 
-	if resp.Status != ResponseStatusError {
+	if resp.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected read denial, got %#v", resp)
 	}
-	if resp.DenialCode != DenialCodeInvalidCapabilityArguments {
+	if resp.DenialCode != controlapipkg.DenialCodeInvalidCapabilityArguments {
 		t.Fatalf("expected invalid-arguments denial, got %#v", resp)
 	}
 }
@@ -168,7 +169,7 @@ func TestExecuteHostFolderList_DeniesSymlinkDirectoryEscape(t *testing.T) {
 
 	resp := server.executeHostFolderListCapability(
 		capabilityToken{ControlSessionID: "cs-downloads", ActorLabel: "operator", ClientSessionLabel: "operator-session"},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-host-list-symlink",
 			Capability: "host.folder.list",
 			Arguments: map[string]string{
@@ -178,10 +179,10 @@ func TestExecuteHostFolderList_DeniesSymlinkDirectoryEscape(t *testing.T) {
 		},
 	)
 
-	if resp.Status != ResponseStatusError {
+	if resp.Status != controlapipkg.ResponseStatusError {
 		t.Fatalf("expected list denial, got %#v", resp)
 	}
-	if resp.DenialCode != DenialCodeInvalidCapabilityArguments {
+	if resp.DenialCode != controlapipkg.DenialCodeInvalidCapabilityArguments {
 		t.Fatalf("expected invalid-arguments denial, got %#v", resp)
 	}
 }
@@ -223,7 +224,7 @@ func TestExecuteCapabilityRequest_HostPlanApplyMoveOnlyWithinGrantedDownloadsByp
 			AllowedCapabilities: capabilitySet([]string{"host.plan.apply"}),
 			ExpiresAt:           server.now().UTC().Add(time.Hour),
 		},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-downloads-allow",
 			Capability: "host.plan.apply",
 			Arguments:  map[string]string{"plan_id": planID},
@@ -234,7 +235,7 @@ func TestExecuteCapabilityRequest_HostPlanApplyMoveOnlyWithinGrantedDownloadsByp
 	if resp.ApprovalRequired {
 		t.Fatalf("expected low-risk host plan apply to bypass approval, got %#v", resp)
 	}
-	if resp.Status != ResponseStatusSuccess {
+	if resp.Status != controlapipkg.ResponseStatusSuccess {
 		t.Fatalf("expected success, got %#v", resp)
 	}
 	if _, err := os.Stat(filepath.Join(downloadsDir, "Archives", "report.pdf")); err != nil {
@@ -284,7 +285,7 @@ func TestExecuteCapabilityRequest_HostPlanApplyOverwriteRiskStillRequiresApprova
 			AllowedCapabilities: capabilitySet([]string{"host.plan.apply"}),
 			ExpiresAt:           server.now().UTC().Add(time.Hour),
 		},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-downloads-approval",
 			Capability: "host.plan.apply",
 			Arguments:  map[string]string{"plan_id": planID},
@@ -295,7 +296,7 @@ func TestExecuteCapabilityRequest_HostPlanApplyOverwriteRiskStillRequiresApprova
 	if !resp.ApprovalRequired {
 		t.Fatalf("expected overwrite-risk host plan apply to require approval, got %#v", resp)
 	}
-	if resp.Status != ResponseStatusPendingApproval {
+	if resp.Status != controlapipkg.ResponseStatusPendingApproval {
 		t.Fatalf("expected pending approval, got %#v", resp)
 	}
 }
@@ -343,7 +344,7 @@ func TestExecuteCapabilityRequest_HostPlanApplySymlinkDestinationStillRequiresAp
 			AllowedCapabilities: capabilitySet([]string{"host.plan.apply"}),
 			ExpiresAt:           server.now().UTC().Add(time.Hour),
 		},
-		CapabilityRequest{
+		controlapipkg.CapabilityRequest{
 			RequestID:  "req-downloads-symlink",
 			Capability: "host.plan.apply",
 			Arguments:  map[string]string{"plan_id": planID},
@@ -354,7 +355,7 @@ func TestExecuteCapabilityRequest_HostPlanApplySymlinkDestinationStillRequiresAp
 	if !resp.ApprovalRequired {
 		t.Fatalf("expected symlink destination host plan apply to require approval, got %#v", resp)
 	}
-	if resp.Status != ResponseStatusPendingApproval {
+	if resp.Status != controlapipkg.ResponseStatusPendingApproval {
 		t.Fatalf("expected pending approval, got %#v", resp)
 	}
 }

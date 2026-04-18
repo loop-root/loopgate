@@ -2,8 +2,10 @@ package loopgate
 
 import (
 	"errors"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -204,7 +206,7 @@ func TestUpdateFolderAccessPersistsGrantedPresetsAndHostDownloadsAccess(t *testi
 		ControlSessionID:   "cs-test",
 		ActorLabel:         "operator",
 		ClientSessionLabel: "session-test",
-	}, FolderAccessUpdateRequest{GrantedIDs: []string{"downloads"}})
+	}, controlapipkg.FolderAccessUpdateRequest{GrantedIDs: []string{"downloads"}})
 	if err != nil {
 		t.Fatalf("update folder access: %v", err)
 	}
@@ -273,7 +275,7 @@ func TestSyncGrantedFolderAccessSkipsAuditUntilSourceChanges(t *testing.T) {
 		ControlSessionID:   "cs-test",
 		ActorLabel:         "operator",
 		ClientSessionLabel: "session-test",
-	}, FolderAccessUpdateRequest{GrantedIDs: []string{"downloads"}}); err != nil {
+	}, controlapipkg.FolderAccessUpdateRequest{GrantedIDs: []string{"downloads"}}); err != nil {
 		t.Fatalf("seed folder access config: %v", err)
 	}
 
@@ -313,11 +315,60 @@ func TestSyncGrantedFolderAccessSkipsAuditUntilSourceChanges(t *testing.T) {
 	}
 }
 
-func folderStatusByID(folderStatuses []FolderAccessStatus, folderID string) FolderAccessStatus {
+func folderStatusByID(folderStatuses []controlapipkg.FolderAccessStatus, folderID string) controlapipkg.FolderAccessStatus {
 	for _, folderStatus := range folderStatuses {
 		if folderStatus.ID == folderID {
 			return folderStatus
 		}
 	}
-	return FolderAccessStatus{}
+	return controlapipkg.FolderAccessStatus{}
+}
+
+func TestFolderAccessSourceFingerprint_ChangesWhenFileContentChangesWithoutMetadataChange(t *testing.T) {
+	sourceDir := t.TempDir()
+	filePath := filepath.Join(sourceDir, "notes.txt")
+	fixedTime := time.Date(2026, 4, 18, 12, 0, 0, 0, time.UTC)
+
+	if err := os.WriteFile(filePath, []byte("AAAA"), 0o600); err != nil {
+		t.Fatalf("write original file: %v", err)
+	}
+	if err := os.Chtimes(filePath, fixedTime, fixedTime); err != nil {
+		t.Fatalf("set original timestamps: %v", err)
+	}
+
+	firstFingerprint, err := folderAccessSourceFingerprint(sourceDir)
+	if err != nil {
+		t.Fatalf("first fingerprint: %v", err)
+	}
+
+	if err := os.WriteFile(filePath, []byte("BBBB"), 0o600); err != nil {
+		t.Fatalf("write modified file: %v", err)
+	}
+	if err := os.Chtimes(filePath, fixedTime, fixedTime); err != nil {
+		t.Fatalf("restore modified timestamps: %v", err)
+	}
+
+	secondFingerprint, err := folderAccessSourceFingerprint(sourceDir)
+	if err != nil {
+		t.Fatalf("second fingerprint: %v", err)
+	}
+	if firstFingerprint == secondFingerprint {
+		t.Fatalf("expected fingerprint to change when file content changes without size/mtime drift")
+	}
+}
+
+func TestFolderAccessSourceFingerprint_DeniesSymlinkEntries(t *testing.T) {
+	sourceDir := t.TempDir()
+	targetPath := filepath.Join(sourceDir, "target.txt")
+	if err := os.WriteFile(targetPath, []byte("target"), 0o600); err != nil {
+		t.Fatalf("write target file: %v", err)
+	}
+	if err := os.Symlink(targetPath, filepath.Join(sourceDir, "link.txt")); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	_, err := folderAccessSourceFingerprint(sourceDir)
+	if err == nil || !strings.Contains(err.Error(), "contains symlink") {
+		t.Fatalf("expected symlink denial, got %v", err)
+	}
 }

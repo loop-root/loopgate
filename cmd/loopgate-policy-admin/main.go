@@ -19,6 +19,7 @@ import (
 
 	"loopgate/internal/config"
 	"loopgate/internal/loopgate"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 )
 
 const policySigningPrivateKeyFileEnv = "LOOPGATE_POLICY_SIGNING_PRIVATE_KEY_FILE"
@@ -285,7 +286,7 @@ func runApprovalDecision(args []string, approved bool, stdout io.Writer, stderr 
 	} else {
 		fmt.Fprintf(stdout, "approval %s %s audit_event_hash=%s\n", approvalID, action, response.AuditEventHash)
 	}
-	if response.Status == loopgate.ResponseStatusError {
+	if response.Status == controlapipkg.ResponseStatusError {
 		return 1
 	}
 	return 0
