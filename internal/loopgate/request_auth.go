@@ -25,9 +25,14 @@ type authDeniedAuditOptions struct {
 
 type signedControlPlaneHeaders struct {
 	ControlSessionID string
-	RequestTimestamp string
-	RequestNonce     string
-	RequestSignature string
+	// RawRequestTimestamp is the exact trimmed header value that participates in
+	// the signed request payload. Do not rebuild it from ParsedRequestTimestampUTC.
+	RawRequestTimestamp string
+	// ParsedRequestTimestampUTC is the validated UTC timestamp parsed from
+	// RawRequestTimestamp for skew enforcement and any future time comparisons.
+	ParsedRequestTimestampUTC time.Time
+	RequestNonce              string
+	RequestSignature          string
 }
 
 // parseCapabilityTokenAuthorizationHeader accepts RFC-agnostic but explicit
@@ -246,13 +251,13 @@ func (server *Server) authenticate(writer http.ResponseWriter, request *http.Req
 // are not necessarily rows in server.sessionState.sessions.
 func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expectedControlSessionID string) (signedControlPlaneHeaders, controlapipkg.CapabilityResponse, bool) {
 	headers := signedControlPlaneHeaders{
-		ControlSessionID: strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session")),
-		RequestTimestamp: strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp")),
-		RequestNonce:     strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce")),
-		RequestSignature: strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature")),
+		ControlSessionID:    strings.TrimSpace(request.Header.Get("X-Loopgate-Control-Session")),
+		RawRequestTimestamp: strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Timestamp")),
+		RequestNonce:        strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Nonce")),
+		RequestSignature:    strings.TrimSpace(request.Header.Get("X-Loopgate-Request-Signature")),
 	}
 
-	if headers.ControlSessionID == "" || headers.RequestTimestamp == "" || headers.RequestNonce == "" || headers.RequestSignature == "" {
+	if headers.ControlSessionID == "" || headers.RawRequestTimestamp == "" || headers.RequestNonce == "" || headers.RequestSignature == "" {
 		return signedControlPlaneHeaders{}, controlapipkg.CapabilityResponse{
 			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "signed control-plane headers are required",
@@ -267,7 +272,7 @@ func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expe
 		}, false
 	}
 
-	parsedTimestamp, err := time.Parse(time.RFC3339Nano, headers.RequestTimestamp)
+	parsedTimestamp, err := time.Parse(time.RFC3339Nano, headers.RawRequestTimestamp)
 	if err != nil {
 		return signedControlPlaneHeaders{}, controlapipkg.CapabilityResponse{
 			Status:       controlapipkg.ResponseStatusDenied,
@@ -283,6 +288,7 @@ func (server *Server) parseSignedControlPlaneHeaders(request *http.Request, expe
 			DenialCode:   controlapipkg.DenialCodeRequestTimestampInvalid,
 		}, false
 	}
+	headers.ParsedRequestTimestampUTC = parsedTimestamp.UTC()
 
 	return headers, controlapipkg.CapabilityResponse{}, true
 }
@@ -325,7 +331,7 @@ func (server *Server) verifySignedRequestAgainstMACKeys(request *http.Request, r
 		if sessionMACKey == "" {
 			continue
 		}
-		if !requestSignatureBytesMatchMACKey(headers.RequestSignature, request.Method, request.URL.Path, headers.ControlSessionID, headers.RequestTimestamp, headers.RequestNonce, requestBodyBytes, sessionMACKey) {
+		if !requestSignatureBytesMatchMACKey(headers.RequestSignature, request.Method, request.URL.Path, headers.ControlSessionID, headers.RawRequestTimestamp, headers.RequestNonce, requestBodyBytes, sessionMACKey) {
 			continue
 		}
 		if nonceDenial := server.recordAuthNonce(headers.ControlSessionID, headers.RequestNonce); nonceDenial != nil {

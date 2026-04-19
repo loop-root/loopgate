@@ -124,10 +124,28 @@ func TestParseSignedControlPlaneHeaders(t *testing.T) {
 				"X-Loopgate-Request-Signature": " deadbeef ",
 			},
 			wantHeaders: signedControlPlaneHeaders{
-				ControlSessionID: "control-123",
-				RequestTimestamp: fixedNowUTC.Format(time.RFC3339Nano),
-				RequestNonce:     "nonce-123",
-				RequestSignature: "deadbeef",
+				ControlSessionID:          "control-123",
+				RawRequestTimestamp:       fixedNowUTC.Format(time.RFC3339Nano),
+				ParsedRequestTimestampUTC: fixedNowUTC,
+				RequestNonce:              "nonce-123",
+				RequestSignature:          "deadbeef",
+			},
+		},
+		{
+			name:              "valid signed headers preserve raw offset timestamp",
+			expectedSessionID: "control-123",
+			headers: map[string]string{
+				"X-Loopgate-Control-Session":   "control-123",
+				"X-Loopgate-Request-Timestamp": fixedNowUTC.In(time.FixedZone("mdt", -6*60*60)).Format(time.RFC3339Nano),
+				"X-Loopgate-Request-Nonce":     "nonce-456",
+				"X-Loopgate-Request-Signature": "beadfeed",
+			},
+			wantHeaders: signedControlPlaneHeaders{
+				ControlSessionID:          "control-123",
+				RawRequestTimestamp:       fixedNowUTC.In(time.FixedZone("mdt", -6*60*60)).Format(time.RFC3339Nano),
+				ParsedRequestTimestampUTC: fixedNowUTC,
+				RequestNonce:              "nonce-456",
+				RequestSignature:          "beadfeed",
 			},
 		},
 		{
