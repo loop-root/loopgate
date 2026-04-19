@@ -235,6 +235,15 @@ For a direct capability denial or execution failure keyed by `request_id`, use:
 This prints the current request status plus the denial code or execution-failure
 class and the related request timeline from the verified ledger.
 
+For a Claude hook block that never became an approval or capability request, use:
+
+```bash
+./bin/loopgate-doctor explain-denial -hook-session-id <session-id> -tool-use-id <tool-use-id>
+```
+
+If you only know the hook session id, you can omit `-tool-use-id`; doctor will
+select the latest blocked hook event recorded for that session.
+
 ### Apply a policy change safely
 
 Use this flow:

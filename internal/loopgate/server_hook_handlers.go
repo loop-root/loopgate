@@ -290,6 +290,9 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 			"peer_uid":                  peer.UID,
 			"peer_pid":                  peer.PID,
 		}, req, server.repoRoot, includeHookAuditPreviews)
+		if strings.TrimSpace(denialCode) != "" {
+			hookAuditData["denial_code"] = denialCode
+		}
 		if err := server.logEvent("hook.pre_validate", req.SessionID, hookAuditData); err != nil {
 			http.Error(w, "audit unavailable: required append failed before hook decision", http.StatusInternalServerError)
 			return
@@ -330,6 +333,9 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 			"peer_uid":           peer.UID,
 			"peer_pid":           peer.PID,
 		}, req, server.repoRoot, includeHookAuditPreviews)
+		if decision == "block" {
+			hookAuditData["denial_code"] = controlapipkg.DenialCodeHookUnknownTool
+		}
 		if err := server.logEvent("hook.pre_validate", req.SessionID, hookAuditData); err != nil {
 			http.Error(w, "audit unavailable: required append failed before hook decision", http.StatusInternalServerError)
 			return
@@ -421,6 +427,9 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		"peer_uid":                  peer.UID,
 		"peer_pid":                  peer.PID,
 	}, req, server.repoRoot, includeHookAuditPreviews)
+	if decision == "block" && strings.TrimSpace(denialCode) != "" {
+		hookAuditData["denial_code"] = denialCode
+	}
 	if err := server.logEvent("hook.pre_validate", req.SessionID, hookAuditData); err != nil {
 		http.Error(w, "audit unavailable: required append failed before hook decision", http.StatusInternalServerError)
 		return

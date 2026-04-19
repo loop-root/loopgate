@@ -57,7 +57,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, `Usage:
   loopgate-doctor report      [-repo DIR]                        Print offline JSON diagnostic report to stdout
   loopgate-doctor bundle      [-repo DIR] -out DIR [-log-lines N]   Write report.json + diagnostic log tails
-  loopgate-doctor explain-denial [-repo DIR] (-approval-id ID | -request-id ID)    Explain one approval or request outcome from the verified audit ledger
+  loopgate-doctor explain-denial [-repo DIR] (-approval-id ID | -request-id ID | -hook-session-id ID [-tool-use-id ID] [-hook-event-name NAME])    Explain one approval, request, or hook block outcome from the verified audit ledger
   loopgate-doctor trust-check [-repo DIR] [-socket PATH]            Query the running local Loopgate audit-export trust preflight
 
 -repo defaults to the current working directory.
@@ -149,13 +149,33 @@ func runExplainDenial(args []string, stdout io.Writer, stderr io.Writer) int {
 	repoFn := parseRepoFlag(fs)
 	approvalIDFlag := fs.String("approval-id", "", "approval request id to explain")
 	requestIDFlag := fs.String("request-id", "", "capability request id to explain")
+	hookSessionIDFlag := fs.String("hook-session-id", "", "Claude hook session id to explain")
+	toolUseIDFlag := fs.String("tool-use-id", "", "Claude tool use id filter for hook explanation")
+	hookEventNameFlag := fs.String("hook-event-name", "", "Claude hook event name filter for hook explanation")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	trimmedApprovalID := strings.TrimSpace(*approvalIDFlag)
 	trimmedRequestID := strings.TrimSpace(*requestIDFlag)
-	if (trimmedApprovalID == "" && trimmedRequestID == "") || (trimmedApprovalID != "" && trimmedRequestID != "") {
-		fmt.Fprintln(stderr, "ERROR: exactly one of -approval-id or -request-id is required")
+	trimmedHookSessionID := strings.TrimSpace(*hookSessionIDFlag)
+	trimmedToolUseID := strings.TrimSpace(*toolUseIDFlag)
+	trimmedHookEventName := strings.TrimSpace(*hookEventNameFlag)
+	if trimmedHookSessionID == "" && (trimmedToolUseID != "" || trimmedHookEventName != "") {
+		fmt.Fprintln(stderr, "ERROR: -tool-use-id and -hook-event-name require -hook-session-id")
+		return 2
+	}
+	selectedPrimaryFlags := 0
+	if trimmedApprovalID != "" {
+		selectedPrimaryFlags++
+	}
+	if trimmedRequestID != "" {
+		selectedPrimaryFlags++
+	}
+	if trimmedHookSessionID != "" {
+		selectedPrimaryFlags++
+	}
+	if selectedPrimaryFlags != 1 {
+		fmt.Fprintln(stderr, "ERROR: exactly one of -approval-id, -request-id, or -hook-session-id is required")
 		return 2
 	}
 	repoRoot, err := repoFn()
@@ -180,6 +200,26 @@ func runExplainDenial(args []string, stdout io.Writer, stderr io.Writer) int {
 			return 1
 		}
 		if err := troubleshoot.WriteApprovalExplanation(stdout, explanation); err != nil {
+			fmt.Fprintln(stderr, "ERROR: write explanation:", err)
+			return 1
+		}
+		return 0
+	}
+	if trimmedHookSessionID != "" {
+		explanation, err := troubleshoot.ExplainHookBlock(repoRoot, runtimeConfig, troubleshoot.HookBlockQuery{
+			SessionID:     trimmedHookSessionID,
+			ToolUseID:     trimmedToolUseID,
+			HookEventName: trimmedHookEventName,
+		})
+		if err != nil {
+			if errors.Is(err, troubleshoot.ErrHookBlockNotFound) {
+				fmt.Fprintln(stderr, "ERROR:", err)
+				return 1
+			}
+			fmt.Fprintln(stderr, "ERROR: explain hook block:", err)
+			return 1
+		}
+		if err := troubleshoot.WriteHookBlockExplanation(stdout, explanation); err != nil {
 			fmt.Fprintln(stderr, "ERROR: write explanation:", err)
 			return 1
 		}

@@ -184,7 +184,7 @@ func TestRunExplainDenial_RequiresApprovalID(t *testing.T) {
 	if exitCode != 2 {
 		t.Fatalf("expected flag usage exit code 2, got %d stderr=%s", exitCode, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "exactly one of -approval-id or -request-id is required") {
+	if !strings.Contains(stderr.String(), "exactly one of -approval-id, -request-id, or -hook-session-id is required") {
 		t.Fatalf("expected missing approval id error, got %q", stderr.String())
 	}
 }
@@ -196,8 +196,20 @@ func TestRunExplainDenial_RejectsBothIdentifiers(t *testing.T) {
 	if exitCode != 2 {
 		t.Fatalf("expected flag usage exit code 2, got %d stderr=%s", exitCode, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "exactly one of -approval-id or -request-id is required") {
+	if !strings.Contains(stderr.String(), "exactly one of -approval-id, -request-id, or -hook-session-id is required") {
 		t.Fatalf("expected exclusive flag error, got %q", stderr.String())
+	}
+}
+
+func TestRunExplainDenial_HookFiltersRequireHookSessionID(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"explain-denial", "-tool-use-id", "toolu-1"}, &stdout, &stderr)
+	if exitCode != 2 {
+		t.Fatalf("expected flag usage exit code 2, got %d stderr=%s", exitCode, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "require -hook-session-id") {
+		t.Fatalf("expected hook filter dependency error, got %q", stderr.String())
 	}
 }
 
@@ -271,6 +283,45 @@ func TestRunExplainDenial_RequestID_PrintsRequestSummary(t *testing.T) {
 	}
 }
 
+func TestRunExplainDenial_HookSession_PrintsHookSummary(t *testing.T) {
+	repoRoot := t.TempDir()
+	runtimeConfig := config.DefaultRuntimeConfig()
+	if err := config.WriteRuntimeConfigYAML(repoRoot, runtimeConfig); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	activeAuditPath := filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl")
+	if err := os.MkdirAll(filepath.Dir(activeAuditPath), 0o755); err != nil {
+		t.Fatalf("mkdir runtime state: %v", err)
+	}
+	appendDoctorAuditEventForSessionTest(t, activeAuditPath, "session-hook", "2026-04-19T18:15:00Z", "hook.pre_validate", 1, map[string]interface{}{
+		"decision":           "block",
+		"hook_event_name":    "PreToolUse",
+		"tool_use_id":        "toolu-denied",
+		"tool_name":          "Bash",
+		"hook_surface_class": "primary_authority",
+		"denial_code":        "policy_denied",
+		"reason":             "tool not in governance map — denied by default",
+	})
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"explain-denial", "-repo", repoRoot, "-hook-session-id", "session-hook", "-tool-use-id", "toolu-denied"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected explain-denial hook success, got exit code %d stderr=%s", exitCode, stderr.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Hook session: session-hook") {
+		t.Fatalf("expected hook session in output, got %q", output)
+	}
+	if !strings.Contains(output, "Tool use id: toolu-denied") {
+		t.Fatalf("expected tool use id in output, got %q", output)
+	}
+	if !strings.Contains(output, "Denial code: policy_denied") {
+		t.Fatalf("expected denial code in output, got %q", output)
+	}
+}
+
 type auditExportTestCertificates struct {
 	RootCAPEM            string
 	ClientCertificatePEM string
@@ -336,6 +387,10 @@ func generateAuditExportTestCertificates(t *testing.T) auditExportTestCertificat
 }
 
 func appendDoctorAuditEventForTest(t *testing.T, activeAuditPath string, timestamp string, eventType string, auditSequence int64, data map[string]interface{}) {
+	appendDoctorAuditEventForSessionTest(t, activeAuditPath, "session-1", timestamp, eventType, auditSequence, data)
+}
+
+func appendDoctorAuditEventForSessionTest(t *testing.T, activeAuditPath string, sessionID string, timestamp string, eventType string, auditSequence int64, data map[string]interface{}) {
 	t.Helper()
 
 	copied := map[string]interface{}{}
@@ -343,7 +398,7 @@ func appendDoctorAuditEventForTest(t *testing.T, activeAuditPath string, timesta
 		copied[key] = value
 	}
 	copied["audit_sequence"] = auditSequence
-	if err := ledger.Append(activeAuditPath, ledger.NewEvent(timestamp, eventType, "session-1", copied)); err != nil {
+	if err := ledger.Append(activeAuditPath, ledger.NewEvent(timestamp, eventType, sessionID, copied)); err != nil {
 		t.Fatalf("append audit event: %v", err)
 	}
 }

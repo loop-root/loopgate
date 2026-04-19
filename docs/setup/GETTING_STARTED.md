@@ -162,6 +162,13 @@ failure, use:
 ./bin/loopgate-doctor explain-denial -request-id <request-id>
 ```
 
+If the block happened earlier in the Claude hook path and never became an
+approval or capability request, use the Claude hook session and tool use id:
+
+```bash
+./bin/loopgate-doctor explain-denial -hook-session-id <session-id> -tool-use-id <tool-use-id>
+```
+
 ## Did it work?
 
 Use one real governed path instead of guessing from startup text alone:

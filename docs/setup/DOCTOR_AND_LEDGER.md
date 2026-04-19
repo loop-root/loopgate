@@ -45,7 +45,7 @@ Use `loopgate-ledger` first when the question is:
 Primary uses:
 - build an offline diagnostic report from repo state
 - write a troubleshooting bundle with log tails
-- explain one approval or capability-request outcome directly from the verified audit ledger
+- explain one approval, capability-request, or blocked hook outcome directly from the verified audit ledger
 - ask a running Loopgate instance for audit-export trust status
 
 Most useful commands:
@@ -55,6 +55,7 @@ Most useful commands:
 ./bin/loopgate-doctor bundle -out ./tmp/loopgate-bundle
 ./bin/loopgate-doctor explain-denial -approval-id <approval-id>
 ./bin/loopgate-doctor explain-denial -request-id <request-id>
+./bin/loopgate-doctor explain-denial -hook-session-id <session-id> -tool-use-id <tool-use-id>
 ./bin/loopgate-doctor trust-check
 ```
 
@@ -69,9 +70,10 @@ What each one is for:
 - `bundle`
   - `report.json` plus diagnostic log tails for sharing or later inspection
 - `explain-denial`
-  - walks the verified audit ledger for one `approval_request_id` or `request_id`
-    and prints the current status, denial code/reason or execution-failure class
-    when present, plus a short related-event timeline
+  - walks the verified audit ledger for one `approval_request_id`, `request_id`,
+    or blocked hook event in a Claude hook session and prints the current status,
+    denial code/reason or execution-failure class when present, plus a short
+    related-event timeline
 - `trust-check`
   - live query against a running Loopgate instance for audit-export trust preflight
 
@@ -80,6 +82,7 @@ Use `loopgate-doctor` first when the question is:
 - "Can I package a local troubleshooting bundle?"
 - "Why did approval `X` get denied?"
 - "Why did request `Y` get denied or fail?"
+- "Why did Claude block hook event `Z`?"
 - "Is audit export trust configured and healthy?"
 
 ## Short rule of thumb
@@ -95,8 +98,9 @@ After a denial, approval surprise, or suspicious local behavior:
 2. run `./bin/loopgate-ledger verify`
 3. if you have an approval id, run `./bin/loopgate-doctor explain-denial -approval-id <approval-id>`
 4. if you have a direct request id instead, run `./bin/loopgate-doctor explain-denial -request-id <request-id>`
-5. run `./bin/loopgate-doctor report`
-6. if needed, write a bundle with `./bin/loopgate-doctor bundle -out ...`
+5. if you only have a Claude hook session and tool use id, run `./bin/loopgate-doctor explain-denial -hook-session-id <session-id> -tool-use-id <tool-use-id>`
+6. run `./bin/loopgate-doctor report`
+7. if needed, write a bundle with `./bin/loopgate-doctor bundle -out ...`
 
 ## Read next
 
