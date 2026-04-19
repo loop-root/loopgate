@@ -61,7 +61,8 @@ ledger.
 
 The normal event chain is hash-linked JSONL. The HMAC checkpoints add a keyed
 integrity signal backed by a secret outside the JSONL, using the shipped local
-macOS Keychain path by default.
+macOS Keychain path by default. They improve local tamper detection, but they
+do not replace off-host retention or remote notarization.
 
 ## Audit ledger
 

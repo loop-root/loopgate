@@ -9,7 +9,7 @@ Current product scope:
 - require approval for higher-risk actions
 - record a durable local audit trail of what happened
 - provide a local control plane for hook-based harnesses and governed tool execution
-- verify local audit integrity with hash-chain plus default-on HMAC checkpoint tooling on macOS
+- verify local audit integrity with a hash-linked ledger plus default-on HMAC checkpoints on macOS
 
 **Current MVP harness:** **Claude Code + project hooks + Loopgate**
 
@@ -32,7 +32,7 @@ Loopgate takes the opposite position:
 - model output is untrusted input
 - policy decides what can run
 - approvals are explicit
-- audit is local and durable
+- audit is local, durable, and append-only
 
 For the current local-first product, that means:
 
@@ -188,6 +188,7 @@ Current realities to keep in mind:
 - macOS-first, single-node operator flow is the active shipped scope
 - Claude Code hooks and the governed MCP broker path are the practical attachment surface today
 - the policy surface is intentionally strict by default; many teams will want to tune or replace the starter policy before daily use
+- local audit integrity is strong local-machine evidence, not remote notarization; see [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md) for the exact hash-chain and checkpoint limits
 - internal package cleanup is in progress, so contributor ergonomics are improving but not yet boring
 
 Current gap tracking lives here:

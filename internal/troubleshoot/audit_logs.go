@@ -29,21 +29,12 @@ func ReadRecentAuditLog(repoRoot string, runtimeConfig config.RuntimeConfig, lim
 	if limit <= 0 {
 		limit = defaultAuditLogLimit
 	}
-	activeAuditPath := ActiveAuditPath(repoRoot)
-	rotationSettings := AuditRotationSettings(repoRoot, runtimeConfig)
-	if _, _, err := ledger.ReadSegmentedChainState(activeAuditPath, "audit_sequence", rotationSettings); err != nil {
-		return nil, fmt.Errorf("verify audit ledger: %w", err)
-	}
-
-	auditPaths, err := ledger.OrderedSegmentedPaths(activeAuditPath, rotationSettings)
-	if err != nil {
-		return nil, err
-	}
 	lineRing := newAuditLogRing(limit)
-	for _, auditPath := range auditPaths {
-		if err := appendAuditLogLinesFromFile(lineRing, auditPath); err != nil {
-			return nil, err
-		}
+	if err := visitVerifiedAuditEvents(repoRoot, runtimeConfig, func(parsedEvent ledger.Event) error {
+		lineRing.Append(renderAuditLogLine(parsedEvent))
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	return lineRing.Lines(), nil
 }
@@ -73,6 +64,32 @@ func WriteAuditLog(writer io.Writer, auditLogLines []AuditLogLine) error {
 }
 
 func appendAuditLogLinesFromFile(lineRing *auditLogRing, auditPath string) error {
+	return scanAuditFile(auditPath, func(parsedEvent ledger.Event) error {
+		lineRing.Append(renderAuditLogLine(parsedEvent))
+		return nil
+	})
+}
+
+func visitVerifiedAuditEvents(repoRoot string, runtimeConfig config.RuntimeConfig, visit func(ledger.Event) error) error {
+	activeAuditPath := ActiveAuditPath(repoRoot)
+	rotationSettings := AuditRotationSettings(repoRoot, runtimeConfig)
+	if _, _, err := ledger.ReadSegmentedChainState(activeAuditPath, "audit_sequence", rotationSettings); err != nil {
+		return fmt.Errorf("verify audit ledger: %w", err)
+	}
+
+	auditPaths, err := ledger.OrderedSegmentedPaths(activeAuditPath, rotationSettings)
+	if err != nil {
+		return err
+	}
+	for _, auditPath := range auditPaths {
+		if err := scanAuditFile(auditPath, visit); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func scanAuditFile(auditPath string, visit func(ledger.Event) error) error {
 	auditHandle, err := os.Open(auditPath)
 	if err != nil {
 		return fmt.Errorf("open audit file %q: %w", auditPath, err)
@@ -86,7 +103,9 @@ func appendAuditLogLinesFromFile(lineRing *auditLogRing, auditPath string) error
 		if !ok {
 			return fmt.Errorf("malformed audit line in %s", auditPath)
 		}
-		lineRing.Append(renderAuditLogLine(parsedEvent))
+		if err := visit(parsedEvent); err != nil {
+			return err
+		}
 	}
 	if err := auditScanner.Err(); err != nil {
 		return fmt.Errorf("scan audit file %q: %w", auditPath, err)

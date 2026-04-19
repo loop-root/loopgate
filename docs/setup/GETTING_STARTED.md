@@ -114,8 +114,8 @@ kill "$(cat runtime/state/loopgate.pid)"
 ```
 
 On the first successful start, Loopgate also bootstraps the default
-Keychain-backed audit HMAC checkpoint key used for tamper-evident audit
-checkpoints.
+Keychain-backed audit HMAC checkpoint key used for keyed audit-integrity
+checkpoints on the local ledger.
 If macOS Keychain access is denied or canceled, Loopgate fails closed at
 startup rather than falling back to plaintext or unaudited mode. Rerun from an
 interactive login session and approve the Keychain prompt.
@@ -146,6 +146,13 @@ If you need quick visibility:
 ```bash
 ./bin/loopgate-ledger tail -verbose
 ./bin/loopgate-doctor report
+```
+
+If a specific approval was denied and you have its id, explain that outcome
+from the verified ledger with:
+
+```bash
+./bin/loopgate-doctor explain-denial -approval-id <approval-id>
 ```
 
 ## Did it work?

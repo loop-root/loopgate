@@ -216,6 +216,16 @@ The approve and deny commands print the resulting audit event hash so you can
 correlate the human decision with `loopgate-ledger verify` or a later audit
 review.
 
+If you need the operator-facing explanation for one approval id from the
+verified ledger, run:
+
+```bash
+./bin/loopgate-doctor explain-denial -approval-id <approval-id>
+```
+
+This prints the current approval status plus the denial code, operator reason,
+and short related-event timeline when the request was actually denied.
+
 ### Apply a policy change safely
 
 Use this flow:

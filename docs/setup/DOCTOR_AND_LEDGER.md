@@ -45,6 +45,7 @@ Use `loopgate-ledger` first when the question is:
 Primary uses:
 - build an offline diagnostic report from repo state
 - write a troubleshooting bundle with log tails
+- explain one approval request directly from the verified audit ledger
 - ask a running Loopgate instance for audit-export trust status
 
 Most useful commands:
@@ -52,6 +53,7 @@ Most useful commands:
 ```bash
 ./bin/loopgate-doctor report
 ./bin/loopgate-doctor bundle -out ./tmp/loopgate-bundle
+./bin/loopgate-doctor explain-denial -approval-id <approval-id>
 ./bin/loopgate-doctor trust-check
 ```
 
@@ -65,12 +67,16 @@ What each one is for:
     state, and nonce replay persistence/utilization warnings
 - `bundle`
   - `report.json` plus diagnostic log tails for sharing or later inspection
+- `explain-denial`
+  - walks the verified audit ledger for one `approval_request_id` and prints
+    the current status, denial code/reason when present, and a short related-event timeline
 - `trust-check`
   - live query against a running Loopgate instance for audit-export trust preflight
 
 Use `loopgate-doctor` first when the question is:
 - "What is this repo/runtime configured to do right now?"
 - "Can I package a local troubleshooting bundle?"
+- "Why did approval `X` get denied?"
 - "Is audit export trust configured and healthy?"
 
 ## Short rule of thumb
@@ -84,8 +90,9 @@ After a denial, approval surprise, or suspicious local behavior:
 
 1. run `./bin/loopgate-ledger tail -verbose`
 2. run `./bin/loopgate-ledger verify`
-3. run `./bin/loopgate-doctor report`
-4. if needed, write a bundle with `./bin/loopgate-doctor bundle -out ...`
+3. if you have an approval id, run `./bin/loopgate-doctor explain-denial -approval-id <approval-id>`
+4. run `./bin/loopgate-doctor report`
+5. if needed, write a bundle with `./bin/loopgate-doctor bundle -out ...`
 
 ## Read next
 

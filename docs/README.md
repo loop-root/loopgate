@@ -11,7 +11,7 @@ The current active story is:
 - Claude Code hooks
 - signed policy
 - approvals
-- local audit
+- local hash-linked audit
 - default-on audit HMAC checkpoints on macOS
 - governed local MCP/runtime work
 

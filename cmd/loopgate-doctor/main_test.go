@@ -12,10 +12,12 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"loopgate/internal/config"
+	"loopgate/internal/ledger"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"loopgate/internal/secrets"
 	"loopgate/internal/testutil"
@@ -127,6 +129,93 @@ func TestResolveSocketPath_PrefersEnvOverRepoDefault(t *testing.T) {
 	}
 }
 
+func TestRunExplainDenial_PrintsDeniedApprovalSummary(t *testing.T) {
+	repoRoot := t.TempDir()
+	runtimeConfig := config.DefaultRuntimeConfig()
+	if err := config.WriteRuntimeConfigYAML(repoRoot, runtimeConfig); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	activeAuditPath := filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl")
+	if err := os.MkdirAll(filepath.Dir(activeAuditPath), 0o755); err != nil {
+		t.Fatalf("mkdir runtime state: %v", err)
+	}
+	appendDoctorAuditEventForTest(t, activeAuditPath, "2026-04-19T18:00:00Z", "approval.created", 1, map[string]interface{}{
+		"approval_request_id":      "approval-cli",
+		"approval_class":           "claude_builtin_inline",
+		"tool_name":                "Bash",
+		"command_redacted_preview": "git status",
+		"reason":                   "policy requires operator approval",
+	})
+	appendDoctorAuditEventForTest(t, activeAuditPath, "2026-04-19T18:00:02Z", "approval.denied", 2, map[string]interface{}{
+		"approval_request_id":      "approval-cli",
+		"approval_class":           "claude_builtin_inline",
+		"tool_name":                "Bash",
+		"command_redacted_preview": "git status",
+		"reason":                   "outside allowed change window",
+		"denial_code":              "policy_denied",
+	})
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"explain-denial", "-repo", repoRoot, "-approval-id", "approval-cli"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected explain-denial success, got exit code %d stderr=%s", exitCode, stderr.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Approval request: approval-cli") {
+		t.Fatalf("expected approval id in output, got %q", output)
+	}
+	if !strings.Contains(output, "Current status: DENIED") {
+		t.Fatalf("expected denied status in output, got %q", output)
+	}
+	if !strings.Contains(output, "Denial code: policy_denied") {
+		t.Fatalf("expected denial code in output, got %q", output)
+	}
+	if !strings.Contains(output, "Timeline:") {
+		t.Fatalf("expected timeline in output, got %q", output)
+	}
+}
+
+func TestRunExplainDenial_RequiresApprovalID(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"explain-denial"}, &stdout, &stderr)
+	if exitCode != 2 {
+		t.Fatalf("expected flag usage exit code 2, got %d stderr=%s", exitCode, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "-approval-id is required") {
+		t.Fatalf("expected missing approval id error, got %q", stderr.String())
+	}
+}
+
+func TestRunExplainDenial_NotFound(t *testing.T) {
+	repoRoot := t.TempDir()
+	runtimeConfig := config.DefaultRuntimeConfig()
+	if err := config.WriteRuntimeConfigYAML(repoRoot, runtimeConfig); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	activeAuditPath := filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl")
+	if err := os.MkdirAll(filepath.Dir(activeAuditPath), 0o755); err != nil {
+		t.Fatalf("mkdir runtime state: %v", err)
+	}
+	appendDoctorAuditEventForTest(t, activeAuditPath, "2026-04-19T18:05:00Z", "approval.created", 1, map[string]interface{}{
+		"approval_request_id": "approval-other",
+		"reason":              "other approval",
+	})
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"explain-denial", "-repo", repoRoot, "-approval-id", "approval-missing"}, &stdout, &stderr)
+	if exitCode != 1 {
+		t.Fatalf("expected explain-denial failure, got exit code %d stderr=%s", exitCode, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "approval request not found") {
+		t.Fatalf("expected not-found error, got %q", stderr.String())
+	}
+}
+
 type auditExportTestCertificates struct {
 	RootCAPEM            string
 	ClientCertificatePEM string
@@ -188,5 +277,18 @@ func generateAuditExportTestCertificates(t *testing.T) auditExportTestCertificat
 		RootCAPEM:            rootCAPEM,
 		ClientCertificatePEM: clientCertificatePEM,
 		ClientPrivateKeyPEM:  clientPrivateKeyPEM,
+	}
+}
+
+func appendDoctorAuditEventForTest(t *testing.T, activeAuditPath string, timestamp string, eventType string, auditSequence int64, data map[string]interface{}) {
+	t.Helper()
+
+	copied := map[string]interface{}{}
+	for key, value := range data {
+		copied[key] = value
+	}
+	copied["audit_sequence"] = auditSequence
+	if err := ledger.Append(activeAuditPath, ledger.NewEvent(timestamp, eventType, "session-1", copied)); err != nil {
+		t.Fatalf("append audit event: %v", err)
 	}
 }

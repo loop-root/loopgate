@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -38,6 +39,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runReport(args[1:], stdout, stderr)
 	case "bundle":
 		return runBundle(args[1:], stdout, stderr)
+	case "explain-denial":
+		return runExplainDenial(args[1:], stdout, stderr)
 	case "trust-check":
 		return runTrustCheck(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
@@ -54,6 +57,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, `Usage:
   loopgate-doctor report      [-repo DIR]                        Print offline JSON diagnostic report to stdout
   loopgate-doctor bundle      [-repo DIR] -out DIR [-log-lines N]   Write report.json + diagnostic log tails
+  loopgate-doctor explain-denial [-repo DIR] -approval-id ID    Explain one approval request from the verified audit ledger
   loopgate-doctor trust-check [-repo DIR] [-socket PATH]            Query the running local Loopgate audit-export trust preflight
 
 -repo defaults to the current working directory.
@@ -136,6 +140,44 @@ func runBundle(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintln(stdout, "wrote bundle to", outDir)
+	return 0
+}
+
+func runExplainDenial(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("explain-denial", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	repoFn := parseRepoFlag(fs)
+	approvalIDFlag := fs.String("approval-id", "", "approval request id to explain")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if strings.TrimSpace(*approvalIDFlag) == "" {
+		fmt.Fprintln(stderr, "ERROR: -approval-id is required")
+		return 2
+	}
+	repoRoot, err := repoFn()
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR:", err)
+		return 1
+	}
+	runtimeConfig, err := troubleshoot.LoadEffectiveRuntimeConfig(repoRoot)
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR: load runtime config:", err)
+		return 1
+	}
+	explanation, err := troubleshoot.ExplainApprovalRequest(repoRoot, runtimeConfig, *approvalIDFlag)
+	if err != nil {
+		if errors.Is(err, troubleshoot.ErrApprovalRequestNotFound) {
+			fmt.Fprintln(stderr, "ERROR:", err)
+			return 1
+		}
+		fmt.Fprintln(stderr, "ERROR: explain approval denial:", err)
+		return 1
+	}
+	if err := troubleshoot.WriteApprovalExplanation(stdout, explanation); err != nil {
+		fmt.Fprintln(stderr, "ERROR: write explanation:", err)
+		return 1
+	}
 	return 0
 }
 

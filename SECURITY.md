@@ -29,7 +29,7 @@ The highest-priority security issues are:
 - Loopgate authentication and approval provenance
 - secret handling and token isolation
 - filesystem boundary escapes
-- audit integrity and tamper evidence
+- audit integrity and checkpointed tamper evidence
 - prompt-injection or data-poisoning paths into model context
 
 ## Supported versions
