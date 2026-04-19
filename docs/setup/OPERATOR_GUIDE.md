@@ -10,6 +10,12 @@ If you are setting up Loopgate for the first time, start with:
 - [Getting started](./GETTING_STARTED.md)
 - [Setup](./SETUP.md)
 
+For most operators, the recommended first command is:
+
+```bash
+./bin/loopgate setup
+```
+
 ## What an operator does
 
 In the current product, the operator:
@@ -31,24 +37,37 @@ The command examples below use the built binaries under `./bin/`. If you ran
 
 ## Basic workflow
 
-### 1. Initialize local policy signing
+### 1. Run guided setup
 
 For a first-time local setup:
 
 ```bash
 make build
-./bin/loopgate init
-./bin/loopgate-policy-admin validate
+./bin/loopgate setup
 ```
 
-If you later re-sign policy intentionally, reuse the `key_id` printed by
-`loopgate init`.
+`loopgate setup` is the fastest supported path for operators. It:
+- initializes or reuses the local signer
+- lets you choose `strict`, `balanced`, or `developer`
+- signs the selected policy
+- installs Claude Code hooks
+- can install and load a macOS LaunchAgent
+
+Important:
+- hook install writes into your user-level Claude config under `~/.claude/`
+- until you remove those hooks, Claude Code will keep routing governed hook events through Loopgate on this machine
+
+If you later re-sign policy intentionally through the manual path, reuse the
+`key_id` printed by `loopgate init`.
 
 ### 2. Start Loopgate
 
 ```bash
 ./bin/loopgate
 ```
+
+If setup installed and loaded the LaunchAgent, Loopgate should already be
+running in the background.
 
 Expected local socket:
 
@@ -70,8 +89,20 @@ repeated macOS approval prompts.
 ### Run Loopgate in background
 
 If you start `./bin/loopgate` in a terminal, that shell owns the foreground
-process. Closing the terminal usually stops Loopgate. From the repo root, a
-simple background launch looks like:
+process. Closing the terminal usually stops Loopgate.
+
+Recommended macOS path:
+
+```bash
+./bin/loopgate install-launch-agent -load
+```
+
+This writes a per-repo LaunchAgent plist under `~/Library/LaunchAgents/`,
+points it at the current Loopgate binary, and starts it with launchd.
+Use the built `./bin/loopgate` or an installed `loopgate` binary rather than
+`go run`, because the LaunchAgent pins that executable path directly.
+
+Simple shell-managed fallback from the repo root:
 
 ```bash
 mkdir -p runtime/logs runtime/state
@@ -233,6 +264,7 @@ with the configured Keychain-backed secret.
 
 If you are unsure whether to use `loopgate-ledger` or `loopgate-doctor`, see:
 - [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
+- [Glossary](./GLOSSARY.md)
 
 ### Know your audit integrity mode
 
@@ -352,4 +384,4 @@ Do not widen write roots unless you actually want that authority.
   current documented local-first operator surface.
 
 Tracked status:
-- [Review closure status](../reports/reviews/2026-04-16/review_status.md)
+- [Active product gaps](../roadmap/loopgate_v1_product_gaps.md)

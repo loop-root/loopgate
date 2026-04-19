@@ -72,13 +72,33 @@ make build
 # optional: install the built binaries into ~/.local/bin
 make install-local
 
-./bin/loopgate init
-./bin/loopgate-policy-admin validate
-./bin/loopgate
+./bin/loopgate setup
 ```
 
 If you ran `make install-local`, replace `./bin/...` below with the bare command
 names such as `loopgate` and `loopgate-policy-admin`.
+
+`loopgate setup` is the recommended first-run path. It:
+- initializes or reuses your local policy-signing key
+- lets you choose a starter policy profile: `strict`, `balanced`, or `developer`
+- signs the selected policy
+- installs Claude Code hooks
+- can install and load a macOS LaunchAgent so Loopgate keeps running in the background
+
+Important:
+- Claude hook install is global to your local Claude Code config under `~/.claude/`
+- until you remove those hooks, Claude Code will keep routing governed hook events through Loopgate
+
+Fast smoke test after setup:
+1. run `/hooks` inside Claude Code and confirm the 7 Loopgate hook entries are present
+2. ask Claude Code to read `README.md`
+3. run `./bin/loopgate-ledger tail -verbose`
+
+Expected result:
+- you should see a recent `hook.pre_validate` audit event for the Claude action you just triggered
+- if the request needed approval or was denied, the tail output should make that obvious too
+
+If you prefer the manual operator path, see [Setup](./docs/setup/SETUP.md).
 
 On first start, Loopgate may ask macOS Keychain to create the default audit
 HMAC checkpoint key. If Keychain access is denied or canceled, startup fails
@@ -88,8 +108,16 @@ For keychain-backed commands, prefer the stable `./bin/...` binaries over
 trigger repeated macOS approval prompts.
 
 Running `./bin/loopgate` in a terminal keeps it attached to that terminal.
-If you want it to keep running after you close the shell, use a background
-launch command from the repo root:
+For a more durable background path on macOS, install the LaunchAgent:
+
+```bash
+./bin/loopgate install-launch-agent -load
+```
+
+That LaunchAgent pins the current Loopgate executable path, so use the built
+`./bin/loopgate` or an installed `loopgate` binary rather than `go run`.
+
+If you prefer a simple shell-managed background run from the repo root:
 
 ```bash
 mkdir -p runtime/logs runtime/state
@@ -141,12 +169,12 @@ Start here:
 - [Operator guide](./docs/setup/OPERATOR_GUIDE.md)
 - [Setup](./docs/setup/SETUP.md)
 - [Policy reference](./docs/setup/POLICY_REFERENCE.md)
+- [Glossary](./docs/setup/GLOSSARY.md)
 - [Doctor and ledger tools](./docs/setup/DOCTOR_AND_LEDGER.md)
 - [HTTP API for local clients](./docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
 - [Policy signing](./docs/setup/POLICY_SIGNING.md)
 - [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./docs/loopgate-threat-model.md)
-- [Review closure status](./docs/reports/reviews/2026-04-16/review_status.md)
 - [Release candidate checklist](./docs/roadmap/release_candidate_checklist.md)
 - [Changelog](./CHANGELOG.md)
 - [Support](./SUPPORT.md)
@@ -164,7 +192,7 @@ Current realities to keep in mind:
 
 Current gap tracking lives here:
 - [Active product gaps](./docs/roadmap/loopgate_v1_product_gaps.md)
-- [Review closure status](./docs/reports/reviews/2026-04-16/review_status.md)
+- [Release candidate checklist](./docs/roadmap/release_candidate_checklist.md)
 
 ## Repository layout
 

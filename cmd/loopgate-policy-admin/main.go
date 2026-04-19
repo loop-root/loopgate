@@ -61,7 +61,7 @@ func printUsage(w io.Writer) {
   loopgate-policy-admin validate        [-repo DIR] [-policy-file PATH] [-signature-file PATH]
   loopgate-policy-admin explain         [-repo DIR] [-policy-file PATH] [-signature-file PATH] [-tool NAME]
   loopgate-policy-admin diff            [-repo DIR] [-left-policy-file PATH] [-left-signature-file PATH] -right-policy-file PATH [-right-signature-file PATH]
-  loopgate-policy-admin render-template [-preset strict-mvp|developer]
+  loopgate-policy-admin render-template [-preset strict|balanced|developer]
   loopgate-policy-admin apply           [-repo DIR] [-socket PATH] [-verify-setup] [-private-key-file PATH] [-key-id ID]
   loopgate-policy-admin approvals list  [-repo DIR] [-socket PATH]
   loopgate-policy-admin approvals approve <id> [-repo DIR] [-socket PATH] [-reason TEXT]
@@ -432,22 +432,18 @@ func runDiff(args []string, stdout io.Writer, stderr io.Writer) int {
 func runRenderTemplate(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("render-template", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	presetFlag := fs.String("preset", "strict-mvp", "template preset to render: strict-mvp or developer")
+	presetFlag := fs.String("preset", "strict", "template preset to render: strict, balanced, or developer")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
-	switch strings.TrimSpace(*presetFlag) {
-	case "strict-mvp":
-		fmt.Fprint(stdout, strictMVPPresetTemplate)
-		return 0
-	case "developer":
-		fmt.Fprint(stdout, developerPresetTemplate)
-		return 0
-	default:
-		fmt.Fprintf(stderr, "ERROR: unknown preset %q\n", *presetFlag)
+	preset, err := config.ResolvePolicyTemplatePreset(*presetFlag)
+	if err != nil {
+		fmt.Fprintf(stderr, "ERROR: %v\n", err)
 		return 2
 	}
+	fmt.Fprint(stdout, preset.TemplateYAML)
+	return 0
 }
 
 func loadPolicyDocument(repoRootFlag string, policyPathFlag string, signaturePathFlag string) (loadedPolicyDocument, error) {
@@ -834,207 +830,3 @@ func emptyPolicyCollectionValue(value reflect.Value) bool {
 		return false
 	}
 }
-
-const strictMVPPresetTemplate = `version: 0.1.0
-tools:
-  claude_code:
-    deny_unknown_tools: true
-    tool_policies:
-      Bash:
-        enabled: false
-      Read:
-        enabled: true
-        allowed_roots:
-          - "."
-        denied_paths:
-          - "runtime/state"
-          - "core/policy"
-      Glob:
-        enabled: true
-        allowed_roots:
-          - "."
-        denied_paths:
-          - "runtime/state"
-          - "core/policy"
-      Grep:
-        enabled: true
-        allowed_roots:
-          - "."
-        denied_paths:
-          - "runtime/state"
-          - "core/policy"
-      Write:
-        enabled: true
-        requires_approval: true
-        allowed_roots:
-          - "."
-        denied_paths:
-          - "core/policy"
-          - ".claude/settings.json"
-      Edit:
-        enabled: true
-        requires_approval: true
-        allowed_roots:
-          - "."
-      MultiEdit:
-        enabled: true
-        requires_approval: true
-        allowed_roots:
-          - "."
-      WebFetch:
-        enabled: false
-      WebSearch:
-        enabled: false
-  mcp_gateway:
-    deny_unknown_servers: true
-    servers: {}
-  filesystem:
-    allowed_roots:
-      - "."
-    denied_paths:
-      - "core/policy"
-      - "persona"
-    read_enabled: true
-    write_enabled: true
-    write_requires_approval: true
-  http:
-    enabled: false
-    allowed_domains: []
-    requires_approval: true
-    timeout_seconds: 10
-  shell:
-    enabled: false
-    allowed_commands: []
-    requires_approval: true
-logging:
-  log_commands: true
-  log_tool_calls: true
-safety:
-  allow_persona_modification: false
-  allow_policy_modification: false
-`
-
-const developerPresetTemplate = `version: 0.1.0
-tools:
-  claude_code:
-    deny_unknown_tools: true
-    tool_policies:
-      Bash:
-        enabled: true
-        allowed_command_prefixes:
-          - "ls"
-          - "pwd"
-          - "find "
-          - "grep "
-          - "cat "
-          - "sed -n "
-          - "head "
-          - "tail "
-          - "wc "
-          - "sort "
-          - "git status"
-          - "git diff"
-          - "go test"
-          - "rg "
-        denied_command_prefixes:
-          - "rm "
-          - "curl "
-      Read:
-        enabled: true
-        allowed_roots:
-          - "."
-        denied_paths:
-          - "runtime/state"
-          - "core/policy"
-      Glob:
-        enabled: true
-        allowed_roots:
-          - "."
-        denied_paths:
-          - "runtime/state"
-          - "core/policy"
-      Grep:
-        enabled: true
-        allowed_roots:
-          - "."
-        denied_paths:
-          - "runtime/state"
-          - "core/policy"
-      Write:
-        enabled: true
-        requires_approval: true
-        allowed_roots:
-          - "."
-        denied_paths:
-          - "core/policy"
-          - ".claude/settings.json"
-      Edit:
-        enabled: true
-        requires_approval: true
-        allowed_roots:
-          - "."
-      MultiEdit:
-        enabled: true
-        requires_approval: true
-        allowed_roots:
-          - "."
-      WebFetch:
-        enabled: false
-        allowed_domains: []
-  mcp_gateway:
-    deny_unknown_servers: true
-    servers: {}
-  filesystem:
-    allowed_roots:
-      - "."
-    denied_paths:
-      - "core/policy"
-      - "persona"
-    read_enabled: true
-    write_enabled: true
-    write_requires_approval: true
-  http:
-    enabled: true
-    allowed_domains: []
-    requires_approval: true
-    timeout_seconds: 10
-  shell:
-    enabled: true
-    allowed_commands:
-      - "git"
-      - "go"
-      - "gofmt"
-      - "rg"
-      - "ls"
-      - "cat"
-      - "pwd"
-      - "printf"
-      - "mkdir"
-      - "cp"
-      - "mv"
-      - "sed"
-      - "grep"
-      - "find"
-      - "head"
-      - "tail"
-      - "wc"
-      - "sort"
-      - "uniq"
-      - "tr"
-      - "xargs"
-      - "make"
-      - "npm"
-      - "pnpm"
-      - "node"
-      - "python3"
-      - "uv"
-      - "swift"
-      - "xcodebuild"
-    requires_approval: true
-logging:
-  log_commands: true
-  log_tool_calls: true
-safety:
-  allow_persona_modification: false
-  allow_policy_modification: false
-`

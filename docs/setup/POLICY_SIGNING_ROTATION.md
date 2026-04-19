@@ -52,7 +52,7 @@ install -m 600 /path/from/secure-backup/loopgate-policy-root-2026-04.pem \
 3. Re-sign the policy:
 
 ```bash
-go run ./cmd/loopgate-policy-sign
+./bin/loopgate-policy-sign
 ```
 
 4. Verify Loopgate accepts the signed policy:
@@ -115,7 +115,7 @@ Use either the default path or an explicit override:
 
 ```bash
 LOOPGATE_POLICY_SIGNING_PRIVATE_KEY_FILE="$HOME/Library/Application Support/Loopgate/policy-signing/loopgate-policy-root-2026-05.pem" \
-  go run ./cmd/loopgate-policy-sign -key-id loopgate-policy-root-2026-05
+  ./bin/loopgate-policy-sign -key-id loopgate-policy-root-2026-05
 ```
 
 This must rewrite `core/policy/policy.yaml.sig` with the new `key_id`.
@@ -131,8 +131,12 @@ go test ./cmd/loopgate ./cmd/loopgate-policy-sign ./internal/config -count=1
 Then start Loopgate normally:
 
 ```bash
-go run ./cmd/loopgate
+./bin/loopgate
 ```
+
+For keychain-backed flows, prefer the stable `./bin/...` binaries over
+`go run`; a fresh `go run` build changes the executable identity and can cause
+repeated macOS approval prompts.
 
 ### 6. Retire the old signer
 

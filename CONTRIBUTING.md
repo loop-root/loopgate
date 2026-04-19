@@ -10,10 +10,10 @@ Apache License, Version 2.0 used by this repository.
 ## Before opening a PR
 
 - read [README.md](./README.md)
-- read [AGENTS.md](./AGENTS.md)
-- read [context_map.md](./context_map.md)
-- read [docs/design_overview/systems_contract.md](./docs/design_overview/systems_contract.md)
-- read [docs/design_overview/loopgate.md](./docs/design_overview/loopgate.md)
+- read the one most relevant doc for the surface you are changing:
+  - setup/operator flow: [docs/setup/GETTING_STARTED.md](./docs/setup/GETTING_STARTED.md)
+  - architecture overview: [docs/design_overview/architecture.md](./docs/design_overview/architecture.md)
+  - trust boundary or security-sensitive runtime change: [AGENTS.md](./AGENTS.md)
 
 ## Ground rules
 

@@ -3,13 +3,9 @@
 # Review Closure Status — 2026-04-16
 
 This document is the concrete closure pass for the current public-release prep.
-It consolidates the review sources now archived together under this folder:
+Its detailed review inputs now live under:
 
-- [Claude Opus handoff review](./claude_opus_code_review.md)
-- [Senior readiness walkthrough](./walkthrough.md)
-- [Senior engineering code review](./loopgate_code_review.md)
-- [Claude 4.7 follow-up review](./claude_4_7_review.md)
-- [Gemini 3.1 production-readiness audit](./gemini_3_1_pro_production_readiness_audit.md)
+- [notes/internal/reviews/2026-04-16](../../../../notes/internal/reviews/2026-04-16)
 
 Use this file as the current truth for what is closed, what is still open, what
 is intentionally deferred, and whether the repo is safe to return to product

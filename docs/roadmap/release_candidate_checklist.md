@@ -63,10 +63,10 @@ It does **not** certify:
 
 Recommended spot checks before tagging:
 
-- [ ] `go run ./cmd/loopgate-policy-sign -verify-setup`
-- [ ] `go run ./cmd/loopgate-policy-admin validate`
-- [ ] `go run ./cmd/loopgate-ledger verify`
-- [ ] `go run ./cmd/loopgate-doctor report`
+- [ ] `./bin/loopgate-policy-sign -verify-setup`
+- [ ] `./bin/loopgate-policy-admin validate`
+- [ ] `./bin/loopgate-ledger verify`
+- [ ] `./bin/loopgate-doctor report`
 
 ## Operator flow sanity checks
 

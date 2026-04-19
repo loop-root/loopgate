@@ -21,6 +21,12 @@ const policySigningTrustDirEnv = "LOOPGATE_POLICY_SIGNING_TRUST_DIR"
 
 const loopgateRepoRootEnv = "LOOPGATE_REPO_ROOT"
 
+type loopgateInitResult struct {
+	KeyID              string
+	SocketPath         string
+	AlreadyInitialized bool
+}
+
 func runInit(args []string, stdout io.Writer, stderr io.Writer) error {
 	initFlags := flag.NewFlagSet("init", flag.ContinueOnError)
 	initFlags.SetOutput(stderr)
@@ -44,68 +50,113 @@ func runInit(args []string, stdout io.Writer, stderr io.Writer) error {
 		return err
 	}
 
+	result, err := initializeLoopgatePolicySigning(repoRoot, keyID, *forceFlag)
+	if err != nil {
+		return err
+	}
+	if result.AlreadyInitialized {
+		fmt.Fprintln(stdout, "already initialized")
+		return nil
+	}
+
+	fmt.Fprintf(stdout, "key_id: %s\n", result.KeyID)
+	fmt.Fprintf(stdout, "socket_path: %s\n", result.SocketPath)
+	fmt.Fprintln(stdout, "next_command: ./bin/loopgate")
+	return nil
+}
+
+func initializeLoopgatePolicySigning(repoRoot string, keyID string, force bool) (loopgateInitResult, error) {
 	runtimeStateDir := filepath.Join(repoRoot, "runtime", "state")
 	if err := os.MkdirAll(runtimeStateDir, 0o700); err != nil {
-		return fmt.Errorf("create runtime state directory: %w", err)
+		return loopgateInitResult{}, fmt.Errorf("create runtime state directory: %w", err)
 	}
 	if err := os.Chmod(runtimeStateDir, 0o700); err != nil {
-		return fmt.Errorf("chmod runtime state directory: %w", err)
+		return loopgateInitResult{}, fmt.Errorf("chmod runtime state directory: %w", err)
 	}
 
 	privateKeyPath, err := defaultOperatorPolicySigningPrivateKeyPath(keyID)
 	if err != nil {
-		return err
+		return loopgateInitResult{}, err
 	}
 	publicKeyPath, err := defaultOperatorPolicySigningPublicKeyPath(keyID)
 	if err != nil {
-		return err
+		return loopgateInitResult{}, err
 	}
 
-	if !*forceFlag {
+	if !force {
 		if _, err := config.VerifyPolicySigningSetup(repoRoot, privateKeyPath, keyID); err == nil {
-			fmt.Fprintln(stdout, "already initialized")
-			return nil
+			return loopgateInitResult{
+				KeyID:              keyID,
+				SocketPath:         filepath.Join(runtimeStateDir, "loopgate.sock"),
+				AlreadyInitialized: true,
+			}, nil
 		}
 	}
 
 	existingPrivateKey, existingPrivateKeyPresent, err := loadExistingOperatorPolicySigningPrivateKey(privateKeyPath)
 	if err != nil {
-		return err
+		return loopgateInitResult{}, err
 	}
 
 	var signerPublicKey ed25519.PublicKey
 	var signerPrivateKey ed25519.PrivateKey
 	switch {
-	case *forceFlag:
+	case force:
 		if err := backupExistingFileForForce(privateKeyPath); err != nil {
-			return err
+			return loopgateInitResult{}, err
 		}
 		if err := backupExistingFileForForce(publicKeyPath); err != nil {
-			return err
+			return loopgateInitResult{}, err
 		}
 		signerPublicKey, signerPrivateKey, err = ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return fmt.Errorf("generate policy signing keypair: %w", err)
+			return loopgateInitResult{}, fmt.Errorf("generate policy signing keypair: %w", err)
 		}
 	case existingPrivateKeyPresent:
 		signerPrivateKey = existingPrivateKey
 		derivedPublicKey, ok := signerPrivateKey.Public().(ed25519.PublicKey)
 		if !ok {
-			return fmt.Errorf("existing private key %s did not yield an Ed25519 public key", privateKeyPath)
+			return loopgateInitResult{}, fmt.Errorf("existing private key %s did not yield an Ed25519 public key", privateKeyPath)
 		}
 		signerPublicKey = append(ed25519.PublicKey(nil), derivedPublicKey...)
 	default:
 		signerPublicKey, signerPrivateKey, err = ed25519.GenerateKey(rand.Reader)
 		if err != nil {
-			return fmt.Errorf("generate policy signing keypair: %w", err)
+			return loopgateInitResult{}, fmt.Errorf("generate policy signing keypair: %w", err)
 		}
 	}
 
-	if err := ensureOperatorPolicySigningPublicKeyPath(publicKeyPath, signerPublicKey, *forceFlag); err != nil {
-		return err
+	if err := ensureOperatorPolicySigningPublicKeyPath(publicKeyPath, signerPublicKey, force); err != nil {
+		return loopgateInitResult{}, err
 	}
 	if err := writeOperatorPolicySigningPrivateKey(privateKeyPath, signerPrivateKey); err != nil {
+		return loopgateInitResult{}, err
+	}
+	if err := signRepoPolicyWithLocalOperatorKey(repoRoot, keyID); err != nil {
+		return loopgateInitResult{}, err
+	}
+
+	if _, err := config.VerifyPolicySigningSetup(repoRoot, privateKeyPath, keyID); err != nil {
+		return loopgateInitResult{}, fmt.Errorf("verify initialized policy signing setup: %w", err)
+	}
+
+	return loopgateInitResult{
+		KeyID:      keyID,
+		SocketPath: filepath.Join(runtimeStateDir, "loopgate.sock"),
+	}, nil
+}
+
+func signRepoPolicyWithLocalOperatorKey(repoRoot string, keyID string) error {
+	privateKeyPath, err := defaultOperatorPolicySigningPrivateKeyPath(keyID)
+	if err != nil {
 		return err
+	}
+	signerPrivateKey, signerPrivateKeyPresent, err := loadExistingOperatorPolicySigningPrivateKey(privateKeyPath)
+	if err != nil {
+		return err
+	}
+	if !signerPrivateKeyPresent {
+		return fmt.Errorf("operator private key %s not found after initialization", privateKeyPath)
 	}
 
 	rawPolicyBytes, err := os.ReadFile(filepath.Join(repoRoot, "core", "policy", "policy.yaml"))
@@ -119,13 +170,6 @@ func runInit(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err := config.WritePolicySignatureYAML(repoRoot, signatureFile); err != nil {
 		return fmt.Errorf("write policy signature yaml: %w", err)
 	}
-	if _, err := config.VerifyPolicySigningSetup(repoRoot, privateKeyPath, keyID); err != nil {
-		return fmt.Errorf("verify initialized policy signing setup: %w", err)
-	}
-
-	fmt.Fprintf(stdout, "key_id: %s\n", keyID)
-	fmt.Fprintf(stdout, "socket_path: %s\n", filepath.Join(runtimeStateDir, "loopgate.sock"))
-	fmt.Fprintln(stdout, "next_command: go run ./cmd/loopgate")
 	return nil
 }
 

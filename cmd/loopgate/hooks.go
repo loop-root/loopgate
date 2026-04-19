@@ -107,15 +107,29 @@ func handleLoopgateSubcommand(args []string) bool {
 		}
 		exitProcess(0)
 		return true
+	case "setup":
+		if err := runSetup(args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: setup:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
 	case "install-hooks":
-		if err := runInstallHooks(args[1:]); err != nil {
+		if err := runInstallHooks(args[1:], os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: install hooks:", err)
 			exitProcess(1)
 		}
 		exitProcess(0)
 		return true
+	case "install-launch-agent":
+		if err := runInstallLaunchAgent(args[1:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: install-launch-agent:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
 	case "remove-hooks":
-		if err := runRemoveHooks(args[1:]); err != nil {
+		if err := runRemoveHooks(args[1:], os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: remove hooks:", err)
 			exitProcess(1)
 		}
@@ -126,7 +140,7 @@ func handleLoopgateSubcommand(args []string) bool {
 	}
 }
 
-func runInstallHooks(args []string) error {
+func runInstallHooks(args []string, stdout io.Writer) error {
 	repoRoot, claudeDir, err := parseHookCommandArgs("install-hooks", args)
 	if err != nil {
 		return err
@@ -149,13 +163,13 @@ func runInstallHooks(args []string) error {
 	if err := writeClaudeSettings(settingsPath, settingsConfig); err != nil {
 		return err
 	}
-	fmt.Printf("Installed Loopgate Claude hooks into %s\n", claudeDir)
-	fmt.Printf("Copied %d hook files into %s\n", len(copiedScripts), claudeHooksDir)
-	fmt.Printf("Configured %d hook events in %s\n", installedHooks, settingsPath)
+	fmt.Fprintf(stdout, "Installed Loopgate Claude hooks into %s\n", claudeDir)
+	fmt.Fprintf(stdout, "Copied %d hook files into %s\n", len(copiedScripts), claudeHooksDir)
+	fmt.Fprintf(stdout, "Configured %d hook events in %s\n", installedHooks, settingsPath)
 	return nil
 }
 
-func runRemoveHooks(args []string) error {
+func runRemoveHooks(args []string, stdout io.Writer) error {
 	repoRoot, claudeDir, err := parseHookCommandArgs("remove-hooks", args)
 	if err != nil {
 		return err
@@ -172,14 +186,14 @@ func runRemoveHooks(args []string) error {
 			return err
 		}
 		if removedHooks > 0 {
-			fmt.Printf("Removed %d Loopgate Claude hook entries from %s\n", removedHooks, settingsPath)
+			fmt.Fprintf(stdout, "Removed %d Loopgate Claude hook entries from %s\n", removedHooks, settingsPath)
 		}
 		totalRemovedHooks += removedHooks
 	}
 	if totalRemovedHooks == 0 {
-		fmt.Printf("Removed 0 Loopgate Claude hook entries from %s\n", filepath.Join(claudeDir, claudeSettingsFilename))
+		fmt.Fprintf(stdout, "Removed 0 Loopgate Claude hook entries from %s\n", filepath.Join(claudeDir, claudeSettingsFilename))
 	}
-	fmt.Printf("Hook scripts under %s were left in place\n", filepath.Join(claudeDir, claudeHooksDirname))
+	fmt.Fprintf(stdout, "Hook scripts under %s were left in place\n", filepath.Join(claudeDir, claudeHooksDirname))
 	return nil
 }
 

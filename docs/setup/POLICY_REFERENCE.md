@@ -15,7 +15,7 @@ For the signed-policy workflow, see [POLICY_SIGNING.md](./POLICY_SIGNING.md).
 For a plain-language summary of the active signed policy, use:
 
 ```bash
-go run ./cmd/loopgate-policy-admin explain
+./bin/loopgate-policy-admin explain
 ```
 
 ## Parsing and trust model
@@ -201,7 +201,15 @@ The checked-in `core/policy/policy.yaml` is an intentionally strict starter poli
 If you want a more permissive local-development starting point, render a reviewed template first:
 
 ```bash
-go run ./cmd/loopgate-policy-admin render-template -preset developer
+./bin/loopgate-policy-admin render-template -preset balanced
 ```
 
-Then inspect, sign, and apply it through the normal signed-policy workflow.
+Available starter profiles:
+- `strict`
+  - read-oriented starter profile; shell and HTTP disabled
+- `balanced`
+  - approval-gated common inspection and test shell commands; HTTP disabled
+- `developer`
+  - approval-gated common development shell commands plus HTTP enabled
+
+Then inspect, sign, and apply the chosen profile through the normal signed-policy workflow, or use `./bin/loopgate setup` for the guided path.

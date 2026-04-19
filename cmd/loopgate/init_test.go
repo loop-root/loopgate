@@ -27,7 +27,7 @@ func TestRunInit_InitializesPolicySigningSetup(t *testing.T) {
 	if lines[0] != "key_id: local-operator-test" {
 		t.Fatalf("unexpected key_id line: %q", lines[0])
 	}
-	if lines[2] != "next_command: go run ./cmd/loopgate" {
+	if lines[2] != "next_command: ./bin/loopgate" {
 		t.Fatalf("unexpected next command line: %q", lines[2])
 	}
 

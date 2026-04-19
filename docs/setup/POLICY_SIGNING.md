@@ -7,11 +7,18 @@ Loopgate now requires a detached signature for the live policy file.
 For the default first-time local setup, prefer:
 
 ```bash
-go run ./cmd/loopgate init
+./bin/loopgate setup
 ```
 
-That creates a local signer, installs the matching trust anchor, and signs the
-checked-in policy for you.
+That creates or reuses a local signer, lets you choose a starter policy
+profile, signs the checked-in policy for you, and installs Claude hooks.
+
+If you want the manual signing path instead:
+
+```bash
+./bin/loopgate init
+./bin/loopgate-policy-admin validate
+```
 
 Required files:
 
@@ -98,13 +105,13 @@ Example signing flow with a custom operator key:
 
 ```bash
 KEY_ID="loopgate-local-root-2026-04"
-go run ./cmd/loopgate-policy-sign -key-id "$KEY_ID"
+./bin/loopgate-policy-sign -key-id "$KEY_ID"
 ```
 
 Or override the key location explicitly:
 
 ```bash
-go run ./cmd/loopgate-policy-sign \
+./bin/loopgate-policy-sign \
   -key-id "$KEY_ID" \
   -private-key-file ~/loopgate-policy-signing-key.pem
 ```
@@ -118,16 +125,20 @@ core/policy/policy.yaml.sig
 Verify the active rollout inputs before restarting operators:
 
 ```bash
-go run ./cmd/loopgate-policy-sign -key-id "$KEY_ID" -verify-setup
+./bin/loopgate-policy-sign -key-id "$KEY_ID" -verify-setup
 ```
 
 Before signing, you can validate or explain the policy surface locally with:
 
 ```bash
-go run ./cmd/loopgate-policy-admin validate
-go run ./cmd/loopgate-policy-admin explain -tool Bash
-go run ./cmd/loopgate-policy-admin diff -right-policy-file ./candidate-policy.yaml
+./bin/loopgate-policy-admin validate
+./bin/loopgate-policy-admin explain -tool Bash
+./bin/loopgate-policy-admin diff -right-policy-file ./candidate-policy.yaml
 ```
+
+For keychain-backed flows, prefer the stable `./bin/...` binaries over
+`go run`; a fresh `go run` build changes the executable identity and can cause
+repeated macOS approval prompts.
 
 `diff` is intentionally a **normalized effective-policy diff**, not a raw YAML
 text diff. It compares what Loopgate will enforce after strict parsing,

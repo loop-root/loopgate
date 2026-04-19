@@ -516,11 +516,16 @@ make build          # build all Loopgate binaries into ./bin
 make install-local  # install binaries into ~/.local/bin
 ```
 
-Then build next:
+Recent progress:
+- `loopgate setup` now provides a guided local-first setup path
+- starter policy profiles now exist for `strict`, `balanced`, and `developer`
+- `install-launch-agent` now gives macOS operators a supported background-run path
+
+Still build next:
 
 - signed release artifacts for non-Go users
-- a setup wizard that walks the operator through init, policy validation, and hook install
-- a guided policy-profile chooser for common local modes such as strict, balanced, and permissive-dev
+- setup flows that stop requiring a local Go toolchain entirely
+- a first-class downloadable/operator installer rather than repo-root commands
 
 ### Files to touch
 

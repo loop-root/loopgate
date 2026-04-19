@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,7 @@ func TestRunInstallHooks_CopiesScriptsAndWritesSettings(t *testing.T) {
 	repoRoot := makeTestHookRepo(t)
 	claudeDir := t.TempDir()
 
-	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}); err != nil {
+	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}, io.Discard); err != nil {
 		t.Fatalf("runInstallHooks returned error: %v", err)
 	}
 
@@ -66,7 +67,7 @@ func TestRunInstallHooks_IsIdempotent(t *testing.T) {
 	claudeDir := t.TempDir()
 
 	for runIndex := 0; runIndex < 2; runIndex++ {
-		if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}); err != nil {
+		if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}, io.Discard); err != nil {
 			t.Fatalf("runInstallHooks returned error on pass %d: %v", runIndex+1, err)
 		}
 	}
@@ -92,7 +93,7 @@ func TestRunInstallHooks_PreservesOtherSettings(t *testing.T) {
 		t.Fatalf("write raw settings: %v", err)
 	}
 
-	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}); err != nil {
+	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}, io.Discard); err != nil {
 		t.Fatalf("runInstallHooks returned error: %v", err)
 	}
 
@@ -117,7 +118,7 @@ func TestRunInstallHooks_QuotesCommandPathsWithSpaces(t *testing.T) {
 		t.Fatalf("mkdir claude dir: %v", err)
 	}
 
-	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}); err != nil {
+	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}, io.Discard); err != nil {
 		t.Fatalf("runInstallHooks returned error: %v", err)
 	}
 
@@ -138,7 +139,7 @@ func TestRunInstallHooks_MissingHookBundleExplainsExpectedSourceDir(t *testing.T
 	repoRoot := t.TempDir()
 	claudeDir := t.TempDir()
 
-	err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir})
+	err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}, io.Discard)
 	if err == nil {
 		t.Fatal("expected install-hooks to fail when the tracked hook bundle is missing")
 	}
@@ -253,10 +254,10 @@ func TestRunRemoveHooks_RemovesOnlyLoopgateEntries(t *testing.T) {
 	}
 	writeTestClaudeSettings(t, filepath.Join(claudeDir, claudeSettingsFilename), settingsConfig)
 
-	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}); err != nil {
+	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}, io.Discard); err != nil {
 		t.Fatalf("runInstallHooks returned error: %v", err)
 	}
-	if err := runRemoveHooks([]string{"-claude-dir", claudeDir}); err != nil {
+	if err := runRemoveHooks([]string{"-claude-dir", claudeDir}, io.Discard); err != nil {
 		t.Fatalf("runRemoveHooks returned error: %v", err)
 	}
 
@@ -298,7 +299,7 @@ func TestRunRemoveHooks_RemovesRepoLocalLoopgateEntries(t *testing.T) {
 		},
 	})
 
-	if err := runRemoveHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}); err != nil {
+	if err := runRemoveHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}, io.Discard); err != nil {
 		t.Fatalf("runRemoveHooks returned error: %v", err)
 	}
 

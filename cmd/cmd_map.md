@@ -18,9 +18,13 @@ Use it when changing:
   - constructs socket path `runtime/state/loopgate.sock` under cwd-as-repo-root
   - starts `loopgate.NewServerWithOptions` and runs until signal
   - also provides operator subcommands:
+    - `setup`
     - `install-hooks`
+    - `install-launch-agent`
     - `remove-hooks`
+  - `setup` is the guided first-run path: local signer init/reuse, starter policy profile selection, signed policy write, hook install, and optional macOS LaunchAgent install
   - `install-hooks` copies the tracked hook bundle from `claude/hooks/scripts/` into the target Claude config dir and wires the supported hook events into `settings.json`
+  - `install-launch-agent` writes a per-repo macOS LaunchAgent plist pointed at the current Loopgate binary and can load it immediately with `launchctl`
   - `remove-hooks` removes only the Loopgate-managed hook entries and leaves copied scripts in place
 
 ## `cmd/loopgate-policy-sign/`
@@ -39,7 +43,7 @@ Use it when changing:
   - validates signed repo policy or an arbitrary policy YAML file against the same strict parser used at runtime
   - explains the current Claude Code tool policy surface, including deny-unknown-tools behavior and per-tool overrides
   - diffs two normalized policy documents so operators can review effective changes before signing
-  - renders starter admin policy templates for `strict-mvp` and `developer`
+  - renders starter admin policy templates for `strict`, `balanced`, and `developer` (still accepting `strict-mvp` as a compatibility alias)
   - hot-applies the already signed on-disk policy to a running local Loopgate instance via `apply`
   - `apply -verify-setup` also verifies the local signer key against the trusted public key set before hot reload
   - treats detached signature verification as required for the default repo policy path and optional for ad hoc template files

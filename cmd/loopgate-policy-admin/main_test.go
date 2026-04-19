@@ -26,6 +26,15 @@ type testPolicySignerFixture struct {
 	privateKey ed25519.PrivateKey
 }
 
+func mustPolicyPresetTemplate(t *testing.T, presetName string) string {
+	t.Helper()
+	preset, err := config.ResolvePolicyTemplatePreset(presetName)
+	if err != nil {
+		t.Fatalf("resolve policy preset %q: %v", presetName, err)
+	}
+	return preset.TemplateYAML
+}
+
 func (fixture testPolicySignerFixture) keyID() string {
 	return "loopgate-test-policy-root"
 }
@@ -95,7 +104,7 @@ func (fixture testPolicySignerFixture) writeSignedPolicy(t *testing.T, repoRoot 
 
 func TestRunValidate_ValidatesSignedRepoPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
-	writeSignedPolicyFixture(t, repoRoot, strictMVPPresetTemplate)
+	writeSignedPolicyFixture(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -114,7 +123,7 @@ func TestRunValidate_ValidatesSignedRepoPolicy(t *testing.T) {
 func TestRunValidate_ValidatesUnsignedPolicyFile(t *testing.T) {
 	repoRoot := t.TempDir()
 	policyPath := filepath.Join(repoRoot, "policy.yaml")
-	if err := os.WriteFile(policyPath, []byte(strictMVPPresetTemplate), 0o600); err != nil {
+	if err := os.WriteFile(policyPath, []byte(mustPolicyPresetTemplate(t, "strict")), 0o600); err != nil {
 		t.Fatalf("write unsigned policy: %v", err)
 	}
 
@@ -131,7 +140,7 @@ func TestRunValidate_ValidatesUnsignedPolicyFile(t *testing.T) {
 
 func TestRunExplain_PrintsToolExplanation(t *testing.T) {
 	repoRoot := t.TempDir()
-	writeSignedPolicyFixture(t, repoRoot, developerPresetTemplate)
+	writeSignedPolicyFixture(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -154,7 +163,7 @@ func TestRunExplain_PrintsToolExplanation(t *testing.T) {
 func TestRunRenderTemplate_RendersPreset(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	exitCode := run([]string{"render-template", "-preset", "strict-mvp"}, &stdout, &stderr)
+	exitCode := run([]string{"render-template", "-preset", "strict"}, &stdout, &stderr)
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d stderr=%s", exitCode, stderr.String())
 	}
@@ -167,9 +176,25 @@ func TestRunRenderTemplate_RendersPreset(t *testing.T) {
 	}
 }
 
+func TestRunRenderTemplate_RendersBalancedPreset(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"render-template", "-preset", "balanced"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stderr=%s", exitCode, stderr.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "enabled: true") {
+		t.Fatalf("expected balanced template to enable at least one guarded tool, got %q", output)
+	}
+	if !strings.Contains(output, "timeout_seconds: 10") {
+		t.Fatalf("expected balanced template to retain explicit HTTP timeout, got %q", output)
+	}
+}
+
 func TestRunExplain_RejectsUnsupportedToolName(t *testing.T) {
 	repoRoot := t.TempDir()
-	writeSignedPolicyFixture(t, repoRoot, strictMVPPresetTemplate)
+	writeSignedPolicyFixture(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -184,10 +209,10 @@ func TestRunExplain_RejectsUnsupportedToolName(t *testing.T) {
 
 func TestRunDiff_PrintsNormalizedPolicyDifferences(t *testing.T) {
 	repoRoot := t.TempDir()
-	writeSignedPolicyFixture(t, repoRoot, strictMVPPresetTemplate)
+	writeSignedPolicyFixture(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 
 	rightPolicyPath := filepath.Join(repoRoot, "developer-policy.yaml")
-	if err := os.WriteFile(rightPolicyPath, []byte(developerPresetTemplate), 0o600); err != nil {
+	if err := os.WriteFile(rightPolicyPath, []byte(mustPolicyPresetTemplate(t, "developer")), 0o600); err != nil {
 		t.Fatalf("write right policy: %v", err)
 	}
 
@@ -217,10 +242,10 @@ func TestRunDiff_PrintsNormalizedPolicyDifferences(t *testing.T) {
 
 func TestRunDiff_PrintsNoDiffForEquivalentPolicies(t *testing.T) {
 	repoRoot := t.TempDir()
-	writeSignedPolicyFixture(t, repoRoot, strictMVPPresetTemplate)
+	writeSignedPolicyFixture(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 
 	rightPolicyPath := filepath.Join(repoRoot, "strict-copy.yaml")
-	if err := os.WriteFile(rightPolicyPath, []byte(strictMVPPresetTemplate), 0o600); err != nil {
+	if err := os.WriteFile(rightPolicyPath, []byte(mustPolicyPresetTemplate(t, "strict")), 0o600); err != nil {
 		t.Fatalf("write right policy: %v", err)
 	}
 
@@ -238,7 +263,7 @@ func TestRunDiff_PrintsNoDiffForEquivalentPolicies(t *testing.T) {
 func TestRunApply_HotReloadsSignedPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
-	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 	initialPolicy, err := loadPolicyDocument(repoRoot, "", "")
 	if err != nil {
 		t.Fatalf("load initial policy: %v", err)
@@ -247,7 +272,7 @@ func TestRunApply_HotReloadsSignedPolicy(t *testing.T) {
 	socketPath := newTempSocketPath(t)
 	_ = startPolicyAdminTestServer(t, repoRoot, socketPath)
 
-	signerFixture.writeSignedPolicy(t, repoRoot, developerPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
 	reloadedPolicy, err := loadPolicyDocument(repoRoot, "", "")
 	if err != nil {
 		t.Fatalf("load reloaded policy: %v", err)
@@ -295,7 +320,7 @@ func TestRunApply_HotReloadsSignedPolicy(t *testing.T) {
 func TestRunApply_WithVerifySetup_HotReloadsSignedPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
-	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 	initialPolicy, err := loadPolicyDocument(repoRoot, "", "")
 	if err != nil {
 		t.Fatalf("load initial policy: %v", err)
@@ -307,7 +332,7 @@ func TestRunApply_WithVerifySetup_HotReloadsSignedPolicy(t *testing.T) {
 	socketPath := newTempSocketPath(t)
 	_ = startPolicyAdminTestServer(t, repoRoot, socketPath)
 
-	signerFixture.writeSignedPolicy(t, repoRoot, developerPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
 	reloadedPolicy, err := loadPolicyDocument(repoRoot, "", "")
 	if err != nil {
 		t.Fatalf("load reloaded policy: %v", err)
@@ -344,7 +369,7 @@ func TestRunApply_WithVerifySetup_HotReloadsSignedPolicy(t *testing.T) {
 func TestRunApply_WithVerifySetup_DefaultsToCurrentSignedPolicyKeyID(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
-	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 	initialPolicy, err := loadPolicyDocument(repoRoot, "", "")
 	if err != nil {
 		t.Fatalf("load initial policy: %v", err)
@@ -365,7 +390,7 @@ func TestRunApply_WithVerifySetup_DefaultsToCurrentSignedPolicyKeyID(t *testing.
 	socketPath := newTempSocketPath(t)
 	_ = startPolicyAdminTestServer(t, repoRoot, socketPath)
 
-	signerFixture.writeSignedPolicy(t, repoRoot, developerPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
 	reloadedPolicy, err := loadPolicyDocument(repoRoot, "", "")
 	if err != nil {
 		t.Fatalf("load reloaded policy: %v", err)
@@ -396,13 +421,13 @@ func TestRunApply_WithVerifySetup_DefaultsToCurrentSignedPolicyKeyID(t *testing.
 func TestRunApply_FailsWhenServerReloadsDifferentPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
-	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 	serverRepoRoot := t.TempDir()
-	signerFixture.writeSignedPolicy(t, serverRepoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, serverRepoRoot, mustPolicyPresetTemplate(t, "strict"))
 	socketPath := newTempSocketPath(t)
 	_ = startPolicyAdminTestServer(t, serverRepoRoot, socketPath)
 
-	signerFixture.writeSignedPolicy(t, repoRoot, developerPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -418,7 +443,7 @@ func TestRunApply_FailsWhenServerReloadsDifferentPolicy(t *testing.T) {
 func TestRunApply_WithVerifySetup_RejectsMismatchedSigner(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
-	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 
 	_, mismatchedPrivateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -441,7 +466,7 @@ func TestRunApply_WithVerifySetup_RejectsMismatchedSigner(t *testing.T) {
 func TestRunApprovalsList_PrintsPendingApprovals(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
-	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 
 	socketPath := newTempSocketPath(t)
 	_ = startPolicyAdminTestServer(t, repoRoot, socketPath)
@@ -482,7 +507,7 @@ func TestRunApprovalsList_PrintsPendingApprovals(t *testing.T) {
 func TestRunApprovalsApprove_CompletesApprovalAndWritesAuditReason(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
-	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 
 	socketPath := newTempSocketPath(t)
 	workspaceRoot := startPolicyAdminTestServer(t, repoRoot, socketPath)
@@ -534,7 +559,7 @@ func TestRunApprovalsApprove_CompletesApprovalAndWritesAuditReason(t *testing.T)
 func TestRunApprovalsDeny_RecordsAuditReason(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)
-	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
 
 	socketPath := newTempSocketPath(t)
 	workspaceRoot := startPolicyAdminTestServer(t, repoRoot, socketPath)

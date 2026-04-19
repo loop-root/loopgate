@@ -53,10 +53,11 @@ Practical approaches:
 
 ## 2. Running Loopgate
 
-From this repository’s root (with Go toolchain):
+From this repository’s root:
 
 ```bash
-go run ./cmd/loopgate
+make build
+./bin/loopgate
 ```
 
 You should see:
@@ -68,7 +69,7 @@ Loopgate listening on …/runtime/state/loopgate.sock
 Policy changes now require a valid detached signature:
 
 ```bash
-go run ./cmd/loopgate-policy-sign
+./bin/loopgate-policy-sign
 ```
 
 See [SETUP.md](./SETUP.md) and [POLICY_SIGNING.md](./POLICY_SIGNING.md) for repo layout, runtime paths, and signed-policy workflow.
@@ -281,7 +282,7 @@ explicitly needs the connection surface.
 - **Scope:** **`diagnostic.read`**
 - **Response:** JSON aggregate for operators and in-app doctor UIs: ledger chain verification summary (`ledger_verify`), active audit JSONL line count and top event types (`ledger_active`), diagnostic logging flags (`diagnostics`), nonce replay persistence/utilization status (`nonce_replay`), and audit-export sink / trust-material status (`audit_export`). The `nonce_replay` section reports retained active entries, persisted log size, and warning states such as legacy snapshot fallback, high retained-entry utilization, or visible append-only log growth. The `audit_export.trust.*` section includes renewal-window fields such as `renewal_threshold_at_utc`, `seconds_until_renewal_threshold`, `days_until_renewal_threshold`, and `renewal_window_active`. **No** raw audit JSONL, tool payloads, private keys, tokens, or other secrets.
 - **Go client:** `(*loopgate.Client).FetchDiagnosticReport(ctx, &dest)` unmarshals the same JSON.
-- **CLI (no server):** `go run ./cmd/loopgate-doctor report` and `go run ./cmd/loopgate-doctor bundle -out /path/to/dir` write `report.json` plus optional tails of configured diagnostic `*.log` files.
+- **CLI (no server):** `./bin/loopgate-doctor report` and `./bin/loopgate-doctor bundle -out /path/to/dir` write `report.json` plus optional tails of configured diagnostic `*.log` files.
 
 **`GET /v1/audit/export/trust-check`**
 

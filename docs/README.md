@@ -16,8 +16,8 @@ The current active story is:
 - governed local MCP/runtime work
 
 Use the documents below as the current source of truth for the active product.
-Historical material has been moved to the `ARCHIVED` or `continuity` sibling
-repositories.
+Internal review artifacts and temporary hardening notes now live under
+[`notes/`](../notes/README.md) and are not part of the public operator path.
 
 ## Start here
 
@@ -30,13 +30,9 @@ repositories.
 - [Policy signing](./setup/POLICY_SIGNING.md)
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./loopgate-threat-model.md)
-- [Review closure status](./reports/reviews/2026-04-16/review_status.md)
-- [T3 handoff snapshot](./reports/handoffs/2026-04-16_t3_handoff.md)
 - [Active product gaps](./roadmap/loopgate_v1_product_gaps.md)
 - [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
-- [Ship-readiness hardening follow-up](./roadmap/ship_readiness_hardening_followup.md)
 - [Release candidate checklist](./roadmap/release_candidate_checklist.md)
-- [Repository sealing review](./roadmap/repository_sealing_review.md)
 - [Changelog](../CHANGELOG.md)
 - [Support](../SUPPORT.md)
 - [Security reporting](../SECURITY.md)
@@ -62,6 +58,7 @@ repositories.
 
 ## Historical material
 
-Older product notes, extracted continuity design docs, sprint plans, and review
-artifacts live in the separate `ARCHIVED` and `continuity` sibling
-repositories.
+Older product notes, extracted continuity design docs, and related historical
+material live in the separate `ARCHIVED` and `continuity` sibling repositories.
+Internal review and hardening notes that still matter to maintainers but are
+not part of the public docs surface live under [`notes/`](../notes/README.md).

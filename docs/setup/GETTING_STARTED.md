@@ -14,10 +14,9 @@ It assumes the current supported product shape:
 ## What you will do
 
 1. build local binaries
-2. initialize local policy signing
-3. start Loopgate
-4. install Claude Code hooks
-5. run a normal task and inspect the local audit if needed
+2. run the guided setup wizard
+3. verify Loopgate is running
+4. run a normal task and inspect the local audit if needed
 
 Prerequisites:
 - Go 1.25 or newer to build from source
@@ -38,24 +37,41 @@ If you ran `make install-local`, replace `./bin/...` below with the bare
 command names such as `loopgate`, `loopgate-ledger`, and
 `loopgate-policy-admin`.
 
-### 2. Initialize local policy signing
+### 2. Run the guided setup wizard
 
 ```bash
-./bin/loopgate init
-./bin/loopgate-policy-admin validate
+./bin/loopgate setup
 ```
 
-`loopgate init` creates a local Ed25519 signer for this operator, installs the
-matching trust anchor under your Loopgate config directory, signs the checked-in
-policy, and prints the `key_id` you should reuse later if you intentionally
-re-sign with `loopgate-policy-sign`.
+`loopgate setup` is the shortest supported operator path. It guides you through:
+- local policy-signing setup
+- choosing a starter policy profile: `strict`, `balanced`, or `developer`
+- signing the selected policy
+- installing Claude Code hooks
+- optionally installing and loading a macOS LaunchAgent so Loopgate keeps running in the background
 
-The checked-in starter policy is deliberately strict. If you want a more
-permissive local-development baseline, review
-[POLICY_REFERENCE.md](./POLICY_REFERENCE.md) and render a template with
-`./bin/loopgate-policy-admin render-template` before signing and applying it.
+Recommended default:
+- `balanced`
+  - common inspection and test commands are available through approval-gated shell policy
+  - HTTP stays disabled
+  - writes still require approval
 
-### 3. Start Loopgate
+Important:
+- hook install writes into your user-level Claude config under `~/.claude/`
+- until you remove those hooks, Claude Code will keep sending governed hook events through Loopgate across projects on this machine
+
+If you prefer the manual path, see [SETUP.md](./SETUP.md).
+
+### 3. Verify Loopgate is running
+
+If setup loaded the macOS LaunchAgent, Loopgate should already be running in the
+background. Verify with:
+
+```bash
+./bin/loopgate-doctor report
+```
+
+If you skipped the LaunchAgent, start Loopgate yourself:
 
 Foreground:
 
@@ -63,7 +79,16 @@ Foreground:
 ./bin/loopgate
 ```
 
-Simple background run from the repo root:
+Recommended macOS background path:
+
+```bash
+./bin/loopgate install-launch-agent -load
+```
+
+This LaunchAgent pins the current Loopgate executable path, so use the built
+`./bin/loopgate` or an installed `loopgate` binary rather than `go run`.
+
+Simple shell-managed background run from the repo root:
 
 ```bash
 mkdir -p runtime/logs runtime/state
@@ -98,24 +123,18 @@ For keychain-backed operator flows, prefer the stable `./bin/...` binaries over
 `go run`; a fresh `go run` build changes the executable identity and can cause
 repeated macOS approval prompts.
 
-### 4. Install Claude Code hooks
+Setup normally installs Claude Code hooks for you. If you skipped that step,
+you can run it manually later:
 
 ```bash
 ./bin/loopgate install-hooks
 ```
 
-This updates:
-- `~/.claude/settings.json`
-- `~/.claude/hooks/`
-
-The tracked hook bundle source lives in:
-- `claude/hooks/scripts/`
-
-Quick smoke check:
+Quick smoke check after hook install:
 - run `/hooks` inside Claude Code and confirm the 7 Loopgate hook events are registered
 - verify the installed commands point at `~/.claude/hooks/loopgate_*.py`
 
-### 5. Run a normal task
+### 4. Run a normal task
 
 Use Claude Code normally and watch for:
 - low-risk reads that should be allow + audit
@@ -128,6 +147,23 @@ If you need quick visibility:
 ./bin/loopgate-ledger tail -verbose
 ./bin/loopgate-doctor report
 ```
+
+## Did it work?
+
+Use one real governed path instead of guessing from startup text alone:
+
+1. run `/hooks` inside Claude Code and confirm the 7 Loopgate hook entries are present
+2. ask Claude Code to read `README.md`
+3. run:
+
+```bash
+./bin/loopgate-ledger tail -verbose
+```
+
+Expected result:
+- you should see a recent `hook.pre_validate` event
+- if the action was denied or approval-gated, that should also be visible in the tail output
+- if nothing new appears, the first thing to re-check is whether the Claude hooks are installed and pointing at `~/.claude/hooks/loopgate_*.py`
 
 ## Optional contributor checkout validation
 
@@ -163,6 +199,8 @@ sequenceDiagram
 - Hooks seem missing:
   - rerun `./bin/loopgate install-hooks`
   - confirm the tracked source bundle exists under `claude/hooks/scripts/`
+- You want the supported background path on macOS:
+  - run `./bin/loopgate install-launch-agent -load`
 - Policy changes are not taking effect:
   - rerun `validate`, `-verify-setup`, and `apply -verify-setup`
   - `-verify-setup` uses the current signed policy `key_id` by default
@@ -177,5 +215,6 @@ sequenceDiagram
 - [Setup](./SETUP.md)
 - [Operator guide](./OPERATOR_GUIDE.md)
 - [Policy reference](./POLICY_REFERENCE.md)
+- [Glossary](./GLOSSARY.md)
 - [Doctor and ledger tools](./DOCTOR_AND_LEDGER.md)
 - [Loopgate HTTP API for local clients](./LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md)
