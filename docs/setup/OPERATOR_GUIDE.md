@@ -87,6 +87,10 @@ will sweep those repo-local Loopgate entries too.
 If Claude says a hook script is missing, reinstall first before disabling anything.
 After install, run `/hooks` in Claude Code and confirm the Loopgate entries point
 at `~/.claude/hooks/loopgate_*.py`.
+If Loopgate is unreachable, the installed command hooks exit with Claude Code's
+blocking hook status. That means governed events such as `PreToolUse`,
+`PermissionRequest`, and `UserPromptSubmit` fail closed instead of silently
+bypassing Loopgate, while audit-only lifecycle hooks surface a visible error.
 
 ### 4. Re-sign policy when you intentionally change it
 

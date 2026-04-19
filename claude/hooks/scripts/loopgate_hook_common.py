@@ -68,6 +68,8 @@ def resolve_loopgate_socket_path(request_payload: Dict[str, Any]) -> str:
     if project_dir:
         return os.path.join(project_dir, "runtime", "state", "loopgate.sock")
 
+    # Convenience-only local-dev fallback. For stable operator behavior, prefer the
+    # operator-controlled LOOPGATE_SOCKET or CLAUDE_PROJECT_DIR values above.
     raw_cwd = request_payload.get("cwd")
     if isinstance(raw_cwd, str) and raw_cwd.strip():
         try:
@@ -193,29 +195,41 @@ def build_hook_output(event_name: str, response_payload: Dict[str, Any]) -> Opti
     if event_name == "UserPromptSubmit":
         if decision == "ask":
             raise HookFailure("Loopgate returned unexpected ask decision for UserPromptSubmit")
-        output = additional_context_output("UserPromptSubmit", additional_context) or {"suppressOutput": True}
+        output = additional_context_output("UserPromptSubmit", additional_context)
+        has_output_content = output is not None
+        if output is None:
+            output = {"suppressOutput": True}
         if decision == "block":
             output["decision"] = "block"
             output["reason"] = reason or "Loopgate blocked prompt processing"
-        return output if len(output) > 1 else None
+            has_output_content = True
+        return output if has_output_content else None
 
     if event_name == "PostToolUse":
         if decision == "ask":
             raise HookFailure("Loopgate returned unexpected ask decision for PostToolUse")
-        output = additional_context_output("PostToolUse", additional_context) or {"suppressOutput": True}
+        output = additional_context_output("PostToolUse", additional_context)
+        has_output_content = output is not None
+        if output is None:
+            output = {"suppressOutput": True}
         if decision == "block":
             output["decision"] = "block"
             output["reason"] = reason or "Loopgate rejected post-tool processing"
-        return output if len(output) > 1 else None
+            has_output_content = True
+        return output if has_output_content else None
 
     if event_name == "PostToolUseFailure":
         if decision == "ask":
             raise HookFailure("Loopgate returned unexpected ask decision for PostToolUseFailure")
-        output = additional_context_output("PostToolUseFailure", additional_context) or {"suppressOutput": True}
+        output = additional_context_output("PostToolUseFailure", additional_context)
+        has_output_content = output is not None
+        if output is None:
+            output = {"suppressOutput": True}
         if decision == "block":
             output["decision"] = "block"
             output["reason"] = reason or "Loopgate rejected post-tool failure processing"
-        return output if len(output) > 1 else None
+            has_output_content = True
+        return output if has_output_content else None
 
     raise HookFailure(f"unsupported Loopgate hook event {event_name!r}")
 
@@ -226,6 +240,10 @@ def main(expected_event_name: str) -> int:
         response_payload = request_loopgate_hook_decision(request_payload)
         hook_output = build_hook_output(expected_event_name, response_payload)
     except HookFailure as exc:
+        # Intentional fail-closed path. Claude Code's documented hook semantics treat
+        # exit code 2 as blocking for PreToolUse, PermissionRequest, and
+        # UserPromptSubmit, while non-blockable lifecycle hooks surface the error to
+        # the user or Claude instead of silently bypassing Loopgate.
         print(f"Loopgate hook error: {exc}", file=sys.stderr)
         return 2
 

@@ -49,6 +49,15 @@ func TestRunInstallHooks_CopiesScriptsAndWritesSettings(t *testing.T) {
 	}
 }
 
+func TestLoopgateHookBundleCopiesSharedHelperFirst(t *testing.T) {
+	if len(loopgateHookBundleFiles) == 0 {
+		t.Fatal("expected tracked hook bundle files")
+	}
+	if loopgateHookBundleFiles[0] != "loopgate_hook_common.py" {
+		t.Fatalf("expected shared helper to copy first, got %q", loopgateHookBundleFiles[0])
+	}
+}
+
 func TestRunInstallHooks_IsIdempotent(t *testing.T) {
 	repoRoot := makeTestHookRepo(t)
 	claudeDir := t.TempDir()

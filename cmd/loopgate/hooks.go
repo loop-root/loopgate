@@ -30,8 +30,8 @@ var (
 		"loopgate_permissionrequest.py",
 	}
 	loopgateHookBundleFiles = append(
-		append([]string(nil), requiredLoopgateHookScripts...),
-		"loopgate_hook_common.py",
+		[]string{"loopgate_hook_common.py"},
+		requiredLoopgateHookScripts...,
 	)
 	loopgateHookEvents = []loopgateClaudeHookSpec{
 		{
