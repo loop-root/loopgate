@@ -2,16 +2,12 @@ package secrets
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
 
-const (
-	loopgateKeychainServicePrefix    = "loopgate."
-	legacyMorphKeychainServicePrefix = "morph.loopgate."
-)
+const loopgateKeychainServicePrefix = "loopgate."
 
 type MacOSKeychainStore struct {
 	now               func() time.Time
@@ -70,7 +66,7 @@ func (store *MacOSKeychainStore) Get(ctx context.Context, validatedRef SecretRef
 		return nil, SecretMetadata{}, err
 	}
 
-	secretBytes, _, err := store.getSecretWithLegacyFallback(ctx, validatedRef)
+	secretBytes, err := store.getSecret(ctx, validatedRef, keychainServiceName(validatedRef))
 	if err != nil {
 		return nil, SecretMetadata{}, err
 	}
@@ -92,7 +88,7 @@ func (store *MacOSKeychainStore) Delete(ctx context.Context, validatedRef Secret
 		return err
 	}
 
-	return store.deleteSecretWithLegacyFallback(ctx, validatedRef)
+	return store.deleteSecret(ctx, validatedRef, keychainServiceName(validatedRef))
 }
 
 func (store *MacOSKeychainStore) Metadata(ctx context.Context, validatedRef SecretRef) (SecretMetadata, error) {
@@ -103,58 +99,11 @@ func (store *MacOSKeychainStore) Metadata(ctx context.Context, validatedRef Secr
 		return SecretMetadata{}, err
 	}
 
-	return store.metadataWithLegacyFallback(ctx, validatedRef)
+	return store.metadataForSecret(ctx, validatedRef, keychainServiceName(validatedRef))
 }
 
 func keychainServiceName(validatedRef SecretRef) string {
 	return loopgateKeychainServicePrefix + strings.TrimSpace(validatedRef.Scope)
-}
-
-func legacyKeychainServiceName(validatedRef SecretRef) string {
-	return legacyMorphKeychainServicePrefix + strings.TrimSpace(validatedRef.Scope)
-}
-
-func (store *MacOSKeychainStore) getSecretWithLegacyFallback(ctx context.Context, validatedRef SecretRef) ([]byte, string, error) {
-	primaryServiceName := keychainServiceName(validatedRef)
-	secretBytes, err := store.getSecret(ctx, validatedRef, primaryServiceName)
-	if err == nil || !errors.Is(err, ErrSecretNotFound) {
-		return secretBytes, primaryServiceName, err
-	}
-
-	legacyServiceName := legacyKeychainServiceName(validatedRef)
-	if legacyServiceName == primaryServiceName {
-		return nil, primaryServiceName, err
-	}
-	secretBytes, legacyErr := store.getSecret(ctx, validatedRef, legacyServiceName)
-	return secretBytes, legacyServiceName, legacyErr
-}
-
-func (store *MacOSKeychainStore) deleteSecretWithLegacyFallback(ctx context.Context, validatedRef SecretRef) error {
-	primaryServiceName := keychainServiceName(validatedRef)
-	deleteErr := store.deleteSecret(ctx, validatedRef, primaryServiceName)
-	if deleteErr == nil || !errors.Is(deleteErr, ErrSecretNotFound) {
-		return deleteErr
-	}
-
-	legacyServiceName := legacyKeychainServiceName(validatedRef)
-	if legacyServiceName == primaryServiceName {
-		return deleteErr
-	}
-	return store.deleteSecret(ctx, validatedRef, legacyServiceName)
-}
-
-func (store *MacOSKeychainStore) metadataWithLegacyFallback(ctx context.Context, validatedRef SecretRef) (SecretMetadata, error) {
-	primaryServiceName := keychainServiceName(validatedRef)
-	secretMetadata, err := store.metadataForSecret(ctx, validatedRef, primaryServiceName)
-	if err == nil || !errors.Is(err, ErrSecretNotFound) {
-		return secretMetadata, err
-	}
-
-	legacyServiceName := legacyKeychainServiceName(validatedRef)
-	if legacyServiceName == primaryServiceName {
-		return SecretMetadata{}, err
-	}
-	return store.metadataForSecret(ctx, validatedRef, legacyServiceName)
 }
 
 func formatKeychainStatusError(operation string, validatedRef SecretRef, statusCode int, errorMessageText string) error {

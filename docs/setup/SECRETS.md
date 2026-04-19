@@ -62,9 +62,7 @@ Backend constants:
 - Returns metadata and secret refs only; no raw secret values are written to
   repo state
 - Fails closed on missing keychain items or unavailable backend tooling
-- Prefers the Loopgate-native service namespace `loopgate.<scope>` and keeps a
-  legacy read/delete compatibility path for older `morph.loopgate.<scope>`
-  entries during upgrade cleanup
+- Uses the Loopgate-native service namespace `loopgate.<scope>`
 
 Current limitations:
 
@@ -75,9 +73,6 @@ Current limitations:
   state; temp-home automation is not a separate secure keychain profile
 - the service namespace is Loopgate-native (`loopgate.<scope>`), so the
   default audit checkpoint key uses `loopgate.local`
-- older workstations may still have a legacy `morph.loopgate.local` audit
-  checkpoint key; Loopgate will read it during transition so operators can
-  migrate and remove the stale item without breaking verification continuity
 - if you want Keychain approval decisions to stick, prefer stable built
   binaries such as `./bin/loopgate`, `./bin/loopgate-doctor`, and
   `./bin/loopgate-ledger` over `go run`

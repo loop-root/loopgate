@@ -6,15 +6,15 @@ package secrets
 #include <CoreFoundation/CoreFoundation.h>
 #include <stdlib.h>
 
-static CFStringRef morphMakeCFString(const char *s) {
+static CFStringRef loopgateMakeCFString(const char *s) {
 	return CFStringCreateWithCString(NULL, s, kCFStringEncodingUTF8);
 }
 
-static CFDataRef morphMakeCFData(const void *data, CFIndex len) {
+static CFDataRef loopgateMakeCFData(const void *data, CFIndex len) {
 	return CFDataCreate(NULL, (const UInt8 *)data, len);
 }
 
-static CFMutableDictionaryRef morphMakeQueryDict(CFTypeRef svc, CFTypeRef acct) {
+static CFMutableDictionaryRef loopgateMakeQueryDict(CFTypeRef svc, CFTypeRef acct) {
 	CFMutableDictionaryRef dict = CFDictionaryCreateMutable(NULL, 0,
 		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 	if (dict == NULL) {
@@ -26,21 +26,21 @@ static CFMutableDictionaryRef morphMakeQueryDict(CFTypeRef svc, CFTypeRef acct) 
 	return dict;
 }
 
-static CFDictionaryRef morphMakeAddDict(CFTypeRef svc, CFTypeRef acct, CFTypeRef data) {
+static CFDictionaryRef loopgateMakeAddDict(CFTypeRef svc, CFTypeRef acct, CFTypeRef data) {
 	const void *keys[]   = { kSecClass, kSecAttrService, kSecAttrAccount, kSecValueData };
 	const void *values[] = { kSecClassGenericPassword, svc, acct, data };
 	return CFDictionaryCreate(NULL, keys, values, 4,
 		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 }
 
-static CFDictionaryRef morphMakeUpdateDict(CFTypeRef data) {
+static CFDictionaryRef loopgateMakeUpdateDict(CFTypeRef data) {
 	const void *keys[]   = { kSecValueData };
 	const void *values[] = { data };
 	return CFDictionaryCreate(NULL, keys, values, 1,
 		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 }
 
-static char *morphCopySecErrorMessage(OSStatus status) {
+static char *loopgateCopySecErrorMessage(OSStatus status) {
 	CFStringRef message = SecCopyErrorMessageString(status, NULL);
 	if (message == NULL) {
 		return NULL;
@@ -62,8 +62,8 @@ static char *morphCopySecErrorMessage(OSStatus status) {
 	return buffer;
 }
 
-static OSStatus morphCopySecretData(CFTypeRef svc, CFTypeRef acct, CFDataRef *dataOut) {
-	CFMutableDictionaryRef queryDict = morphMakeQueryDict(svc, acct);
+static OSStatus loopgateCopySecretData(CFTypeRef svc, CFTypeRef acct, CFDataRef *dataOut) {
+	CFMutableDictionaryRef queryDict = loopgateMakeQueryDict(svc, acct);
 	if (queryDict == NULL) {
 		return errSecAllocate;
 	}
@@ -74,8 +74,8 @@ static OSStatus morphCopySecretData(CFTypeRef svc, CFTypeRef acct, CFDataRef *da
 	return status;
 }
 
-static OSStatus morphCopySecretMetadata(CFTypeRef svc, CFTypeRef acct, CFDictionaryRef *metadataOut) {
-	CFMutableDictionaryRef queryDict = morphMakeQueryDict(svc, acct);
+static OSStatus loopgateCopySecretMetadata(CFTypeRef svc, CFTypeRef acct, CFDictionaryRef *metadataOut) {
+	CFMutableDictionaryRef queryDict = loopgateMakeQueryDict(svc, acct);
 	if (queryDict == NULL) {
 		return errSecAllocate;
 	}
@@ -86,8 +86,8 @@ static OSStatus morphCopySecretMetadata(CFTypeRef svc, CFTypeRef acct, CFDiction
 	return status;
 }
 
-static OSStatus morphDeleteSecret(CFTypeRef svc, CFTypeRef acct) {
-	CFMutableDictionaryRef queryDict = morphMakeQueryDict(svc, acct);
+static OSStatus loopgateDeleteSecret(CFTypeRef svc, CFTypeRef acct) {
+	CFMutableDictionaryRef queryDict = loopgateMakeQueryDict(svc, acct);
 	if (queryDict == NULL) {
 		return errSecAllocate;
 	}
@@ -111,20 +111,20 @@ func storeSecretInMacOSKeychain(ctx context.Context, validatedRef SecretRef, ser
 	cAccount := C.CString(validatedRef.AccountName)
 	defer C.free(unsafe.Pointer(cAccount))
 
-	serviceCF := C.morphMakeCFString(cService)
+	serviceCF := C.loopgateMakeCFString(cService)
 	defer C.CFRelease(C.CFTypeRef(serviceCF))
-	accountCF := C.morphMakeCFString(cAccount)
+	accountCF := C.loopgateMakeCFString(cAccount)
 	defer C.CFRelease(C.CFTypeRef(accountCF))
 
 	var dataPtr unsafe.Pointer
 	if len(rawSecret) > 0 {
 		dataPtr = unsafe.Pointer(&rawSecret[0])
 	}
-	dataCF := C.morphMakeCFData(dataPtr, C.CFIndex(len(rawSecret)))
+	dataCF := C.loopgateMakeCFData(dataPtr, C.CFIndex(len(rawSecret)))
 	defer C.CFRelease(C.CFTypeRef(dataCF))
 
 	// Try add first.
-	addDict := C.morphMakeAddDict(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF), C.CFTypeRef(dataCF))
+	addDict := C.loopgateMakeAddDict(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF), C.CFTypeRef(dataCF))
 	defer C.CFRelease(C.CFTypeRef(addDict))
 
 	addStatus := C.SecItemAdd(C.CFDictionaryRef(addDict), nil)
@@ -136,9 +136,9 @@ func storeSecretInMacOSKeychain(ctx context.Context, validatedRef SecretRef, ser
 	}
 
 	// Item already exists — update the data in place.
-	queryDict := C.morphMakeQueryDict(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF))
+	queryDict := C.loopgateMakeQueryDict(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF))
 	defer C.CFRelease(C.CFTypeRef(queryDict))
-	updateDict := C.morphMakeUpdateDict(C.CFTypeRef(dataCF))
+	updateDict := C.loopgateMakeUpdateDict(C.CFTypeRef(dataCF))
 	defer C.CFRelease(C.CFTypeRef(updateDict))
 
 	updateStatus := C.SecItemUpdate(C.CFDictionaryRef(queryDict), C.CFDictionaryRef(updateDict))
@@ -155,13 +155,13 @@ func readSecretFromMacOSKeychain(ctx context.Context, validatedRef SecretRef, se
 	cAccount := C.CString(validatedRef.AccountName)
 	defer C.free(unsafe.Pointer(cAccount))
 
-	serviceCF := C.morphMakeCFString(cService)
+	serviceCF := C.loopgateMakeCFString(cService)
 	defer C.CFRelease(C.CFTypeRef(serviceCF))
-	accountCF := C.morphMakeCFString(cAccount)
+	accountCF := C.loopgateMakeCFString(cAccount)
 	defer C.CFRelease(C.CFTypeRef(accountCF))
 
 	var secretDataCF C.CFDataRef
-	readStatus := C.morphCopySecretData(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF), &secretDataCF)
+	readStatus := C.loopgateCopySecretData(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF), &secretDataCF)
 	if readStatus != C.errSecSuccess {
 		return nil, mapKeychainStatus("read secret", validatedRef, readStatus)
 	}
@@ -182,12 +182,12 @@ func deleteSecretFromMacOSKeychain(ctx context.Context, validatedRef SecretRef, 
 	cAccount := C.CString(validatedRef.AccountName)
 	defer C.free(unsafe.Pointer(cAccount))
 
-	serviceCF := C.morphMakeCFString(cService)
+	serviceCF := C.loopgateMakeCFString(cService)
 	defer C.CFRelease(C.CFTypeRef(serviceCF))
-	accountCF := C.morphMakeCFString(cAccount)
+	accountCF := C.loopgateMakeCFString(cAccount)
 	defer C.CFRelease(C.CFTypeRef(accountCF))
 
-	deleteStatus := C.morphDeleteSecret(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF))
+	deleteStatus := C.loopgateDeleteSecret(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF))
 	if deleteStatus != C.errSecSuccess {
 		return mapKeychainStatus("delete secret", validatedRef, deleteStatus)
 	}
@@ -201,13 +201,13 @@ func metadataForMacOSKeychainSecret(ctx context.Context, validatedRef SecretRef,
 	cAccount := C.CString(validatedRef.AccountName)
 	defer C.free(unsafe.Pointer(cAccount))
 
-	serviceCF := C.morphMakeCFString(cService)
+	serviceCF := C.loopgateMakeCFString(cService)
 	defer C.CFRelease(C.CFTypeRef(serviceCF))
-	accountCF := C.morphMakeCFString(cAccount)
+	accountCF := C.loopgateMakeCFString(cAccount)
 	defer C.CFRelease(C.CFTypeRef(accountCF))
 
 	var metadataCF C.CFDictionaryRef
-	readStatus := C.morphCopySecretMetadata(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF), &metadataCF)
+	readStatus := C.loopgateCopySecretMetadata(C.CFTypeRef(serviceCF), C.CFTypeRef(accountCF), &metadataCF)
 	if readStatus != C.errSecSuccess {
 		return SecretMetadata{}, mapKeychainStatus("read secret metadata", validatedRef, readStatus)
 	}
@@ -227,7 +227,7 @@ func mapKeychainStatus(operation string, validatedRef SecretRef, status C.OSStat
 }
 
 func keychainStatusMessage(status C.OSStatus) string {
-	errorMessageCString := C.morphCopySecErrorMessage(status)
+	errorMessageCString := C.loopgateCopySecErrorMessage(status)
 	if errorMessageCString == nil {
 		return ""
 	}
