@@ -63,14 +63,18 @@ What is not the active product story right now:
 ## Quick start
 
 ```bash
+make build
 go run ./cmd/loopgate init
 go run ./cmd/loopgate-policy-admin validate
-go run ./cmd/loopgate
+./bin/loopgate
 ```
 
 On first start, Loopgate may ask macOS Keychain to create the default audit
 HMAC checkpoint key. If Keychain access is denied or canceled, startup fails
 closed and you should rerun from an interactive macOS login session.
+For keychain-backed commands, prefer the stable `./bin/...` binaries over
+`go run`. A fresh `go run` build changes the executable identity and can
+trigger repeated macOS approval prompts.
 
 Default local socket:
 

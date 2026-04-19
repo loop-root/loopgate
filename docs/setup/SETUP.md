@@ -21,6 +21,7 @@ It reflects the current product boundary:
 ```bash
 go mod tidy
 go test ./...
+make build
 ```
 
 ## Initialize local policy signing
@@ -46,7 +47,7 @@ printed `key_id`.
 ## Start Loopgate
 
 ```bash
-go run ./cmd/loopgate
+./bin/loopgate
 ```
 
 Default socket:
@@ -61,6 +62,9 @@ runtime config.
 If Keychain access is denied or canceled, startup fails closed. Rerun from an
 interactive macOS login session and allow the prompt rather than expecting an
 insecure fallback.
+For keychain-backed commands, prefer the stable `./bin/...` binaries over
+`go run`; a fresh `go run` build changes the executable identity and can
+trigger repeated macOS approval prompts.
 
 ## Re-sign and apply policy
 

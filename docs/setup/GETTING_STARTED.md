@@ -26,6 +26,7 @@ It assumes the current supported product shape:
 ```bash
 go mod tidy
 go test ./...
+make build
 ```
 
 ### 2. Initialize local policy signing
@@ -48,7 +49,7 @@ permissive local-development baseline, review
 ### 3. Start Loopgate
 
 ```bash
-go run ./cmd/loopgate
+./bin/loopgate
 ```
 
 Default socket:
@@ -65,6 +66,9 @@ checkpoints.
 If macOS Keychain access is denied or canceled, Loopgate fails closed at
 startup rather than falling back to plaintext or unaudited mode. Rerun from an
 interactive login session and approve the Keychain prompt.
+For keychain-backed operator flows, prefer the stable `./bin/...` binaries over
+`go run`; a fresh `go run` build changes the executable identity and can cause
+repeated macOS approval prompts.
 
 ### 4. Install Claude Code hooks
 
@@ -86,8 +90,8 @@ Use Claude Code normally and watch for:
 If you need quick visibility:
 
 ```bash
-go run ./cmd/loopgate-ledger tail -verbose
-go run ./cmd/loopgate-doctor report
+./bin/loopgate-ledger tail -verbose
+./bin/loopgate-doctor report
 ```
 
 ## Normal local flow

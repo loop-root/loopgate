@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,23 +12,6 @@ import (
 	"testing"
 	"time"
 )
-
-type fakeCommandExecutor struct {
-	lastName  string
-	lastArgs  []string
-	lastStdin []byte
-	stdout    []byte
-	stderr    []byte
-	err       error
-}
-
-func (fakeCommandExecutor *fakeCommandExecutor) Run(ctx context.Context, stdin []byte, name string, args ...string) ([]byte, []byte, error) {
-	_ = ctx
-	fakeCommandExecutor.lastName = name
-	fakeCommandExecutor.lastArgs = append([]string(nil), args...)
-	fakeCommandExecutor.lastStdin = append([]byte(nil), stdin...)
-	return append([]byte(nil), fakeCommandExecutor.stdout...), append([]byte(nil), fakeCommandExecutor.stderr...), fakeCommandExecutor.err
-}
 
 func TestEnvSecretStore_GetSuccess(t *testing.T) {
 	fixedNow := time.Date(2026, 3, 7, 18, 30, 0, 0, time.UTC)
@@ -398,12 +382,14 @@ func TestMacOSKeychainStore_PutUsesInjectedWriter(t *testing.T) {
 
 	fixedNow := time.Date(2026, 3, 7, 21, 0, 0, 0, time.UTC)
 	var storedRef SecretRef
+	var storedServiceName string
 	var storedSecret []byte
 	store := &MacOSKeychainStore{
 		now:             func() time.Time { return fixedNow },
 		allowedBackends: []string{BackendMacOSKeychain},
-		putSecret: func(_ context.Context, validatedRef SecretRef, rawSecret []byte) error {
+		putSecret: func(_ context.Context, validatedRef SecretRef, serviceName string, rawSecret []byte) error {
 			storedRef = validatedRef
+			storedServiceName = serviceName
 			storedSecret = append([]byte(nil), rawSecret...)
 			return nil
 		},
@@ -423,6 +409,9 @@ func TestMacOSKeychainStore_PutUsesInjectedWriter(t *testing.T) {
 	if storedRef != validatedRef {
 		t.Fatalf("unexpected validated ref: %#v", storedRef)
 	}
+	if storedServiceName != loopgateKeychainServicePrefix+validatedRef.Scope {
+		t.Fatalf("expected loopgate service name, got %q", storedServiceName)
+	}
 	if string(storedSecret) != "super-secret-key" {
 		t.Fatalf("expected raw secret to reach injected writer, got %q", string(storedSecret))
 	}
@@ -441,12 +430,16 @@ func TestMacOSKeychainStore_GetReturnsMetadata(t *testing.T) {
 		currentRuntimeGOOS = originalGOOS
 	})
 
-	commandExecutor := &fakeCommandExecutor{stdout: []byte("retrieved-secret\n")}
 	fixedNow := time.Date(2026, 3, 7, 22, 0, 0, 0, time.UTC)
 	store := &MacOSKeychainStore{
-		executor:        commandExecutor,
 		now:             func() time.Time { return fixedNow },
 		allowedBackends: []string{BackendMacOSKeychain},
+		getSecret: func(_ context.Context, validatedRef SecretRef, serviceName string) ([]byte, error) {
+			if serviceName != loopgateKeychainServicePrefix+validatedRef.Scope {
+				t.Fatalf("unexpected service name lookup: %q", serviceName)
+			}
+			return []byte("retrieved-secret"), nil
+		},
 	}
 	validatedRef := SecretRef{
 		ID:          "sec-ref-keychain-get",
@@ -470,6 +463,149 @@ func TestMacOSKeychainStore_GetReturnsMetadata(t *testing.T) {
 	}
 }
 
+func TestMacOSKeychainStore_GetFallsBackToLegacyMorphService(t *testing.T) {
+	originalGOOS := currentRuntimeGOOS
+	currentRuntimeGOOS = "darwin"
+	t.Cleanup(func() {
+		currentRuntimeGOOS = originalGOOS
+	})
+
+	validatedRef := SecretRef{
+		ID:          "sec-ref-keychain-legacy-read",
+		Backend:     BackendMacOSKeychain,
+		AccountName: "loopgate.audit_ledger_hmac",
+		Scope:       "local",
+	}
+
+	var requestedServiceNames []string
+	store := &MacOSKeychainStore{
+		now:             time.Now,
+		allowedBackends: []string{BackendMacOSKeychain},
+		getSecret: func(_ context.Context, validatedRef SecretRef, serviceName string) ([]byte, error) {
+			requestedServiceNames = append(requestedServiceNames, serviceName)
+			switch serviceName {
+			case keychainServiceName(validatedRef):
+				return nil, fmt.Errorf("%w: keychain item for secret ref %q", ErrSecretNotFound, validatedRef.ID)
+			case legacyKeychainServiceName(validatedRef):
+				return []byte("legacy-secret"), nil
+			default:
+				t.Fatalf("unexpected service lookup: %q", serviceName)
+				return nil, nil
+			}
+		},
+	}
+
+	rawSecret, secretMetadata, err := store.Get(context.Background(), validatedRef)
+	if err != nil {
+		t.Fatalf("keychain get with legacy fallback failed: %v", err)
+	}
+	if string(rawSecret) != "legacy-secret" {
+		t.Fatalf("expected legacy secret value, got %q", string(rawSecret))
+	}
+	expectedServiceNames := []string{
+		keychainServiceName(validatedRef),
+		legacyKeychainServiceName(validatedRef),
+	}
+	if !reflect.DeepEqual(requestedServiceNames, expectedServiceNames) {
+		t.Fatalf("unexpected service lookup order: %#v", requestedServiceNames)
+	}
+	if secretMetadata.Status != "stored" || secretMetadata.Scope != validatedRef.Scope {
+		t.Fatalf("unexpected keychain metadata after legacy fallback: %#v", secretMetadata)
+	}
+}
+
+func TestMacOSKeychainStore_MetadataFallsBackToLegacyMorphService(t *testing.T) {
+	originalGOOS := currentRuntimeGOOS
+	currentRuntimeGOOS = "darwin"
+	t.Cleanup(func() {
+		currentRuntimeGOOS = originalGOOS
+	})
+
+	validatedRef := SecretRef{
+		ID:          "sec-ref-keychain-legacy-metadata",
+		Backend:     BackendMacOSKeychain,
+		AccountName: "loopgate.audit_ledger_hmac",
+		Scope:       "local",
+	}
+
+	var requestedServiceNames []string
+	store := &MacOSKeychainStore{
+		now:             time.Now,
+		allowedBackends: []string{BackendMacOSKeychain},
+		metadataForSecret: func(_ context.Context, validatedRef SecretRef, serviceName string) (SecretMetadata, error) {
+			requestedServiceNames = append(requestedServiceNames, serviceName)
+			switch serviceName {
+			case keychainServiceName(validatedRef):
+				return SecretMetadata{}, fmt.Errorf("%w: keychain item for secret ref %q", ErrSecretNotFound, validatedRef.ID)
+			case legacyKeychainServiceName(validatedRef):
+				return SecretMetadata{Status: "stored", Scope: validatedRef.Scope}, nil
+			default:
+				t.Fatalf("unexpected metadata lookup: %q", serviceName)
+				return SecretMetadata{}, nil
+			}
+		},
+	}
+
+	secretMetadata, err := store.Metadata(context.Background(), validatedRef)
+	if err != nil {
+		t.Fatalf("keychain metadata with legacy fallback failed: %v", err)
+	}
+	expectedServiceNames := []string{
+		keychainServiceName(validatedRef),
+		legacyKeychainServiceName(validatedRef),
+	}
+	if !reflect.DeepEqual(requestedServiceNames, expectedServiceNames) {
+		t.Fatalf("unexpected metadata lookup order: %#v", requestedServiceNames)
+	}
+	if secretMetadata.Status != "stored" || secretMetadata.Scope != validatedRef.Scope {
+		t.Fatalf("unexpected metadata after legacy fallback: %#v", secretMetadata)
+	}
+}
+
+func TestMacOSKeychainStore_DeleteFallsBackToLegacyMorphService(t *testing.T) {
+	originalGOOS := currentRuntimeGOOS
+	currentRuntimeGOOS = "darwin"
+	t.Cleanup(func() {
+		currentRuntimeGOOS = originalGOOS
+	})
+
+	validatedRef := SecretRef{
+		ID:          "sec-ref-keychain-legacy-delete",
+		Backend:     BackendMacOSKeychain,
+		AccountName: "loopgate.audit_ledger_hmac",
+		Scope:       "local",
+	}
+
+	var deletedServiceNames []string
+	store := &MacOSKeychainStore{
+		now:             time.Now,
+		allowedBackends: []string{BackendMacOSKeychain},
+		deleteSecret: func(_ context.Context, validatedRef SecretRef, serviceName string) error {
+			deletedServiceNames = append(deletedServiceNames, serviceName)
+			switch serviceName {
+			case keychainServiceName(validatedRef):
+				return fmt.Errorf("%w: keychain item for secret ref %q", ErrSecretNotFound, validatedRef.ID)
+			case legacyKeychainServiceName(validatedRef):
+				return nil
+			default:
+				t.Fatalf("unexpected delete service name: %q", serviceName)
+				return nil
+			}
+		},
+	}
+
+	if err := store.Delete(context.Background(), validatedRef); err != nil {
+		t.Fatalf("keychain delete with legacy fallback failed: %v", err)
+	}
+	expectedServiceNames := []string{
+		keychainServiceName(validatedRef),
+		legacyKeychainServiceName(validatedRef),
+	}
+	if !reflect.DeepEqual(deletedServiceNames, expectedServiceNames) {
+		t.Fatalf("unexpected delete order: %#v", deletedServiceNames)
+	}
+}
+
 func TestMacOSKeychainStore_NotFoundMapsToErrSecretNotFound(t *testing.T) {
 	originalGOOS := currentRuntimeGOOS
 	currentRuntimeGOOS = "darwin"
@@ -478,12 +614,11 @@ func TestMacOSKeychainStore_NotFoundMapsToErrSecretNotFound(t *testing.T) {
 	})
 
 	store := &MacOSKeychainStore{
-		executor: &fakeCommandExecutor{
-			stderr: []byte("security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain."),
-			err:    errors.New("exit status 44"),
-		},
 		now:             time.Now,
 		allowedBackends: []string{BackendMacOSKeychain},
+		getSecret: func(_ context.Context, _ SecretRef, _ string) ([]byte, error) {
+			return nil, fmt.Errorf("%w: keychain item for secret ref %q", ErrSecretNotFound, "sec-ref-keychain-missing")
+		},
 	}
 	validatedRef := SecretRef{
 		ID:          "sec-ref-keychain-missing",

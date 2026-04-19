@@ -14,6 +14,10 @@ GOFILES := $(shell find . -type f -name '*.go' -not -path './runtime/*' | sort)
 build:
 	mkdir -p bin
 	$(GO) build -ldflags "$(LDFLAGS)" -o bin/loopgate ./cmd/loopgate
+	$(GO) build -ldflags "$(LDFLAGS)" -o bin/loopgate-doctor ./cmd/loopgate-doctor
+	$(GO) build -ldflags "$(LDFLAGS)" -o bin/loopgate-ledger ./cmd/loopgate-ledger
+	$(GO) build -ldflags "$(LDFLAGS)" -o bin/loopgate-policy-admin ./cmd/loopgate-policy-admin
+	$(GO) build -ldflags "$(LDFLAGS)" -o bin/loopgate-policy-sign ./cmd/loopgate-policy-sign
 
 fmt:
 	gofmt -w $(GOFILES)

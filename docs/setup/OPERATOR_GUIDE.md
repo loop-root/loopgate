@@ -33,6 +33,7 @@ customize the policy surface before signing and applying it.
 For a first-time local setup:
 
 ```bash
+make build
 go run ./cmd/loopgate init
 go run ./cmd/loopgate-policy-admin validate
 ```
@@ -43,7 +44,7 @@ If you later re-sign policy intentionally, reuse the `key_id` printed by
 ### 2. Start Loopgate
 
 ```bash
-go run ./cmd/loopgate
+./bin/loopgate
 ```
 
 Expected local socket:
@@ -58,6 +59,10 @@ Current startup summary:
 - socket path
 - signed policy path and `key_id`
 - audit integrity posture
+
+For keychain-backed operator flows, prefer the stable `./bin/...` binaries over
+`go run`; a fresh `go run` build changes the executable identity and can cause
+repeated macOS approval prompts.
 
 ### 3. Install Claude hooks
 
@@ -185,8 +190,8 @@ Use the built-in verifier when you want to trust the local audit history after
 an incident, a demo reset, or suspicious local behavior:
 
 ```bash
-go run ./cmd/loopgate-ledger verify
-go run ./cmd/loopgate-doctor report
+./bin/loopgate-ledger verify
+./bin/loopgate-doctor report
 ```
 
 `loopgate-ledger verify` checks the append-only chain across the active audit
@@ -221,7 +226,7 @@ forging a keyed MAC — detectable by anyone who holds the key.
 To check mode without restarting:
 
 ```bash
-go run ./cmd/loopgate-doctor report | grep -A6 '"hmac_checkpoints"'
+./bin/loopgate-doctor report | grep -A6 '"hmac_checkpoints"'
 ```
 
 Look for `"enabled": true` and `"status": "verified"` to confirm HMAC mode

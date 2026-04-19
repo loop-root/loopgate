@@ -1,6 +1,7 @@
 package troubleshoot
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,7 +9,28 @@ import (
 
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
+	"loopgate/internal/secrets"
 )
+
+type auditIntegrityTestSecretStore struct {
+	getSecret func(context.Context, secrets.SecretRef) ([]byte, secrets.SecretMetadata, error)
+}
+
+func (store auditIntegrityTestSecretStore) Put(context.Context, secrets.SecretRef, []byte) (secrets.SecretMetadata, error) {
+	return secrets.SecretMetadata{}, fmt.Errorf("unexpected Put call in audit integrity test")
+}
+
+func (store auditIntegrityTestSecretStore) Get(ctx context.Context, validatedRef secrets.SecretRef) ([]byte, secrets.SecretMetadata, error) {
+	return store.getSecret(ctx, validatedRef)
+}
+
+func (store auditIntegrityTestSecretStore) Delete(context.Context, secrets.SecretRef) error {
+	return fmt.Errorf("unexpected Delete call in audit integrity test")
+}
+
+func (store auditIntegrityTestSecretStore) Metadata(context.Context, secrets.SecretRef) (secrets.SecretMetadata, error) {
+	return secrets.SecretMetadata{}, fmt.Errorf("unexpected Metadata call in audit integrity test")
+}
 
 func TestVerifyAuditLedgerCheckpoints_Verified(t *testing.T) {
 	repoRoot := t.TempDir()
@@ -54,6 +76,17 @@ func TestVerifyAuditLedgerCheckpoints_DefaultKeyBootstrapPendingWhenLedgerMissin
 	repoRoot := t.TempDir()
 	runtimeConfig := config.DefaultRuntimeConfig()
 	runtimeConfig.Logging.AuditLedger.HMACCheckpoint = config.DefaultAuditLedgerHMACCheckpoint()
+	originalNewSecretStoreForRef := newSecretStoreForRef
+	newSecretStoreForRef = func(validatedRef secrets.SecretRef) (secrets.SecretStore, error) {
+		return auditIntegrityTestSecretStore{
+			getSecret: func(context.Context, secrets.SecretRef) ([]byte, secrets.SecretMetadata, error) {
+				return nil, secrets.SecretMetadata{}, fmt.Errorf("%w: keychain item for secret ref %q", secrets.ErrSecretNotFound, validatedRef.ID)
+			},
+		}, nil
+	}
+	t.Cleanup(func() {
+		newSecretStoreForRef = originalNewSecretStoreForRef
+	})
 
 	report, err := VerifyAuditLedgerCheckpoints(repoRoot, runtimeConfig)
 	if err != nil {

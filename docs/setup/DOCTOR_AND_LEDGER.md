@@ -20,9 +20,9 @@ Primary uses:
 Most useful commands:
 
 ```bash
-go run ./cmd/loopgate-ledger verify
-go run ./cmd/loopgate-ledger summary
-go run ./cmd/loopgate-ledger tail -verbose
+./bin/loopgate-ledger verify
+./bin/loopgate-ledger summary
+./bin/loopgate-ledger tail -verbose
 ```
 
 What each one is for:
@@ -50,10 +50,14 @@ Primary uses:
 Most useful commands:
 
 ```bash
-go run ./cmd/loopgate-doctor report
-go run ./cmd/loopgate-doctor bundle -out ./tmp/loopgate-bundle
-go run ./cmd/loopgate-doctor trust-check
+./bin/loopgate-doctor report
+./bin/loopgate-doctor bundle -out ./tmp/loopgate-bundle
+./bin/loopgate-doctor trust-check
 ```
+
+For keychain-backed diagnostics, prefer the stable `./bin/...` binaries over
+`go run`; a fresh `go run` build changes the executable identity and can cause
+repeated macOS approval prompts.
 
 What each one is for:
 - `report`
@@ -78,10 +82,10 @@ Use `loopgate-doctor` first when the question is:
 
 After a denial, approval surprise, or suspicious local behavior:
 
-1. run `go run ./cmd/loopgate-ledger tail -verbose`
-2. run `go run ./cmd/loopgate-ledger verify`
-3. run `go run ./cmd/loopgate-doctor report`
-4. if needed, write a bundle with `go run ./cmd/loopgate-doctor bundle -out ...`
+1. run `./bin/loopgate-ledger tail -verbose`
+2. run `./bin/loopgate-ledger verify`
+3. run `./bin/loopgate-doctor report`
+4. if needed, write a bundle with `./bin/loopgate-doctor bundle -out ...`
 
 ## Read next
 

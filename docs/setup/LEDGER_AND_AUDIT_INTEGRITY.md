@@ -83,13 +83,17 @@ operator needs evidence off the workstation.
 
 Current operator verification path:
 
-- `go run ./cmd/loopgate-ledger verify`
+- `./bin/loopgate-ledger verify`
   - verifies the append-only chain across the active JSONL plus sealed segments
   - verifies HMAC checkpoints too when the configured `secret_ref` resolves
     successfully
-- `go run ./cmd/loopgate-doctor report`
+- `./bin/loopgate-doctor report`
   - includes a derived `ledger_verify.hmac_checkpoints` status block so
     operators can see whether checkpoints are disabled, verified, or failing
+
+For keychain-backed verification, prefer the stable `./bin/...` binaries over
+`go run`; a fresh `go run` build changes the executable identity and can cause
+repeated macOS approval prompts.
 
 ## Recommended topology
 

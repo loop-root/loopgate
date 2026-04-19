@@ -11,6 +11,8 @@ import (
 	"loopgate/internal/secrets"
 )
 
+var newSecretStoreForRef = secrets.NewStoreForRef
+
 // AuditLedgerCheckpointReport is a derived operator-facing status view for
 // optional HMAC checkpoints on the authoritative audit ledger.
 type AuditLedgerCheckpointReport struct {
@@ -65,7 +67,7 @@ func VerifyAuditLedgerCheckpoints(repoRoot string, runtimeConfig config.RuntimeC
 		return report, fmt.Errorf("ordered audit ledger paths: %w", err)
 	}
 
-	secretStore, err := secrets.NewStoreForRef(validatedSecretRef)
+	secretStore, err := newSecretStoreForRef(validatedSecretRef)
 	if err != nil {
 		report.Status = "error"
 		report.Error = err.Error()

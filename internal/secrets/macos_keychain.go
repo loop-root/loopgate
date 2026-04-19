@@ -1,41 +1,25 @@
 package secrets
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 )
 
-type commandExecutor interface {
-	Run(ctx context.Context, stdin []byte, name string, args ...string) ([]byte, []byte, error)
-}
-
-type execCommandExecutor struct{}
-
-func (execCommandExecutor) Run(ctx context.Context, stdin []byte, name string, args ...string) ([]byte, []byte, error) {
-	command := exec.CommandContext(ctx, name, args...)
-	if len(stdin) > 0 {
-		command.Stdin = bytes.NewReader(stdin)
-	}
-
-	var stdoutBuffer bytes.Buffer
-	var stderrBuffer bytes.Buffer
-	command.Stdout = &stdoutBuffer
-	command.Stderr = &stderrBuffer
-
-	err := command.Run()
-	return stdoutBuffer.Bytes(), stderrBuffer.Bytes(), err
-}
+const (
+	loopgateKeychainServicePrefix    = "loopgate."
+	legacyMorphKeychainServicePrefix = "morph.loopgate."
+)
 
 type MacOSKeychainStore struct {
-	executor        commandExecutor
-	now             func() time.Time
-	allowedBackends []string
-	putSecret       func(context.Context, SecretRef, []byte) error
+	now               func() time.Time
+	allowedBackends   []string
+	putSecret         func(context.Context, SecretRef, string, []byte) error
+	getSecret         func(context.Context, SecretRef, string) ([]byte, error)
+	deleteSecret      func(context.Context, SecretRef, string) error
+	metadataForSecret func(context.Context, SecretRef, string) (SecretMetadata, error)
 }
 
 func NewMacOSKeychainStore(allowedBackends ...string) *MacOSKeychainStore {
@@ -44,10 +28,12 @@ func NewMacOSKeychainStore(allowedBackends ...string) *MacOSKeychainStore {
 		normalizedBackends = []string{BackendMacOSKeychain}
 	}
 	return &MacOSKeychainStore{
-		executor:        execCommandExecutor{},
-		now:             time.Now,
-		allowedBackends: normalizedBackends,
-		putSecret:       storeSecretInMacOSKeychain,
+		now:               time.Now,
+		allowedBackends:   normalizedBackends,
+		putSecret:         storeSecretInMacOSKeychain,
+		getSecret:         readSecretFromMacOSKeychain,
+		deleteSecret:      deleteSecretFromMacOSKeychain,
+		metadataForSecret: metadataForMacOSKeychainSecret,
 	}
 }
 
@@ -62,7 +48,7 @@ func (store *MacOSKeychainStore) Put(ctx context.Context, validatedRef SecretRef
 		return SecretMetadata{}, fmt.Errorf("%w: secret value is empty", ErrSecretValidation)
 	}
 
-	if err := store.putSecret(ctx, validatedRef, rawSecret); err != nil {
+	if err := store.putSecret(ctx, validatedRef, keychainServiceName(validatedRef), rawSecret); err != nil {
 		return SecretMetadata{}, err
 	}
 
@@ -84,20 +70,11 @@ func (store *MacOSKeychainStore) Get(ctx context.Context, validatedRef SecretRef
 		return nil, SecretMetadata{}, err
 	}
 
-	stdoutBytes, stderrBytes, err := store.executor.Run(
-		ctx,
-		nil,
-		"security",
-		"find-generic-password",
-		"-a", validatedRef.AccountName,
-		"-s", keychainServiceName(validatedRef),
-		"-w",
-	)
+	secretBytes, _, err := store.getSecretWithLegacyFallback(ctx, validatedRef)
 	if err != nil {
-		return nil, SecretMetadata{}, mapKeychainError("read secret", validatedRef, stderrBytes, err)
+		return nil, SecretMetadata{}, err
 	}
 
-	secretBytes := trimSingleTrailingNewline(stdoutBytes)
 	nowUTC := store.now().UTC()
 	return secretBytes, SecretMetadata{
 		LastUsedAt:  nowUTC,
@@ -115,18 +92,7 @@ func (store *MacOSKeychainStore) Delete(ctx context.Context, validatedRef Secret
 		return err
 	}
 
-	_, stderrBytes, err := store.executor.Run(
-		ctx,
-		nil,
-		"security",
-		"delete-generic-password",
-		"-a", validatedRef.AccountName,
-		"-s", keychainServiceName(validatedRef),
-	)
-	if err != nil {
-		return mapKeychainError("delete secret", validatedRef, stderrBytes, err)
-	}
-	return nil
+	return store.deleteSecretWithLegacyFallback(ctx, validatedRef)
 }
 
 func (store *MacOSKeychainStore) Metadata(ctx context.Context, validatedRef SecretRef) (SecretMetadata, error) {
@@ -137,54 +103,58 @@ func (store *MacOSKeychainStore) Metadata(ctx context.Context, validatedRef Secr
 		return SecretMetadata{}, err
 	}
 
-	_, stderrBytes, err := store.executor.Run(
-		ctx,
-		nil,
-		"security",
-		"find-generic-password",
-		"-a", validatedRef.AccountName,
-		"-s", keychainServiceName(validatedRef),
-	)
-	if err != nil {
-		return SecretMetadata{}, mapKeychainError("read secret metadata", validatedRef, stderrBytes, err)
-	}
-
-	return SecretMetadata{
-		Status: "stored",
-		Scope:  validatedRef.Scope,
-	}, nil
+	return store.metadataWithLegacyFallback(ctx, validatedRef)
 }
 
 func keychainServiceName(validatedRef SecretRef) string {
-	return "morph.loopgate." + validatedRef.Scope
+	return loopgateKeychainServicePrefix + strings.TrimSpace(validatedRef.Scope)
 }
 
-func trimSingleTrailingNewline(rawValue []byte) []byte {
-	trimmedValue := rawValue
-	trimmedValue = bytes.TrimSuffix(trimmedValue, []byte("\r\n"))
-	trimmedValue = bytes.TrimSuffix(trimmedValue, []byte("\n"))
-	return trimmedValue
+func legacyKeychainServiceName(validatedRef SecretRef) string {
+	return legacyMorphKeychainServicePrefix + strings.TrimSpace(validatedRef.Scope)
 }
 
-func mapKeychainError(operation string, validatedRef SecretRef, stderrBytes []byte, err error) error {
-	if err == nil {
-		return nil
+func (store *MacOSKeychainStore) getSecretWithLegacyFallback(ctx context.Context, validatedRef SecretRef) ([]byte, string, error) {
+	primaryServiceName := keychainServiceName(validatedRef)
+	secretBytes, err := store.getSecret(ctx, validatedRef, primaryServiceName)
+	if err == nil || !errors.Is(err, ErrSecretNotFound) {
+		return secretBytes, primaryServiceName, err
 	}
 
-	stderrText := strings.ToLower(strings.TrimSpace(string(stderrBytes)))
-	if strings.Contains(stderrText, "could not be found") || strings.Contains(stderrText, "item not found") {
-		return fmt.Errorf("%w: keychain item for secret ref %q", ErrSecretNotFound, validatedRef.ID)
+	legacyServiceName := legacyKeychainServiceName(validatedRef)
+	if legacyServiceName == primaryServiceName {
+		return nil, primaryServiceName, err
+	}
+	secretBytes, legacyErr := store.getSecret(ctx, validatedRef, legacyServiceName)
+	return secretBytes, legacyServiceName, legacyErr
+}
+
+func (store *MacOSKeychainStore) deleteSecretWithLegacyFallback(ctx context.Context, validatedRef SecretRef) error {
+	primaryServiceName := keychainServiceName(validatedRef)
+	deleteErr := store.deleteSecret(ctx, validatedRef, primaryServiceName)
+	if deleteErr == nil || !errors.Is(deleteErr, ErrSecretNotFound) {
+		return deleteErr
 	}
 
-	if errors.Is(err, exec.ErrNotFound) {
-		return fmt.Errorf("%w: macos security tool unavailable during %s", ErrSecretBackendUnavailable, operation)
+	legacyServiceName := legacyKeychainServiceName(validatedRef)
+	if legacyServiceName == primaryServiceName {
+		return deleteErr
+	}
+	return store.deleteSecret(ctx, validatedRef, legacyServiceName)
+}
+
+func (store *MacOSKeychainStore) metadataWithLegacyFallback(ctx context.Context, validatedRef SecretRef) (SecretMetadata, error) {
+	primaryServiceName := keychainServiceName(validatedRef)
+	secretMetadata, err := store.metadataForSecret(ctx, validatedRef, primaryServiceName)
+	if err == nil || !errors.Is(err, ErrSecretNotFound) {
+		return secretMetadata, err
 	}
 
-	if stderrText == "" {
-		return fmt.Errorf("%w: macos keychain %s failed for secret ref %q", ErrSecretBackendUnavailable, operation, validatedRef.ID)
+	legacyServiceName := legacyKeychainServiceName(validatedRef)
+	if legacyServiceName == primaryServiceName {
+		return SecretMetadata{}, err
 	}
-
-	return fmt.Errorf("%w: macos keychain %s failed for secret ref %q (%s)", ErrSecretBackendUnavailable, operation, validatedRef.ID, stderrText)
+	return store.metadataForSecret(ctx, validatedRef, legacyServiceName)
 }
 
 func formatKeychainStatusError(operation string, validatedRef SecretRef, statusCode int, errorMessageText string) error {
