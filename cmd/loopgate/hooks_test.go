@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -141,6 +144,75 @@ func TestRunInstallHooks_MissingHookBundleExplainsExpectedSourceDir(t *testing.T
 	}
 	if !strings.Contains(err.Error(), loopgateHookBundleDir) {
 		t.Fatalf("expected missing-bundle error to mention %q, got %v", loopgateHookBundleDir, err)
+	}
+}
+
+func TestGovernedHookScriptsFailClosedWhenLoopgateUnreachable(t *testing.T) {
+	python3Path, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skipf("python3 not available: %v", err)
+	}
+	currentWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("determine working directory: %v", err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(currentWorkingDirectory, "..", ".."))
+	unreachableSocketPath := fmt.Sprintf("/tmp/loopgate-hook-unreachable-%d.sock", os.Getpid())
+	_ = os.Remove(unreachableSocketPath)
+
+	testCases := []struct {
+		name       string
+		scriptName string
+		inputJSON  string
+	}{
+		{
+			name:       "pretool",
+			scriptName: "loopgate_pretool.py",
+			inputJSON:  `{"tool_name":"Bash","tool_use_id":"toolu_test","tool_input":{"command":"pwd"}}`,
+		},
+		{
+			name:       "permissionrequest",
+			scriptName: "loopgate_permissionrequest.py",
+			inputJSON:  `{"tool_name":"Bash","tool_use_id":"toolu_test","reason":"need shell access"}`,
+		},
+		{
+			name:       "userpromptsubmit",
+			scriptName: "loopgate_userpromptsubmit.py",
+			inputJSON:  `{"prompt":"review the repo"}`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			scriptPath := filepath.Join(repoRoot, filepath.FromSlash(loopgateHookBundleDir), testCase.scriptName)
+			command := exec.Command(python3Path, scriptPath)
+			command.Env = append(os.Environ(), "LOOPGATE_SOCKET="+unreachableSocketPath)
+			command.Stdin = strings.NewReader(testCase.inputJSON)
+
+			var stdoutBuffer bytes.Buffer
+			var stderrBuffer bytes.Buffer
+			command.Stdout = &stdoutBuffer
+			command.Stderr = &stderrBuffer
+
+			runErr := command.Run()
+			if runErr == nil {
+				t.Fatalf("expected %s to fail closed when Loopgate is unreachable", testCase.scriptName)
+			}
+			exitErr, ok := runErr.(*exec.ExitError)
+			if !ok {
+				t.Fatalf("expected exit error for %s, got %T: %v", testCase.scriptName, runErr, runErr)
+			}
+			if exitErr.ExitCode() != 2 {
+				t.Fatalf("expected blocking exit code 2 for %s, got %d with stderr %q", testCase.scriptName, exitErr.ExitCode(), stderrBuffer.String())
+			}
+			if stdoutBuffer.Len() != 0 {
+				t.Fatalf("expected no stdout for %s when Loopgate is unreachable, got %q", testCase.scriptName, stdoutBuffer.String())
+			}
+			expectedErrorPrefix := "Loopgate hook error: failed to contact Loopgate over " + unreachableSocketPath
+			if !strings.Contains(stderrBuffer.String(), expectedErrorPrefix) {
+				t.Fatalf("expected stderr for %s to contain %q, got %q", testCase.scriptName, expectedErrorPrefix, stderrBuffer.String())
+			}
+		})
 	}
 }
 

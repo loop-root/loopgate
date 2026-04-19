@@ -91,6 +91,10 @@ If Loopgate is unreachable, the installed command hooks exit with Claude Code's
 blocking hook status. That means governed events such as `PreToolUse`,
 `PermissionRequest`, and `UserPromptSubmit` fail closed instead of silently
 bypassing Loopgate, while audit-only lifecycle hooks surface a visible error.
+Expected outcomes:
+- `PreToolUse`: Claude blocks the tool invocation and shows the Loopgate hook error instead of running the tool.
+- `PermissionRequest`: Claude denies the permission request and shows the Loopgate hook error instead of granting the permission.
+- `UserPromptSubmit`: Claude blocks prompt submission and shows the Loopgate hook error instead of continuing with governed execution.
 
 ### 4. Re-sign policy when you intentionally change it
 
