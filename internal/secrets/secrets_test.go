@@ -87,7 +87,7 @@ func TestStubSecureStore_BackendUnavailable(t *testing.T) {
 	validatedRef := SecretRef{
 		ID:          "sec-ref-4",
 		Backend:     BackendSecure,
-		AccountName: "morph.dev",
+		AccountName: "loopgate.dev",
 		Scope:       "llm.provider",
 	}
 

@@ -29,7 +29,6 @@ func TestGitignore_ContainsRuntimeAndBuildArtifactRules(t *testing.T) {
 		"/bin/",
 		"tmp/",
 		".claude/",
-		"morph",
 		"*.tar.gz",
 		"*.zip",
 	}

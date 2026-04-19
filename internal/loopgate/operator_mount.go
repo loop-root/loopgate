@@ -28,7 +28,7 @@ func withOperatorMountControlSession(ctx context.Context, controlSessionID strin
 
 func isOperatorMountActor(actor string) bool {
 	switch defaultLabel(actor, "client") {
-	case "operator", "haven":
+	case "operator":
 		return true
 	default:
 		return false
@@ -85,11 +85,9 @@ func canonicalizeOperatorMountPath(raw string) (string, error) {
 }
 
 // normalizeOperatorMountPathsForSession validates and deduplicates paths for
-// operator-scoped sessions only. The legacy actor label "haven" remains
-// accepted as a compatibility alias while the current product surface prefers
-// the neutral label "operator".
-// Session-open still requires a server-side expected-client executable pin before these
-// mounts are accepted into authoritative control-session state.
+// operator-scoped sessions only. Session-open still requires a server-side
+// expected-client executable pin before these mounts are accepted into
+// authoritative control-session state.
 func normalizeOperatorMountPathsForSession(actor string, rawPaths []string) ([]string, error) {
 	if len(rawPaths) == 0 {
 		return nil, nil

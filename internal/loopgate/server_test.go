@@ -159,7 +159,7 @@ func TestCheckHookPreValidateRateLimit_IsPerUID(t *testing.T) {
 
 func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 	repoRoot := t.TempDir()
-	memoryDir := filepath.Join(repoRoot, ".morph", "memory")
+	memoryDir := filepath.Join(repoRoot, ".loopgate", "memory")
 	if err := os.MkdirAll(memoryDir, 0o700); err != nil {
 		t.Fatalf("mkdir memory dir: %v", err)
 	}
@@ -167,14 +167,14 @@ func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 		t.Fatalf("write keys file: %v", err)
 	}
 
-	policyYAML := strings.Replace(loopgatePolicyYAML(false), "    denied_paths: []\n", "    denied_paths:\n      - \".morph/memory\"\n      - \"runtime/state/memory\"\n", 1)
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "    denied_paths: []\n", "    denied_paths:\n      - \".loopgate/memory\"\n      - \"runtime/state/memory\"\n", 1)
 	client, _, _ := startLoopgateServer(t, repoRoot, policyYAML)
 
 	readResponse, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
 		RequestID:  "req-memory-read",
 		Capability: "fs_read",
 		Arguments: map[string]string{
-			"path": ".morph/memory/keys.json",
+			"path": ".loopgate/memory/keys.json",
 		},
 	})
 	if err != nil {
@@ -191,7 +191,7 @@ func TestClientExecuteCapability_DeniesRawMemoryFilesystemAccess(t *testing.T) {
 		RequestID:  "req-memory-write",
 		Capability: "fs_write",
 		Arguments: map[string]string{
-			"path":    ".morph/memory/keys.json",
+			"path":    ".loopgate/memory/keys.json",
 			"content": "{\"keys\":[{\"id\":\"user.name\"}]}\n",
 		},
 	})
@@ -648,12 +648,12 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 	if importResponse.SandboxRoot != sandbox.VirtualHome {
 		t.Fatalf("expected virtual sandbox root %q, got %#v", sandbox.VirtualHome, importResponse)
 	}
-	if importResponse.SandboxAbsolutePath != "/morph/home/imports/example.txt" {
+	if importResponse.SandboxAbsolutePath != "/loopgate/home/imports/example.txt" {
 		t.Fatalf("expected virtual sandbox path, got %#v", importResponse)
 	}
 
 	stageResponse, err := client.SandboxStage(context.Background(), controlapipkg.SandboxStageRequest{
-		SandboxSourcePath: "/morph/home/imports/example.txt",
+		SandboxSourcePath: "/loopgate/home/imports/example.txt",
 		OutputName:        "export-me.txt",
 	})
 	if err != nil {
@@ -665,15 +665,15 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 	if stageResponse.ArtifactRef == "" {
 		t.Fatalf("expected staged artifact ref, got %#v", stageResponse)
 	}
-	if stageResponse.SourceSandboxPath != "/morph/home/imports/example.txt" {
+	if stageResponse.SourceSandboxPath != "/loopgate/home/imports/example.txt" {
 		t.Fatalf("expected virtual source sandbox path, got %#v", stageResponse)
 	}
-	if stageResponse.SandboxAbsolutePath != "/morph/home/outputs/export-me.txt" {
+	if stageResponse.SandboxAbsolutePath != "/loopgate/home/outputs/export-me.txt" {
 		t.Fatalf("expected virtual staged path, got %#v", stageResponse)
 	}
 
 	metadataResponse, err := client.SandboxMetadata(context.Background(), controlapipkg.SandboxMetadataRequest{
-		SandboxSourcePath: "/morph/home/outputs/export-me.txt",
+		SandboxSourcePath: "/loopgate/home/outputs/export-me.txt",
 	})
 	if err != nil {
 		t.Fatalf("sandbox metadata: %v", err)
@@ -684,7 +684,7 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 	if metadataResponse.ContentSHA256 != stageResponse.ContentSHA256 {
 		t.Fatalf("expected content hash %q, got %#v", stageResponse.ContentSHA256, metadataResponse)
 	}
-	if metadataResponse.SourceSandboxPath != "/morph/home/imports/example.txt" {
+	if metadataResponse.SourceSandboxPath != "/loopgate/home/imports/example.txt" {
 		t.Fatalf("expected virtual metadata source path, got %#v", metadataResponse)
 	}
 
@@ -699,7 +699,7 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 
 	hostDestinationPath := filepath.Join(hostRootPath, "exported.txt")
 	exportResponse, err := client.SandboxExport(context.Background(), controlapipkg.SandboxExportRequest{
-		SandboxSourcePath:   "/morph/home/outputs/export-me.txt",
+		SandboxSourcePath:   "/loopgate/home/outputs/export-me.txt",
 		HostDestinationPath: hostDestinationPath,
 	})
 	if err != nil {
@@ -708,7 +708,7 @@ func TestSandboxImportAndStageAndExport(t *testing.T) {
 	if exportResponse.Action != "export" {
 		t.Fatalf("unexpected export response: %#v", exportResponse)
 	}
-	if exportResponse.SourceSandboxPath != "/morph/home/outputs/export-me.txt" {
+	if exportResponse.SourceSandboxPath != "/loopgate/home/outputs/export-me.txt" {
 		t.Fatalf("expected virtual export source path, got %#v", exportResponse)
 	}
 
@@ -779,14 +779,14 @@ func TestSandboxExportRequiresOperatorMountWriteGrant(t *testing.T) {
 		t.Fatalf("sandbox import: %v", err)
 	}
 	if _, err := client.SandboxStage(context.Background(), controlapipkg.SandboxStageRequest{
-		SandboxSourcePath: "/morph/home/imports/example.txt",
+		SandboxSourcePath: "/loopgate/home/imports/example.txt",
 		OutputName:        "export-me.txt",
 	}); err != nil {
 		t.Fatalf("sandbox stage: %v", err)
 	}
 
 	_, err := client.SandboxExport(context.Background(), controlapipkg.SandboxExportRequest{
-		SandboxSourcePath:   "/morph/home/outputs/export-me.txt",
+		SandboxSourcePath:   "/loopgate/home/outputs/export-me.txt",
 		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
 	})
 	if err == nil {

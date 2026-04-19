@@ -75,9 +75,9 @@ func TestLoadPolicy_ExpandsHomePathPrefixes(t *testing.T) {
 tools:
   filesystem:
     allowed_roots:
-      - "~/morph/tests"
+      - "~/loopgate/tests"
     denied_paths:
-      - "~/morph/secret"
+      - "~/loopgate/secret"
     read_enabled: true
     write_enabled: true
     write_requires_approval: true

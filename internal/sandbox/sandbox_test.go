@@ -27,7 +27,7 @@ func TestResolveHomePathAcceptsVirtualPath(t *testing.T) {
 		t.Fatalf("eval imported path symlinks: %v", err)
 	}
 
-	resolvedPath, sandboxRelativePath, err := paths.ResolveHomePath("/morph/home/imports/notes.txt")
+	resolvedPath, sandboxRelativePath, err := paths.ResolveHomePath("/loopgate/home/imports/notes.txt")
 	if err != nil {
 		t.Fatalf("resolve virtual sandbox path: %v", err)
 	}
@@ -46,8 +46,8 @@ func TestResolveHomePathRejectsVirtualPathOutsideHome(t *testing.T) {
 		t.Fatalf("ensure sandbox paths: %v", err)
 	}
 
-	if _, _, err := paths.ResolveHomePath("/morph/state/secrets.json"); err == nil {
-		t.Fatal("expected virtual path outside /morph/home to be rejected")
+	if _, _, err := paths.ResolveHomePath("/loopgate/state/secrets.json"); err == nil {
+		t.Fatal("expected virtual path outside /loopgate/home to be rejected")
 	}
 }
 
@@ -62,7 +62,7 @@ func TestNormalizeHomePathNormalizesUnicodeBeforeTraversalChecks(t *testing.T) {
 }
 
 func TestVirtualizeRelativeHomePath(t *testing.T) {
-	if virtualPath := VirtualizeRelativeHomePath("outputs/staged.txt"); virtualPath != "/morph/home/outputs/staged.txt" {
+	if virtualPath := VirtualizeRelativeHomePath("outputs/staged.txt"); virtualPath != "/loopgate/home/outputs/staged.txt" {
 		t.Fatalf("unexpected virtualized path: %q", virtualPath)
 	}
 }

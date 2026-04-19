@@ -42,7 +42,7 @@ func TestSandboxExportDeniesNonOutputsPath(t *testing.T) {
 	}
 
 	_, err := client.SandboxExport(context.Background(), controlapipkg.SandboxExportRequest{
-		SandboxSourcePath:   "/morph/home/imports/example.txt",
+		SandboxSourcePath:   "/loopgate/home/imports/example.txt",
 		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
 	})
 	if err == nil {
@@ -72,7 +72,7 @@ func TestSandboxExportDeniesOrphanedOutputWithoutStagedRecord(t *testing.T) {
 	}
 
 	_, err := client.SandboxExport(context.Background(), controlapipkg.SandboxExportRequest{
-		SandboxSourcePath:   "/morph/home/outputs/orphan.txt",
+		SandboxSourcePath:   "/loopgate/home/outputs/orphan.txt",
 		HostDestinationPath: filepath.Join(hostRootPath, "exported.txt"),
 	})
 	if err == nil {

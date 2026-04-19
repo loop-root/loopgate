@@ -58,7 +58,7 @@ func TestConnectionStatusValidate_DeniesUnsafeIdentifiers(t *testing.T) {
 
 func TestOpenSessionRequestValidate_DeniesUnsafeRequestedCapability(t *testing.T) {
 	validOpenSessionRequest := OpenSessionRequest{
-		Actor:                 "morph",
+		Actor:                 "operator",
 		SessionID:             "session_123",
 		RequestedCapabilities: []string{"fs_read", "fs_list"},
 		CorrelationID:         "corr_123",
@@ -68,7 +68,7 @@ func TestOpenSessionRequestValidate_DeniesUnsafeRequestedCapability(t *testing.T
 	}
 
 	invalidOpenSessionRequest := OpenSessionRequest{
-		Actor:                 "morph",
+		Actor:                 "operator",
 		SessionID:             "session_123",
 		RequestedCapabilities: []string{"../../etc"},
 	}
@@ -81,7 +81,7 @@ func TestCapabilityRequestValidate_DeniesUnsafeMetadataAndArgumentNames(t *testi
 	validCapabilityRequest := CapabilityRequest{
 		RequestID:     "req_123",
 		SessionID:     "control_123",
-		Actor:         "morph",
+		Actor:         "operator",
 		Capability:    "fs_read",
 		Arguments:     map[string]string{"path": "README.md"},
 		CorrelationID: "corr_123",

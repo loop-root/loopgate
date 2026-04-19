@@ -1,6 +1,4 @@
 # Root-built binaries (do not commit)
-/morph
-/haven
 /loopgate-admin
 
 # OS / editor
@@ -15,9 +13,8 @@ docs/.obsidian/
 *.out
 /vendor/
 
-# Node (legacy Wails frontend)
+# Node (legacy frontend)
 node_modules/
-cmd/haven/frontend/dist/
 
 # Archives
 *.tar.gz
@@ -45,7 +42,6 @@ claude/hooks/scripts/__pycache__/
 runtime/
 
 # Runtime / memory artifacts (see internal/config/gitignore_test.go)
-runtime/.morph.lock
 cmd/memorybench/
 core/memory/ledger/*.jsonl
 core/memory/ledger/*.old

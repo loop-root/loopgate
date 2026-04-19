@@ -11,8 +11,8 @@ import toolspkg "loopgate/internal/tools"
 // implementation makes no observable mutation to Loopgate state, so Loopgate
 // can safely run multiple of them in parallel without ordering constraints.
 //
-// The result size cap is not stored here. It lives in havenToolResultMaxRunesByCapability
-// and is looked up directly at the point of truncation, keeping this struct minimal.
+// The result size cap is not stored here; truncation policy is applied at the
+// final response-writing path so this struct stays focused on dispatch safety.
 type capabilityClass struct {
 	// readOnly is true when the registered tool's Operation() is OpRead.
 	// A readOnly capability may execute concurrently with other readOnly

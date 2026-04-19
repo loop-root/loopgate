@@ -26,15 +26,15 @@ var (
 )
 
 const (
-	VirtualRoot      = "/morph"
-	VirtualHome      = "/morph/home"
-	VirtualWorkspace = "/morph/home/workspace"
-	VirtualImports   = "/morph/home/imports"
-	VirtualOutputs   = "/morph/home/outputs"
-	VirtualScratch   = "/morph/home/scratch"
-	VirtualAgents    = "/morph/home/agents"
-	VirtualTmp       = "/morph/home/tmp"
-	VirtualLogs      = "/morph/home/logs"
+	VirtualRoot      = "/loopgate"
+	VirtualHome      = "/loopgate/home"
+	VirtualWorkspace = "/loopgate/home/workspace"
+	VirtualImports   = "/loopgate/home/imports"
+	VirtualOutputs   = "/loopgate/home/outputs"
+	VirtualScratch   = "/loopgate/home/scratch"
+	VirtualAgents    = "/loopgate/home/agents"
+	VirtualTmp       = "/loopgate/home/tmp"
+	VirtualLogs      = "/loopgate/home/logs"
 )
 
 type Paths struct {

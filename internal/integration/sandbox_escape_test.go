@@ -85,7 +85,7 @@ func TestSandboxStageRejectsSandboxSymlinkEscapeOverRealSocket(t *testing.T) {
 	}
 
 	_, err := client.SandboxStage(context.Background(), controlapipkg.SandboxStageRequest{
-		SandboxSourcePath: "/morph/home/imports/escape.txt",
+		SandboxSourcePath: "/loopgate/home/imports/escape.txt",
 		OutputName:        "escaped.txt",
 	})
 	if err == nil {

@@ -5,7 +5,7 @@ This file maps `internal/sandbox/`, the filesystem boundary between the repo’s
 Use it when changing:
 
 - import/export path mapping
-- virtual path constants (`/morph/home/...`)
+- virtual path constants (`/loopgate/home/...`)
 - copy/mirror semantics into or out of the sandbox
 - symlink or traversal rules
 

@@ -182,7 +182,7 @@ tools:
       - "."
     # Block sensitive subtrees even if a broad allowed_roots would include them.
     denied_paths:
-      - ".morph/memory"
+      - ".loopgate/memory"
       - "core/policy"
       - "persona"
       - "runtime/state/memory"

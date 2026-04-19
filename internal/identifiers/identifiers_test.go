@@ -4,7 +4,7 @@ import "testing"
 
 func TestValidateSafeIdentifier_AllowsSimpleLabels(t *testing.T) {
 	for _, allowedValue := range []string{
-		"morph",
+		"loopgate",
 		"session-20260307",
 		"OPENAI_API_KEY",
 		"user.name",
