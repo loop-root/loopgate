@@ -226,6 +226,15 @@ verified ledger, run:
 This prints the current approval status plus the denial code, operator reason,
 and short related-event timeline when the request was actually denied.
 
+For a direct capability denial or execution failure keyed by `request_id`, use:
+
+```bash
+./bin/loopgate-doctor explain-denial -request-id <request-id>
+```
+
+This prints the current request status plus the denial code or execution-failure
+class and the related request timeline from the verified ledger.
+
 ### Apply a policy change safely
 
 Use this flow:

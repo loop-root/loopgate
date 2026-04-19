@@ -57,7 +57,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, `Usage:
   loopgate-doctor report      [-repo DIR]                        Print offline JSON diagnostic report to stdout
   loopgate-doctor bundle      [-repo DIR] -out DIR [-log-lines N]   Write report.json + diagnostic log tails
-  loopgate-doctor explain-denial [-repo DIR] -approval-id ID    Explain one approval request from the verified audit ledger
+  loopgate-doctor explain-denial [-repo DIR] (-approval-id ID | -request-id ID)    Explain one approval or request outcome from the verified audit ledger
   loopgate-doctor trust-check [-repo DIR] [-socket PATH]            Query the running local Loopgate audit-export trust preflight
 
 -repo defaults to the current working directory.
@@ -148,11 +148,14 @@ func runExplainDenial(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	repoFn := parseRepoFlag(fs)
 	approvalIDFlag := fs.String("approval-id", "", "approval request id to explain")
+	requestIDFlag := fs.String("request-id", "", "capability request id to explain")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if strings.TrimSpace(*approvalIDFlag) == "" {
-		fmt.Fprintln(stderr, "ERROR: -approval-id is required")
+	trimmedApprovalID := strings.TrimSpace(*approvalIDFlag)
+	trimmedRequestID := strings.TrimSpace(*requestIDFlag)
+	if (trimmedApprovalID == "" && trimmedRequestID == "") || (trimmedApprovalID != "" && trimmedRequestID != "") {
+		fmt.Fprintln(stderr, "ERROR: exactly one of -approval-id or -request-id is required")
 		return 2
 	}
 	repoRoot, err := repoFn()
@@ -165,16 +168,34 @@ func runExplainDenial(args []string, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "ERROR: load runtime config:", err)
 		return 1
 	}
-	explanation, err := troubleshoot.ExplainApprovalRequest(repoRoot, runtimeConfig, *approvalIDFlag)
+
+	if trimmedApprovalID != "" {
+		explanation, err := troubleshoot.ExplainApprovalRequest(repoRoot, runtimeConfig, trimmedApprovalID)
+		if err != nil {
+			if errors.Is(err, troubleshoot.ErrApprovalRequestNotFound) {
+				fmt.Fprintln(stderr, "ERROR:", err)
+				return 1
+			}
+			fmt.Fprintln(stderr, "ERROR: explain approval denial:", err)
+			return 1
+		}
+		if err := troubleshoot.WriteApprovalExplanation(stdout, explanation); err != nil {
+			fmt.Fprintln(stderr, "ERROR: write explanation:", err)
+			return 1
+		}
+		return 0
+	}
+
+	explanation, err := troubleshoot.ExplainCapabilityRequest(repoRoot, runtimeConfig, trimmedRequestID)
 	if err != nil {
-		if errors.Is(err, troubleshoot.ErrApprovalRequestNotFound) {
+		if errors.Is(err, troubleshoot.ErrCapabilityRequestNotFound) {
 			fmt.Fprintln(stderr, "ERROR:", err)
 			return 1
 		}
-		fmt.Fprintln(stderr, "ERROR: explain approval denial:", err)
+		fmt.Fprintln(stderr, "ERROR: explain request denial:", err)
 		return 1
 	}
-	if err := troubleshoot.WriteApprovalExplanation(stdout, explanation); err != nil {
+	if err := troubleshoot.WriteCapabilityRequestExplanation(stdout, explanation); err != nil {
 		fmt.Fprintln(stderr, "ERROR: write explanation:", err)
 		return 1
 	}

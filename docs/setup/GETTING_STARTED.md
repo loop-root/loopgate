@@ -155,6 +155,13 @@ from the verified ledger with:
 ./bin/loopgate-doctor explain-denial -approval-id <approval-id>
 ```
 
+If you instead have a direct `request_id` for a capability denial or execution
+failure, use:
+
+```bash
+./bin/loopgate-doctor explain-denial -request-id <request-id>
+```
+
 ## Did it work?
 
 Use one real governed path instead of guessing from startup text alone:

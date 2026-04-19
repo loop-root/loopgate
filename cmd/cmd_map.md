@@ -53,7 +53,7 @@ Use it when changing:
 - `main.go`
   - builds offline derived operator reports from local repo state
   - writes diagnostic bundles without touching authoritative audit history
-  - explains one approval request by walking the verified audit ledger for its `approval_request_id`
+  - explains one approval or capability request by walking the verified audit ledger for its `approval_request_id` or `request_id`
   - can query a running local Loopgate instance for the read-only audit export trust preflight via `trust-check`
   - `report` includes `ledger_verify.hmac_checkpoints`, including `bootstrap_pending` before the first successful server start creates the default macOS Keychain-backed checkpoint key
 
