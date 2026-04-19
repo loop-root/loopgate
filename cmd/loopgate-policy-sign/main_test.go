@@ -119,6 +119,53 @@ func TestRunPolicySignCLI_VerifySetup_PrintsSummary(t *testing.T) {
 	}
 }
 
+func TestRunPolicySignCLI_VerifySetup_DefaultsToCurrentSignedPolicyKeyID(t *testing.T) {
+	testSigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new policy test signer: %v", err)
+	}
+	testSigner.ConfigureEnv(t.Setenv)
+
+	repoRoot := t.TempDir()
+	if err := testSigner.WriteSignedPolicyYAML(repoRoot, "version: \"1\"\n"); err != nil {
+		t.Fatalf("write signed policy yaml: %v", err)
+	}
+
+	t.Setenv(policySigningPrivateKeyFileEnv, "")
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	defaultKeyPath, err := defaultPolicySigningPrivateKeyPath(testSigner.KeyID)
+	if err != nil {
+		t.Fatalf("default private key path: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(defaultKeyPath), 0o755); err != nil {
+		t.Fatalf("mkdir default key dir: %v", err)
+	}
+	writePEMEncodedEd25519PrivateKey(t, defaultKeyPath, testSigner.PrivateKey, 0o600)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := runPolicySignCLI(
+		[]string{
+			"-repo-root", repoRoot,
+			"-verify-setup",
+		},
+		&stdout,
+		&stderr,
+		func() (string, error) { return "", nil },
+		os.Getenv,
+	)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d with stderr %q", exitCode, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "key_id: "+testSigner.KeyID) {
+		t.Fatalf("expected inferred key_id output, got %q", stdout.String())
+	}
+}
+
 func TestRunPolicySignCLI_MissingDefaultPrivateKeyPrintsGuidance(t *testing.T) {
 	repoRoot := t.TempDir()
 	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")

@@ -68,6 +68,10 @@ go run ./cmd/loopgate-policy-admin validate
 go run ./cmd/loopgate
 ```
 
+On first start, Loopgate may ask macOS Keychain to create the default audit
+HMAC checkpoint key. If Keychain access is denied or canceled, startup fails
+closed and you should rerun from an interactive macOS login session.
+
 Default local socket:
 
 ```text
@@ -80,6 +84,10 @@ Loopgate uses a signed policy:
 go run ./cmd/loopgate-policy-sign -verify-setup
 go run ./cmd/loopgate-policy-admin validate
 ```
+
+`-verify-setup` infers the current signed policy `key_id` by default. Pass
+`-key-id` only when you intentionally want to verify or apply against a
+different signer than the repo’s current `core/policy/policy.yaml.sig`.
 
 If Loopgate is already running:
 

@@ -93,7 +93,7 @@ func runApply(args []string, stdout io.Writer, stderr io.Writer) int {
 	socketPathFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
 	verifySetupFlag := fs.Bool("verify-setup", false, "verify the local policy signing setup before hot-applying")
 	privateKeyPathFlag := fs.String("private-key-file", "", "path to a PKCS#8 PEM-encoded Ed25519 private key used with -verify-setup")
-	keyIDFlag := fs.String("key-id", config.PolicySigningTrustAnchorKeyID, "trusted signing key identifier used with -verify-setup")
+	keyIDFlag := fs.String("key-id", "", "trusted signing key identifier used with -verify-setup (defaults to the current signed policy key_id)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -111,12 +111,21 @@ func runApply(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	if *verifySetupFlag {
-		privateKeyPath, privateKeyPathSource, err := resolvePolicySigningPrivateKeyPath(strings.TrimSpace(*privateKeyPathFlag), strings.TrimSpace(os.Getenv(policySigningPrivateKeyFileEnv)), strings.TrimSpace(*keyIDFlag))
+		effectiveKeyID := strings.TrimSpace(*keyIDFlag)
+		if effectiveKeyID == "" {
+			signatureFile, err := config.LoadPolicySignatureFile(baseRoot)
+			if err != nil {
+				fmt.Fprintln(stderr, "ERROR: load signed policy key_id for verify-setup:", err)
+				return 1
+			}
+			effectiveKeyID = strings.TrimSpace(signatureFile.KeyID)
+		}
+		privateKeyPath, privateKeyPathSource, err := resolvePolicySigningPrivateKeyPath(strings.TrimSpace(*privateKeyPathFlag), strings.TrimSpace(os.Getenv(policySigningPrivateKeyFileEnv)), effectiveKeyID)
 		if err != nil {
 			fmt.Fprintln(stderr, "ERROR:", err)
 			return 2
 		}
-		verificationResult, err := config.VerifyPolicySigningSetup(baseRoot, privateKeyPath, strings.TrimSpace(*keyIDFlag))
+		verificationResult, err := config.VerifyPolicySigningSetup(baseRoot, privateKeyPath, effectiveKeyID)
 		if err != nil {
 			fmt.Fprintln(stderr, "ERROR: verify policy signing setup:", err)
 			return 1

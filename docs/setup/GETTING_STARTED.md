@@ -62,6 +62,9 @@ Leave Loopgate running in its own terminal.
 On the first successful start, Loopgate also bootstraps the default
 Keychain-backed audit HMAC checkpoint key used for tamper-evident audit
 checkpoints.
+If macOS Keychain access is denied or canceled, Loopgate fails closed at
+startup rather than falling back to plaintext or unaudited mode. Rerun from an
+interactive login session and approve the Keychain prompt.
 
 ### 4. Install Claude Code hooks
 
@@ -113,7 +116,8 @@ sequenceDiagram
   - rerun `go run ./cmd/loopgate install-hooks`
 - Policy changes are not taking effect:
   - rerun `validate`, `-verify-setup`, and `apply -verify-setup`
-  - if you used `loopgate init`, pass the printed `-key-id` to later `loopgate-policy-sign` and `loopgate-policy-admin apply -verify-setup` commands
+  - `-verify-setup` uses the current signed policy `key_id` by default
+  - pass `-key-id` only if you intentionally want to verify or apply against a different signer than the current `core/policy/policy.yaml.sig`
 - A task was denied and you want to know why:
   - `go run ./cmd/loopgate-ledger tail -verbose`
 - You want a structured local diagnostic snapshot:

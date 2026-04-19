@@ -31,15 +31,9 @@ func runPolicySignCLI(
 	repoRootFlag := signFlags.String("repo-root", "", "repository root containing core/policy/policy.yaml")
 	policyPathFlag := signFlags.String("policy-file", "", "path to the policy YAML file to sign")
 	privateKeyPathFlag := signFlags.String("private-key-file", "", "path to a PKCS#8 PEM-encoded Ed25519 private key (overrides "+policySigningPrivateKeyFileEnv+" and the default operator path)")
-	keyIDFlag := signFlags.String("key-id", config.PolicySigningTrustAnchorKeyID, "trusted signing key identifier")
+	keyIDFlag := signFlags.String("key-id", "", "trusted signing key identifier (defaults to the current signed policy key_id for -verify-setup, otherwise the built-in Loopgate trust anchor key_id)")
 	verifySetupFlag := signFlags.Bool("verify-setup", false, "verify that the trusted public key, current policy signature, and operator signer key all line up")
 	if err := signFlags.Parse(args); err != nil {
-		return 2
-	}
-
-	privateKeyPath, privateKeyPathSource, err := resolvePolicySigningPrivateKeyPath(strings.TrimSpace(*privateKeyPathFlag), strings.TrimSpace(getenv(policySigningPrivateKeyFileEnv)), strings.TrimSpace(*keyIDFlag))
-	if err != nil {
-		fmt.Fprintln(stderr, "ERROR:", err)
 		return 2
 	}
 
@@ -54,6 +48,18 @@ func runPolicySignCLI(
 	}
 	repoRoot = filepath.Clean(repoRoot)
 
+	effectiveKeyID, err := resolvePolicySigningKeyID(repoRoot, strings.TrimSpace(*keyIDFlag), *verifySetupFlag)
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR:", err)
+		return 2
+	}
+
+	privateKeyPath, privateKeyPathSource, err := resolvePolicySigningPrivateKeyPath(strings.TrimSpace(*privateKeyPathFlag), strings.TrimSpace(getenv(policySigningPrivateKeyFileEnv)), effectiveKeyID)
+	if err != nil {
+		fmt.Fprintln(stderr, "ERROR:", err)
+		return 2
+	}
+
 	policyPath := strings.TrimSpace(*policyPathFlag)
 	if policyPath == "" {
 		policyPath = filepath.Join(repoRoot, "core", "policy", "policy.yaml")
@@ -62,7 +68,7 @@ func runPolicySignCLI(
 	}
 
 	if *verifySetupFlag {
-		verificationResult, err := verifyPolicySigningSetup(repoRoot, privateKeyPath, privateKeyPathSource, strings.TrimSpace(*keyIDFlag))
+		verificationResult, err := verifyPolicySigningSetup(repoRoot, privateKeyPath, privateKeyPathSource, effectiveKeyID)
 		if err != nil {
 			fmt.Fprintln(stderr, "ERROR:", err)
 			return 1
@@ -92,7 +98,7 @@ func runPolicySignCLI(
 		return 1
 	}
 
-	signatureFile, err := config.SignPolicyDocument(rawPolicyBytes, *keyIDFlag, privateKey)
+	signatureFile, err := config.SignPolicyDocument(rawPolicyBytes, effectiveKeyID, privateKey)
 	if err != nil {
 		fmt.Fprintln(stderr, "ERROR: sign policy:", err)
 		return 1
@@ -104,6 +110,21 @@ func runPolicySignCLI(
 
 	fmt.Fprintf(stdout, "Wrote %s\n", filepath.Join(repoRoot, "core", "policy", "policy.yaml.sig"))
 	return 0
+}
+
+func resolvePolicySigningKeyID(repoRoot string, requestedKeyID string, verifySetup bool) (string, error) {
+	trimmedRequestedKeyID := strings.TrimSpace(requestedKeyID)
+	if trimmedRequestedKeyID != "" {
+		return trimmedRequestedKeyID, nil
+	}
+	if !verifySetup {
+		return config.PolicySigningTrustAnchorKeyID, nil
+	}
+	signatureFile, err := config.LoadPolicySignatureFile(repoRoot)
+	if err != nil {
+		return "", fmt.Errorf("load policy signature for verify-setup key_id default: %w", err)
+	}
+	return strings.TrimSpace(signatureFile.KeyID), nil
 }
 
 func resolvePolicySigningPrivateKeyPath(flagValue string, envValue string, keyID string) (string, string, error) {

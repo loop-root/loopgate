@@ -186,3 +186,11 @@ func mapKeychainError(operation string, validatedRef SecretRef, stderrBytes []by
 
 	return fmt.Errorf("%w: macos keychain %s failed for secret ref %q (%s)", ErrSecretBackendUnavailable, operation, validatedRef.ID, stderrText)
 }
+
+func formatKeychainStatusError(operation string, validatedRef SecretRef, statusCode int, errorMessageText string) error {
+	trimmedErrorMessageText := strings.TrimSpace(errorMessageText)
+	if trimmedErrorMessageText == "" {
+		return fmt.Errorf("%w: macos keychain %s failed for secret ref %q (status %d)", ErrSecretBackendUnavailable, operation, validatedRef.ID, statusCode)
+	}
+	return fmt.Errorf("%w: macos keychain %s failed for secret ref %q (%s; status %d)", ErrSecretBackendUnavailable, operation, validatedRef.ID, trimmedErrorMessageText, statusCode)
+}

@@ -34,6 +34,28 @@ static CFDictionaryRef morphMakeUpdateDict(CFTypeRef data) {
 	return CFDictionaryCreate(NULL, keys, values, 1,
 		&kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
 }
+
+static char *morphCopySecErrorMessage(OSStatus status) {
+	CFStringRef message = SecCopyErrorMessageString(status, NULL);
+	if (message == NULL) {
+		return NULL;
+	}
+
+	CFIndex length = CFStringGetLength(message);
+	CFIndex maxSize = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1;
+	char *buffer = (char *)malloc((size_t)maxSize);
+	if (buffer == NULL) {
+		CFRelease(message);
+		return NULL;
+	}
+	if (!CFStringGetCString(message, buffer, maxSize, kCFStringEncodingUTF8)) {
+		free(buffer);
+		CFRelease(message);
+		return NULL;
+	}
+	CFRelease(message);
+	return buffer;
+}
 */
 import "C"
 
@@ -90,5 +112,14 @@ func mapKeychainStatus(operation string, validatedRef SecretRef, status C.OSStat
 	if status == C.errSecItemNotFound {
 		return fmt.Errorf("%w: keychain item for secret ref %q", ErrSecretNotFound, validatedRef.ID)
 	}
-	return fmt.Errorf("%w: macos keychain %s failed for secret ref %q (status %d)", ErrSecretBackendUnavailable, operation, validatedRef.ID, int(status))
+	return formatKeychainStatusError(operation, validatedRef, int(status), keychainStatusMessage(status))
+}
+
+func keychainStatusMessage(status C.OSStatus) string {
+	errorMessageCString := C.morphCopySecErrorMessage(status)
+	if errorMessageCString == nil {
+		return ""
+	}
+	defer C.free(unsafe.Pointer(errorMessageCString))
+	return C.GoString(errorMessageCString)
 }

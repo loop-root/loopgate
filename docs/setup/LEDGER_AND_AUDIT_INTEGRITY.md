@@ -71,6 +71,8 @@ For the default local config, the checkpoint secret ref is:
 If that default keychain item does not exist yet, the first successful Loopgate
 server start bootstraps a new 32-byte checkpoint key into Keychain. Before that
 first start, `loopgate-doctor report` may show `bootstrap_pending`.
+If Keychain creation or access is denied, Loopgate fails closed rather than
+silently downgrading to hash-chain-only mode.
 
 Checkpoint lines still participate in the same **append-only hash chain** as
 other events. Verification helpers live in **`internal/ledger`**

@@ -497,3 +497,23 @@ func TestMacOSKeychainStore_NotFoundMapsToErrSecretNotFound(t *testing.T) {
 		t.Fatalf("expected ErrSecretNotFound, got %v", err)
 	}
 }
+
+func TestFormatKeychainStatusError_UsesReadableMessageWhenAvailable(t *testing.T) {
+	validatedRef := SecretRef{
+		ID:          "audit_ledger_hmac",
+		Backend:     BackendMacOSKeychain,
+		AccountName: "loopgate.audit_ledger_hmac",
+		Scope:       "local",
+	}
+
+	err := formatKeychainStatusError("store secret", validatedRef, -60006, "The authorization was canceled by the user.")
+	if !errors.Is(err, ErrSecretBackendUnavailable) {
+		t.Fatalf("expected ErrSecretBackendUnavailable, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "authorization was canceled by the user") {
+		t.Fatalf("expected readable security message, got %q", err)
+	}
+	if !strings.Contains(err.Error(), "status -60006") {
+		t.Fatalf("expected status code in error, got %q", err)
+	}
+}

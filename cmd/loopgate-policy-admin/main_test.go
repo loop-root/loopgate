@@ -341,6 +341,58 @@ func TestRunApply_WithVerifySetup_HotReloadsSignedPolicy(t *testing.T) {
 	}
 }
 
+func TestRunApply_WithVerifySetup_DefaultsToCurrentSignedPolicyKeyID(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, strictMVPPresetTemplate)
+	initialPolicy, err := loadPolicyDocument(repoRoot, "", "")
+	if err != nil {
+		t.Fatalf("load initial policy: %v", err)
+	}
+
+	t.Setenv(policySigningPrivateKeyFileEnv, "")
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	defaultKeyPath, err := defaultPolicySigningPrivateKeyPath(signerFixture.keyID())
+	if err != nil {
+		t.Fatalf("default private key path: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(defaultKeyPath), 0o755); err != nil {
+		t.Fatalf("mkdir default key dir: %v", err)
+	}
+	writePEMEncodedEd25519PrivateKey(t, defaultKeyPath, signerFixture.privateKey, 0o600)
+
+	socketPath := newTempSocketPath(t)
+	_ = startPolicyAdminTestServer(t, repoRoot, socketPath)
+
+	signerFixture.writeSignedPolicy(t, repoRoot, developerPresetTemplate)
+	reloadedPolicy, err := loadPolicyDocument(repoRoot, "", "")
+	if err != nil {
+		t.Fatalf("load reloaded policy: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"apply", "-repo", repoRoot, "-socket", socketPath, "-verify-setup"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stderr=%s", exitCode, stderr.String())
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "policy signing setup OK") {
+		t.Fatalf("expected setup verification output, got %q", output)
+	}
+	if !strings.Contains(output, "key_id: "+signerFixture.keyID()) {
+		t.Fatalf("expected inferred key_id output, got %q", output)
+	}
+	if !strings.Contains(output, "previous_policy_sha256: "+initialPolicy.ContentSHA256) {
+		t.Fatalf("expected previous hash in output, got %q", output)
+	}
+	if !strings.Contains(output, "policy_sha256: "+reloadedPolicy.ContentSHA256) {
+		t.Fatalf("expected reloaded hash in output, got %q", output)
+	}
+}
+
 func TestRunApply_FailsWhenServerReloadsDifferentPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)

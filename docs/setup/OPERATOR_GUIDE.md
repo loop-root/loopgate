@@ -82,7 +82,9 @@ If Claude says a hook script is missing, reinstall first before disabling anythi
 
 ### 4. Re-sign policy when you intentionally change it
 
-If you use a custom signer `key_id`, pass it to both `-verify-setup` commands below.
+The `-verify-setup` commands below infer the repo’s current signed-policy
+`key_id` by default. Pass `-key-id` only when you intentionally want to verify
+or apply against a different signer than the current `core/policy/policy.yaml.sig`.
 
 ```bash
 go run ./cmd/loopgate-policy-admin validate
@@ -156,7 +158,7 @@ go run ./cmd/loopgate-policy-sign -verify-setup
 go run ./cmd/loopgate-policy-admin apply -verify-setup
 ```
 
-With a custom signer:
+With a different signer than the repo’s current signed policy:
 
 ```bash
 go run ./cmd/loopgate-policy-admin validate
@@ -245,6 +247,8 @@ logging:
 
 On the first successful Loopgate start, that default key is bootstrapped into
 Keychain automatically if it does not already exist.
+If Keychain access is denied or canceled, Loopgate startup fails closed. Rerun
+from an interactive macOS login session and approve the prompt.
 
 See [Ledger and audit integrity](./LEDGER_AND_AUDIT_INTEGRITY.md) for the
 full explanation of what each mode proves and does not prove.

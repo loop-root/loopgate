@@ -57,9 +57,8 @@ Backend constants:
 ### MacOSKeychainStore (`internal/secrets/macos_keychain.go`)
 
 - Backend name: `macos_keychain`
-- Uses the macOS `security` tool against the user keychain
-- Stores secret bytes via stdin-prompted `-w` usage rather than command-line
-  secret arguments
+- Uses the macOS Security framework for writes and the `security` tool for
+  read / metadata / delete operations against the signed-in user's keychain
 - Returns metadata and secret refs only; no raw secret values are written to
   repo state
 - Fails closed on missing keychain items or unavailable backend tooling
@@ -69,6 +68,8 @@ Current limitations:
 - implemented for macOS only
 - metadata is intentionally minimal and does not attempt to scrape full
   Keychain timestamps
+- keychain access is bound to the macOS user session rather than repo-local
+  state; temp-home automation is not a separate secure keychain profile
 
 ### Local dev secure selector
 

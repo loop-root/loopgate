@@ -58,6 +58,9 @@ runtime/state/loopgate.sock
 On the first successful Loopgate start, the default Keychain-backed audit HMAC
 checkpoint key is bootstrapped automatically for the shipped macOS-first
 runtime config.
+If Keychain access is denied or canceled, startup fails closed. Rerun from an
+interactive macOS login session and allow the prompt rather than expecting an
+insecure fallback.
 
 ## Re-sign and apply policy
 
@@ -65,8 +68,10 @@ Loopgate requires a valid detached signature for `core/policy/policy.yaml`.
 If you intentionally use your own signer instead of `loopgate init`, install its
 public key into the operator trust directory first. See
 [Policy signing](./POLICY_SIGNING.md).
-If you use a custom `key_id`, pass it to both `loopgate-policy-sign
--verify-setup` and `loopgate-policy-admin apply -verify-setup`.
+`loopgate-policy-sign -verify-setup` and `loopgate-policy-admin apply
+-verify-setup` infer the repo’s current signed-policy `key_id` by default.
+Pass `-key-id` only when you intentionally want to verify or apply against a
+different signer than the current `core/policy/policy.yaml.sig`.
 
 Validate signer setup and sign:
 
