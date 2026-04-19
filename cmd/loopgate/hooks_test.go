@@ -16,13 +16,13 @@ func TestRunInstallHooks_CopiesScriptsAndWritesSettings(t *testing.T) {
 		t.Fatalf("runInstallHooks returned error: %v", err)
 	}
 
-	for _, scriptName := range requiredLoopgateHookScripts {
+	for _, scriptName := range loopgateHookBundleFiles {
 		scriptPath := filepath.Join(claudeDir, claudeHooksDirname, scriptName)
 		scriptBytes, err := os.ReadFile(scriptPath)
 		if err != nil {
 			t.Fatalf("read copied script %s: %v", scriptName, err)
 		}
-		if string(scriptBytes) != "#!/usr/bin/env python3\n" {
+		if string(scriptBytes) != testHookBundleFileContents(scriptName) {
 			t.Fatalf("unexpected script contents for %s: %q", scriptName, string(scriptBytes))
 		}
 	}
@@ -42,7 +42,7 @@ func TestRunInstallHooks_CopiesScriptsAndWritesSettings(t *testing.T) {
 		if len(groups[0].Hooks) != 1 {
 			t.Fatalf("expected one hook action for %s, got %d", hookSpec.EventName, len(groups[0].Hooks))
 		}
-		expectedCommand := "python3 " + filepath.Join(claudeDir, claudeHooksDirname, hookSpec.ScriptName)
+		expectedCommand := "python3 " + shellQuoteHookCommandPath(filepath.Join(claudeDir, claudeHooksDirname, hookSpec.ScriptName))
 		if groups[0].Hooks[0].Type != "command" || groups[0].Hooks[0].Command != expectedCommand {
 			t.Fatalf("unexpected hook action for %s: %#v", hookSpec.EventName, groups[0].Hooks[0])
 		}
@@ -94,6 +94,44 @@ func TestRunInstallHooks_PreservesOtherSettings(t *testing.T) {
 	}
 	if _, ok := rawFields["permissions"]; !ok {
 		t.Fatalf("expected permissions field to be preserved in settings.json")
+	}
+}
+
+func TestRunInstallHooks_QuotesCommandPathsWithSpaces(t *testing.T) {
+	repoRoot := makeTestHookRepo(t)
+	parentDir := t.TempDir()
+	claudeDir := filepath.Join(parentDir, "Claude Dir With Space")
+	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
+		t.Fatalf("mkdir claude dir: %v", err)
+	}
+
+	if err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}); err != nil {
+		t.Fatalf("runInstallHooks returned error: %v", err)
+	}
+
+	settingsConfig := loadTestClaudeSettings(t, filepath.Join(claudeDir, claudeSettingsFilename))
+	for _, hookSpec := range loopgateHookEvents {
+		groups := settingsConfig.Hooks[hookSpec.EventName]
+		if len(groups) != 1 || len(groups[0].Hooks) != 1 {
+			t.Fatalf("unexpected hook groups for %s: %#v", hookSpec.EventName, groups)
+		}
+		expectedCommand := "python3 " + shellQuoteHookCommandPath(filepath.Join(claudeDir, claudeHooksDirname, hookSpec.ScriptName))
+		if groups[0].Hooks[0].Command != expectedCommand {
+			t.Fatalf("expected quoted hook command %q for %s, got %#v", expectedCommand, hookSpec.EventName, groups[0].Hooks[0])
+		}
+	}
+}
+
+func TestRunInstallHooks_MissingHookBundleExplainsExpectedSourceDir(t *testing.T) {
+	repoRoot := t.TempDir()
+	claudeDir := t.TempDir()
+
+	err := runInstallHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir})
+	if err == nil {
+		t.Fatal("expected install-hooks to fail when the tracked hook bundle is missing")
+	}
+	if !strings.Contains(err.Error(), loopgateHookBundleDir) {
+		t.Fatalf("expected missing-bundle error to mention %q, got %v", loopgateHookBundleDir, err)
 	}
 }
 
@@ -192,17 +230,21 @@ func TestRunRemoveHooks_RemovesRepoLocalLoopgateEntries(t *testing.T) {
 func makeTestHookRepo(t *testing.T) string {
 	t.Helper()
 	repoRoot := t.TempDir()
-	hooksDir := filepath.Join(repoRoot, ".claude", claudeHooksDirname)
+	hooksDir := filepath.Join(repoRoot, filepath.FromSlash(loopgateHookBundleDir))
 	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
 		t.Fatalf("mkdir hooks dir: %v", err)
 	}
-	for _, scriptName := range requiredLoopgateHookScripts {
+	for _, scriptName := range loopgateHookBundleFiles {
 		scriptPath := filepath.Join(hooksDir, scriptName)
-		if err := os.WriteFile(scriptPath, []byte("#!/usr/bin/env python3\n"), 0o644); err != nil {
+		if err := os.WriteFile(scriptPath, []byte(testHookBundleFileContents(scriptName)), 0o644); err != nil {
 			t.Fatalf("write script %s: %v", scriptName, err)
 		}
 	}
 	return repoRoot
+}
+
+func testHookBundleFileContents(scriptName string) string {
+	return "#!/usr/bin/env python3\n# " + scriptName + "\n"
 }
 
 func loadTestClaudeSettings(t *testing.T, settingsPath string) claudeSettings {
@@ -225,6 +267,9 @@ func writeTestClaudeSettings(t *testing.T, settingsPath string, settingsConfig c
 		t.Fatalf("marshal settings file: %v", err)
 	}
 	settingsBytes = append(settingsBytes, '\n')
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatalf("mkdir settings dir: %v", err)
+	}
 	if err := os.WriteFile(settingsPath, settingsBytes, 0o644); err != nil {
 		t.Fatalf("write settings file: %v", err)
 	}

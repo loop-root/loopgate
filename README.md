@@ -62,6 +62,11 @@ What is not the active product story right now:
 
 ## Quick start
 
+Requirements:
+- Go 1.25 or newer
+- Python 3 on `PATH` for Claude hook scripts
+- Claude Code for the active hook-based harness
+
 ```bash
 make build
 go run ./cmd/loopgate init
@@ -143,6 +148,7 @@ Current gap tracking lives here:
 
 ```text
 cmd/loopgate/              primary Loopgate server
+claude/hooks/scripts/      tracked Claude hook bundle source copied by install-hooks
 cmd/loopgate-policy-sign/  policy signing CLI
 cmd/loopgate-policy-admin/ policy validate/diff/explain/apply CLI
 cmd/loopgate-doctor/       operator diagnostics CLI

@@ -39,13 +39,15 @@ The current MVP stack is:
 
 Minimum repo-owned pieces:
 
-- `.claude/settings.json`
-- `.claude/hooks/loopgate_pretool.py`
-- `.claude/hooks/loopgate_posttool.py`
-- `.claude/hooks/loopgate_posttoolfailure.py`
-- `.claude/hooks/loopgate_sessionstart.py`
-- `.claude/hooks/loopgate_sessionend.py`
-- `.claude/hooks/loopgate_userpromptsubmit.py`
+- tracked hook source under `claude/hooks/scripts/`
+- operator-installed Claude settings entries under `~/.claude/settings.json` or project-local `.claude/settings.json`
+- `claude/hooks/scripts/loopgate_pretool.py`
+- `claude/hooks/scripts/loopgate_posttool.py`
+- `claude/hooks/scripts/loopgate_posttoolfailure.py`
+- `claude/hooks/scripts/loopgate_sessionstart.py`
+- `claude/hooks/scripts/loopgate_sessionend.py`
+- `claude/hooks/scripts/loopgate_userpromptsubmit.py`
+- `claude/hooks/scripts/loopgate_permissionrequest.py`
 - `POST /v1/hook/pre-validate`
 - `runtime/state/claude_hook_sessions.json`
 - repo docs that explain the trust model and expected workflow

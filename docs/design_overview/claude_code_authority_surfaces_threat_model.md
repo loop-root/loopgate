@@ -181,7 +181,7 @@ Impact:
 
 Current control:
 
-- the project hook script is fail-closed by default in [`.claude/hooks/loopgate_pretool.py`](../../.claude/hooks/loopgate_pretool.py)
+- the tracked hook bundle is fail-closed by default in [`claude/hooks/scripts/loopgate_pretool.py`](../../claude/hooks/scripts/loopgate_pretool.py)
 
 Residual risk:
 

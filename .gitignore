@@ -39,6 +39,7 @@ cmd/haven/frontend/dist/
 tmp/
 output/
 /bin/
+claude/hooks/scripts/__pycache__/
 
 # Operator-generated runtime (logs, sockets, ledger, sandbox state, imports, local fixtures)
 runtime/

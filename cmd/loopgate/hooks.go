@@ -16,6 +16,7 @@ import (
 const (
 	claudeSettingsFilename = "settings.json"
 	claudeHooksDirname     = "hooks"
+	loopgateHookBundleDir  = "claude/hooks/scripts"
 )
 
 var (
@@ -28,6 +29,10 @@ var (
 		"loopgate_userpromptsubmit.py",
 		"loopgate_permissionrequest.py",
 	}
+	loopgateHookBundleFiles = append(
+		append([]string(nil), requiredLoopgateHookScripts...),
+		"loopgate_hook_common.py",
+	)
 	loopgateHookEvents = []loopgateClaudeHookSpec{
 		{
 			EventName:  "PreToolUse",
@@ -126,7 +131,7 @@ func runInstallHooks(args []string) error {
 	if err != nil {
 		return err
 	}
-	repoHooksDir := filepath.Join(repoRoot, ".claude", claudeHooksDirname)
+	repoHooksDir := filepath.Join(repoRoot, filepath.FromSlash(loopgateHookBundleDir))
 	claudeHooksDir := filepath.Join(claudeDir, claudeHooksDirname)
 	if err := os.MkdirAll(claudeHooksDir, 0o755); err != nil {
 		return fmt.Errorf("create claude hooks directory: %w", err)
@@ -145,7 +150,7 @@ func runInstallHooks(args []string) error {
 		return err
 	}
 	fmt.Printf("Installed Loopgate Claude hooks into %s\n", claudeDir)
-	fmt.Printf("Copied %d hook scripts into %s\n", len(copiedScripts), claudeHooksDir)
+	fmt.Printf("Copied %d hook files into %s\n", len(copiedScripts), claudeHooksDir)
 	fmt.Printf("Configured %d hook events in %s\n", installedHooks, settingsPath)
 	return nil
 }
@@ -239,8 +244,11 @@ func collectClaudeSettingsPaths(repoRoot string, claudeDir string) []string {
 }
 
 func installLoopgateHookScripts(repoHooksDir string, claudeHooksDir string) ([]string, error) {
-	copiedScripts := make([]string, 0, len(requiredLoopgateHookScripts))
-	for _, scriptName := range requiredLoopgateHookScripts {
+	if err := validateLoopgateHookBundle(repoHooksDir); err != nil {
+		return nil, err
+	}
+	copiedScripts := make([]string, 0, len(loopgateHookBundleFiles))
+	for _, scriptName := range loopgateHookBundleFiles {
 		sourcePath := filepath.Join(repoHooksDir, scriptName)
 		destinationPath := filepath.Join(claudeHooksDir, scriptName)
 		if err := copyFile(sourcePath, destinationPath); err != nil {
@@ -249,6 +257,20 @@ func installLoopgateHookScripts(repoHooksDir string, claudeHooksDir string) ([]s
 		copiedScripts = append(copiedScripts, scriptName)
 	}
 	return copiedScripts, nil
+}
+
+func validateLoopgateHookBundle(repoHooksDir string) error {
+	repoHooksInfo, err := os.Stat(repoHooksDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("repo hook bundle missing at %s (expected tracked hook sources under %s)", repoHooksDir, loopgateHookBundleDir)
+		}
+		return fmt.Errorf("stat repo hook bundle: %w", err)
+	}
+	if !repoHooksInfo.IsDir() {
+		return fmt.Errorf("repo hook bundle path %s is not a directory", repoHooksDir)
+	}
+	return nil
 }
 
 func copyFile(sourcePath string, destinationPath string) error {
@@ -266,15 +288,36 @@ func copyFile(sourcePath string, destinationPath string) error {
 		return fmt.Errorf("source is not a regular file")
 	}
 
-	destinationFile, err := os.OpenFile(destinationPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	temporaryDestination, err := os.CreateTemp(filepath.Dir(destinationPath), filepath.Base(destinationPath)+".tmp-*")
 	if err != nil {
 		return err
 	}
-	defer destinationFile.Close()
+	temporaryDestinationPath := temporaryDestination.Name()
+	cleanupTemporary := true
+	defer func() {
+		if cleanupTemporary {
+			_ = os.Remove(temporaryDestinationPath)
+		}
+	}()
+	defer temporaryDestination.Close()
 
-	if _, err := io.Copy(destinationFile, sourceFile); err != nil {
+	if err := temporaryDestination.Chmod(sourceInfo.Mode().Perm()); err != nil {
 		return err
 	}
+
+	if _, err := io.Copy(temporaryDestination, sourceFile); err != nil {
+		return err
+	}
+	if err := temporaryDestination.Sync(); err != nil {
+		return err
+	}
+	if err := temporaryDestination.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryDestinationPath, destinationPath); err != nil {
+		return err
+	}
+	cleanupTemporary = false
 	return nil
 }
 
@@ -325,7 +368,7 @@ func applyLoopgateHookSettings(settingsConfig *claudeSettings, claudeHooksDir st
 		commandPath := filepath.Join(claudeHooksDir, hookSpec.ScriptName)
 		hookAction := claudeHookAction{
 			Type:    "command",
-			Command: "python3 " + commandPath,
+			Command: "python3 " + shellQuoteHookCommandPath(commandPath),
 		}
 		matcherGroup := claudeHookMatcherGroup{
 			Hooks: []claudeHookAction{hookAction},
@@ -380,7 +423,7 @@ func isLoopgateHookCommand(command string) bool {
 	if !strings.HasPrefix(trimmedCommand, "python3 ") {
 		return false
 	}
-	scriptPath := strings.TrimSpace(strings.TrimPrefix(trimmedCommand, "python3 "))
+	scriptPath := strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmedCommand, "python3 ")), `"'`)
 	scriptBase := filepath.Base(scriptPath)
 	for _, scriptName := range requiredLoopgateHookScripts {
 		if scriptBase == scriptName {
@@ -388,6 +431,21 @@ func isLoopgateHookCommand(command string) bool {
 		}
 	}
 	return false
+}
+
+func shellQuoteHookCommandPath(commandPath string) string {
+	var quotedPath strings.Builder
+	quotedPath.Grow(len(commandPath) + 2)
+	quotedPath.WriteByte('"')
+	for _, pathRune := range commandPath {
+		switch pathRune {
+		case '\\', '"', '$', '`':
+			quotedPath.WriteByte('\\')
+		}
+		quotedPath.WriteRune(pathRune)
+	}
+	quotedPath.WriteByte('"')
+	return quotedPath.String()
 }
 
 func normalizeClaudeHooks(settingsConfig *claudeSettings) {

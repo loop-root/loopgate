@@ -19,6 +19,11 @@ It assumes the current supported product shape:
 4. install Claude Code hooks
 5. run a normal task and inspect the local audit if needed
 
+Prerequisites:
+- Go 1.25 or newer
+- Python 3 on `PATH`
+- Claude Code
+
 ## Quick path
 
 ### 1. Validate the checkout
@@ -80,6 +85,13 @@ This updates:
 - `~/.claude/settings.json`
 - `~/.claude/hooks/`
 
+The tracked hook bundle source lives in:
+- `claude/hooks/scripts/`
+
+Quick smoke check:
+- run `/hooks` inside Claude Code and confirm the 7 Loopgate hook events are registered
+- verify the installed commands point at `~/.claude/hooks/loopgate_*.py`
+
 ### 5. Run a normal task
 
 Use Claude Code normally and watch for:
@@ -118,6 +130,7 @@ sequenceDiagram
 
 - Hooks seem missing:
   - rerun `go run ./cmd/loopgate install-hooks`
+  - confirm the tracked source bundle exists under `claude/hooks/scripts/`
 - Policy changes are not taking effect:
   - rerun `validate`, `-verify-setup`, and `apply -verify-setup`
   - `-verify-setup` uses the current signed policy `key_id` by default

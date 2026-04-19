@@ -20,7 +20,7 @@ Use it when changing:
   - also provides operator subcommands:
     - `install-hooks`
     - `remove-hooks`
-  - `install-hooks` copies Loopgate Claude hook scripts into the target Claude config dir and wires the supported hook events into `settings.json`
+  - `install-hooks` copies the tracked hook bundle from `claude/hooks/scripts/` into the target Claude config dir and wires the supported hook events into `settings.json`
   - `remove-hooks` removes only the Loopgate-managed hook entries and leaves copied scripts in place
 
 ## `cmd/loopgate-policy-sign/`

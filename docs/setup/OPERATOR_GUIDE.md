@@ -79,11 +79,14 @@ go run ./cmd/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claud
 This updates:
 - `~/.claude/settings.json`
 - `~/.claude/hooks/`
+- source scripts come from the tracked repo bundle at `claude/hooks/scripts/`
 
 If this repo also has local Claude settings under `./.claude/`, `remove-hooks`
 will sweep those repo-local Loopgate entries too.
 
 If Claude says a hook script is missing, reinstall first before disabling anything.
+After install, run `/hooks` in Claude Code and confirm the Loopgate entries point
+at `~/.claude/hooks/loopgate_*.py`.
 
 ### 4. Re-sign policy when you intentionally change it
 

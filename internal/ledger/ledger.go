@@ -85,13 +85,16 @@ func NewEvent(ts, eventType, session string, data map[string]interface{}) Event 
 }
 
 // Append writes a single JSONL event to the ledger file.
-// Uses O_APPEND for atomic writes on POSIX systems.
+// It serializes concurrent appenders with LOCK_EX, verifies the chain state,
+// seeks to the current end, and then writes the next canonical JSONL record.
 func Append(path string, e Event) error {
 	return defaultAppendRuntime.Append(path, e)
 }
 
 // Append writes a single JSONL event to the ledger file using this runtime's
-// append-chain cache ownership. Uses O_APPEND for atomic writes on POSIX systems.
+// append-chain cache ownership. It serializes concurrent appenders with LOCK_EX,
+// verifies the chain state, seeks to the current end, and then writes the next
+// canonical JSONL record.
 func (runtime *AppendRuntime) Append(path string, e Event) error {
 	// Ensure schema version is set
 	if e.V == 0 {

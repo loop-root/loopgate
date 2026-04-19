@@ -99,6 +99,11 @@ go run ./cmd/loopgate-policy-admin apply -verify-setup
 
 The active harness is Claude Code project hooks.
 
+Prerequisites for this path:
+- Go 1.25 or newer
+- Python 3 on `PATH`
+- Claude Code
+
 Install the Loopgate hook bundle into Claude's config directory:
 
 ```bash
@@ -114,11 +119,12 @@ go run ./cmd/loopgate remove-hooks
 
 This command:
 - creates `~/.claude/hooks/` if needed
-- copies the Loopgate Python hook scripts there
+- copies the tracked Loopgate hook bundle from `claude/hooks/scripts/`
 - updates `~/.claude/settings.json`
 - wires the 7 supported hook events without duplicating entries on rerun
 
 Relevant files after install:
+- `claude/hooks/scripts/`
 - `~/.claude/settings.json`
 - `~/.claude/hooks/loopgate_pretool.py`
 - `~/.claude/hooks/loopgate_posttool.py`
@@ -127,6 +133,10 @@ Relevant files after install:
 - `~/.claude/hooks/loopgate_sessionend.py`
 - `~/.claude/hooks/loopgate_userpromptsubmit.py`
 - `~/.claude/hooks/loopgate_permissionrequest.py`
+
+Quick validation:
+- run `/hooks` inside Claude Code and confirm the Loopgate hook entries are present
+- if your home directory has spaces, confirm the installed command paths remain quoted in Claude's hook view
 
 Design and behavior notes:
 - [Claude Code hooks MVP](../design_overview/claude_code_hooks_mvp.md)

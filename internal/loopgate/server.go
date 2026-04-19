@@ -471,6 +471,10 @@ const (
 	hookPreValidateRateWindow           = 1 * time.Minute
 	defaultHookPeerAuthFailureRateLimit = 60
 	hookPeerAuthFailureRateWindow       = 1 * time.Minute
+	defaultCapabilityExecutionTimeout   = 30 * time.Second
+	// Shutdown needs to outlive the default capability execution deadline so in-flight
+	// local tool executions can finish and emit their terminal audit event.
+	defaultServerShutdownGracePeriod = defaultCapabilityExecutionTimeout + (5 * time.Second)
 	// In-memory bounds (DoS): single-session pending approvals, replay maps, and global tables.
 	defaultMaxPendingApprovalsPerControlSession = 64
 	defaultMaxSeenRequestReplayEntries          = 65536
@@ -801,7 +805,7 @@ func (server *Server) Serve(ctx context.Context) error {
 
 	go func() {
 		<-ctx.Done()
-		shutdownContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownContext, cancel := context.WithTimeout(context.Background(), defaultServerShutdownGracePeriod)
 		defer cancel()
 		_ = server.server.Shutdown(shutdownContext)
 	}()
@@ -1289,7 +1293,7 @@ func (server *Server) executeCapabilityTool(ctx context.Context, tool toolspkg.T
 	executionContext := ctx
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
-		executionContext, cancel = context.WithTimeout(ctx, 30*time.Second)
+		executionContext, cancel = context.WithTimeout(ctx, defaultCapabilityExecutionTimeout)
 		defer cancel()
 	}
 	executionContext = withOperatorMountControlSession(executionContext, effectiveTokenClaims.ControlSessionID)
