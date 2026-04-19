@@ -244,21 +244,9 @@ func (server *Server) verifySignedRequestAgainstRotatingSessionMAC(request *http
 		}, false
 	}
 	cur := server.currentSessionMACEpochIndex()
+	candidateMACKeys := make([]string, 0, 3)
 	for _, epochIndex := range []int64{cur - 1, cur, cur + 1} {
-		keyStr := derivedSessionMACKeyForControlSessionAtEpoch(sessionMACRotationMaster, headers.ControlSessionID, epochIndex)
-		if keyStr == "" {
-			continue
-		}
-		if requestSignatureBytesMatchMACKey(headers.RequestSignature, request.Method, request.URL.Path, headers.ControlSessionID, headers.RequestTimestamp, headers.RequestNonce, requestBodyBytes, keyStr) {
-			if nonceDenial := server.recordAuthNonce(headers.ControlSessionID, headers.RequestNonce); nonceDenial != nil {
-				return *nonceDenial, false
-			}
-			return controlapipkg.CapabilityResponse{}, true
-		}
+		candidateMACKeys = append(candidateMACKeys, derivedSessionMACKeyForControlSessionAtEpoch(sessionMACRotationMaster, headers.ControlSessionID, epochIndex))
 	}
-	return controlapipkg.CapabilityResponse{
-		Status:       controlapipkg.ResponseStatusDenied,
-		DenialReason: "request signature is invalid",
-		DenialCode:   controlapipkg.DenialCodeRequestSignatureInvalid,
-	}, false
+	return server.verifySignedRequestAgainstMACKeys(request, requestBodyBytes, headers, candidateMACKeys)
 }

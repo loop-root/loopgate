@@ -312,20 +312,32 @@ func (server *Server) verifySignedRequest(request *http.Request, requestBodyByte
 	return server.verifySignedRequestWithMACKey(request, requestBodyBytes, headers, activeSession.SessionMACKey)
 }
 
+func invalidRequestSignatureResponse() controlapipkg.CapabilityResponse {
+	return controlapipkg.CapabilityResponse{
+		Status:       controlapipkg.ResponseStatusDenied,
+		DenialReason: "request signature is invalid",
+		DenialCode:   controlapipkg.DenialCodeRequestSignatureInvalid,
+	}
+}
+
+func (server *Server) verifySignedRequestAgainstMACKeys(request *http.Request, requestBodyBytes []byte, headers signedControlPlaneHeaders, candidateMACKeys []string) (controlapipkg.CapabilityResponse, bool) {
+	for _, sessionMACKey := range candidateMACKeys {
+		if sessionMACKey == "" {
+			continue
+		}
+		if !requestSignatureBytesMatchMACKey(headers.RequestSignature, request.Method, request.URL.Path, headers.ControlSessionID, headers.RequestTimestamp, headers.RequestNonce, requestBodyBytes, sessionMACKey) {
+			continue
+		}
+		if nonceDenial := server.recordAuthNonce(headers.ControlSessionID, headers.RequestNonce); nonceDenial != nil {
+			return *nonceDenial, false
+		}
+		return controlapipkg.CapabilityResponse{}, true
+	}
+	return invalidRequestSignatureResponse(), false
+}
+
 func (server *Server) verifySignedRequestWithMACKey(request *http.Request, requestBodyBytes []byte, headers signedControlPlaneHeaders, sessionMACKey string) (controlapipkg.CapabilityResponse, bool) {
-	if !requestSignatureBytesMatchMACKey(headers.RequestSignature, request.Method, request.URL.Path, headers.ControlSessionID, headers.RequestTimestamp, headers.RequestNonce, requestBodyBytes, sessionMACKey) {
-		return controlapipkg.CapabilityResponse{
-			Status:       controlapipkg.ResponseStatusDenied,
-			DenialReason: "request signature is invalid",
-			DenialCode:   controlapipkg.DenialCodeRequestSignatureInvalid,
-		}, false
-	}
-
-	if nonceDenial := server.recordAuthNonce(headers.ControlSessionID, headers.RequestNonce); nonceDenial != nil {
-		return *nonceDenial, false
-	}
-
-	return controlapipkg.CapabilityResponse{}, true
+	return server.verifySignedRequestAgainstMACKeys(request, requestBodyBytes, headers, []string{sessionMACKey})
 }
 
 func peerIdentityFromContext(ctx context.Context) (peerIdentity, bool) {

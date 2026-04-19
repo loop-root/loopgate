@@ -6,8 +6,10 @@ import (
 	"errors"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseCapabilityTokenAuthorizationHeader(t *testing.T) {
@@ -91,6 +93,118 @@ func TestParseCapabilityTokenAuthorizationHeader(t *testing.T) {
 			}
 			if denialResponse.DenialReason != testCase.wantReason {
 				t.Fatalf("denial reason = %q, want %q", denialResponse.DenialReason, testCase.wantReason)
+			}
+		})
+	}
+}
+
+func TestParseSignedControlPlaneHeaders(t *testing.T) {
+	fixedNowUTC := time.Date(2026, time.April, 18, 12, 0, 0, 0, time.UTC)
+	server := &Server{
+		now: func() time.Time {
+			return fixedNowUTC
+		},
+	}
+
+	testCases := []struct {
+		name              string
+		headers           map[string]string
+		expectedSessionID string
+		wantHeaders       signedControlPlaneHeaders
+		wantDenialCode    string
+		wantDenialReason  string
+	}{
+		{
+			name:              "valid signed headers",
+			expectedSessionID: "control-123",
+			headers: map[string]string{
+				"X-Loopgate-Control-Session":   " control-123 ",
+				"X-Loopgate-Request-Timestamp": fixedNowUTC.Format(time.RFC3339Nano),
+				"X-Loopgate-Request-Nonce":     " nonce-123 ",
+				"X-Loopgate-Request-Signature": " deadbeef ",
+			},
+			wantHeaders: signedControlPlaneHeaders{
+				ControlSessionID: "control-123",
+				RequestTimestamp: fixedNowUTC.Format(time.RFC3339Nano),
+				RequestNonce:     "nonce-123",
+				RequestSignature: "deadbeef",
+			},
+		},
+		{
+			name:              "missing signed header",
+			expectedSessionID: "control-123",
+			headers: map[string]string{
+				"X-Loopgate-Control-Session":   "control-123",
+				"X-Loopgate-Request-Timestamp": fixedNowUTC.Format(time.RFC3339Nano),
+				"X-Loopgate-Request-Nonce":     "nonce-123",
+			},
+			wantDenialCode:   controlapipkg.DenialCodeRequestSignatureMissing,
+			wantDenialReason: "signed control-plane headers are required",
+		},
+		{
+			name:              "control session binding mismatch",
+			expectedSessionID: "control-123",
+			headers: map[string]string{
+				"X-Loopgate-Control-Session":   "other-control",
+				"X-Loopgate-Request-Timestamp": fixedNowUTC.Format(time.RFC3339Nano),
+				"X-Loopgate-Request-Nonce":     "nonce-123",
+				"X-Loopgate-Request-Signature": "deadbeef",
+			},
+			wantDenialCode:   controlapipkg.DenialCodeControlSessionBindingInvalid,
+			wantDenialReason: "control session binding is invalid",
+		},
+		{
+			name:              "invalid timestamp format",
+			expectedSessionID: "control-123",
+			headers: map[string]string{
+				"X-Loopgate-Control-Session":   "control-123",
+				"X-Loopgate-Request-Timestamp": "not-a-timestamp",
+				"X-Loopgate-Request-Nonce":     "nonce-123",
+				"X-Loopgate-Request-Signature": "deadbeef",
+			},
+			wantDenialCode:   controlapipkg.DenialCodeRequestTimestampInvalid,
+			wantDenialReason: "request timestamp is invalid",
+		},
+		{
+			name:              "timestamp outside skew window",
+			expectedSessionID: "control-123",
+			headers: map[string]string{
+				"X-Loopgate-Control-Session":   "control-123",
+				"X-Loopgate-Request-Timestamp": fixedNowUTC.Add(-(requestSignatureSkew + time.Second)).Format(time.RFC3339Nano),
+				"X-Loopgate-Request-Nonce":     "nonce-123",
+				"X-Loopgate-Request-Signature": "deadbeef",
+			},
+			wantDenialCode:   controlapipkg.DenialCodeRequestTimestampInvalid,
+			wantDenialReason: "request timestamp is outside the allowed skew window",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/v1/capabilities/execute", nil)
+			for headerName, headerValue := range testCase.headers {
+				request.Header.Set(headerName, headerValue)
+			}
+
+			gotHeaders, denialResponse, ok := server.parseSignedControlPlaneHeaders(request, testCase.expectedSessionID)
+			if testCase.wantDenialCode != "" {
+				if ok {
+					t.Fatalf("expected denial, got headers %#v", gotHeaders)
+				}
+				if denialResponse.DenialCode != testCase.wantDenialCode {
+					t.Fatalf("denial code = %q, want %q", denialResponse.DenialCode, testCase.wantDenialCode)
+				}
+				if denialResponse.DenialReason != testCase.wantDenialReason {
+					t.Fatalf("denial reason = %q, want %q", denialResponse.DenialReason, testCase.wantDenialReason)
+				}
+				return
+			}
+
+			if !ok {
+				t.Fatalf("expected success, got denial %#v", denialResponse)
+			}
+			if gotHeaders != testCase.wantHeaders {
+				t.Fatalf("headers = %#v, want %#v", gotHeaders, testCase.wantHeaders)
 			}
 		})
 	}
