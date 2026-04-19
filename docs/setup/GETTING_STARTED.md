@@ -13,32 +13,36 @@ It assumes the current supported product shape:
 
 ## What you will do
 
-1. validate the checkout
+1. build local binaries
 2. initialize local policy signing
 3. start Loopgate
 4. install Claude Code hooks
 5. run a normal task and inspect the local audit if needed
 
 Prerequisites:
-- Go 1.25 or newer
+- Go 1.25 or newer to build from source
 - Python 3 on `PATH`
 - Claude Code
 
 ## Quick path
 
-### 1. Validate the checkout
+### 1. Build local binaries
 
 ```bash
-go mod tidy
-go test ./...
 make build
+# optional: copy the binaries into ~/.local/bin
+make install-local
 ```
+
+If you ran `make install-local`, replace `./bin/...` below with the bare
+command names such as `loopgate`, `loopgate-ledger`, and
+`loopgate-policy-admin`.
 
 ### 2. Initialize local policy signing
 
 ```bash
-go run ./cmd/loopgate init
-go run ./cmd/loopgate-policy-admin validate
+./bin/loopgate init
+./bin/loopgate-policy-admin validate
 ```
 
 `loopgate init` creates a local Ed25519 signer for this operator, installs the
@@ -49,12 +53,22 @@ re-sign with `loopgate-policy-sign`.
 The checked-in starter policy is deliberately strict. If you want a more
 permissive local-development baseline, review
 [POLICY_REFERENCE.md](./POLICY_REFERENCE.md) and render a template with
-`loopgate-policy-admin render-template` before signing and applying it.
+`./bin/loopgate-policy-admin render-template` before signing and applying it.
 
 ### 3. Start Loopgate
 
+Foreground:
+
 ```bash
 ./bin/loopgate
+```
+
+Simple background run from the repo root:
+
+```bash
+mkdir -p runtime/logs runtime/state
+nohup ./bin/loopgate > runtime/logs/loopgate.stdout.log 2> runtime/logs/loopgate.stderr.log < /dev/null &
+echo $! > runtime/state/loopgate.pid
 ```
 
 Default socket:
@@ -63,7 +77,16 @@ Default socket:
 runtime/state/loopgate.sock
 ```
 
-Leave Loopgate running in its own terminal.
+If you start Loopgate in the foreground from a terminal, that terminal session
+owns the process. Closing the terminal usually stops Loopgate. Use `nohup`,
+`launchctl`, or another service manager if you want it to stay up after the
+shell exits.
+
+Stop the `nohup` background process with:
+
+```bash
+kill "$(cat runtime/state/loopgate.pid)"
+```
 
 On the first successful start, Loopgate also bootstraps the default
 Keychain-backed audit HMAC checkpoint key used for tamper-evident audit
@@ -78,7 +101,7 @@ repeated macOS approval prompts.
 ### 4. Install Claude Code hooks
 
 ```bash
-go run ./cmd/loopgate install-hooks
+./bin/loopgate install-hooks
 ```
 
 This updates:
@@ -106,6 +129,15 @@ If you need quick visibility:
 ./bin/loopgate-doctor report
 ```
 
+## Optional contributor checkout validation
+
+If you are validating a fresh source checkout rather than just installing
+Loopgate for local use, also run:
+
+```bash
+go test ./...
+```
+
 ## Normal local flow
 
 ```mermaid
@@ -129,16 +161,16 @@ sequenceDiagram
 ## When things look wrong
 
 - Hooks seem missing:
-  - rerun `go run ./cmd/loopgate install-hooks`
+  - rerun `./bin/loopgate install-hooks`
   - confirm the tracked source bundle exists under `claude/hooks/scripts/`
 - Policy changes are not taking effect:
   - rerun `validate`, `-verify-setup`, and `apply -verify-setup`
   - `-verify-setup` uses the current signed policy `key_id` by default
   - pass `-key-id` only if you intentionally want to verify or apply against a different signer than the current `core/policy/policy.yaml.sig`
 - A task was denied and you want to know why:
-  - `go run ./cmd/loopgate-ledger tail -verbose`
+  - `./bin/loopgate-ledger tail -verbose`
 - You want a structured local diagnostic snapshot:
-  - `go run ./cmd/loopgate-doctor report`
+  - `./bin/loopgate-doctor report`
 
 ## Read next
 

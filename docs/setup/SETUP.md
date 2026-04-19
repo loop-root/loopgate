@@ -13,15 +13,27 @@ It reflects the current product boundary:
 
 ## Prerequisites
 
-- Go (see `go.mod`)
+- Go 1.25 or newer to build from source
+- Python 3 on `PATH` for Claude hook scripts
+- Claude Code for the active hook-based harness
 - macOS for supported production use
 
-## Validate the checkout
+## Build local binaries
 
 ```bash
-go mod tidy
-go test ./...
 make build
+# optional: copy the binaries into ~/.local/bin
+make install-local
+```
+
+If you ran `make install-local`, replace `./bin/...` below with the bare
+command names such as `loopgate` and `loopgate-policy-admin`.
+
+If you are validating a fresh contributor checkout rather than just installing
+Loopgate locally, also run:
+
+```bash
+go test ./...
 ```
 
 ## Initialize local policy signing
@@ -29,8 +41,8 @@ make build
 For the default first-time local setup:
 
 ```bash
-go run ./cmd/loopgate init
-go run ./cmd/loopgate-policy-admin validate
+./bin/loopgate init
+./bin/loopgate-policy-admin validate
 ```
 
 `loopgate init` creates a local Ed25519 signer for this operator, installs the
@@ -50,6 +62,14 @@ printed `key_id`.
 ./bin/loopgate
 ```
 
+Simple background run from the repo root:
+
+```bash
+mkdir -p runtime/logs runtime/state
+nohup ./bin/loopgate > runtime/logs/loopgate.stdout.log 2> runtime/logs/loopgate.stderr.log < /dev/null &
+echo $! > runtime/state/loopgate.pid
+```
+
 Default socket:
 
 ```text
@@ -65,6 +85,16 @@ insecure fallback.
 For keychain-backed commands, prefer the stable `./bin/...` binaries over
 `go run`; a fresh `go run` build changes the executable identity and can
 trigger repeated macOS approval prompts.
+If you run `./bin/loopgate` in a terminal, that terminal session owns the
+foreground process. Closing the shell usually stops it. Use `nohup`,
+`launchctl`, or another service manager if you want it to stay running after
+logout or terminal close.
+
+Stop the `nohup` background process with:
+
+```bash
+kill "$(cat runtime/state/loopgate.pid)"
+```
 
 ## Re-sign and apply policy
 
@@ -72,7 +102,7 @@ Loopgate requires a valid detached signature for `core/policy/policy.yaml`.
 If you intentionally use your own signer instead of `loopgate init`, install its
 public key into the operator trust directory first. See
 [Policy signing](./POLICY_SIGNING.md).
-`loopgate-policy-sign -verify-setup` and `loopgate-policy-admin apply
+`./bin/loopgate-policy-sign -verify-setup` and `./bin/loopgate-policy-admin apply
 -verify-setup` infer the repo’s current signed-policy `key_id` by default.
 Pass `-key-id` only when you intentionally want to verify or apply against a
 different signer than the current `core/policy/policy.yaml.sig`.
@@ -80,41 +110,36 @@ different signer than the current `core/policy/policy.yaml.sig`.
 Validate signer setup and sign:
 
 ```bash
-go run ./cmd/loopgate-policy-sign -verify-setup
+./bin/loopgate-policy-sign -verify-setup
 ```
 
 Validate policy:
 
 ```bash
-go run ./cmd/loopgate-policy-admin validate
+./bin/loopgate-policy-admin validate
 ```
 
 If Loopgate is already running, hot-apply the signed on-disk policy:
 
 ```bash
-go run ./cmd/loopgate-policy-admin apply -verify-setup
+./bin/loopgate-policy-admin apply -verify-setup
 ```
 
 ## Connect Claude Code
 
 The active harness is Claude Code project hooks.
 
-Prerequisites for this path:
-- Go 1.25 or newer
-- Python 3 on `PATH`
-- Claude Code
-
 Install the Loopgate hook bundle into Claude's config directory:
 
 ```bash
-go run ./cmd/loopgate install-hooks
+./bin/loopgate install-hooks
 ```
 
 Useful flags:
 
 ```bash
-go run ./cmd/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
-go run ./cmd/loopgate remove-hooks
+./bin/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
+./bin/loopgate remove-hooks
 ```
 
 This command:
@@ -164,10 +189,10 @@ Important current note:
 ## Current operator commands
 
 ```bash
-go run ./cmd/loopgate install-hooks
-go run ./cmd/loopgate remove-hooks
-go run ./cmd/loopgate-policy-admin help
-go run ./cmd/loopgate-doctor trust-check
+./bin/loopgate install-hooks
+./bin/loopgate remove-hooks
+./bin/loopgate-policy-admin help
+./bin/loopgate-doctor trust-check
 ```
 
 `trust-check` currently exists because audit export hardening work landed before the repo cleanup pass. It is not the center of the local-first product story.

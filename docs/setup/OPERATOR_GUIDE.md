@@ -23,8 +23,11 @@ Loopgate is not a chat UI. It is the local authority layer.
 
 The checked-in starter policy is intentionally strict. Use
 [Policy reference](./POLICY_REFERENCE.md) and
-`go run ./cmd/loopgate-policy-admin render-template` when you want to review or
+`./bin/loopgate-policy-admin render-template` when you want to review or
 customize the policy surface before signing and applying it.
+
+The command examples below use the built binaries under `./bin/`. If you ran
+`make install-local`, use the bare command names instead.
 
 ## Basic workflow
 
@@ -34,8 +37,8 @@ For a first-time local setup:
 
 ```bash
 make build
-go run ./cmd/loopgate init
-go run ./cmd/loopgate-policy-admin validate
+./bin/loopgate init
+./bin/loopgate-policy-admin validate
 ```
 
 If you later re-sign policy intentionally, reuse the `key_id` printed by
@@ -64,16 +67,34 @@ For keychain-backed operator flows, prefer the stable `./bin/...` binaries over
 `go run`; a fresh `go run` build changes the executable identity and can cause
 repeated macOS approval prompts.
 
+### Run Loopgate in background
+
+If you start `./bin/loopgate` in a terminal, that shell owns the foreground
+process. Closing the terminal usually stops Loopgate. From the repo root, a
+simple background launch looks like:
+
+```bash
+mkdir -p runtime/logs runtime/state
+nohup ./bin/loopgate > runtime/logs/loopgate.stdout.log 2> runtime/logs/loopgate.stderr.log < /dev/null &
+echo $! > runtime/state/loopgate.pid
+```
+
+Stop that background process with:
+
+```bash
+kill "$(cat runtime/state/loopgate.pid)"
+```
+
 ### 3. Install Claude hooks
 
 ```bash
-go run ./cmd/loopgate install-hooks
+./bin/loopgate install-hooks
 ```
 
 Optional:
 
 ```bash
-go run ./cmd/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
+./bin/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
 ```
 
 This updates:
@@ -103,14 +124,14 @@ The `-verify-setup` commands below infer the repo’s current signed-policy
 or apply against a different signer than the current `core/policy/policy.yaml.sig`.
 
 ```bash
-go run ./cmd/loopgate-policy-admin validate
-go run ./cmd/loopgate-policy-sign -verify-setup
+./bin/loopgate-policy-admin validate
+./bin/loopgate-policy-sign -verify-setup
 ```
 
 ### 5. Hot-apply policy
 
 ```bash
-go run ./cmd/loopgate-policy-admin apply -verify-setup
+./bin/loopgate-policy-admin apply -verify-setup
 ```
 
 ### 6. Exercise the harness
@@ -145,19 +166,19 @@ Current policy model note:
 List pending approvals from the local control plane:
 
 ```bash
-go run ./cmd/loopgate-policy-admin approvals list
+./bin/loopgate-policy-admin approvals list
 ```
 
 Approve a pending request:
 
 ```bash
-go run ./cmd/loopgate-policy-admin approvals approve <approval-id> -reason "reviewed and allowed"
+./bin/loopgate-policy-admin approvals approve <approval-id> -reason "reviewed and allowed"
 ```
 
 Deny a pending request:
 
 ```bash
-go run ./cmd/loopgate-policy-admin approvals deny <approval-id> -reason "outside allowed change window"
+./bin/loopgate-policy-admin approvals deny <approval-id> -reason "outside allowed change window"
 ```
 
 The approve and deny commands print the resulting audit event hash so you can
@@ -169,17 +190,17 @@ review.
 Use this flow:
 
 ```bash
-go run ./cmd/loopgate-policy-admin validate
-go run ./cmd/loopgate-policy-sign -verify-setup
-go run ./cmd/loopgate-policy-admin apply -verify-setup
+./bin/loopgate-policy-admin validate
+./bin/loopgate-policy-sign -verify-setup
+./bin/loopgate-policy-admin apply -verify-setup
 ```
 
 With a different signer than the repo’s current signed policy:
 
 ```bash
-go run ./cmd/loopgate-policy-admin validate
-go run ./cmd/loopgate-policy-sign -key-id "$KEY_ID" -verify-setup
-go run ./cmd/loopgate-policy-admin apply -key-id "$KEY_ID" -verify-setup
+./bin/loopgate-policy-admin validate
+./bin/loopgate-policy-sign -key-id "$KEY_ID" -verify-setup
+./bin/loopgate-policy-admin apply -key-id "$KEY_ID" -verify-setup
 ```
 
 ### Check MCP broker state
@@ -279,7 +300,7 @@ Likely causes:
 - hook file exists but the command points at the wrong Claude config directory
 
 Check:
-- rerun `go run ./cmd/loopgate install-hooks`
+- rerun `./bin/loopgate install-hooks`
 - the script file exists under `~/.claude/hooks/`
 - the hook command points at the same `~/.claude/hooks/` directory you expect
 
@@ -288,7 +309,7 @@ Check:
 If you need to disable the Loopgate harness without deleting the scripts:
 
 ```bash
-go run ./cmd/loopgate remove-hooks
+./bin/loopgate remove-hooks
 ```
 
 This removes only the Loopgate-managed hook entries from the Claude settings

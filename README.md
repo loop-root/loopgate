@@ -63,16 +63,22 @@ What is not the active product story right now:
 ## Quick start
 
 Requirements:
-- Go 1.25 or newer
+- Go 1.25 or newer to build from source
 - Python 3 on `PATH` for Claude hook scripts
 - Claude Code for the active hook-based harness
 
 ```bash
 make build
-go run ./cmd/loopgate init
-go run ./cmd/loopgate-policy-admin validate
+# optional: install the built binaries into ~/.local/bin
+make install-local
+
+./bin/loopgate init
+./bin/loopgate-policy-admin validate
 ./bin/loopgate
 ```
+
+If you ran `make install-local`, replace `./bin/...` below with the bare command
+names such as `loopgate` and `loopgate-policy-admin`.
 
 On first start, Loopgate may ask macOS Keychain to create the default audit
 HMAC checkpoint key. If Keychain access is denied or canceled, startup fails
@@ -80,6 +86,22 @@ closed and you should rerun from an interactive macOS login session.
 For keychain-backed commands, prefer the stable `./bin/...` binaries over
 `go run`. A fresh `go run` build changes the executable identity and can
 trigger repeated macOS approval prompts.
+
+Running `./bin/loopgate` in a terminal keeps it attached to that terminal.
+If you want it to keep running after you close the shell, use a background
+launch command from the repo root:
+
+```bash
+mkdir -p runtime/logs runtime/state
+nohup ./bin/loopgate > runtime/logs/loopgate.stdout.log 2> runtime/logs/loopgate.stderr.log < /dev/null &
+echo $! > runtime/state/loopgate.pid
+```
+
+Stop that background process with:
+
+```bash
+kill "$(cat runtime/state/loopgate.pid)"
+```
 
 Default local socket:
 
@@ -90,8 +112,8 @@ runtime/state/loopgate.sock
 Loopgate uses a signed policy:
 
 ```bash
-go run ./cmd/loopgate-policy-sign -verify-setup
-go run ./cmd/loopgate-policy-admin validate
+./bin/loopgate-policy-sign -verify-setup
+./bin/loopgate-policy-admin validate
 ```
 
 `-verify-setup` infers the current signed policy `key_id` by default. Pass
@@ -101,7 +123,7 @@ different signer than the repo’s current `core/policy/policy.yaml.sig`.
 If Loopgate is already running:
 
 ```bash
-go run ./cmd/loopgate-policy-admin apply -verify-setup
+./bin/loopgate-policy-admin apply -verify-setup
 ```
 
 ## Operator flow

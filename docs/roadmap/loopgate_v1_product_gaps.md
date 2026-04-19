@@ -501,24 +501,26 @@ covering:
 
 ### Problem
 
-All project operations require `go run ./cmd/...` with the correct arguments.
-There is no `make build`, `make test`, `make install`, or `make sign-policy`.
-This creates unnecessary friction for new contributors and means agents must
-rediscover the correct incantations each session.
+The repo now has `make build`, `make test`, and `make install-local`, but the
+operator onboarding path is still too source-oriented and too easy to confuse
+with contributor workflow. New operators still have to understand too much
+about repo layout, long-running process handling, and detached policy-signing
+commands before they can do useful work.
 
 ### What to build
 
-A `Makefile` at the repo root with targets:
+A binary-first operator path with:
 
 ```makefile
-make build          # go build ./...
-make test           # go test -race -count=1 ./...
-make install        # go install ./cmd/...
-make doctor         # go run ./cmd/loopgate-doctor
-make sign-policy    # go run ./cmd/loopgate-policy-sign
-make verify-setup   # go run ./cmd/loopgate-policy-sign -verify-setup
-make init           # go run ./cmd/loopgate-init (once item 1 is built)
+make build          # build all Loopgate binaries into ./bin
+make install-local  # install binaries into ~/.local/bin
 ```
+
+Then build next:
+
+- signed release artifacts for non-Go users
+- a setup wizard that walks the operator through init, policy validation, and hook install
+- a guided policy-profile chooser for common local modes such as strict, balanced, and permissive-dev
 
 ### Files to touch
 
