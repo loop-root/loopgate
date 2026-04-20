@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -306,6 +307,21 @@ func TestRunRemoveHooks_RemovesRepoLocalLoopgateEntries(t *testing.T) {
 	updatedConfig := loadTestClaudeSettings(t, repoSettingsPath)
 	if len(updatedConfig.Hooks) != 0 {
 		t.Fatalf("expected repo-local loopgate hooks removed, got %#v", updatedConfig.Hooks)
+	}
+}
+
+func TestRunRemoveHooks_DoesNotCreateMissingSettingsFiles(t *testing.T) {
+	repoRoot := makeTestHookRepo(t)
+	claudeDir := t.TempDir()
+
+	if err := runRemoveHooks([]string{"-repo", repoRoot, "-claude-dir", claudeDir}, io.Discard); err != nil {
+		t.Fatalf("runRemoveHooks returned error: %v", err)
+	}
+
+	for _, settingsPath := range collectClaudeSettingsPaths(repoRoot, claudeDir) {
+		if _, err := os.Stat(settingsPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected remove-hooks not to create %s, stat err=%v", settingsPath, err)
+		}
 	}
 }
 

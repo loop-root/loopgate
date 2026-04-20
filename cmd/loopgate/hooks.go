@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -96,6 +98,10 @@ func handleLoopgateSubcommand(args []string) bool {
 		return false
 	}
 	switch args[0] {
+	case "help", "-h", "--help":
+		printLoopgateUsage(os.Stdout)
+		exitProcess(0)
+		return true
 	case "version", "--version", "-version":
 		printVersion(os.Stdout)
 		exitProcess(0)
@@ -147,6 +153,26 @@ func handleLoopgateSubcommand(args []string) bool {
 	}
 }
 
+func printLoopgateUsage(output io.Writer) {
+	fmt.Fprintf(output, `Usage:
+  loopgate                 Start the local Loopgate server in the current repo
+  loopgate help            Print this command summary
+  loopgate version         Print build/version information
+  loopgate init            Initialize or verify local policy-signing trust
+  loopgate setup           Guided first-run setup for signed policy + Claude hooks
+  loopgate quickstart      Apply the recommended setup defaults non-interactively
+  loopgate install-hooks   Install Loopgate Claude Code hooks
+  loopgate remove-hooks    Remove Loopgate Claude Code hooks
+  loopgate install-launch-agent   Install the macOS LaunchAgent
+
+Companion tools:
+  loopgate-doctor          Diagnostics and denial explanations
+  loopgate-ledger          Audit-ledger inspection and verification
+  loopgate-policy-admin    Policy explain/diff/render/apply helpers
+  loopgate-policy-sign     Detached policy signing helper
+`)
+}
+
 func runInstallHooks(args []string, stdout io.Writer) error {
 	repoRoot, claudeDir, err := parseHookCommandArgs("install-hooks", args)
 	if err != nil {
@@ -162,12 +188,15 @@ func runInstallHooks(args []string, stdout io.Writer) error {
 		return err
 	}
 	settingsPath := filepath.Join(claudeDir, claudeSettingsFilename)
-	settingsConfig, err := loadClaudeSettings(settingsPath)
-	if err != nil {
-		return err
-	}
-	installedHooks := applyLoopgateHookSettings(&settingsConfig, claudeHooksDir)
-	if err := writeClaudeSettings(settingsPath, settingsConfig); err != nil {
+	installedHooks := 0
+	if err := withClaudeSettingsLock(settingsPath, true, func() error {
+		settingsConfig, err := loadClaudeSettings(settingsPath)
+		if err != nil {
+			return err
+		}
+		installedHooks = applyLoopgateHookSettings(&settingsConfig, claudeHooksDir)
+		return writeClaudeSettings(settingsPath, settingsConfig)
+	}); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "Installed Loopgate Claude hooks into %s\n", claudeDir)
@@ -184,12 +213,21 @@ func runRemoveHooks(args []string, stdout io.Writer) error {
 	settingsPaths := collectClaudeSettingsPaths(repoRoot, claudeDir)
 	totalRemovedHooks := 0
 	for _, settingsPath := range settingsPaths {
-		settingsConfig, err := loadClaudeSettings(settingsPath)
-		if err != nil {
-			return err
+		if _, err := os.Stat(settingsPath); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return fmt.Errorf("stat %s: %w", settingsPath, err)
 		}
-		removedHooks := removeLoopgateHookSettings(&settingsConfig)
-		if err := writeClaudeSettings(settingsPath, settingsConfig); err != nil {
+		removedHooks := 0
+		if err := withClaudeSettingsLock(settingsPath, false, func() error {
+			settingsConfig, err := loadClaudeSettings(settingsPath)
+			if err != nil {
+				return err
+			}
+			removedHooks = removeLoopgateHookSettings(&settingsConfig)
+			return writeClaudeSettings(settingsPath, settingsConfig)
+		}); err != nil {
 			return err
 		}
 		if removedHooks > 0 {
@@ -377,6 +415,28 @@ func writeClaudeSettings(settingsPath string, settingsConfig claudeSettings) err
 		return fmt.Errorf("write %s: %w", settingsPath, err)
 	}
 	return nil
+}
+
+func withClaudeSettingsLock(settingsPath string, createParentDir bool, operation func() error) error {
+	lockPath := settingsPath + ".lock"
+	lockDir := filepath.Dir(lockPath)
+	if createParentDir {
+		if err := os.MkdirAll(lockDir, 0o755); err != nil {
+			return fmt.Errorf("create settings lock directory: %w", err)
+		}
+	}
+	lockHandle, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return fmt.Errorf("open settings lock %s: %w", lockPath, err)
+	}
+	defer lockHandle.Close()
+	if err := unix.Flock(int(lockHandle.Fd()), unix.LOCK_EX); err != nil {
+		return fmt.Errorf("lock settings %s: %w", settingsPath, err)
+	}
+	defer func() {
+		_ = unix.Flock(int(lockHandle.Fd()), unix.LOCK_UN)
+	}()
+	return operation()
 }
 
 func applyLoopgateHookSettings(settingsConfig *claudeSettings, claudeHooksDir string) int {

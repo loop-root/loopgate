@@ -19,7 +19,13 @@ func main() {
 		return
 	}
 	if len(os.Args) > 1 {
-		fmt.Fprintln(os.Stderr, "ERROR: startup flags are no longer supported; policy changes require a valid detached signature, not --accept-policy")
+		firstArgument := strings.TrimSpace(os.Args[1])
+		if strings.HasPrefix(firstArgument, "-") {
+			fmt.Fprintln(os.Stderr, "ERROR: startup flags are no longer supported; policy changes require a valid detached signature, not --accept-policy")
+		} else {
+			fmt.Fprintf(os.Stderr, "ERROR: unknown subcommand %q\n\n", firstArgument)
+			printLoopgateUsage(os.Stderr)
+		}
 		exitProcess(2)
 	}
 

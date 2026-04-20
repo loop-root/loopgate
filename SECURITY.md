@@ -34,5 +34,5 @@ The highest-priority security issues are:
 
 ## Supported versions
 
-There is no formal stable release line yet. Assume only the current `main`
-branch is supported.
+There is no formal stable release line yet. Assume only the current default
+branch and the latest public release candidate are supported.

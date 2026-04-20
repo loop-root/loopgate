@@ -1,7 +1,7 @@
 # Support
 
 Loopgate is an experimental, security-sensitive project. Support is best-effort
-and centered on the current `main` branch.
+and centered on the current default branch and latest public release candidate.
 
 ## What support is for
 
@@ -30,7 +30,8 @@ public support thread.
 Loopgate is still being hardened. Please assume:
 
 - support is best-effort, not SLA-backed
-- only the current `main` branch is considered supported
+- only the current default branch and latest public release candidate are
+  considered supported
 - compatibility may change while the governance surface is still evolving
 - examples and defaults are optimized for the current local-first macOS-focused
   product shape
