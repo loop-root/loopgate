@@ -3,9 +3,9 @@
 # Review Closure Status — 2026-04-16
 
 This document is the concrete closure pass for the current public-release prep.
-Its detailed review inputs now live under:
-
-- [notes/internal/reviews/2026-04-16](../../../../notes/internal/reviews/2026-04-16)
+Its detailed review inputs have been moved to the separate `ARCHIVED`
+repository so the public Loopgate tree stays focused on the active operator and
+contributor surface.
 
 Use this file as the current truth for what is closed, what is still open, what
 is intentionally deferred, and whether the repo is safe to return to product

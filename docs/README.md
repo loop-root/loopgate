@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-20
 
 # Docs Index
 
@@ -16,8 +16,8 @@ The current active story is:
 - governed local MCP/runtime work
 
 Use the documents below as the current source of truth for the active product.
-Internal review artifacts and temporary hardening notes now live under
-[`notes/`](../notes/README.md) and are not part of the public operator path.
+Internal review artifacts and temporary hardening notes have been moved to the
+separate `ARCHIVED` repository and are not part of the public operator path.
 
 ## Start here
 
@@ -61,4 +61,5 @@ Internal review artifacts and temporary hardening notes now live under
 Older product notes, extracted continuity design docs, and related historical
 material live in the separate `ARCHIVED` and `continuity` sibling repositories.
 Internal review and hardening notes that still matter to maintainers but are
-not part of the public docs surface live under [`notes/`](../notes/README.md).
+not part of the public docs surface now live in the separate `ARCHIVED`
+repository.
