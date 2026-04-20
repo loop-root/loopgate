@@ -1,6 +1,6 @@
 module loopgate
 
-go 1.25.0
+go 1.25.9
 
 require (
 	golang.org/x/sys v0.42.0
