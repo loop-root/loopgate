@@ -40,13 +40,9 @@ const (
 func (server *Server) executeConfiguredCapability(ctx context.Context, capabilityName string, arguments map[string]string) (string, error) {
 	_ = arguments
 
-	configuredCapabilityDefinition, found := server.providerRuntime.configuredCapabilities[capabilityName]
+	configuredCapabilityDefinition, configuredConnectionDefinition, found := server.configuredCapabilityWithConnectionSnapshot(capabilityName)
 	if !found {
 		return "", fmt.Errorf("configured capability %q not found", capabilityName)
-	}
-	configuredConnectionDefinition, found := server.providerRuntime.configuredConnections[configuredCapabilityDefinition.ConnectionKey]
-	if !found {
-		return "", fmt.Errorf("configured connection for capability %q not found", capabilityName)
 	}
 
 	accessToken := ""
@@ -172,7 +168,7 @@ func (server *Server) issueConnectionAccessToken(ctx context.Context, configured
 }
 
 func (server *Server) capabilityProvenanceMetadata(capabilityName string, quarantineRef string) map[string]interface{} {
-	configuredCapabilityDefinition, found := server.providerRuntime.configuredCapabilities[capabilityName]
+	configuredCapabilityDefinition, found := server.configuredCapabilitySnapshot(capabilityName)
 	if !found {
 		return nil
 	}

@@ -256,18 +256,21 @@ func saveConnectionRecords(path string, connectionRecords map[string]connectionR
 }
 
 func (server *Server) connectionStatuses() []controlapipkg.ConnectionStatus {
-	server.connectionRuntime.mu.Lock()
-	defer server.connectionRuntime.mu.Unlock()
+	configuredConnections, _ := server.currentConfiguredProviderSnapshot()
 
-	connectionStatuses := make([]controlapipkg.ConnectionStatus, 0, len(server.connectionRuntime.records)+len(server.providerRuntime.configuredConnections))
-	for _, connectionRecord := range server.connectionRuntime.records {
+	server.connectionRuntime.mu.Lock()
+	connectionRecords := cloneConnectionRecords(server.connectionRuntime.records)
+	server.connectionRuntime.mu.Unlock()
+
+	connectionStatuses := make([]controlapipkg.ConnectionStatus, 0, len(connectionRecords)+len(configuredConnections))
+	for _, connectionRecord := range connectionRecords {
 		connectionStatuses = append(connectionStatuses, connectionRecord.statusSummary())
 	}
-	for connectionKey, configuredConnectionDefinition := range server.providerRuntime.configuredConnections {
+	for connectionKey, configuredConnectionDefinition := range configuredConnections {
 		if !isPublicReadGrantType(configuredConnectionDefinition.Registration.GrantType) {
 			continue
 		}
-		if _, found := server.connectionRuntime.records[connectionKey]; found {
+		if _, found := connectionRecords[connectionKey]; found {
 			continue
 		}
 		connectionStatuses = append(connectionStatuses, controlapipkg.ConnectionStatus{
@@ -591,7 +594,7 @@ func (server *Server) ValidateConnection(ctx context.Context, provider string, s
 	connectionRecord, found := server.connectionRuntime.records[connectionRecordKey(trimmedProvider, trimmedSubject)]
 	server.connectionRuntime.mu.Unlock()
 	if !found {
-		configuredConnectionDefinition, configuredFound := server.providerRuntime.configuredConnections[connectionRecordKey(trimmedProvider, trimmedSubject)]
+		configuredConnectionDefinition, configuredFound := server.configuredConnectionSnapshot(connectionRecordKey(trimmedProvider, trimmedSubject))
 		if configuredFound && isPublicReadGrantType(configuredConnectionDefinition.Registration.GrantType) {
 			return controlapipkg.ConnectionStatus{
 				Provider:           configuredConnectionDefinition.Registration.Provider,

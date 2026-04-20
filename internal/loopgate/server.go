@@ -1334,7 +1334,7 @@ func (server *Server) finalizeCapabilityExecution(effectiveTokenClaims capabilit
 		quarantineRef string
 		err           error
 	)
-	if _, configuredCapability := server.providerRuntime.configuredCapabilities[capabilityRequest.Capability]; configuredCapability {
+	if _, configuredCapability := server.configuredCapabilitySnapshot(capabilityRequest.Capability); configuredCapability {
 		quarantineRef, err = server.storeQuarantinedPayload(capabilityRequest, output)
 		if err != nil {
 			return server.capabilityQuarantinePersistenceFailureResponse(effectiveTokenClaims, capabilityRequest, err)

@@ -81,18 +81,22 @@ func cloneConfiguredCapabilities(source map[string]configuredCapability) map[str
 	}
 	copied := make(map[string]configuredCapability, len(source))
 	for capabilityName, configuredCapabilityDefinition := range source {
-		copied[capabilityName] = configuredCapability{
-			Name:           configuredCapabilityDefinition.Name,
-			Description:    configuredCapabilityDefinition.Description,
-			Method:         configuredCapabilityDefinition.Method,
-			Path:           configuredCapabilityDefinition.Path,
-			ContentClass:   configuredCapabilityDefinition.ContentClass,
-			Extractor:      configuredCapabilityDefinition.Extractor,
-			ResponseFields: append([]configuredCapabilityField(nil), configuredCapabilityDefinition.ResponseFields...),
-			ConnectionKey:  configuredCapabilityDefinition.ConnectionKey,
-		}
+		copied[capabilityName] = cloneConfiguredCapability(configuredCapabilityDefinition)
 	}
 	return copied
+}
+
+func cloneConfiguredCapability(configuredCapabilityDefinition configuredCapability) configuredCapability {
+	return configuredCapability{
+		Name:           configuredCapabilityDefinition.Name,
+		Description:    configuredCapabilityDefinition.Description,
+		Method:         configuredCapabilityDefinition.Method,
+		Path:           configuredCapabilityDefinition.Path,
+		ContentClass:   configuredCapabilityDefinition.ContentClass,
+		Extractor:      configuredCapabilityDefinition.Extractor,
+		ResponseFields: append([]configuredCapabilityField(nil), configuredCapabilityDefinition.ResponseFields...),
+		ConnectionKey:  configuredCapabilityDefinition.ConnectionKey,
+	}
 }
 
 func cloneConfiguredConnections(source map[string]configuredConnection) map[string]configuredConnection {
@@ -101,46 +105,50 @@ func cloneConfiguredConnections(source map[string]configuredConnection) map[stri
 	}
 	copied := make(map[string]configuredConnection, len(source))
 	for connectionKey, configuredConnectionDefinition := range source {
-		allowedHosts := make(map[string]struct{}, len(configuredConnectionDefinition.AllowedHosts))
-		for allowedHost := range configuredConnectionDefinition.AllowedHosts {
-			allowedHosts[allowedHost] = struct{}{}
-		}
-
-		var authorizationURL *url.URL
-		if configuredConnectionDefinition.AuthorizationURL != nil {
-			clonedAuthorizationURL := *configuredConnectionDefinition.AuthorizationURL
-			authorizationURL = &clonedAuthorizationURL
-		}
-
-		var tokenURL *url.URL
-		if configuredConnectionDefinition.TokenURL != nil {
-			clonedTokenURL := *configuredConnectionDefinition.TokenURL
-			tokenURL = &clonedTokenURL
-		}
-
-		var apiBaseURL *url.URL
-		if configuredConnectionDefinition.APIBaseURL != nil {
-			clonedAPIBaseURL := *configuredConnectionDefinition.APIBaseURL
-			apiBaseURL = &clonedAPIBaseURL
-		}
-
-		copied[connectionKey] = configuredConnection{
-			Registration: connectionRegistration{
-				Provider:   configuredConnectionDefinition.Registration.Provider,
-				GrantType:  configuredConnectionDefinition.Registration.GrantType,
-				Subject:    configuredConnectionDefinition.Registration.Subject,
-				Scopes:     append([]string(nil), configuredConnectionDefinition.Registration.Scopes...),
-				Credential: configuredConnectionDefinition.Registration.Credential,
-			},
-			ClientID:         configuredConnectionDefinition.ClientID,
-			AuthorizationURL: authorizationURL,
-			TokenURL:         tokenURL,
-			RedirectURL:      configuredConnectionDefinition.RedirectURL,
-			APIBaseURL:       apiBaseURL,
-			AllowedHosts:     allowedHosts,
-		}
+		copied[connectionKey] = cloneConfiguredConnection(configuredConnectionDefinition)
 	}
 	return copied
+}
+
+func cloneConfiguredConnection(configuredConnectionDefinition configuredConnection) configuredConnection {
+	allowedHosts := make(map[string]struct{}, len(configuredConnectionDefinition.AllowedHosts))
+	for allowedHost := range configuredConnectionDefinition.AllowedHosts {
+		allowedHosts[allowedHost] = struct{}{}
+	}
+
+	var authorizationURL *url.URL
+	if configuredConnectionDefinition.AuthorizationURL != nil {
+		clonedAuthorizationURL := *configuredConnectionDefinition.AuthorizationURL
+		authorizationURL = &clonedAuthorizationURL
+	}
+
+	var tokenURL *url.URL
+	if configuredConnectionDefinition.TokenURL != nil {
+		clonedTokenURL := *configuredConnectionDefinition.TokenURL
+		tokenURL = &clonedTokenURL
+	}
+
+	var apiBaseURL *url.URL
+	if configuredConnectionDefinition.APIBaseURL != nil {
+		clonedAPIBaseURL := *configuredConnectionDefinition.APIBaseURL
+		apiBaseURL = &clonedAPIBaseURL
+	}
+
+	return configuredConnection{
+		Registration: connectionRegistration{
+			Provider:   configuredConnectionDefinition.Registration.Provider,
+			GrantType:  configuredConnectionDefinition.Registration.GrantType,
+			Subject:    configuredConnectionDefinition.Registration.Subject,
+			Scopes:     append([]string(nil), configuredConnectionDefinition.Registration.Scopes...),
+			Credential: configuredConnectionDefinition.Registration.Credential,
+		},
+		ClientID:         configuredConnectionDefinition.ClientID,
+		AuthorizationURL: authorizationURL,
+		TokenURL:         tokenURL,
+		RedirectURL:      configuredConnectionDefinition.RedirectURL,
+		APIBaseURL:       apiBaseURL,
+		AllowedHosts:     allowedHosts,
+	}
 }
 
 func cloneHTTPClientWithTimeout(existingHTTPClient *http.Client, timeout time.Duration) *http.Client {
@@ -227,6 +235,40 @@ func (server *Server) buildPolicyRuntimeForConfiguredCapabilities(configuredCapa
 		Policy:        currentPolicyRuntime.policy,
 		ContentSHA256: currentPolicyRuntime.policyContentSHA256,
 	}, cloneConfiguredCapabilities(configuredCapabilities))
+}
+
+func (server *Server) configuredCapabilitySnapshot(capabilityName string) (configuredCapability, bool) {
+	server.providerRuntime.mu.Lock()
+	defer server.providerRuntime.mu.Unlock()
+	configuredCapabilityDefinition, found := server.providerRuntime.configuredCapabilities[capabilityName]
+	if !found {
+		return configuredCapability{}, false
+	}
+	return cloneConfiguredCapability(configuredCapabilityDefinition), true
+}
+
+func (server *Server) configuredConnectionSnapshot(connectionKey string) (configuredConnection, bool) {
+	server.providerRuntime.mu.Lock()
+	defer server.providerRuntime.mu.Unlock()
+	configuredConnectionDefinition, found := server.providerRuntime.configuredConnections[connectionKey]
+	if !found {
+		return configuredConnection{}, false
+	}
+	return cloneConfiguredConnection(configuredConnectionDefinition), true
+}
+
+func (server *Server) configuredCapabilityWithConnectionSnapshot(capabilityName string) (configuredCapability, configuredConnection, bool) {
+	server.providerRuntime.mu.Lock()
+	defer server.providerRuntime.mu.Unlock()
+	configuredCapabilityDefinition, found := server.providerRuntime.configuredCapabilities[capabilityName]
+	if !found {
+		return configuredCapability{}, configuredConnection{}, false
+	}
+	configuredConnectionDefinition, found := server.providerRuntime.configuredConnections[configuredCapabilityDefinition.ConnectionKey]
+	if !found {
+		return cloneConfiguredCapability(configuredCapabilityDefinition), configuredConnection{}, false
+	}
+	return cloneConfiguredCapability(configuredCapabilityDefinition), cloneConfiguredConnection(configuredConnectionDefinition), true
 }
 
 func (server *Server) reloadPolicyRuntimeFromDisk() (serverPolicyRuntime, error) {

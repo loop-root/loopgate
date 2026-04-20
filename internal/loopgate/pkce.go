@@ -237,7 +237,7 @@ func (server *Server) pruneExpiredPKCESessionsLocked() {
 
 func (server *Server) lookupConfiguredConnection(provider string, subject string, expectedGrantType string) (configuredConnection, string, error) {
 	connectionKey := connectionRecordKey(strings.TrimSpace(provider), strings.TrimSpace(subject))
-	configuredConnectionDefinition, found := server.providerRuntime.configuredConnections[connectionKey]
+	configuredConnectionDefinition, found := server.configuredConnectionSnapshot(connectionKey)
 	if !found {
 		return configuredConnection{}, "", fmt.Errorf("configured connection not found for provider %q subject %q", provider, subject)
 	}

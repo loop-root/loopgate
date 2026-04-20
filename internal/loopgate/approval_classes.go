@@ -50,7 +50,7 @@ func (server *Server) approvalClassForCapability(capabilityName string) string {
 	case "fs_write":
 		return ApprovalClassWriteSandboxPath
 	default:
-		if _, found := server.providerRuntime.configuredCapabilities[capabilityName]; found {
+		if _, found := server.configuredCapabilitySnapshot(capabilityName); found {
 			return ApprovalClassProviderCapability
 		}
 		return ""

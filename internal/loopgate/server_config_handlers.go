@@ -66,12 +66,9 @@ func (server *Server) handleConfigGet(w http.ResponseWriter, section string) {
 	case "policy":
 		result = policyRuntime.policy
 	case "runtime":
-		result = server.runtimeConfig
+		result = server.currentRuntimeConfigSnapshot()
 	case "connections":
-		server.providerRuntime.mu.Lock()
-		conns := server.providerRuntime.configuredConnections
-		caps := server.providerRuntime.configuredCapabilities
-		server.providerRuntime.mu.Unlock()
+		conns, caps := server.currentConfiguredProviderSnapshot()
 		result = connectionsToConfigFiles(conns, caps)
 	}
 
