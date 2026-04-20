@@ -37,6 +37,39 @@ const (
 	fieldTrustDeterministic      = "deterministic"
 )
 
+func cloneHTTPClient(existingHTTPClient *http.Client) *http.Client {
+	if existingHTTPClient == nil {
+		return &http.Client{}
+	}
+	clonedHTTPClient := *existingHTTPClient
+	return &clonedHTTPClient
+}
+
+func (server *Server) configuredConnectionHTTPClient(configuredConnectionDefinition configuredConnection) *http.Client {
+	policyRuntime := server.currentPolicyRuntime()
+	configuredHTTPClient := cloneHTTPClient(policyRuntime.httpClient)
+	baseCheckRedirect := configuredHTTPClient.CheckRedirect
+	configuredHTTPClient.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		if baseCheckRedirect != nil {
+			if err := baseCheckRedirect(request, via); err != nil {
+				return err
+			}
+		}
+		redirectedHostname := request.URL.Hostname()
+		if _, allowed := configuredConnectionDefinition.AllowedHosts[redirectedHostname]; !allowed {
+			return fmt.Errorf("redirect host %q is not in allowed_hosts", redirectedHostname)
+		}
+		if request.URL.Scheme != "https" && !isLocalhostHost(redirectedHostname) {
+			return fmt.Errorf("redirected request must use https for non-local hosts")
+		}
+		return nil
+	}
+	return configuredHTTPClient
+}
+
 func (server *Server) executeConfiguredCapability(ctx context.Context, capabilityName string, arguments map[string]string) (string, error) {
 	_ = arguments
 
@@ -72,7 +105,7 @@ func (server *Server) executeConfiguredCapability(ctx context.Context, capabilit
 		request.Header.Set("Authorization", "Bearer "+accessToken)
 	}
 
-	response, err := server.currentPolicyRuntime().httpClient.Do(request)
+	response, err := server.configuredConnectionHTTPClient(configuredConnectionDefinition).Do(request)
 	if err != nil {
 		return "", fmt.Errorf("execute configured capability request: %w", err)
 	}

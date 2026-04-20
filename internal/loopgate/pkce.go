@@ -191,7 +191,6 @@ func (server *Server) refreshPKCEAccessToken(ctx context.Context, configuredConn
 }
 
 func (server *Server) exchangeOAuthToken(ctx context.Context, configuredConnectionDefinition configuredConnection, formValues url.Values) (oauthTokenResponse, error) {
-	policyRuntime := server.currentPolicyRuntime()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, configuredConnectionDefinition.TokenURL.String(), strings.NewReader(formValues.Encode()))
 	if err != nil {
 		return oauthTokenResponse{}, fmt.Errorf("create oauth token request: %w", err)
@@ -199,7 +198,7 @@ func (server *Server) exchangeOAuthToken(ctx context.Context, configuredConnecti
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept", "application/json")
 
-	response, err := policyRuntime.httpClient.Do(request)
+	response, err := server.configuredConnectionHTTPClient(configuredConnectionDefinition).Do(request)
 	if err != nil {
 		return oauthTokenResponse{}, fmt.Errorf("exchange oauth token: %w", err)
 	}
