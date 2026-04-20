@@ -41,15 +41,6 @@ claude/hooks/scripts/__pycache__/
 # Operator-generated runtime (logs, sockets, ledger, sandbox state, imports, local fixtures)
 runtime/
 
-# Runtime / memory artifacts (see internal/config/gitignore_test.go)
-cmd/memorybench/
-core/memory/ledger/*.jsonl
-core/memory/ledger/*.old
-core/memory/distillates/*.jsonl
-core/memory/distillates/*.old
-core/memory/keys/
-core/memory/keys_old/
-
 # Local built binaries
 /loopgate/
 /loopgate/loopgate

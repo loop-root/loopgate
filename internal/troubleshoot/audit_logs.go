@@ -63,13 +63,6 @@ func WriteAuditLog(writer io.Writer, auditLogLines []AuditLogLine) error {
 	return nil
 }
 
-func appendAuditLogLinesFromFile(lineRing *auditLogRing, auditPath string) error {
-	return scanAuditFile(auditPath, func(parsedEvent ledger.Event) error {
-		lineRing.Append(renderAuditLogLine(parsedEvent))
-		return nil
-	})
-}
-
 func visitVerifiedAuditEvents(repoRoot string, runtimeConfig config.RuntimeConfig, visit func(ledger.Event) error) error {
 	activeAuditPath := ActiveAuditPath(repoRoot)
 	rotationSettings := AuditRotationSettings(repoRoot, runtimeConfig)

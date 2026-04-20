@@ -285,10 +285,6 @@ func validateConfiguredFieldsMetadata(structuredResult map[string]interface{}, f
 	return nil
 }
 
-func (server *Server) registerConfiguredCapabilities() error {
-	return registerConfiguredCapabilitiesOnRegistry(server, server.currentPolicyRuntime().registry, server.currentConfiguredCapabilitiesSnapshot())
-}
-
 func sortedConfiguredCapabilityNames(configuredCapabilities map[string]configuredCapability) []string {
 	capabilityNames := make([]string, 0, len(configuredCapabilities))
 	for capabilityName := range configuredCapabilities {

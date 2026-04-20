@@ -375,7 +375,7 @@ func validateSetupPrerequisites(plan loopgateSetupPlan) (string, error) {
 	}
 	python3Path, err := exec.LookPath("python3")
 	if err != nil {
-		return "", fmt.Errorf("Claude hooks require python3 on PATH; install Python 3 or rerun setup with -skip-hooks")
+		return "", fmt.Errorf("claude hooks require python3 on PATH; install Python 3 or rerun setup with -skip-hooks")
 	}
 	return filepath.Clean(python3Path), nil
 }
