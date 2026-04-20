@@ -26,11 +26,9 @@ func (r *Registry) TryRegister(tool Tool) error {
 }
 
 // Register adds a tool to the registry.
-// Panics if a tool with the same name is already registered.
-func (r *Registry) Register(tool Tool) {
-	if err := r.TryRegister(tool); err != nil {
-		panic(err.Error())
-	}
+// Returns an error if a tool with the same name is already registered.
+func (r *Registry) Register(tool Tool) error {
+	return r.TryRegister(tool)
 }
 
 // Get returns a tool by name, or nil if not found.

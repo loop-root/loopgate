@@ -325,6 +325,39 @@ func TestRunRemoveHooks_DoesNotCreateMissingSettingsFiles(t *testing.T) {
 	}
 }
 
+func TestRemoveLoopgateHookScripts_RemovesCopiedBundleOnly(t *testing.T) {
+	claudeDir := t.TempDir()
+	hooksDir := filepath.Join(claudeDir, claudeHooksDirname)
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatalf("mkdir hooks dir: %v", err)
+	}
+	for _, scriptName := range loopgateHookBundleFiles {
+		if err := os.WriteFile(filepath.Join(hooksDir, scriptName), []byte(scriptName), 0o644); err != nil {
+			t.Fatalf("write loopgate hook script %s: %v", scriptName, err)
+		}
+	}
+	extraHookPath := filepath.Join(hooksDir, "keep_me.py")
+	if err := os.WriteFile(extraHookPath, []byte("keep"), 0o644); err != nil {
+		t.Fatalf("write extra hook script: %v", err)
+	}
+
+	removedScripts, err := removeLoopgateHookScripts(claudeDir)
+	if err != nil {
+		t.Fatalf("removeLoopgateHookScripts: %v", err)
+	}
+	if removedScripts != len(loopgateHookBundleFiles) {
+		t.Fatalf("expected %d removed scripts, got %d", len(loopgateHookBundleFiles), removedScripts)
+	}
+	for _, scriptName := range loopgateHookBundleFiles {
+		if _, err := os.Stat(filepath.Join(hooksDir, scriptName)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected %s to be removed, stat err=%v", scriptName, err)
+		}
+	}
+	if _, err := os.Stat(extraHookPath); err != nil {
+		t.Fatalf("expected non-loopgate hook script to remain, stat err=%v", err)
+	}
+}
+
 func makeTestHookRepo(t *testing.T) string {
 	t.Helper()
 	repoRoot := t.TempDir()

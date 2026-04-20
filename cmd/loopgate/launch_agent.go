@@ -36,6 +36,19 @@ type launchAgentInstallResult struct {
 	Loaded            bool
 }
 
+type launchAgentRemoveOptions struct {
+	RepoRoot        string
+	LaunchAgentsDir string
+	Label           string
+}
+
+type launchAgentRemoveResult struct {
+	Label     string
+	PlistPath string
+	Removed   bool
+	Unloaded  bool
+}
+
 type launchAgentDependencies struct {
 	Platform       string
 	UserUID        int
@@ -82,6 +95,40 @@ func runInstallLaunchAgent(args []string, stdout io.Writer, stderr io.Writer) er
 	fmt.Fprintf(stdout, "stdout_path: %s\n", result.StandardOutPath)
 	fmt.Fprintf(stdout, "stderr_path: %s\n", result.StandardErrorPath)
 	fmt.Fprintf(stdout, "loaded: %t\n", result.Loaded)
+	return nil
+}
+
+func runRemoveLaunchAgent(args []string, stdout io.Writer, stderr io.Writer) error {
+	fs := flag.NewFlagSet("remove-launch-agent", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	repoRootFlag := fs.String("repo-root", "", "repository root that Loopgate serves from")
+	launchAgentsDirFlag := fs.String("launch-agents-dir", "", "LaunchAgents directory (default: ~/Library/LaunchAgents)")
+	labelFlag := fs.String("label", "", "launch agent label override")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+	}
+
+	repoRoot, err := resolveLoopgateRepoRoot(strings.TrimSpace(*repoRootFlag))
+	if err != nil {
+		return err
+	}
+	result, err := removeLaunchAgent(launchAgentRemoveOptions{
+		RepoRoot:        repoRoot,
+		LaunchAgentsDir: strings.TrimSpace(*launchAgentsDirFlag),
+		Label:           strings.TrimSpace(*labelFlag),
+	}, defaultLaunchAgentDependencies())
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(stdout, "launch agent remove OK")
+	fmt.Fprintf(stdout, "label: %s\n", result.Label)
+	fmt.Fprintf(stdout, "plist_path: %s\n", result.PlistPath)
+	fmt.Fprintf(stdout, "removed: %t\n", result.Removed)
+	fmt.Fprintf(stdout, "unloaded: %t\n", result.Unloaded)
 	return nil
 }
 
@@ -165,6 +212,49 @@ func installLaunchAgent(options launchAgentInstallOptions, deps launchAgentDepen
 		StandardOutPath:   stdoutPath,
 		StandardErrorPath: stderrPath,
 		Loaded:            options.LoadImmediately,
+	}, nil
+}
+
+func removeLaunchAgent(options launchAgentRemoveOptions, deps launchAgentDependencies) (launchAgentRemoveResult, error) {
+	if deps.Platform != "darwin" {
+		return launchAgentRemoveResult{}, fmt.Errorf("remove-launch-agent is only supported on macOS")
+	}
+
+	repoRoot := filepath.Clean(strings.TrimSpace(options.RepoRoot))
+	if repoRoot == "" {
+		return launchAgentRemoveResult{}, fmt.Errorf("repo root must not be empty")
+	}
+	launchAgentsDir, err := resolveLaunchAgentsDir(options.LaunchAgentsDir, deps)
+	if err != nil {
+		return launchAgentRemoveResult{}, err
+	}
+	label := strings.TrimSpace(options.Label)
+	if label == "" {
+		label = defaultLoopgateLaunchAgentLabel(repoRoot)
+	}
+	plistPath := filepath.Join(launchAgentsDir, label+".plist")
+
+	launchctlTarget := fmt.Sprintf("gui/%d", deps.UserUID)
+	serviceTarget := fmt.Sprintf("%s/%s", launchctlTarget, label)
+	unloaded := false
+	if err := deps.RunLaunchctl("bootout", serviceTarget); err == nil {
+		unloaded = true
+	} else if !isLaunchctlMissingServiceError(err) {
+		return launchAgentRemoveResult{}, err
+	}
+
+	removed := false
+	if err := os.Remove(plistPath); err == nil {
+		removed = true
+	} else if !os.IsNotExist(err) {
+		return launchAgentRemoveResult{}, fmt.Errorf("remove launch agent plist: %w", err)
+	}
+
+	return launchAgentRemoveResult{
+		Label:     label,
+		PlistPath: plistPath,
+		Removed:   removed,
+		Unloaded:  unloaded,
 	}, nil
 }
 
@@ -348,4 +438,15 @@ func runLaunchctlCommand(args ...string) error {
 		return fmt.Errorf("launchctl %s: %w: %s", strings.Join(args, " "), err, trimmedOutput)
 	}
 	return nil
+}
+
+func isLaunchctlMissingServiceError(err error) bool {
+	if err == nil {
+		return false
+	}
+	loweredError := strings.ToLower(err.Error())
+	return strings.Contains(loweredError, "could not find service") ||
+		strings.Contains(loweredError, "service could not be found") ||
+		strings.Contains(loweredError, "no such process") ||
+		strings.Contains(loweredError, "not loaded")
 }

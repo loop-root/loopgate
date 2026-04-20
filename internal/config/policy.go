@@ -178,14 +178,14 @@ func LoadPolicy(repoRoot string) (Policy, error) {
 // LoadPolicyWithHash loads policy and returns both the parsed policy and
 // the SHA-256 hash of the raw policy file contents.
 func LoadPolicyWithHash(repoRoot string) (PolicyLoadResult, error) {
-	path := filepath.Join(repoRoot, "core", "policy", "policy.yaml")
+	path, err := resolveRequiredLoadPath(filepath.Join(repoRoot, "core", "policy", "policy.yaml"), "policy file")
+	if err != nil {
+		return PolicyLoadResult{}, err
+	}
 
 	rawBytes, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return PolicyLoadResult{}, fmt.Errorf("required policy file not found at %s", path)
-		}
-		return PolicyLoadResult{}, err
+		return PolicyLoadResult{}, fmt.Errorf("read %s: %w", path, err)
 	}
 
 	contentHash := sha256.Sum256(rawBytes)
@@ -199,6 +199,17 @@ func LoadPolicyWithHash(repoRoot string) (PolicyLoadResult, error) {
 		return PolicyLoadResult{}, err
 	}
 	return PolicyLoadResult{Policy: pol, ContentSHA256: hashHex}, nil
+}
+
+func resolveRequiredLoadPath(path string, description string) (string, error) {
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("required %s not found at %s", description, path)
+		}
+		return "", fmt.Errorf("resolve %s %s: %w", description, path, err)
+	}
+	return filepath.Clean(resolvedPath), nil
 }
 
 // ParsePolicyDocument strictly decodes and normalizes a policy YAML document.

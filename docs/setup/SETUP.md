@@ -134,11 +134,19 @@ Useful flags:
 ```bash
 ./bin/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
 ./bin/loopgate remove-hooks
+./bin/loopgate remove-launch-agent
+./bin/loopgate uninstall
 ```
 
 Quick validation:
 - run `/hooks` inside Claude Code and confirm the Loopgate hook entries are present
 - if your home directory has spaces, confirm the installed command paths remain quoted in Claude's hook view
+
+Removal notes:
+- `remove-hooks` removes Loopgate-managed hook entries but leaves the copied hook scripts in place
+- `remove-launch-agent` unloads/removes the per-repo macOS LaunchAgent
+- `uninstall` performs both steps and also removes the copied Loopgate hook scripts under `~/.claude/hooks/`
+- `make uninstall-local` only removes locally installed binaries such as `~/.local/bin/loopgate`
 
 ### 4. Re-sign and apply policy
 

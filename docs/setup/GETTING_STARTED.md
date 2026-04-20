@@ -162,6 +162,15 @@ Quick smoke check after hook install:
 - run `/hooks` inside Claude Code and confirm the 7 Loopgate hook events are registered
 - verify the installed commands point at `~/.claude/hooks/loopgate_*.py`
 
+If you later want to remove the integration again:
+
+```bash
+./bin/loopgate uninstall
+```
+
+That removes Loopgate-managed Claude hook entries, removes the copied Loopgate
+hook scripts, and on macOS unloads/removes the per-repo LaunchAgent.
+
 ### 5. Run a normal task
 
 Use Claude Code normally and watch for:

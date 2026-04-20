@@ -141,9 +141,23 @@ func handleLoopgateSubcommand(args []string) bool {
 		}
 		exitProcess(0)
 		return true
+	case "remove-launch-agent":
+		if err := runRemoveLaunchAgent(args[1:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: remove-launch-agent:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
 	case "remove-hooks":
 		if err := runRemoveHooks(args[1:], os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: remove hooks:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
+	case "uninstall":
+		if err := runUninstall(args[1:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: uninstall:", err)
 			exitProcess(1)
 		}
 		exitProcess(0)
@@ -164,6 +178,8 @@ func printLoopgateUsage(output io.Writer) {
   loopgate install-hooks   Install Loopgate Claude Code hooks
   loopgate remove-hooks    Remove Loopgate Claude Code hooks
   loopgate install-launch-agent   Install the macOS LaunchAgent
+  loopgate remove-launch-agent    Remove the macOS LaunchAgent
+  loopgate uninstall     Remove Loopgate hooks and background startup wiring
 
 Companion tools:
   loopgate-doctor          Diagnostics and denial explanations

@@ -12,9 +12,15 @@ import (
 func buildTestRegistry(t *testing.T) *toolspkg.Registry {
 	t.Helper()
 	reg := toolspkg.NewRegistry()
-	reg.Register(testCapabilityTool{name: "safe_read", op: toolspkg.OpRead})
-	reg.Register(testCapabilityTool{name: "safe_write", op: toolspkg.OpWrite})
-	reg.Register(testCapabilityTool{name: "safe_execute", op: toolspkg.OpExecute})
+	if err := reg.Register(testCapabilityTool{name: "safe_read", op: toolspkg.OpRead}); err != nil {
+		t.Fatalf("register safe_read: %v", err)
+	}
+	if err := reg.Register(testCapabilityTool{name: "safe_write", op: toolspkg.OpWrite}); err != nil {
+		t.Fatalf("register safe_write: %v", err)
+	}
+	if err := reg.Register(testCapabilityTool{name: "safe_execute", op: toolspkg.OpExecute}); err != nil {
+		t.Fatalf("register safe_execute: %v", err)
+	}
 	return reg
 }
 
@@ -88,9 +94,15 @@ func TestCapabilityClass_RealRegistryReadCapabilities(t *testing.T) {
 	//
 	// fs_read and fs_list are both OpRead in the current registry.
 	reg := toolspkg.NewRegistry()
-	reg.Register(testCapabilityTool{name: "fs_read", op: toolspkg.OpRead})
-	reg.Register(testCapabilityTool{name: "fs_list", op: toolspkg.OpRead})
-	reg.Register(testCapabilityTool{name: "fs_write", op: toolspkg.OpWrite})
+	if err := reg.Register(testCapabilityTool{name: "fs_read", op: toolspkg.OpRead}); err != nil {
+		t.Fatalf("register fs_read: %v", err)
+	}
+	if err := reg.Register(testCapabilityTool{name: "fs_list", op: toolspkg.OpRead}); err != nil {
+		t.Fatalf("register fs_list: %v", err)
+	}
+	if err := reg.Register(testCapabilityTool{name: "fs_write", op: toolspkg.OpWrite}); err != nil {
+		t.Fatalf("register fs_write: %v", err)
+	}
 
 	if !classifyCapability(reg, "fs_read").readOnly {
 		t.Error("fs_read must be readOnly")

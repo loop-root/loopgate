@@ -183,6 +183,29 @@ Expected outcomes:
 - `PermissionRequest`: Claude denies the permission request and shows the Loopgate hook error instead of granting the permission.
 - `UserPromptSubmit`: Claude blocks prompt submission and shows the Loopgate hook error instead of continuing with governed execution.
 
+### Remove Loopgate from this machine
+
+If you want to stop using Loopgate on this machine or repo:
+
+```bash
+./bin/loopgate uninstall
+```
+
+That command removes Loopgate-managed Claude hook entries, removes the copied
+Loopgate hook scripts from `~/.claude/hooks/`, and unloads/removes the per-repo
+macOS LaunchAgent when present.
+
+Lower-level offboarding commands:
+
+```bash
+./bin/loopgate remove-hooks
+./bin/loopgate remove-launch-agent
+make uninstall-local
+```
+
+`make uninstall-local` only removes binaries copied into your local install
+directory. It does not remove policy files or runtime/audit state.
+
 ### 4. Re-sign policy when you intentionally change it
 
 The `-verify-setup` commands below infer the repo’s current signed-policy

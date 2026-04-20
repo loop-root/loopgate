@@ -22,12 +22,16 @@ Use it when changing:
     - `setup`
     - `install-hooks`
     - `install-launch-agent`
+    - `remove-launch-agent`
     - `remove-hooks`
+    - `uninstall`
   - `quickstart` is the non-interactive recommended-default path: it delegates to `setup -yes` so first-time onboarding stays on the same signer-init, signed-policy, hook-install, and optional LaunchAgent code path
   - `setup` is the guided first-run path: local signer init/reuse, `strict` or `balanced` starter policy selection, signed policy write, hook install, and optional macOS LaunchAgent install
   - `install-hooks` copies the tracked hook bundle from `claude/hooks/scripts/` into the target Claude config dir and wires the supported hook events into `settings.json`
   - `install-launch-agent` writes a per-repo macOS LaunchAgent plist pointed at the current Loopgate binary and can load it immediately with `launchctl`
+  - `remove-launch-agent` unloads the per-repo macOS LaunchAgent when present and removes its plist
   - `remove-hooks` removes only the Loopgate-managed hook entries and leaves copied scripts in place
+  - `uninstall` removes Loopgate-managed Claude hooks, removes the copied Loopgate hook scripts, unloads/removes the per-repo macOS LaunchAgent on macOS, and deliberately leaves binaries plus runtime/audit state in place for manual cleanup
 
 ## `cmd/loopgate-policy-sign/`
 

@@ -477,7 +477,9 @@ func TestRegistry_Register(t *testing.T) {
 	r := NewRegistry()
 
 	tool := &FSRead{RepoRoot: "/tmp"}
-	r.Register(tool)
+	if err := r.Register(tool); err != nil {
+		t.Fatalf("register tool: %v", err)
+	}
 
 	if !r.Has("fs_read") {
 		t.Error("expected fs_read to be registered")
@@ -490,9 +492,15 @@ func TestRegistry_Register(t *testing.T) {
 func TestRegistry_List(t *testing.T) {
 	r := NewRegistry()
 
-	r.Register(&FSRead{RepoRoot: "/tmp"})
-	r.Register(&FSWrite{RepoRoot: "/tmp"})
-	r.Register(&FSList{RepoRoot: "/tmp"})
+	if err := r.Register(&FSRead{RepoRoot: "/tmp"}); err != nil {
+		t.Fatalf("register fs_read: %v", err)
+	}
+	if err := r.Register(&FSWrite{RepoRoot: "/tmp"}); err != nil {
+		t.Fatalf("register fs_write: %v", err)
+	}
+	if err := r.Register(&FSList{RepoRoot: "/tmp"}); err != nil {
+		t.Fatalf("register fs_list: %v", err)
+	}
 
 	names := r.List()
 	if len(names) != 3 {

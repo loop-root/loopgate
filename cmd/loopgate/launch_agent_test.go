@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,5 +83,80 @@ func TestResolveLoopgateExecutablePath_RejectsTransientGoRunBinary(t *testing.T)
 	}
 	if !strings.Contains(err.Error(), "transient go run executable") {
 		t.Fatalf("expected go run error, got %v", err)
+	}
+}
+
+func TestRemoveLaunchAgent_RemovesPlistAndBootsOutService(t *testing.T) {
+	repoRoot := t.TempDir()
+	launchAgentsDir := filepath.Join(t.TempDir(), "LaunchAgents")
+	if err := os.MkdirAll(launchAgentsDir, 0o755); err != nil {
+		t.Fatalf("mkdir launch agents dir: %v", err)
+	}
+
+	label := defaultLoopgateLaunchAgentLabel(repoRoot)
+	plistPath := filepath.Join(launchAgentsDir, label+".plist")
+	if err := os.WriteFile(plistPath, []byte("<plist/>"), 0o644); err != nil {
+		t.Fatalf("write plist: %v", err)
+	}
+
+	var launchctlCalls [][]string
+	result, err := removeLaunchAgent(launchAgentRemoveOptions{
+		RepoRoot:        repoRoot,
+		LaunchAgentsDir: launchAgentsDir,
+	}, launchAgentDependencies{
+		Platform:       "darwin",
+		UserUID:        501,
+		ExecutablePath: func() (string, error) { return "", nil },
+		UserHomeDir:    func() (string, error) { return t.TempDir(), nil },
+		RunLaunchctl: func(args ...string) error {
+			launchctlCalls = append(launchctlCalls, append([]string(nil), args...))
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("removeLaunchAgent: %v", err)
+	}
+
+	if !result.Removed {
+		t.Fatal("expected plist to be removed")
+	}
+	if !result.Unloaded {
+		t.Fatal("expected launch agent to be unloaded")
+	}
+	if _, err := os.Stat(plistPath); !os.IsNotExist(err) {
+		t.Fatalf("expected plist %s to be removed, stat err=%v", plistPath, err)
+	}
+	if len(launchctlCalls) != 1 {
+		t.Fatalf("expected one bootout call, got %#v", launchctlCalls)
+	}
+	if strings.Join(launchctlCalls[0], " ") != "bootout gui/501/"+label {
+		t.Fatalf("unexpected bootout call: %#v", launchctlCalls[0])
+	}
+}
+
+func TestRemoveLaunchAgent_IgnoresMissingServiceAndPlist(t *testing.T) {
+	repoRoot := t.TempDir()
+	launchAgentsDir := filepath.Join(t.TempDir(), "LaunchAgents")
+
+	result, err := removeLaunchAgent(launchAgentRemoveOptions{
+		RepoRoot:        repoRoot,
+		LaunchAgentsDir: launchAgentsDir,
+	}, launchAgentDependencies{
+		Platform:       "darwin",
+		UserUID:        501,
+		ExecutablePath: func() (string, error) { return "", nil },
+		UserHomeDir:    func() (string, error) { return t.TempDir(), nil },
+		RunLaunchctl: func(args ...string) error {
+			return fmt.Errorf("launchctl %s: Boot-out failed: 3: No such process", strings.Join(args, " "))
+		},
+	})
+	if err != nil {
+		t.Fatalf("removeLaunchAgent: %v", err)
+	}
+	if result.Removed {
+		t.Fatal("expected missing plist not to be reported as removed")
+	}
+	if result.Unloaded {
+		t.Fatal("expected missing launch agent not to be reported as unloaded")
 	}
 }

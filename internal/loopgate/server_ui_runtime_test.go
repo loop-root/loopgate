@@ -386,13 +386,15 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
 
-	server.registry.Register(fakeLoopgateTool{
+	if err := server.registry.Register(fakeLoopgateTool{
 		name:        "remote_fetch",
 		category:    "filesystem",
 		operation:   toolspkg.OpRead,
 		description: "test-only remote fetch stand-in",
 		output:      "raw remote payload",
-	})
+	}); err != nil {
+		t.Fatalf("register remote_fetch: %v", err)
+	}
 	capabilities := append(capabilityNames(status.Capabilities), "remote_fetch", controlCapabilityUIRead)
 	client.ConfigureSession("test-actor", "test-session", capabilities)
 	if _, err := client.ensureCapabilityToken(context.Background()); err != nil {

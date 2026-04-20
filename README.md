@@ -148,6 +148,29 @@ For a more durable background path on macOS, install the LaunchAgent:
 That LaunchAgent pins the current Loopgate executable path, so use the built
 `./bin/loopgate` or an installed `loopgate` binary rather than `go run`.
 
+If you later want to remove Loopgate's machine-level wiring again:
+
+```bash
+./bin/loopgate uninstall
+```
+
+`loopgate uninstall` removes Loopgate-managed Claude hook entries, removes the
+copied Loopgate hook scripts from `~/.claude/hooks/`, and unloads/removes the
+per-repo macOS LaunchAgent when present. It deliberately leaves the local
+binaries, signed policy files, and runtime/audit state in place so removal of
+evidence or operator data is always explicit.
+
+Useful lower-level removal commands:
+
+```bash
+./bin/loopgate remove-hooks
+./bin/loopgate remove-launch-agent
+make uninstall-local
+```
+
+Use `make uninstall-local` only if you previously copied the binaries into your
+local install directory such as `~/.local/bin`.
+
 If you prefer a simple shell-managed background run from the repo root:
 
 ```bash

@@ -134,6 +134,32 @@ func TestLoadPolicy_MissingFileFailsClosed(t *testing.T) {
 	}
 }
 
+func TestResolveRequiredLoadPath_EvalSymlinks(t *testing.T) {
+	targetDir := t.TempDir()
+	targetPath := filepath.Join(targetDir, "policy.yaml")
+	if err := os.WriteFile(targetPath, []byte("version: 0.1.0\n"), 0o600); err != nil {
+		t.Fatalf("write target policy: %v", err)
+	}
+
+	linkDir := t.TempDir()
+	linkPath := filepath.Join(linkDir, "policy.yaml")
+	if err := os.Symlink(targetPath, linkPath); err != nil {
+		t.Fatalf("symlink policy: %v", err)
+	}
+
+	resolvedPath, err := resolveRequiredLoadPath(linkPath, "policy file")
+	if err != nil {
+		t.Fatalf("resolve required load path: %v", err)
+	}
+	canonicalTargetPath, err := filepath.EvalSymlinks(targetPath)
+	if err != nil {
+		t.Fatalf("eval symlinks on target path: %v", err)
+	}
+	if resolvedPath != canonicalTargetPath {
+		t.Fatalf("expected resolved path %q, got %q", canonicalTargetPath, resolvedPath)
+	}
+}
+
 func TestLoadPolicy_EmptyFilesystemAllowedRootsFailsClosed(t *testing.T) {
 	repoRoot := t.TempDir()
 	policyPath := filepath.Join(repoRoot, "core", "policy", "policy.yaml")

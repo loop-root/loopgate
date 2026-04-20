@@ -61,11 +61,13 @@ func LoadPolicySignatureFile(repoRoot string) (PolicySignatureFile, error) {
 
 // LoadPolicySignatureFromPath strictly loads a detached policy signature file.
 func LoadPolicySignatureFromPath(signaturePath string) (PolicySignatureFile, error) {
-	rawSignatureBytes, err := os.ReadFile(signaturePath)
+	resolvedSignaturePath, err := resolveRequiredLoadPath(signaturePath, "policy signature file")
 	if err != nil {
-		if os.IsNotExist(err) {
-			return PolicySignatureFile{}, fmt.Errorf("required policy signature file not found at %s", signaturePath)
-		}
+		return PolicySignatureFile{}, err
+	}
+
+	rawSignatureBytes, err := os.ReadFile(resolvedSignaturePath)
+	if err != nil {
 		return PolicySignatureFile{}, fmt.Errorf("read policy signature: %w", err)
 	}
 

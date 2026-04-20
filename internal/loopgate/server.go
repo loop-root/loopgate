@@ -715,15 +715,12 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	mux.HandleFunc("/v1/approvals/", server.handleApprovalDecision)
 	mux.HandleFunc("/v1/hook/pre-validate", server.handleHookPreValidate)
 
-	handler := http.Handler(mux)
 	diagnostic, diagErr := loopdiag.Open(repoRoot, server.runtimeConfig.Logging.Diagnostic)
 	if diagErr != nil {
 		return nil, fmt.Errorf("open diagnostic logs: %w", diagErr)
 	}
 	server.diagnostic = diagnostic
-	if diagnostic != nil {
-		handler = loopdiag.HTTPMiddleware(diagnostic.Client, mux)
-	}
+	handler := server.wrapHTTPHandler(mux)
 	server.reportResponseWriteError = func(httpStatus int, cause error) {
 		fmt.Fprintf(os.Stderr, "ERROR: response_write status=%d class=%s\n", httpStatus, secrets.LoopgateOperatorErrorClass(cause))
 		if server.diagnostic != nil && server.diagnostic.Server != nil {
@@ -829,7 +826,20 @@ func (server *Server) Serve(ctx context.Context) error {
 
 	serveErr := server.server.Serve(listener)
 	// Give the nonce replay store a chance to compact or checkpoint durable state on shutdown.
-	_ = server.saveNonceReplayState()
+	saveNonceReplayErr := server.saveNonceReplayState()
+	if saveNonceReplayErr != nil {
+		if server.diagnostic != nil && server.diagnostic.Server != nil {
+			server.diagnostic.Server.Error("nonce_replay_shutdown_save_failed",
+				"operator_error_class", "state_persist_failed",
+				"error", saveNonceReplayErr.Error(),
+			)
+		}
+		saveNonceReplayErr = fmt.Errorf("save nonce replay state on shutdown: %w", saveNonceReplayErr)
+		if serveErr == nil || serveErr == http.ErrServerClosed {
+			return saveNonceReplayErr
+		}
+		return errors.Join(serveErr, saveNonceReplayErr)
+	}
 	if serveErr == nil || serveErr == http.ErrServerClosed {
 		return nil
 	}
@@ -945,7 +955,14 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 
 func (server *Server) prepareCapabilityRequestExecution(tokenClaims capabilityToken, capabilityRequest controlapipkg.CapabilityRequest, allowApprovalCreation bool) (controlapipkg.CapabilityRequest, *controlapipkg.CapabilityResponse) {
 	if strings.TrimSpace(capabilityRequest.RequestID) == "" {
-		requestID, _ := randomHex(8)
+		requestID, err := randomHex(8)
+		if err != nil {
+			return capabilityRequest, &controlapipkg.CapabilityResponse{
+				Status:       controlapipkg.ResponseStatusError,
+				DenialReason: "allocate request_id: " + err.Error(),
+				DenialCode:   controlapipkg.DenialCodeExecutionFailed,
+			}
+		}
 		capabilityRequest.RequestID = "req_" + requestID
 	}
 	if capabilityRequest.Arguments == nil {

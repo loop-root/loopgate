@@ -53,7 +53,9 @@ func TestExecuteCapabilityRequest_PersistsQuarantinedPayload(t *testing.T) {
 		description: "test remote fetch",
 		output:      "raw remote payload",
 	}
-	server.registry.Register(remoteTool)
+	if err := server.registry.Register(remoteTool); err != nil {
+		t.Fatalf("register remote_fetch: %v", err)
+	}
 	client.ConfigureSession("test-actor", "test-session", append(capabilityNames(server.capabilitySummaries()), "remote_fetch"))
 
 	response, err := client.ExecuteCapability(context.Background(), controlapipkg.CapabilityRequest{
