@@ -1,8 +1,14 @@
-**Last updated:** 2026-04-14
+**Last updated:** 2026-04-20
 
 # Docs Map
 
 This file maps **`docs/`** — design intent, setup, RFCs, and benchmarks. Use with `context_map.md` (repo-wide index) when present locally.
+
+## Start here
+
+- `docs/loopgate_v1_product_contract.md` — the current v1 product boundary and success bar
+- `docs/README.md` — top-level docs index
+- `docs/setup/GETTING_STARTED.md` — shortest path to a governed local Claude workflow
 
 ## Architecture Decision Records (`docs/ADR/`)
 
@@ -61,6 +67,7 @@ in the separate `ARCHIVED` repository under `ARCHIVED/docs/`.
 ## Other
 
 - `docs/README.md` — docs index entry
+- `docs/loopgate_v1_product_contract.md` — current Claude-first v1 product contract
 - `docs/contributor/` — contributor engineering guidance that expands the root contract in `AGENTS.md`
 - `docs/assets/` — shared assets
 

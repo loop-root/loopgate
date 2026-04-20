@@ -22,6 +22,7 @@ separate `ARCHIVED` repository and are not part of the public operator path.
 ## Start here
 
 - [Getting started](./setup/GETTING_STARTED.md)
+- [V1 product contract](./loopgate_v1_product_contract.md)
 - [Operator guide](./setup/OPERATOR_GUIDE.md)
 - [Setup](./setup/SETUP.md)
 - [Policy reference](./setup/POLICY_REFERENCE.md)
@@ -53,7 +54,7 @@ separate `ARCHIVED` repository and are not part of the public operator path.
 - [Operator guide](./setup/OPERATOR_GUIDE.md)
 - [Setup](./setup/SETUP.md)
 - [Doctor and ledger tools](./setup/DOCTOR_AND_LEDGER.md)
-- [Secrets](./setup/SECRETS.md)
+- [Secrets and experimental provider connections](./setup/SECRETS.md)
 - [Tool usage](./setup/TOOL_USAGE.md)
 
 ## Historical material

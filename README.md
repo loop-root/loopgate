@@ -1,14 +1,17 @@
 # Loopgate
 
-**Last updated:** 2026-04-19
+**Last updated:** 2026-04-20
 
 **Loopgate** is a local-first governance layer for AI-assisted engineering work.
+
+The current product contract is here:
+- [Loopgate V1 product contract](./docs/loopgate_v1_product_contract.md)
 
 Current product scope:
 - govern what your AI tools are allowed to do
 - require approval for higher-risk actions
 - record a durable local audit trail of what happened
-- provide a local control plane for hook-based harnesses and governed tool execution
+- provide a local control plane for Claude Code hook governance
 - verify local audit integrity with a hash-linked ledger plus default-on HMAC checkpoints on macOS
 
 **Current MVP harness:** **Claude Code + project hooks + Loopgate**
@@ -39,8 +42,9 @@ For the current local-first product, that means:
 - Claude Code hooks can be governed before tool execution
 - risky actions can be denied or approval-gated
 - low-risk actions can be allowed with audit
-- governed MCP execution can run through Loopgate’s own broker path
+- governed MCP execution can run through Loopgate’s own broker path when explicitly enabled
 - local audit stays authoritative even if later export or aggregation changes
+- setup should lead operators toward two intentional starter policies: `strict` and `balanced`
 
 ## Active product surface
 
@@ -59,6 +63,8 @@ What is not the active product story right now:
 - legacy worker/runtime experiments
 - distributed enterprise deployment
 - automatic memory or continuity inside Loopgate
+- provider-backed OAuth/PKCE setup as part of the main v1 operator flow
+- secret brokerage as a top-level product feature
 
 ## Quick start
 
@@ -94,10 +100,21 @@ names such as `loopgate` and `loopgate-policy-admin`.
 
 `loopgate setup` is the guided first-run path. It:
 - initializes or reuses your local policy-signing key
-- lets you choose a starter policy profile: `strict`, `balanced`, or `developer`
+- lets you choose a starter policy profile: `strict` or `balanced`
+- shows the setup plan before it mutates local state
 - signs the selected policy
+- checks for `python3` before Claude hook install
 - installs Claude Code hooks
 - can install and load a macOS LaunchAgent so Loopgate keeps running in the background
+
+Starter profiles:
+- `balanced` is the recommended daily-driver: Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` stay open inside the repo root, while `Write` and allowed Bash commands require approval.
+- `strict` is the higher-sensitivity option: repo reads stay open, but all Claude file edits require approval and Bash stays disabled.
+
+If you need the broader `developer` template, render and review it manually
+with `./bin/loopgate-policy-admin render-template -preset developer`. That
+template is kept as an experimental escape hatch, not as part of the supported
+v1 setup path.
 
 Important:
 - Claude hook install is global to your local Claude Code config under `~/.claude/`
@@ -201,7 +218,8 @@ Loopgate is publishable, but it is still an experimental local-first alpha.
 Current realities to keep in mind:
 - macOS-first, single-node operator flow is the active shipped scope
 - Claude Code hooks and the governed MCP broker path are the practical attachment surface today
-- the policy surface is intentionally strict by default; many teams will want to tune or replace the starter policy before daily use
+- the supported starter policy profiles for the guided path are intentionally narrow: `strict` and `balanced`
+- provider-backed OAuth/PKCE connection flows still exist in-tree as experimental groundwork, but they are not part of the main v1 onboarding story
 - local audit integrity is strong local-machine evidence, not remote notarization; see [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md) for the exact hash-chain and checkpoint limits
 - internal package cleanup is in progress, so contributor ergonomics are improving but not yet boring
 

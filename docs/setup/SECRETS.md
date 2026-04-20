@@ -1,6 +1,11 @@
-**Last updated:** 2026-04-11
+**Last updated:** 2026-04-20
 
 # Secrets Subsystem (First Pass)
+
+Provider-backed connection secrets and OAuth/PKCE flows remain in the repo as
+experimental groundwork. They are not part of the main v1 product contract or
+the supported Claude-first setup story. The supported v1 product is local
+governance, policy, approvals, and audit.
 
 The current repo has two different secret stories, and they should not be
 confused:
@@ -129,7 +134,7 @@ Target direction:
 - Connected clients do not receive provider access tokens, refresh tokens, or client
   secrets
 
-Current operator pattern for Loopgate-managed client credentials:
+Experimental operator pattern for Loopgate-managed client credentials:
 
 1. Define a connection in `loopgate/connections/<name>.yaml` with:
    - provider
@@ -149,7 +154,7 @@ Current operator pattern for Loopgate-managed client credentials:
 The raw access token remains in Loopgate memory only. Clients receive only the
 structured capability result and any `quarantine_ref`.
 
-Current operator pattern for Loopgate-managed PKCE:
+Experimental operator pattern for Loopgate-managed PKCE:
 
 1. Define a connection in `loopgate/connections/<name>.yaml` with:
    - grant_type: `pkce`

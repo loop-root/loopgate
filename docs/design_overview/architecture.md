@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-14
+**Last updated:** 2026-04-20
 
 # Loopgate architecture overview
 
@@ -21,7 +21,7 @@ architecture. That work lives in the separate sibling repository named
 
 ## 1) Current system classification
 
-As of **2026-04-14**, the implemented and supported shape is:
+As of **2026-04-20**, the implemented and supported shape is:
 
 - local-first
 - single-machine
@@ -71,7 +71,7 @@ Loopgate owns:
 - approval state
 - capability execution mediation
 - sandbox boundaries
-- provider credential handling
+- experimental provider credential handling groundwork that is not part of the main v1 onboarding story
 - governed MCP server lifecycle and execution
 - authoritative local audit persistence
 

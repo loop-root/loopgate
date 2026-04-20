@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-19
+**Last updated:** 2026-04-20
 
 # Loopgate Glossary
 
@@ -75,10 +75,16 @@ status views and summaries are derived from it, not the other way around.
 
 A starter signed-policy template intended to reduce first-time setup friction.
 
-Current built-in profiles are:
+Supported guided-setup profiles are:
 - `strict`
 - `balanced`
-- `developer`
+
+In practice:
+- `strict` keeps Bash disabled and requires approval for Claude file edits
+- `balanced` allows patch-style Claude edits in-repo, while keeping raw writes and Bash behind approval
+
+An additional `developer` template exists for manual rendering and review, but
+it is treated as experimental rather than part of the supported v1 setup path.
 
 They are starting points, not authority shortcuts. The selected profile is
 still written as a normal policy file and signed through the standard policy

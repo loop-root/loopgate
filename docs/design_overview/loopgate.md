@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-14
+**Last updated:** 2026-04-20
 
 # Loopgate
 
@@ -10,6 +10,12 @@ It is the enforcement point for capabilities, approvals, integration auth, and o
 **v1 transport:** Local clients use **HTTP** on the **Unix domain socket** control plane — Claude Code hook helpers, IDE bridges, tests, and custom integrators attach this way. (An in-tree stdio MCP server was **removed**; see `docs/ADR/0010-macos-supported-target-and-mcp-removal.md`.) **Apple XPC** (or similar) is **optional future hardening** with **no committed milestone (TBD)** — not a v1 requirement — see `docs/rfcs/0001-loopgate-token-policy.md` and `docs/loopgate-threat-model.md`.
 
 **Primary integrators:** [Loopgate HTTP API for local clients](../setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md) (session open, signing, route list). MCP-shaped hosts should use an **external forwarder**. In-tree MCP remains removed; ADR 0010 is the historical record and constraint on any future reintroduction.
+
+**V1 contract note:** the current supported v1 product is Claude-first local
+governance, signed policy, approvals, and audit. Provider-backed connection
+flows, OAuth/PKCE helpers, and secret-brokerage-style setup remain in-tree as
+experimental groundwork and should not define the main onboarding or default
+operator story.
 
 **Security posture (honest v1 vs future work):** [Threat model](../loopgate-threat-model.md) and [RFC 0001](../rfcs/0001-loopgate-token-policy.md) — same-user threat scope, **`GET /v1/health`** as the only unauthenticated inventory-free probe, signed **`GET /v1/status`** / **`GET /v1/connections/status`**, peer binding, and v2 backlog (codesign / XPC).
 
@@ -52,15 +58,7 @@ As of **2026-03-24**, the repo contains a local Loopgate MVP (ongoing ship-prep 
 - typed display-safe UI status and approval list endpoints
 - in-memory display-event ring buffer and SSE replay via `Last-Event-ID`
 - UI approval decisions that stay inside Loopgate authority and do not expose decision nonces to UI callers
-- persisted Loopgate connection records at `runtime/state/loopgate_connections.json`
-- Loopgate-owned secret-ref validation and resolution via the shared `SecretRef` / `SecretStore` boundary
-- macOS Keychain-backed secret storage for `secure` / `macos_keychain` refs on Darwin, with explicit fail-closed stubs on other desktop platforms
-- internal Loopgate connection lifecycle methods for credential creation, validation, secret resolution, and rotation-safe overwrite without exposing raw secret material to the operator client
-- YAML-backed Loopgate connection definitions loaded from `loopgate/connections/*.yaml`
-- client-credentials token exchange inside Loopgate for configured provider connections, with in-memory access-token caching only
-- PKCE authorization-code start/complete flow inside Loopgate for configured provider connections, with refresh-token storage in the secure backend and in-memory access-token caching
-- explicit `public_read` configured connections for host-allowlisted unauthenticated GET workflows such as public status pages
-- typed provider-backed HTTP read capabilities registered through Loopgate config, not the unprivileged client
+- experimental in-tree provider connection records, secret-ref handling, and OAuth/PKCE groundwork for future provider-backed capabilities
 - delegated Loopgate client construction for bridge/UI use without calling `/v1/session/open`
 - explicit quarantine metadata and blob-view endpoints for operator inspection
 - explicit site inspection and trust-draft endpoints for narrow runtime onboarding of new `public_read` sources
@@ -80,10 +78,11 @@ Implemented endpoints:
 - `GET /v1/ui/events` (`ui.read`)
 - `GET /v1/ui/approvals` (approval-token authenticated UI route)
 - `POST /v1/ui/approvals/{id}/decision` (approval-token authenticated; body `{ "approved": bool }`)
-- `GET /v1/connections/status` (Bearer + signed GET + `connection.read`)
-- `POST /v1/connections/validate` (`connection.write`)
-- `POST /v1/connections/pkce/start` (`connection.write`)
-- `POST /v1/connections/pkce/complete` (`connection.write`)
+- experimental provider-connection endpoints:
+  - `GET /v1/connections/status` (Bearer + signed GET + `connection.read`)
+  - `POST /v1/connections/validate` (`connection.write`)
+  - `POST /v1/connections/pkce/start` (`connection.write`)
+  - `POST /v1/connections/pkce/complete` (`connection.write`)
 - `POST /v1/quarantine/metadata` (`quarantine.read`)
 - `POST /v1/quarantine/view` (`quarantine.read`)
 - `POST /v1/quarantine/prune` (`quarantine.write`)

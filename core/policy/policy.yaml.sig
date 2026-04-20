@@ -1,4 +1,4 @@
 version: "1"
 algorithm: ed25519
 key_id: loopgate-policy-root-2026-04
-signature: nq6JrFw500qVIqrJORIGgAkuaowo3cRfmj9y54ywc4/W/TpkaR7hElD7rYgsyjpI4fJXyMatPCK3UD7zeTPEAA==
+signature: Yzv0/C+W/ko5rRPqleKCacXEr9kf7zONykKxPaijt0qL3g8y9Y1c+1YtFBWXEjQp33P7suTGslpGbiUQmGIcDQ==

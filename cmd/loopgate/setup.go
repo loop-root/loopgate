@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -16,12 +17,23 @@ import (
 
 const defaultSetupPolicyProfile = "balanced"
 
+type loopgateSetupPlan struct {
+	RepoRoot           string
+	KeyID              string
+	ClaudeDir          string
+	SelectedPreset     config.PolicyTemplatePreset
+	InstallHooks       bool
+	Python3Path        string
+	InstallLaunchAgent bool
+	LoadLaunchAgent    bool
+}
+
 func runSetup(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	repoRootFlag := fs.String("repo-root", "", "repository root containing Loopgate config and signed policy files")
 	keyIDFlag := fs.String("key-id", "", "policy signing key identifier (default: local-operator-<short-hostname>)")
-	profileFlag := fs.String("profile", "", "starter policy profile: strict, balanced, or developer")
+	profileFlag := fs.String("profile", "", "starter policy profile: strict or balanced")
 	installHooksFlag := fs.Bool("install-hooks", false, "install Claude Code hooks")
 	skipHooksFlag := fs.Bool("skip-hooks", false, "skip Claude Code hook installation")
 	claudeDirFlag := fs.String("claude-dir", "", "Claude config directory used with -install-hooks")
@@ -55,9 +67,13 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 	if err != nil {
 		return err
 	}
+	claudeDir := resolveSetupClaudeDir(strings.TrimSpace(*claudeDirFlag))
 
 	interactive := readerIsInteractive(stdin)
 	promptReader := bufio.NewReader(stdin)
+	if interactive && !*yesFlag {
+		printSetupIntro(stdout, repoRoot, keyID, claudeDir)
+	}
 
 	selectedPreset, err := resolveSetupPolicyPreset(strings.TrimSpace(*profileFlag), *yesFlag, interactive, promptReader, stdout)
 	if err != nil {
@@ -80,6 +96,31 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 			if err != nil {
 				return err
 			}
+		}
+	}
+
+	setupPlan := loopgateSetupPlan{
+		RepoRoot:           repoRoot,
+		KeyID:              keyID,
+		ClaudeDir:          claudeDir,
+		SelectedPreset:     selectedPreset,
+		InstallHooks:       installHooks,
+		InstallLaunchAgent: installLaunchAgentChoice,
+		LoadLaunchAgent:    loadLaunchAgent,
+	}
+	python3Path, err := validateSetupPrerequisites(setupPlan)
+	if err != nil {
+		return err
+	}
+	setupPlan.Python3Path = python3Path
+	if interactive && !*yesFlag {
+		printSetupPlanSummary(stdout, setupPlan)
+		proceed, err := promptYesNo(promptReader, stdout, "Proceed with setup", true)
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			return fmt.Errorf("setup canceled by operator")
 		}
 	}
 
@@ -125,6 +166,10 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 	fmt.Fprintf(stdout, "signature_path: %s\n", config.PolicySignaturePath(repoRoot))
 	fmt.Fprintf(stdout, "socket_path: %s\n", initResult.SocketPath)
 	fmt.Fprintf(stdout, "claude_hooks_installed: %t\n", installHooks)
+	if installHooks {
+		fmt.Fprintf(stdout, "claude_dir: %s\n", claudeDir)
+		fmt.Fprintf(stdout, "python3_path: %s\n", setupPlan.Python3Path)
+	}
 	fmt.Fprintf(stdout, "launch_agent_installed: %t\n", installLaunchAgentChoice)
 	if installLaunchAgentChoice {
 		fmt.Fprintf(stdout, "launch_agent_label: %s\n", launchAgentResult.Label)
@@ -139,15 +184,16 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 	default:
 		fmt.Fprintln(stdout, "next_step: Start Loopgate with ./bin/loopgate, or install a LaunchAgent later with ./bin/loopgate install-launch-agent -load.")
 	}
+	printSetupVerificationHints(stdout)
 	return nil
 }
 
 func resolveSetupPolicyPreset(profileFlag string, assumeDefaults bool, interactive bool, promptReader *bufio.Reader, stdout io.Writer) (config.PolicyTemplatePreset, error) {
 	if trimmedProfileFlag := strings.TrimSpace(profileFlag); trimmedProfileFlag != "" {
-		return config.ResolvePolicyTemplatePreset(trimmedProfileFlag)
+		return config.ResolveSetupPolicyTemplatePreset(trimmedProfileFlag)
 	}
 	if assumeDefaults {
-		return config.ResolvePolicyTemplatePreset(defaultSetupPolicyProfile)
+		return config.ResolveSetupPolicyTemplatePreset(defaultSetupPolicyProfile)
 	}
 	if !interactive {
 		return config.PolicyTemplatePreset{}, fmt.Errorf("setup needs -profile or -yes when stdin is not interactive")
@@ -194,9 +240,11 @@ func buildHookPromptText(claudeDirFlag string) string {
 
 func promptForPolicyTemplatePreset(promptReader *bufio.Reader, stdout io.Writer) (config.PolicyTemplatePreset, error) {
 	fmt.Fprintln(stdout, "Choose a starter policy profile:")
-	for index, preset := range config.PolicyTemplatePresets() {
-		fmt.Fprintf(stdout, "  %d. %s - %s\n", index+1, preset.Name, preset.Summary)
+	for index, preset := range config.SetupPolicyTemplatePresets() {
+		printPolicyTemplatePresetChoice(stdout, index+1, preset)
 	}
+	fmt.Fprintln(stdout, "For the current v1 setup flow, only strict and balanced are supported here.")
+	fmt.Fprintln(stdout, "If you need the broader developer template, render and review it manually with loopgate-policy-admin.")
 	for {
 		fmt.Fprintf(stdout, "Policy profile [%s]: ", defaultSetupPolicyProfile)
 		responseLine, err := promptReader.ReadString('\n')
@@ -205,19 +253,44 @@ func promptForPolicyTemplatePreset(promptReader *bufio.Reader, stdout io.Writer)
 		}
 		trimmedResponse := strings.TrimSpace(responseLine)
 		if trimmedResponse == "" {
-			return config.ResolvePolicyTemplatePreset(defaultSetupPolicyProfile)
+			return config.ResolveSetupPolicyTemplatePreset(defaultSetupPolicyProfile)
 		}
 		if numericChoice, parseErr := strconv.Atoi(trimmedResponse); parseErr == nil {
-			presets := config.PolicyTemplatePresets()
+			presets := config.SetupPolicyTemplatePresets()
 			if numericChoice >= 1 && numericChoice <= len(presets) {
 				return presets[numericChoice-1], nil
 			}
 		}
-		preset, resolveErr := config.ResolvePolicyTemplatePreset(trimmedResponse)
+		preset, resolveErr := config.ResolveSetupPolicyTemplatePreset(trimmedResponse)
 		if resolveErr == nil {
 			return preset, nil
 		}
-		fmt.Fprintf(stdout, "Enter one of: %s\n", strings.Join(config.PolicyTemplatePresetNames(), ", "))
+		fmt.Fprintf(stdout, "Enter one of: %s\n", strings.Join(config.SetupPolicyTemplatePresetNames(), ", "))
+	}
+}
+
+func printPolicyTemplatePresetChoice(output io.Writer, numericChoice int, preset config.PolicyTemplatePreset) {
+	fmt.Fprintf(output, "\n  %d. %s", numericChoice, preset.Name)
+	if preset.RecommendedInSetup {
+		fmt.Fprint(output, " (recommended)")
+	}
+	fmt.Fprintln(output)
+	fmt.Fprintf(output, "     %s\n", preset.Summary)
+	if strings.TrimSpace(preset.UseCase) != "" {
+		fmt.Fprintf(output, "     Use when: %s\n", preset.UseCase)
+	}
+	printIndentedList(output, "     Always allowed:", preset.AlwaysAllowed)
+	printIndentedList(output, "     Approval required:", preset.ApprovalRequired)
+	printIndentedList(output, "     Hard blocks:", preset.HardBlocks)
+}
+
+func printIndentedList(output io.Writer, heading string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	fmt.Fprintln(output, heading)
+	for _, value := range values {
+		fmt.Fprintf(output, "       - %s\n", value)
 	}
 }
 
@@ -273,4 +346,66 @@ func writeAndSignPolicyPreset(repoRoot string, preset config.PolicyTemplatePrese
 		return fmt.Errorf("verify signed policy after applying %s starter profile: %w", preset.Name, err)
 	}
 	return nil
+}
+
+func resolveSetupClaudeDir(claudeDirFlag string) string {
+	if trimmedClaudeDirFlag := strings.TrimSpace(claudeDirFlag); trimmedClaudeDirFlag != "" {
+		return filepath.Clean(trimmedClaudeDirFlag)
+	}
+	claudeDir, err := defaultClaudeDir()
+	if err != nil {
+		return "(unavailable: could not determine default Claude config directory)"
+	}
+	return claudeDir
+}
+
+func printSetupIntro(output io.Writer, repoRoot string, keyID string, claudeDir string) {
+	fmt.Fprintln(output, "Loopgate setup")
+	fmt.Fprintln(output, "This wizard configures local signed policy, Claude hook governance, and optional background startup.")
+	fmt.Fprintf(output, "Repository: %s\n", repoRoot)
+	fmt.Fprintf(output, "Policy signer: %s\n", keyID)
+	fmt.Fprintf(output, "Claude config: %s\n", claudeDir)
+	fmt.Fprintf(output, "Recommended starter profile: %s\n", defaultSetupPolicyProfile)
+	fmt.Fprintln(output)
+}
+
+func validateSetupPrerequisites(plan loopgateSetupPlan) (string, error) {
+	if !plan.InstallHooks {
+		return "", nil
+	}
+	python3Path, err := exec.LookPath("python3")
+	if err != nil {
+		return "", fmt.Errorf("Claude hooks require python3 on PATH; install Python 3 or rerun setup with -skip-hooks")
+	}
+	return filepath.Clean(python3Path), nil
+}
+
+func printSetupPlanSummary(output io.Writer, plan loopgateSetupPlan) {
+	fmt.Fprintln(output)
+	fmt.Fprintln(output, "Setup plan:")
+	fmt.Fprintf(output, "  Policy profile: %s\n", plan.SelectedPreset.Name)
+	fmt.Fprintf(output, "    %s\n", plan.SelectedPreset.Summary)
+	fmt.Fprintf(output, "  Signed policy path: %s\n", filepath.Join(plan.RepoRoot, "core", "policy", "policy.yaml"))
+	if plan.InstallHooks {
+		fmt.Fprintf(output, "  Claude hooks: install into %s\n", plan.ClaudeDir)
+		fmt.Fprintf(output, "  Python runtime: %s\n", plan.Python3Path)
+	} else {
+		fmt.Fprintln(output, "  Claude hooks: skip")
+	}
+	switch {
+	case plan.InstallLaunchAgent && plan.LoadLaunchAgent:
+		fmt.Fprintln(output, "  Background startup: install and load the macOS LaunchAgent")
+	case plan.InstallLaunchAgent:
+		fmt.Fprintln(output, "  Background startup: install the macOS LaunchAgent without loading it yet")
+	default:
+		fmt.Fprintln(output, "  Background startup: skip LaunchAgent installation")
+	}
+	fmt.Fprintln(output)
+}
+
+func printSetupVerificationHints(output io.Writer) {
+	fmt.Fprintln(output, "verify:")
+	fmt.Fprintln(output, "  1. Run /hooks inside Claude Code and confirm the Loopgate hook entries are present.")
+	fmt.Fprintln(output, "  2. Ask Claude Code to read README.md and confirm the request is governed without surprise prompts.")
+	fmt.Fprintln(output, "  3. Run ./bin/loopgate-ledger tail -verbose to inspect the resulting local audit trail.")
 }

@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-19
+**Last updated:** 2026-04-20
 
 # Loopgate Operator Guide
 
@@ -32,6 +32,10 @@ The checked-in starter policy is intentionally strict. Use
 `./bin/loopgate-policy-admin render-template` when you want to review or
 customize the policy surface before signing and applying it.
 
+The guided setup path is intentionally opinionated:
+- `balanced` is the recommended daily-driver for normal local engineering work
+- `strict` is the higher-sensitivity option for repos that should stay read-first until you widen policy deliberately
+
 The command examples below use the built binaries under `./bin/`. If you ran
 `make install-local`, use the bare command names instead.
 
@@ -62,10 +66,27 @@ make build
 
 `loopgate setup` is the fastest supported path for operators. It:
 - initializes or reuses the local signer
-- lets you choose `strict`, `balanced`, or `developer`
+- lets you choose `strict` or `balanced`
+- shows the setup plan before applying it
 - signs the selected policy
+- checks for `python3` before Claude hook install
 - installs Claude Code hooks
 - can install and load a macOS LaunchAgent
+
+Profile intent:
+- `balanced`
+  - allows Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` inside the repo root
+  - keeps Claude `Write` and allowed Bash commands behind approval
+  - keeps HTTP disabled
+- `strict`
+  - allows repo reads and search
+  - keeps all Claude file edits behind approval
+  - keeps Bash and HTTP disabled
+
+If you need the broader `developer` template, render it manually with
+`./bin/loopgate-policy-admin render-template -preset developer` and review it
+before signing. It remains an experimental escape hatch, not part of the main
+v1 setup flow.
 
 Important:
 - hook install writes into your user-level Claude config under `~/.claude/`

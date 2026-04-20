@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-19
+**Last updated:** 2026-04-20
 
 # Getting Started
 
@@ -60,16 +60,29 @@ command names such as `loopgate`, `loopgate-ledger`, and
 
 `loopgate setup` is the shortest supported operator path. It guides you through:
 - local policy-signing setup
-- choosing a starter policy profile: `strict`, `balanced`, or `developer`
+- choosing a starter policy profile: `strict` or `balanced`
+- reviewing the setup plan before local state is changed
 - signing the selected policy
+- checking for `python3` before Claude hook install
 - installing Claude Code hooks
 - optionally installing and loading a macOS LaunchAgent so Loopgate keeps running in the background
 
 Recommended default:
 - `balanced`
-  - common inspection and test commands are available through approval-gated shell policy
+  - Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` are allowed inside the repo root
+  - Claude `Write` and allowed Bash commands still require approval
   - HTTP stays disabled
-  - writes still require approval
+
+Higher-sensitivity option:
+- `strict`
+  - Claude reads and search stay allowed inside the repo root
+  - all Claude file edits require approval
+  - Bash and HTTP stay disabled
+
+If you need the broader `developer` template, render it manually with
+`./bin/loopgate-policy-admin render-template -preset developer` and review it
+before signing. That template is treated as experimental and is not part of the
+supported first-run setup path.
 
 Important:
 - hook install writes into your user-level Claude config under `~/.claude/`

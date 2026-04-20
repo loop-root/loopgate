@@ -24,7 +24,7 @@ Use it when changing:
     - `install-launch-agent`
     - `remove-hooks`
   - `quickstart` is the non-interactive recommended-default path: it delegates to `setup -yes` so first-time onboarding stays on the same signer-init, signed-policy, hook-install, and optional LaunchAgent code path
-  - `setup` is the guided first-run path: local signer init/reuse, starter policy profile selection, signed policy write, hook install, and optional macOS LaunchAgent install
+  - `setup` is the guided first-run path: local signer init/reuse, `strict` or `balanced` starter policy selection, signed policy write, hook install, and optional macOS LaunchAgent install
   - `install-hooks` copies the tracked hook bundle from `claude/hooks/scripts/` into the target Claude config dir and wires the supported hook events into `settings.json`
   - `install-launch-agent` writes a per-repo macOS LaunchAgent plist pointed at the current Loopgate binary and can load it immediately with `launchctl`
   - `remove-hooks` removes only the Loopgate-managed hook entries and leaves copied scripts in place
@@ -45,7 +45,7 @@ Use it when changing:
   - validates signed repo policy or an arbitrary policy YAML file against the same strict parser used at runtime
   - explains the current Claude Code tool policy surface, including deny-unknown-tools behavior and per-tool overrides
   - diffs two normalized policy documents so operators can review effective changes before signing
-  - renders starter admin policy templates for `strict`, `balanced`, and `developer` (still accepting `strict-mvp` as a compatibility alias)
+  - renders starter admin policy templates for `strict`, `balanced`, and the experimental `developer` escape hatch (still accepting `strict-mvp` as a compatibility alias)
   - hot-applies the already signed on-disk policy to a running local Loopgate instance via `apply`
   - `apply -verify-setup` also verifies the local signer key against the trusted public key set before hot reload
   - treats detached signature verification as required for the default repo policy path and optional for ad hoc template files

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"os"
@@ -40,6 +41,27 @@ func TestRunSetup_AppliesBalancedProfileAndInstallsHooks(t *testing.T) {
 	if loadedPolicy.Tools.HTTP.Enabled {
 		t.Fatal("expected balanced profile to keep HTTP disabled")
 	}
+	editPolicy, ok := loadedPolicy.ClaudeCodeToolPolicy("Edit")
+	if !ok {
+		t.Fatal("expected Edit tool policy in balanced profile")
+	}
+	if editPolicy.RequiresApproval == nil || *editPolicy.RequiresApproval {
+		t.Fatalf("expected balanced Edit policy to avoid approval, got %#v", editPolicy.RequiresApproval)
+	}
+	writePolicy, ok := loadedPolicy.ClaudeCodeToolPolicy("Write")
+	if !ok {
+		t.Fatal("expected Write tool policy in balanced profile")
+	}
+	if writePolicy.RequiresApproval == nil || !*writePolicy.RequiresApproval {
+		t.Fatalf("expected balanced Write policy to require approval, got %#v", writePolicy.RequiresApproval)
+	}
+	bashPolicy, ok := loadedPolicy.ClaudeCodeToolPolicy("Bash")
+	if !ok {
+		t.Fatal("expected Bash tool policy in balanced profile")
+	}
+	if bashPolicy.RequiresApproval == nil || !*bashPolicy.RequiresApproval {
+		t.Fatalf("expected balanced Bash policy to require approval, got %#v", bashPolicy.RequiresApproval)
+	}
 
 	for _, scriptName := range loopgateHookBundleFiles {
 		scriptPath := filepath.Join(claudeDir, claudeHooksDirname, scriptName)
@@ -52,6 +74,12 @@ func TestRunSetup_AppliesBalancedProfileAndInstallsHooks(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "profile: balanced") {
 		t.Fatalf("expected profile output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "python3_path:") {
+		t.Fatalf("expected python3 path in setup output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "verify:") {
+		t.Fatalf("expected verification hints in setup output, got %q", stdout.String())
 	}
 }
 
@@ -66,6 +94,47 @@ func TestRunSetup_RequiresExplicitChoicesWhenNonInteractive(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "-profile or -yes") {
 		t.Fatalf("expected missing-choice error, got %v", err)
+	}
+}
+
+func TestRunSetup_RejectsDeveloperProfileInGuidedSetup(t *testing.T) {
+	repoRoot := makeSetupTestRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(policySigningTrustDirEnv, filepath.Join(t.TempDir(), "trusted"))
+
+	err := runSetup([]string{
+		"-repo-root", repoRoot,
+		"-profile", "developer",
+		"-skip-hooks",
+		"-skip-launch-agent",
+	}, strings.NewReader(""), io.Discard, io.Discard)
+	if err == nil {
+		t.Fatal("expected developer profile to be rejected in guided setup")
+	}
+	if !strings.Contains(err.Error(), "supported: strict, balanced") {
+		t.Fatalf("expected supported setup profiles in error, got %v", err)
+	}
+}
+
+func TestRunSetup_InstallHooksRequiresPython3(t *testing.T) {
+	repoRoot := makeSetupTestRepo(t)
+	claudeDir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", "")
+	t.Setenv(policySigningTrustDirEnv, filepath.Join(t.TempDir(), "trusted"))
+
+	err := runSetup([]string{
+		"-repo-root", repoRoot,
+		"-profile", "balanced",
+		"-install-hooks",
+		"-skip-launch-agent",
+		"-claude-dir", claudeDir,
+	}, strings.NewReader(""), io.Discard, io.Discard)
+	if err == nil {
+		t.Fatal("expected missing python3 to fail setup")
+	}
+	if !strings.Contains(err.Error(), "python3 on PATH") {
+		t.Fatalf("expected python3 prerequisite error, got %v", err)
 	}
 }
 
@@ -108,6 +177,27 @@ func TestRunQuickstart_UsesRecommendedDefaultsNonInteractive(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "claude_hooks_installed: true") {
 		t.Fatalf("expected quickstart to install hooks, got %q", stdout.String())
+	}
+}
+
+func TestPromptForPolicyTemplatePreset_ShowsProfileDetails(t *testing.T) {
+	var stdout bytes.Buffer
+	preset, err := promptForPolicyTemplatePreset(bufio.NewReader(strings.NewReader("\n")), &stdout)
+	if err != nil {
+		t.Fatalf("promptForPolicyTemplatePreset: %v", err)
+	}
+	if preset.Name != "balanced" {
+		t.Fatalf("expected default preset balanced, got %q", preset.Name)
+	}
+	renderedOutput := stdout.String()
+	if !strings.Contains(renderedOutput, "balanced (recommended)") {
+		t.Fatalf("expected recommended profile in prompt output, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "Approval required:") {
+		t.Fatalf("expected approval details in prompt output, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "Hard blocks:") {
+		t.Fatalf("expected hard block details in prompt output, got %q", renderedOutput)
 	}
 }
 

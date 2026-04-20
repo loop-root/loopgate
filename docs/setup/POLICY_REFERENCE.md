@@ -1,6 +1,6 @@
 # Policy reference
 
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-20
 
 This page is the operator-facing reference for `core/policy/policy.yaml`.
 
@@ -194,9 +194,9 @@ These should usually stay `false`.
 The checked-in `core/policy/policy.yaml` is an intentionally strict starter policy for a fresh public checkout:
 
 - Claude filesystem reads are allowed within the repo root
-- writes require approval
+- Claude writes and edits require approval
 - shell, HTTP, and governed MCP start disabled
-- policy and persona mutation stay denied
+- policy, persona, runtime state, `.git`, and Claude settings mutation stay denied
 
 If you want a more permissive local-development starting point, render a reviewed template first:
 
@@ -206,10 +206,18 @@ If you want a more permissive local-development starting point, render a reviewe
 
 Available starter profiles:
 - `strict`
-  - read-oriented starter profile; shell and HTTP disabled
+  - higher-sensitivity starter profile
+  - repo reads and search stay open
+  - Claude `Write`, `Edit`, and `MultiEdit` require approval
+  - Bash and HTTP stay disabled
 - `balanced`
-  - approval-gated common inspection and test shell commands; HTTP disabled
+  - recommended daily-driver for local engineering work
+  - Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` are allowed inside the repo root
+  - Claude `Write` and allowed Bash commands require approval
+  - HTTP stays disabled
+
+Experimental manual template:
 - `developer`
-  - approval-gated common development shell commands plus HTTP enabled
+  - broader development shell commands plus HTTP enabled; not part of the supported guided v1 setup path
 
 Then inspect, sign, and apply the chosen profile through the normal signed-policy workflow, or use `./bin/loopgate setup` for the guided path.

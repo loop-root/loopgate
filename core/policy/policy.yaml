@@ -5,13 +5,13 @@ version: 0.1.0
 # This checked-in signed policy is intentionally conservative for a fresh public
 # checkout:
 # - Claude read-oriented hooks are allowed within the repo root
-# - Claude writes require approval
+# - Claude writes and edits require approval
 # - ambient shell, HTTP, and governed MCP stay disabled until an operator opts in
 # - policy and persona mutation remain denied
 #
-# If you want a more permissive local-development starting point, render a
+# If you want a lower-friction daily engineering starting point, render a
 # reviewed template first:
-#   go run ./cmd/loopgate-policy-admin render-template -preset developer
+#   go run ./cmd/loopgate-policy-admin render-template -preset balanced
 #
 # Then sign and apply that reviewed policy through the normal signed-policy
 # workflow.
@@ -28,6 +28,8 @@ tools:
         allowed_roots:
           - "."
         denied_paths:
+          - ".git"
+          - "persona"
           - "runtime/state"
           - "core/policy"
       Glob:
@@ -35,6 +37,8 @@ tools:
         allowed_roots:
           - "."
         denied_paths:
+          - ".git"
+          - "persona"
           - "runtime/state"
           - "core/policy"
       Grep:
@@ -42,6 +46,8 @@ tools:
         allowed_roots:
           - "."
         denied_paths:
+          - ".git"
+          - "persona"
           - "runtime/state"
           - "core/policy"
       Write:
@@ -50,18 +56,33 @@ tools:
         allowed_roots:
           - "."
         denied_paths:
+          - ".git"
+          - "persona"
           - "core/policy"
+          - "runtime/state"
           - ".claude/settings.json"
       Edit:
         enabled: true
         requires_approval: true
         allowed_roots:
           - "."
+        denied_paths:
+          - ".git"
+          - "persona"
+          - "core/policy"
+          - "runtime/state"
+          - ".claude/settings.json"
       MultiEdit:
         enabled: true
         requires_approval: true
         allowed_roots:
           - "."
+        denied_paths:
+          - ".git"
+          - "persona"
+          - "core/policy"
+          - "runtime/state"
+          - ".claude/settings.json"
       WebFetch:
         enabled: false
       WebSearch:
@@ -75,9 +96,11 @@ tools:
     allowed_roots:
       - "."
     denied_paths:
+      - ".git"
       - "core/policy"
       - "persona"
       - "runtime/state"
+      - ".claude/settings.json"
     read_enabled: true
     write_enabled: true
     write_requires_approval: true
