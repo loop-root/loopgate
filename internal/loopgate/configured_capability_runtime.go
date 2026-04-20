@@ -20,6 +20,12 @@ type providerAccessToken struct {
 	ExpiresAt     time.Time
 }
 
+type providerTokenFetch struct {
+	done        chan struct{}
+	accessToken string
+	err         error
+}
+
 const (
 	contentOriginRemote          = "remote"
 	contentClassStructuredJSON   = "structured_json"
@@ -126,41 +132,81 @@ func (server *Server) executeConfiguredCapability(ctx context.Context, capabilit
 
 func (server *Server) accessTokenForConfiguredConnection(ctx context.Context, configuredConnectionDefinition configuredConnection) (string, error) {
 	connectionKey := connectionRecordKey(configuredConnectionDefinition.Registration.Provider, configuredConnectionDefinition.Registration.Subject)
+	nowUTC := server.now().UTC()
 
 	server.providerRuntime.mu.Lock()
 	cachedToken, found := server.providerRuntime.tokens[connectionKey]
-	if found && strings.EqualFold(cachedToken.TokenType, "bearer") && server.now().UTC().Before(cachedToken.ExpiresAt.Add(-30*time.Second)) {
+	if found && strings.EqualFold(cachedToken.TokenType, "bearer") && nowUTC.Before(cachedToken.ExpiresAt.Add(-30*time.Second)) {
 		accessToken := cachedToken.AccessToken
 		server.providerRuntime.mu.Unlock()
 		return accessToken, nil
 	}
+	if existingFetch, found := server.providerRuntime.tokenFetches[connectionKey]; found {
+		server.providerRuntime.mu.Unlock()
+		return waitForProviderTokenFetch(ctx, existingFetch)
+	}
+	if server.providerRuntime.tokenFetches == nil {
+		server.providerRuntime.tokenFetches = make(map[string]*providerTokenFetch)
+	}
+	if server.providerRuntime.tokenGenerations == nil {
+		server.providerRuntime.tokenGenerations = make(map[string]uint64)
+	}
+	inFlightFetch := &providerTokenFetch{done: make(chan struct{})}
+	server.providerRuntime.tokenFetches[connectionKey] = inFlightFetch
+	startTokenGeneration := server.providerRuntime.tokenGenerations[connectionKey]
+	startConfigGeneration := server.providerRuntime.configGeneration
 	server.providerRuntime.mu.Unlock()
 
 	oauthToken, err := server.issueConnectionAccessToken(ctx, configuredConnectionDefinition)
-	if err != nil {
-		return "", err
-	}
-	expiresAt := server.now().UTC().Add(time.Duration(defaultInt(oauthToken.ExpiresIn, 300)) * time.Second)
-	if err := server.logEvent("connection.token_issued", "", map[string]interface{}{
-		"provider":         configuredConnectionDefinition.Registration.Provider,
-		"subject":          configuredConnectionDefinition.Registration.Subject,
-		"grant_type":       configuredConnectionDefinition.Registration.GrantType,
-		"scope_count":      len(configuredConnectionDefinition.Registration.Scopes),
-		"expires_at_utc":   expiresAt.Format(time.RFC3339Nano),
-		"secure_store_ref": configuredConnectionDefinition.Registration.Credential.ID,
-	}); err != nil {
-		return "", err
+	issuedAccessToken := ""
+	var issuedToken providerAccessToken
+	if err == nil {
+		expiresAt := server.now().UTC().Add(time.Duration(defaultInt(oauthToken.ExpiresIn, 300)) * time.Second)
+		if logErr := server.logEvent("connection.token_issued", "", map[string]interface{}{
+			"provider":         configuredConnectionDefinition.Registration.Provider,
+			"subject":          configuredConnectionDefinition.Registration.Subject,
+			"grant_type":       configuredConnectionDefinition.Registration.GrantType,
+			"scope_count":      len(configuredConnectionDefinition.Registration.Scopes),
+			"expires_at_utc":   expiresAt.Format(time.RFC3339Nano),
+			"secure_store_ref": configuredConnectionDefinition.Registration.Credential.ID,
+		}); logErr != nil {
+			err = logErr
+		} else {
+			issuedAccessToken = oauthToken.AccessToken
+			issuedToken = providerAccessToken{
+				ConnectionKey: connectionKey,
+				AccessToken:   oauthToken.AccessToken,
+				TokenType:     defaultString(oauthToken.TokenType, "Bearer"),
+				ExpiresAt:     expiresAt,
+			}
+		}
 	}
 
 	server.providerRuntime.mu.Lock()
-	server.providerRuntime.tokens[connectionKey] = providerAccessToken{
-		ConnectionKey: connectionKey,
-		AccessToken:   oauthToken.AccessToken,
-		TokenType:     defaultString(oauthToken.TokenType, "Bearer"),
-		ExpiresAt:     expiresAt,
+	if err == nil {
+		currentTokenGeneration := server.providerRuntime.tokenGenerations[connectionKey]
+		if currentTokenGeneration != startTokenGeneration || server.providerRuntime.configGeneration != startConfigGeneration {
+			err = fmt.Errorf("connection token state changed during issuance; retry request")
+			issuedAccessToken = ""
+		} else {
+			server.providerRuntime.tokens[connectionKey] = issuedToken
+		}
 	}
+	inFlightFetch.accessToken = issuedAccessToken
+	inFlightFetch.err = err
+	delete(server.providerRuntime.tokenFetches, connectionKey)
+	close(inFlightFetch.done)
 	server.providerRuntime.mu.Unlock()
-	return oauthToken.AccessToken, nil
+	return issuedAccessToken, err
+}
+
+func waitForProviderTokenFetch(ctx context.Context, inFlightFetch *providerTokenFetch) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-inFlightFetch.done:
+		return inFlightFetch.accessToken, inFlightFetch.err
+	}
 }
 
 func (server *Server) issueConnectionAccessToken(ctx context.Context, configuredConnectionDefinition configuredConnection) (oauthTokenResponse, error) {
@@ -190,7 +236,7 @@ func (server *Server) issueConnectionAccessToken(ctx context.Context, configured
 			return oauthTokenResponse{}, err
 		}
 		if strings.TrimSpace(oauthToken.RefreshToken) != "" && oauthToken.RefreshToken != string(rawRefreshToken) {
-			if _, err := server.RotateConnectionCredential(ctx, configuredConnectionDefinition.Registration, []byte(oauthToken.RefreshToken)); err != nil {
+			if _, err := server.rotateConnectionCredential(ctx, configuredConnectionDefinition.Registration, []byte(oauthToken.RefreshToken), false); err != nil {
 				return oauthTokenResponse{}, fmt.Errorf("rotate connection refresh token: %w", err)
 			}
 		}

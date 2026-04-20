@@ -89,6 +89,9 @@ type providerRuntimeState struct {
 	//
 	// Protected fields:
 	//   - tokens
+	//   - tokenFetches
+	//   - tokenGenerations
+	//   - configGeneration
 	//   - configuredConnections
 	//   - configuredCapabilities
 	//
@@ -103,6 +106,9 @@ type providerRuntimeState struct {
 	mu sync.Mutex
 
 	tokens                 map[string]providerAccessToken
+	tokenFetches           map[string]*providerTokenFetch
+	tokenGenerations       map[string]uint64
+	configGeneration       uint64
 	configuredConnections  map[string]configuredConnection
 	configuredCapabilities map[string]configuredCapability
 }

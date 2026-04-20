@@ -436,6 +436,10 @@ func (server *Server) UpsertConnectionCredential(ctx context.Context, registrati
 }
 
 func (server *Server) RotateConnectionCredential(ctx context.Context, registration connectionRegistration, rawSecretBytes []byte) (controlapipkg.ConnectionStatus, error) {
+	return server.rotateConnectionCredential(ctx, registration, rawSecretBytes, true)
+}
+
+func (server *Server) rotateConnectionCredential(ctx context.Context, registration connectionRegistration, rawSecretBytes []byte, invalidateProviderToken bool) (controlapipkg.ConnectionStatus, error) {
 	normalizedRegistration := normalizeConnectionRegistration(registration)
 	if err := normalizedRegistration.Validate(); err != nil {
 		return controlapipkg.ConnectionStatus{}, err
@@ -522,7 +526,9 @@ func (server *Server) RotateConnectionCredential(ctx context.Context, registrati
 		restoreErr := server.restoreConnectionSecret(ctx, secretStore, normalizedRegistration.Credential, previousSecretBytes)
 		return controlapipkg.ConnectionStatus{}, errors.Join(err, saveErr, restoreErr)
 	}
-	server.invalidateProviderAccessToken(connectionKey)
+	if invalidateProviderToken {
+		server.invalidateProviderAccessToken(connectionKey)
+	}
 
 	return updatedRecord.statusSummary(), nil
 }
@@ -710,6 +716,10 @@ func deleteConnectionSecretForRollback(ctx context.Context, secretStore secrets.
 
 func (server *Server) invalidateProviderAccessToken(connectionKey string) {
 	server.providerRuntime.mu.Lock()
+	if server.providerRuntime.tokenGenerations == nil {
+		server.providerRuntime.tokenGenerations = make(map[string]uint64)
+	}
+	server.providerRuntime.tokenGenerations[connectionKey]++
 	delete(server.providerRuntime.tokens, connectionKey)
 	server.providerRuntime.mu.Unlock()
 }

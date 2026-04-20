@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 )
 
 type fakeConnectionSecretStore struct {
+	mu           sync.Mutex
 	storedSecret map[string][]byte
 	metadata     map[string]secrets.SecretMetadata
 	putErr       error
@@ -28,6 +30,8 @@ type fakeConnectionSecretStore struct {
 
 func (fakeStore *fakeConnectionSecretStore) Put(ctx context.Context, validatedRef secrets.SecretRef, rawSecret []byte) (secrets.SecretMetadata, error) {
 	_ = ctx
+	fakeStore.mu.Lock()
+	defer fakeStore.mu.Unlock()
 	if fakeStore.putErr != nil {
 		return secrets.SecretMetadata{}, fakeStore.putErr
 	}
@@ -52,6 +56,8 @@ func (fakeStore *fakeConnectionSecretStore) Put(ctx context.Context, validatedRe
 
 func (fakeStore *fakeConnectionSecretStore) Get(ctx context.Context, validatedRef secrets.SecretRef) ([]byte, secrets.SecretMetadata, error) {
 	_ = ctx
+	fakeStore.mu.Lock()
+	defer fakeStore.mu.Unlock()
 	if fakeStore.getErr != nil {
 		return nil, secrets.SecretMetadata{}, fakeStore.getErr
 	}
@@ -66,6 +72,8 @@ func (fakeStore *fakeConnectionSecretStore) Get(ctx context.Context, validatedRe
 
 func (fakeStore *fakeConnectionSecretStore) Delete(ctx context.Context, validatedRef secrets.SecretRef) error {
 	_ = ctx
+	fakeStore.mu.Lock()
+	defer fakeStore.mu.Unlock()
 	if fakeStore.deleteErr != nil {
 		return fakeStore.deleteErr
 	}
@@ -76,6 +84,8 @@ func (fakeStore *fakeConnectionSecretStore) Delete(ctx context.Context, validate
 
 func (fakeStore *fakeConnectionSecretStore) Metadata(ctx context.Context, validatedRef secrets.SecretRef) (secrets.SecretMetadata, error) {
 	_ = ctx
+	fakeStore.mu.Lock()
+	defer fakeStore.mu.Unlock()
 	secretMetadata, found := fakeStore.metadata[validatedRef.ID]
 	if !found {
 		return secrets.SecretMetadata{}, secrets.ErrSecretNotFound

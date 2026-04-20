@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -241,6 +242,100 @@ func TestConfiguredClientCredentialsCapability_ExecutesThroughLoopgateOnly(t *te
 	}
 	if apiRequests != 2 {
 		t.Fatalf("expected two API requests, got %d", apiRequests)
+	}
+}
+
+func TestConfiguredClientCredentialsTokenFetchIsSerializedPerConnection(t *testing.T) {
+	repoRoot := t.TempDir()
+	var tokenRequests atomic.Int32
+	tokenRequestStarted := make(chan struct{}, 1)
+	releaseTokenResponse := make(chan struct{})
+
+	providerServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/oauth/token":
+			if tokenRequests.Add(1) == 1 {
+				tokenRequestStarted <- struct{}{}
+			}
+			<-releaseTokenResponse
+			if err := request.ParseForm(); err != nil {
+				t.Fatalf("parse token form: %v", err)
+			}
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(writer, `{"access_token":"provider-access-token","token_type":"Bearer","expires_in":300}`)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer providerServer.Close()
+
+	writeConfiguredConnectionYAML(t, repoRoot, providerServer.URL)
+	t.Setenv("LOOPGATE_EXAMPLE_SECRET", "super-secret-client")
+
+	_, _, server := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
+	server.httpClient = providerServer.Client()
+
+	if _, err := server.RegisterConnection(context.Background(), connectionRegistration{
+		Provider:  "example",
+		GrantType: controlapipkg.GrantTypeClientCredentials,
+		Subject:   "service-bot",
+		Scopes:    []string{"status.read"},
+		Credential: secrets.SecretRef{
+			ID:          "example-client-secret",
+			Backend:     secrets.BackendEnv,
+			AccountName: "LOOPGATE_EXAMPLE_SECRET",
+			Scope:       "example.status_read",
+		},
+	}); err != nil {
+		t.Fatalf("register configured connection: %v", err)
+	}
+
+	configuredConnectionDefinition, found := server.configuredConnectionSnapshot(connectionRecordKey("example", "service-bot"))
+	if !found {
+		t.Fatal("expected configured connection snapshot")
+	}
+
+	const concurrentRequests = 8
+	startRequests := make(chan struct{})
+	resultTokens := make(chan string, concurrentRequests)
+	resultErrors := make(chan error, concurrentRequests)
+	var requestGroup sync.WaitGroup
+	for requestIndex := 0; requestIndex < concurrentRequests; requestIndex++ {
+		requestGroup.Add(1)
+		go func() {
+			defer requestGroup.Done()
+			<-startRequests
+			accessToken, err := server.accessTokenForConfiguredConnection(context.Background(), configuredConnectionDefinition)
+			if err != nil {
+				resultErrors <- err
+				return
+			}
+			resultTokens <- accessToken
+		}()
+	}
+
+	close(startRequests)
+	select {
+	case <-tokenRequestStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for token request to start")
+	}
+	time.Sleep(25 * time.Millisecond)
+	close(releaseTokenResponse)
+	requestGroup.Wait()
+	close(resultTokens)
+	close(resultErrors)
+
+	for err := range resultErrors {
+		t.Fatalf("unexpected token fetch error: %v", err)
+	}
+	for accessToken := range resultTokens {
+		if accessToken != "provider-access-token" {
+			t.Fatalf("unexpected access token: %q", accessToken)
+		}
+	}
+	if tokenRequests.Load() != 1 {
+		t.Fatalf("expected one token request across concurrent callers, got %d", tokenRequests.Load())
 	}
 }
 
@@ -1419,6 +1514,114 @@ func TestConfiguredPKCECapability_ExchangesAndRefreshesInsideLoopgate(t *testing
 	}
 	if authorizationRequests != 0 {
 		t.Fatalf("authorization endpoint should not be called by Loopgate start flow, got %d", authorizationRequests)
+	}
+}
+
+func TestConfiguredPKCERefreshIsSerializedPerConnection(t *testing.T) {
+	repoRoot := t.TempDir()
+	var refreshRequests atomic.Int32
+	refreshRequestStarted := make(chan struct{}, 1)
+	releaseRefreshResponse := make(chan struct{})
+
+	providerServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/oauth/token":
+			if err := request.ParseForm(); err != nil {
+				t.Fatalf("parse pkce refresh form: %v", err)
+			}
+			if request.Form.Get("grant_type") != "refresh_token" {
+				t.Fatalf("unexpected oauth grant_type: %q", request.Form.Get("grant_type"))
+			}
+			if request.Form.Get("refresh_token") != "pkce-refresh-1" {
+				t.Fatalf("unexpected refresh_token: %q", request.Form.Get("refresh_token"))
+			}
+			if refreshRequests.Add(1) == 1 {
+				refreshRequestStarted <- struct{}{}
+			}
+			<-releaseRefreshResponse
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(writer, `{"access_token":"pkce-access-2","token_type":"Bearer","expires_in":300,"refresh_token":"pkce-refresh-2"}`)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer providerServer.Close()
+
+	writeConfiguredPKCEYAML(t, repoRoot, providerServer.URL)
+	_, _, server := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
+	server.httpClient = providerServer.Client()
+	fakeStore := &fakeConnectionSecretStore{}
+	server.resolveSecretStore = func(validatedRef secrets.SecretRef) (secrets.SecretStore, error) {
+		return fakeStore, nil
+	}
+
+	if _, err := server.UpsertConnectionCredential(context.Background(), connectionRegistration{
+		Provider:  "examplepkce",
+		GrantType: controlapipkg.GrantTypePKCE,
+		Subject:   "workspace-user",
+		Scopes:    []string{"status.read"},
+		Credential: secrets.SecretRef{
+			ID:          "pkce-refresh-token",
+			Backend:     secrets.BackendSecure,
+			AccountName: "loopgate.examplepkce.workspace-user",
+			Scope:       "examplepkce.status_read",
+		},
+	}, []byte("pkce-refresh-1")); err != nil {
+		t.Fatalf("seed pkce refresh token: %v", err)
+	}
+
+	configuredConnectionDefinition, found := server.configuredConnectionSnapshot(connectionRecordKey("examplepkce", "workspace-user"))
+	if !found {
+		t.Fatal("expected configured pkce connection snapshot")
+	}
+
+	const concurrentRequests = 8
+	startRequests := make(chan struct{})
+	resultTokens := make(chan string, concurrentRequests)
+	resultErrors := make(chan error, concurrentRequests)
+	var requestGroup sync.WaitGroup
+	for requestIndex := 0; requestIndex < concurrentRequests; requestIndex++ {
+		requestGroup.Add(1)
+		go func() {
+			defer requestGroup.Done()
+			<-startRequests
+			accessToken, err := server.accessTokenForConfiguredConnection(context.Background(), configuredConnectionDefinition)
+			if err != nil {
+				resultErrors <- err
+				return
+			}
+			resultTokens <- accessToken
+		}()
+	}
+
+	close(startRequests)
+	select {
+	case <-refreshRequestStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for refresh request to start")
+	}
+	time.Sleep(25 * time.Millisecond)
+	close(releaseRefreshResponse)
+	requestGroup.Wait()
+	close(resultTokens)
+	close(resultErrors)
+
+	for err := range resultErrors {
+		t.Fatalf("unexpected refresh error: %v", err)
+	}
+	for accessToken := range resultTokens {
+		if accessToken != "pkce-access-2" {
+			t.Fatalf("unexpected refreshed access token: %q", accessToken)
+		}
+	}
+	if refreshRequests.Load() != 1 {
+		t.Fatalf("expected one refresh-token request across concurrent callers, got %d", refreshRequests.Load())
+	}
+	if fakeStore.putCalls != 2 {
+		t.Fatalf("expected one initial store and one rotated refresh-token store, got %d puts", fakeStore.putCalls)
+	}
+	if storedRefreshToken := string(fakeStore.storedSecret["pkce-refresh-token"]); storedRefreshToken != "pkce-refresh-2" {
+		t.Fatalf("expected rotated refresh token in secure backend only, got %q", storedRefreshToken)
 	}
 }
 

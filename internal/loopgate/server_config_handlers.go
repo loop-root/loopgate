@@ -391,6 +391,8 @@ func (server *Server) applyRuntimeConfigReloaded(reloadedRuntimeConfig config.Ru
 func (server *Server) applyConfiguredConnectionsReloaded(configuredConnections map[string]configuredConnection, configuredCapabilities map[string]configuredCapability) {
 	server.providerRuntime.mu.Lock()
 	server.providerRuntime.tokens = make(map[string]providerAccessToken)
+	server.providerRuntime.tokenFetches = make(map[string]*providerTokenFetch)
+	server.providerRuntime.configGeneration++
 	server.providerRuntime.configuredConnections = cloneConfiguredConnections(configuredConnections)
 	server.providerRuntime.configuredCapabilities = cloneConfiguredCapabilities(configuredCapabilities)
 	server.providerRuntime.mu.Unlock()
