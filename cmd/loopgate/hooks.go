@@ -114,6 +114,13 @@ func handleLoopgateSubcommand(args []string) bool {
 		}
 		exitProcess(0)
 		return true
+	case "quickstart":
+		if err := runQuickstart(args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: quickstart:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
 	case "install-hooks":
 		if err := runInstallHooks(args[1:], os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: install hooks:", err)

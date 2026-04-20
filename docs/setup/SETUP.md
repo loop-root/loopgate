@@ -8,11 +8,19 @@ This is the manual and advanced setup companion to
 If you want the shortest supported operator path, use:
 
 ```bash
+make quickstart
+```
+
+That builds the binaries and runs `./bin/loopgate quickstart`, which applies
+the recommended defaults on top of the same signed-policy setup path as
+`loopgate setup`.
+
+If you want the guided first-run flow instead, use:
+
+```bash
 make build
 ./bin/loopgate setup
 ```
-
-That is the canonical first-run flow.
 
 Use this page when you need one of these instead:
 - the fully manual policy-signing path

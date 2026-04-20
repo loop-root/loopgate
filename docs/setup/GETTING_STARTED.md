@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-19
 
 # Getting Started
 
@@ -25,7 +25,22 @@ Prerequisites:
 
 ## Quick path
 
-### 1. Build local binaries
+### 1. Fastest path
+
+```bash
+make quickstart
+```
+
+`make quickstart` builds the local binaries and runs `./bin/loopgate quickstart`,
+which accepts the recommended defaults without prompts:
+- starter profile: `balanced`
+- Claude Code hooks installed into `~/.claude/`
+- macOS LaunchAgent installed and loaded so Loopgate stays up in the background
+
+If you want to choose the profile or skip individual setup steps, use the guided
+path below instead.
+
+### 2. Guided path: build local binaries
 
 ```bash
 make build
@@ -37,7 +52,7 @@ If you ran `make install-local`, replace `./bin/...` below with the bare
 command names such as `loopgate`, `loopgate-ledger`, and
 `loopgate-policy-admin`.
 
-### 2. Run the guided setup wizard
+### 3. Guided path: run the setup wizard
 
 ```bash
 ./bin/loopgate setup
@@ -62,7 +77,7 @@ Important:
 
 If you prefer the manual path, see [SETUP.md](./SETUP.md).
 
-### 3. Verify Loopgate is running
+### 4. Verify Loopgate is running
 
 If setup loaded the macOS LaunchAgent, Loopgate should already be running in the
 background. Verify with:
@@ -134,7 +149,7 @@ Quick smoke check after hook install:
 - run `/hooks` inside Claude Code and confirm the 7 Loopgate hook events are registered
 - verify the installed commands point at `~/.claude/hooks/loopgate_*.py`
 
-### 4. Run a normal task
+### 5. Run a normal task
 
 Use Claude Code normally and watch for:
 - low-risk reads that should be allow + audit

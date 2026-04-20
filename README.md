@@ -1,6 +1,6 @@
 # Loopgate
 
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-19
 
 **Loopgate** is a local-first governance layer for AI-assisted engineering work.
 
@@ -67,6 +67,20 @@ Requirements:
 - Python 3 on `PATH` for Claude hook scripts
 - Claude Code for the active hook-based harness
 
+Fastest source-checkout path:
+
+```bash
+make quickstart
+```
+
+`make quickstart` builds the local binaries and runs `./bin/loopgate quickstart`,
+which applies the recommended defaults:
+- starter policy profile: `balanced`
+- Claude Code hook install into `~/.claude/`
+- macOS LaunchAgent install and load so Loopgate keeps running in the background
+
+If you want to choose options interactively instead, use the guided path:
+
 ```bash
 make build
 # optional: install the built binaries into ~/.local/bin
@@ -78,7 +92,7 @@ make install-local
 If you ran `make install-local`, replace `./bin/...` below with the bare command
 names such as `loopgate` and `loopgate-policy-admin`.
 
-`loopgate setup` is the recommended first-run path. It:
+`loopgate setup` is the guided first-run path. It:
 - initializes or reuses your local policy-signing key
 - lets you choose a starter policy profile: `strict`, `balanced`, or `developer`
 - signs the selected policy

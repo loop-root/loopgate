@@ -18,10 +18,12 @@ Use it when changing:
   - constructs socket path `runtime/state/loopgate.sock` under cwd-as-repo-root
   - starts `loopgate.NewServerWithOptions` and runs until signal
   - also provides operator subcommands:
+    - `quickstart`
     - `setup`
     - `install-hooks`
     - `install-launch-agent`
     - `remove-hooks`
+  - `quickstart` is the non-interactive recommended-default path: it delegates to `setup -yes` so first-time onboarding stays on the same signer-init, signed-policy, hook-install, and optional LaunchAgent code path
   - `setup` is the guided first-run path: local signer init/reuse, starter policy profile selection, signed policy write, hook install, and optional macOS LaunchAgent install
   - `install-hooks` copies the tracked hook bundle from `claude/hooks/scripts/` into the target Claude config dir and wires the supported hook events into `settings.json`
   - `install-launch-agent` writes a per-repo macOS LaunchAgent plist pointed at the current Loopgate binary and can load it immediately with `launchctl`

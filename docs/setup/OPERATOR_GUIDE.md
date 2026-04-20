@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-19
 
 # Loopgate Operator Guide
 
@@ -13,7 +13,7 @@ If you are setting up Loopgate for the first time, start with:
 For most operators, the recommended first command is:
 
 ```bash
-./bin/loopgate setup
+make quickstart
 ```
 
 ## What an operator does
@@ -39,7 +39,21 @@ The command examples below use the built binaries under `./bin/`. If you ran
 
 ### 1. Run guided setup
 
-For a first-time local setup:
+Fastest path:
+
+```bash
+make quickstart
+```
+
+That builds the local binaries and runs `./bin/loopgate quickstart`, which uses
+the same signed-policy setup path as `loopgate setup` but accepts the
+recommended defaults:
+- starter profile: `balanced`
+- Claude hooks installed into `~/.claude/`
+- macOS LaunchAgent installed and loaded so Loopgate stays running in the background
+
+If you want to choose the profile or skip hooks / LaunchAgent installation, use
+the guided path instead:
 
 ```bash
 make build

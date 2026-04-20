@@ -10,7 +10,7 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X main.buildVersion=$(VERSION) -X main.buildCommit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
 GOFILES := $(shell find . -type f -name '*.go' -not -path './runtime/*' | sort)
 
-.PHONY: build install-local uninstall-local fmt fmt-check vet test test-race test-e2e test-fuzz-smoke lint policy-check policy-sign-coverage-check vuln ship-check clean
+.PHONY: build quickstart install-local uninstall-local fmt fmt-check vet test test-race test-e2e test-fuzz-smoke lint policy-check policy-sign-coverage-check vuln ship-check clean
 
 build:
 	mkdir -p bin
@@ -19,6 +19,11 @@ build:
 	$(GO) build -ldflags "$(LDFLAGS)" -o bin/loopgate-ledger ./cmd/loopgate-ledger
 	$(GO) build -ldflags "$(LDFLAGS)" -o bin/loopgate-policy-admin ./cmd/loopgate-policy-admin
 	$(GO) build -ldflags "$(LDFLAGS)" -o bin/loopgate-policy-sign ./cmd/loopgate-policy-sign
+
+quickstart: build
+	@printf 'Running Loopgate quickstart with the recommended defaults.\n'
+	@printf 'This writes a signed starter policy, installs Claude hooks, and on macOS installs and loads a LaunchAgent.\n'
+	./bin/loopgate quickstart
 
 install-local: build
 	mkdir -p "$(INSTALL_DIR)"

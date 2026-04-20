@@ -69,6 +69,48 @@ func TestRunSetup_RequiresExplicitChoicesWhenNonInteractive(t *testing.T) {
 	}
 }
 
+func TestRunQuickstart_UsesRecommendedDefaultsNonInteractive(t *testing.T) {
+	repoRoot := makeSetupTestRepo(t)
+	claudeDir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(policySigningTrustDirEnv, filepath.Join(t.TempDir(), "trusted"))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := runQuickstart([]string{
+		"-repo-root", repoRoot,
+		"-claude-dir", claudeDir,
+		"-skip-launch-agent",
+	}, strings.NewReader(""), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("runQuickstart: %v stderr=%s", err, stderr.String())
+	}
+
+	loadedPolicy, err := config.LoadPolicy(repoRoot)
+	if err != nil {
+		t.Fatalf("LoadPolicy after quickstart: %v", err)
+	}
+	if !loadedPolicy.Tools.Shell.Enabled {
+		t.Fatal("expected quickstart to apply the balanced profile")
+	}
+	if loadedPolicy.Tools.HTTP.Enabled {
+		t.Fatal("expected quickstart balanced profile to keep HTTP disabled")
+	}
+
+	for _, scriptName := range loopgateHookBundleFiles {
+		scriptPath := filepath.Join(claudeDir, claudeHooksDirname, scriptName)
+		if _, err := os.Stat(scriptPath); err != nil {
+			t.Fatalf("stat installed hook %s: %v", scriptPath, err)
+		}
+	}
+	if !strings.Contains(stdout.String(), "profile: balanced") {
+		t.Fatalf("expected balanced profile output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "claude_hooks_installed: true") {
+		t.Fatalf("expected quickstart to install hooks, got %q", stdout.String())
+	}
+}
+
 func makeSetupTestRepo(t *testing.T) string {
 	t.Helper()
 	repoRoot := makeTestHookRepo(t)
