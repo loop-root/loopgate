@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"strings"
@@ -34,6 +35,8 @@ type signedControlPlaneHeaders struct {
 	RequestNonce              string
 	RequestSignature          string
 }
+
+const authDeniedAuditBurstWindow = 5 * time.Second
 
 // parseCapabilityTokenAuthorizationHeader accepts RFC-agnostic but explicit
 // bearer forms used by local clients. It tolerates mixed-case scheme names and
@@ -115,12 +118,104 @@ func (server *Server) writeAuditedAuthDenial(writer http.ResponseWriter, request
 		auditData["peer_epid"] = options.requestPeer.EPID
 	}
 
-	if err := server.logEvent("auth.denied", options.controlSessionID, auditData); err != nil {
-		server.writeJSON(writer, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
-		return false
+	auditCurrentDenial, suppressedAuditData := server.planAuthDeniedAudit(request, denial, options)
+	if suppressedAuditData != nil {
+		if err := server.logEvent("auth.denied.suppressed", options.controlSessionID, suppressedAuditData); err != nil {
+			server.writeJSON(writer, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
+			return false
+		}
+	}
+	if auditCurrentDenial {
+		if err := server.logEvent("auth.denied", options.controlSessionID, auditData); err != nil {
+			server.writeJSON(writer, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
+			return false
+		}
 	}
 	server.writeJSON(writer, httpStatusForResponse(denial), denial)
 	return false
+}
+
+func (server *Server) planAuthDeniedAudit(request *http.Request, denial controlapipkg.CapabilityResponse, options authDeniedAuditOptions) (bool, map[string]interface{}) {
+	if authDeniedAuditBurstWindow <= 0 {
+		return true, nil
+	}
+
+	burstKey := authDeniedAuditBurstKey(denial, options)
+	nowUTC := server.now().UTC()
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	if server.replayState.authDeniedBursts == nil {
+		server.replayState.authDeniedBursts = make(map[string]authDeniedBurst)
+	}
+
+	existingBurst, found := server.replayState.authDeniedBursts[burstKey]
+	if found && nowUTC.Sub(existingBurst.WindowStartedAt) < authDeniedAuditBurstWindow {
+		existingBurst.LastSeenAt = nowUTC
+		existingBurst.SuppressedCount++
+		server.replayState.authDeniedBursts[burstKey] = existingBurst
+		server.noteExpiryCandidateLocked(existingBurst.LastSeenAt.Add(authDeniedAuditBurstWindow))
+		return false, nil
+	}
+
+	var suppressedAuditData map[string]interface{}
+	if found && existingBurst.SuppressedCount > 0 {
+		suppressedAuditData = map[string]interface{}{
+			"auth_kind":             options.authKind,
+			"denial_code":           denial.DenialCode,
+			"request_method":        request.Method,
+			"request_path":          request.URL.Path,
+			"suppressed_count":      existingBurst.SuppressedCount,
+			"window_started_at_utc": existingBurst.WindowStartedAt.Format(time.RFC3339Nano),
+			"window_ended_at_utc":   existingBurst.LastSeenAt.Format(time.RFC3339Nano),
+		}
+		if options.requestPeer != nil {
+			suppressedAuditData["peer_uid"] = options.requestPeer.UID
+			suppressedAuditData["peer_pid"] = options.requestPeer.PID
+			suppressedAuditData["peer_epid"] = options.requestPeer.EPID
+		}
+		if strings.TrimSpace(options.controlSessionID) != "" {
+			suppressedAuditData["control_session_id"] = options.controlSessionID
+		}
+		if strings.TrimSpace(options.actorLabel) != "" {
+			suppressedAuditData["actor_label"] = options.actorLabel
+		}
+		if strings.TrimSpace(options.clientSessionLabel) != "" {
+			suppressedAuditData["client_session_label"] = options.clientSessionLabel
+		}
+		if strings.TrimSpace(options.tenantID) != "" {
+			suppressedAuditData["tenant_id"] = options.tenantID
+		}
+		if strings.TrimSpace(options.userID) != "" {
+			suppressedAuditData["user_id"] = options.userID
+		}
+	}
+
+	server.replayState.authDeniedBursts[burstKey] = authDeniedBurst{
+		WindowStartedAt: nowUTC,
+		LastSeenAt:      nowUTC,
+		SuppressedCount: 0,
+	}
+	server.noteExpiryCandidateLocked(nowUTC.Add(authDeniedAuditBurstWindow))
+	return true, suppressedAuditData
+}
+
+func authDeniedAuditBurstKey(denial controlapipkg.CapabilityResponse, options authDeniedAuditOptions) string {
+	peerUID := "unknown"
+	if options.requestPeer != nil {
+		peerUID = fmt.Sprintf("%d", options.requestPeer.UID)
+	}
+	controlSessionID := strings.TrimSpace(options.controlSessionID)
+	if controlSessionID == "" {
+		controlSessionID = "none"
+	}
+	return strings.Join([]string{
+		strings.TrimSpace(options.authKind),
+		strings.TrimSpace(denial.DenialCode),
+		peerUID,
+		controlSessionID,
+	}, "|")
 }
 
 func (server *Server) authenticate(writer http.ResponseWriter, request *http.Request) (capabilityToken, bool) {

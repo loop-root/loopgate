@@ -136,6 +136,13 @@ func (server *Server) pruneExpiredLocked() {
 		}
 		server.replayState.sessionReadCounts[controlSessionID] = prunedReadTimestamps
 	}
+	for burstKey, authDeniedBurst := range server.replayState.authDeniedBursts {
+		if nowUTC.Sub(authDeniedBurst.LastSeenAt) >= authDeniedAuditBurstWindow {
+			delete(server.replayState.authDeniedBursts, burstKey)
+			continue
+		}
+		noteNextSweepCandidate(authDeniedBurst.LastSeenAt.Add(authDeniedAuditBurstWindow))
+	}
 	for peerUID, hookTimestamps := range server.replayState.hookPreValidateCounts {
 		prunedHookTimestamps := hookTimestamps[:0]
 		for _, hookTimestamp := range hookTimestamps {

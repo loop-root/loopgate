@@ -305,6 +305,99 @@ func TestCapabilityAuthDenialFailsClosedWhenAuditUnavailable(t *testing.T) {
 	}
 }
 
+func TestCapabilityAuthDenialsSuppressRepeatedAuditWritesWithinBurstWindow(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	currentTime := time.Date(2026, time.April, 20, 12, 0, 0, 0, time.UTC)
+	server.SetNowForTest(func() time.Time { return currentTime })
+
+	rawClient := NewClient(client.socketPath)
+	rawClient.mu.Lock()
+	rawClient.delegatedSession = true
+	rawClient.mu.Unlock()
+
+	requestInvalidStatus := func() {
+		t.Helper()
+		var statusResponse controlapipkg.StatusResponse
+		err := rawClient.doJSON(context.Background(), http.MethodGet, "/v1/status", "invalid-capability-token", nil, &statusResponse, nil)
+		var denied RequestDeniedError
+		if !errors.As(err, &denied) || denied.DenialCode != controlapipkg.DenialCodeCapabilityTokenInvalid {
+			t.Fatalf("expected invalid capability token denial, got %v", err)
+		}
+	}
+
+	requestInvalidStatus()
+	requestInvalidStatus()
+
+	authDeniedEvents := readAuditEventsOfType(t, repoRoot, "auth.denied")
+	if len(authDeniedEvents) != 1 {
+		t.Fatalf("expected exactly one must-persist auth.denied event in the burst window, got %d", len(authDeniedEvents))
+	}
+
+	currentTime = currentTime.Add(authDeniedAuditBurstWindow + time.Second)
+	requestInvalidStatus()
+
+	authDeniedEvents = readAuditEventsOfType(t, repoRoot, "auth.denied")
+	if len(authDeniedEvents) != 2 {
+		t.Fatalf("expected a second auth.denied event after the burst window rolled, got %d", len(authDeniedEvents))
+	}
+
+	suppressedEvents := readAuditEventsOfType(t, repoRoot, "auth.denied.suppressed")
+	if len(suppressedEvents) != 1 {
+		t.Fatalf("expected one auth.denied.suppressed aggregate event, got %d", len(suppressedEvents))
+	}
+	suppressedEvent := suppressedEvents[0]
+	if suppressedEvent.Data["suppressed_count"] != float64(1) {
+		t.Fatalf("expected suppressed_count 1, got %#v", suppressedEvent.Data["suppressed_count"])
+	}
+	if suppressedEvent.Data["denial_code"] != controlapipkg.DenialCodeCapabilityTokenInvalid {
+		t.Fatalf("expected invalid capability token aggregate denial code, got %#v", suppressedEvent.Data["denial_code"])
+	}
+}
+
+func TestCapabilityAuthDeniedSuppressionFailsClosedWhenAggregateAuditUnavailable(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
+
+	currentTime := time.Date(2026, time.April, 20, 12, 0, 0, 0, time.UTC)
+	server.SetNowForTest(func() time.Time { return currentTime })
+
+	originalAppendAuditEvent := server.appendAuditEvent
+	server.appendAuditEvent = func(ledgerPath string, auditEvent ledger.Event) error {
+		if auditEvent.Type == "auth.denied.suppressed" {
+			return errors.New("aggregate audit unavailable")
+		}
+		return originalAppendAuditEvent(ledgerPath, auditEvent)
+	}
+
+	rawClient := NewClient(client.socketPath)
+	rawClient.mu.Lock()
+	rawClient.delegatedSession = true
+	rawClient.mu.Unlock()
+
+	var firstStatusResponse controlapipkg.StatusResponse
+	firstErr := rawClient.doJSON(context.Background(), http.MethodGet, "/v1/status", "invalid-capability-token", nil, &firstStatusResponse, nil)
+	var denied RequestDeniedError
+	if !errors.As(firstErr, &denied) || denied.DenialCode != controlapipkg.DenialCodeCapabilityTokenInvalid {
+		t.Fatalf("expected first invalid capability token denial, got %v", firstErr)
+	}
+
+	var secondStatusResponse controlapipkg.StatusResponse
+	secondErr := rawClient.doJSON(context.Background(), http.MethodGet, "/v1/status", "invalid-capability-token", nil, &secondStatusResponse, nil)
+	if !errors.As(secondErr, &denied) || denied.DenialCode != controlapipkg.DenialCodeCapabilityTokenInvalid {
+		t.Fatalf("expected second invalid capability token denial in burst window, got %v", secondErr)
+	}
+
+	currentTime = currentTime.Add(authDeniedAuditBurstWindow + time.Second)
+
+	var rolloverStatusResponse controlapipkg.StatusResponse
+	rolloverErr := rawClient.doJSON(context.Background(), http.MethodGet, "/v1/status", "invalid-capability-token", nil, &rolloverStatusResponse, nil)
+	if !errors.As(rolloverErr, &denied) || denied.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
+		t.Fatalf("expected aggregate audit failure to fail closed, got %v", rolloverErr)
+	}
+}
+
 func TestApprovalAuthDenialIsAudited(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(true))
@@ -639,14 +732,25 @@ func TestCapabilityResponseJSONDoesNotExposeProviderTokenFields(t *testing.T) {
 func readLastAuditEventOfType(t *testing.T, repoRoot string, eventType string) ledger.Event {
 	t.Helper()
 
+	auditEvents := readAuditEventsOfType(t, repoRoot, eventType)
+	if len(auditEvents) == 0 {
+		t.Fatalf("expected audit event type %q", eventType)
+	}
+	return auditEvents[len(auditEvents)-1]
+}
+
+func readAuditEventsOfType(t *testing.T, repoRoot string, eventType string) []ledger.Event {
+	t.Helper()
+
 	auditBytes, err := os.ReadFile(filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl"))
 	if err != nil {
 		t.Fatalf("read audit log: %v", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(auditBytes)), "\n")
-	for index := len(lines) - 1; index >= 0; index-- {
-		line := strings.TrimSpace(lines[index])
+	auditEvents := make([]ledger.Event, 0, len(lines))
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
 		if line == "" {
 			continue
 		}
@@ -655,10 +759,8 @@ func readLastAuditEventOfType(t *testing.T, repoRoot string, eventType string) l
 			t.Fatalf("decode audit event: %v", err)
 		}
 		if auditEvent.Type == eventType {
-			return auditEvent
+			auditEvents = append(auditEvents, auditEvent)
 		}
 	}
-
-	t.Fatalf("expected audit event type %q", eventType)
-	return ledger.Event{}
+	return auditEvents
 }

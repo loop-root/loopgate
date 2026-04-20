@@ -205,10 +205,20 @@ type replayControlState struct {
 	usedTokens map[string]usedToken
 	// sessionReadCounts tracks fs_read timestamps per control session under server.mu.
 	sessionReadCounts map[string][]time.Time
+	// authDeniedBursts tracks repeated auth-denial bursts so Loopgate can
+	// preserve first-failure auditability without forcing a disk sync for every
+	// repeated bad-token request in the same short window.
+	authDeniedBursts map[string]authDeniedBurst
 	// hookPreValidateCounts tracks PreToolUse hook timestamps per peer UID under server.mu.
 	hookPreValidateCounts map[uint32][]time.Time
 	// hookPeerAuthFailureCounts tracks repeated hook peer-binding failures under server.mu.
 	hookPeerAuthFailureCounts map[string][]time.Time
+}
+
+type authDeniedBurst struct {
+	WindowStartedAt time.Time
+	LastSeenAt      time.Time
+	SuppressedCount int
 }
 
 type sessionControlState struct {
@@ -591,6 +601,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 			seenAuthNonces:            make(map[string]seenRequest),
 			usedTokens:                make(map[string]usedToken),
 			sessionReadCounts:         make(map[string][]time.Time),
+			authDeniedBursts:          make(map[string]authDeniedBurst),
 			hookPreValidateCounts:     make(map[uint32][]time.Time),
 			hookPeerAuthFailureCounts: make(map[string][]time.Time),
 		},
