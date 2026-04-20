@@ -329,10 +329,13 @@ func loadConfiguredConnectionFile(configPath string) (configuredConnection, map[
 // into a single JSON array. JSON state stores all connections as one array of connectionConfigFile.
 func loadConfiguredConnectionsFromJSON(data []byte) (map[string]configuredConnection, map[string]configuredCapability, error) {
 	var configs []connectionConfigFile
-	if err := json.Unmarshal(data, &configs); err != nil {
+	if err := decodeJSONBytes(data, &configs); err != nil {
 		return nil, nil, fmt.Errorf("decode connections JSON: %w", err)
 	}
+	return loadConfiguredConnectionsFromConfigFiles(configs)
+}
 
+func loadConfiguredConnectionsFromConfigFiles(configs []connectionConfigFile) (map[string]configuredConnection, map[string]configuredCapability, error) {
 	connectionDefinitions := make(map[string]configuredConnection)
 	capabilityDefinitions := make(map[string]configuredCapability)
 

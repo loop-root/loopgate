@@ -3,6 +3,7 @@ package loopgate
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"loopgate/internal/config"
@@ -94,6 +95,54 @@ func cloneConfiguredCapabilities(source map[string]configuredCapability) map[str
 	return copied
 }
 
+func cloneConfiguredConnections(source map[string]configuredConnection) map[string]configuredConnection {
+	if len(source) == 0 {
+		return map[string]configuredConnection{}
+	}
+	copied := make(map[string]configuredConnection, len(source))
+	for connectionKey, configuredConnectionDefinition := range source {
+		allowedHosts := make(map[string]struct{}, len(configuredConnectionDefinition.AllowedHosts))
+		for allowedHost := range configuredConnectionDefinition.AllowedHosts {
+			allowedHosts[allowedHost] = struct{}{}
+		}
+
+		var authorizationURL *url.URL
+		if configuredConnectionDefinition.AuthorizationURL != nil {
+			clonedAuthorizationURL := *configuredConnectionDefinition.AuthorizationURL
+			authorizationURL = &clonedAuthorizationURL
+		}
+
+		var tokenURL *url.URL
+		if configuredConnectionDefinition.TokenURL != nil {
+			clonedTokenURL := *configuredConnectionDefinition.TokenURL
+			tokenURL = &clonedTokenURL
+		}
+
+		var apiBaseURL *url.URL
+		if configuredConnectionDefinition.APIBaseURL != nil {
+			clonedAPIBaseURL := *configuredConnectionDefinition.APIBaseURL
+			apiBaseURL = &clonedAPIBaseURL
+		}
+
+		copied[connectionKey] = configuredConnection{
+			Registration: connectionRegistration{
+				Provider:   configuredConnectionDefinition.Registration.Provider,
+				GrantType:  configuredConnectionDefinition.Registration.GrantType,
+				Subject:    configuredConnectionDefinition.Registration.Subject,
+				Scopes:     append([]string(nil), configuredConnectionDefinition.Registration.Scopes...),
+				Credential: configuredConnectionDefinition.Registration.Credential,
+			},
+			ClientID:         configuredConnectionDefinition.ClientID,
+			AuthorizationURL: authorizationURL,
+			TokenURL:         tokenURL,
+			RedirectURL:      configuredConnectionDefinition.RedirectURL,
+			APIBaseURL:       apiBaseURL,
+			AllowedHosts:     allowedHosts,
+		}
+	}
+	return copied
+}
+
 func cloneHTTPClientWithTimeout(existingHTTPClient *http.Client, timeout time.Duration) *http.Client {
 	if existingHTTPClient == nil {
 		return &http.Client{Timeout: timeout}
@@ -162,9 +211,22 @@ func (server *Server) buildPolicyRuntime(policyLoadResult config.PolicyLoadResul
 }
 
 func (server *Server) currentConfiguredCapabilitiesSnapshot() map[string]configuredCapability {
+	_, configuredCapabilities := server.currentConfiguredProviderSnapshot()
+	return configuredCapabilities
+}
+
+func (server *Server) currentConfiguredProviderSnapshot() (map[string]configuredConnection, map[string]configuredCapability) {
 	server.providerRuntime.mu.Lock()
 	defer server.providerRuntime.mu.Unlock()
-	return cloneConfiguredCapabilities(server.providerRuntime.configuredCapabilities)
+	return cloneConfiguredConnections(server.providerRuntime.configuredConnections), cloneConfiguredCapabilities(server.providerRuntime.configuredCapabilities)
+}
+
+func (server *Server) buildPolicyRuntimeForConfiguredCapabilities(configuredCapabilities map[string]configuredCapability) (serverPolicyRuntime, error) {
+	currentPolicyRuntime := server.currentPolicyRuntime()
+	return server.buildPolicyRuntime(config.PolicyLoadResult{
+		Policy:        currentPolicyRuntime.policy,
+		ContentSHA256: currentPolicyRuntime.policyContentSHA256,
+	}, cloneConfiguredCapabilities(configuredCapabilities))
 }
 
 func (server *Server) reloadPolicyRuntimeFromDisk() (serverPolicyRuntime, error) {

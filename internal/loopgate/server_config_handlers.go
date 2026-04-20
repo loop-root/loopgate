@@ -1,10 +1,14 @@
 package loopgate
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"loopgate/internal/config"
@@ -82,9 +86,9 @@ func (server *Server) handleConfigPut(w http.ResponseWriter, section string, bod
 	case "policy":
 		server.handleConfigPutPolicy(w, tokenClaims, body)
 	case "runtime":
-		server.handleConfigPutRuntime(w, body)
+		server.handleConfigPutRuntime(w, body, tokenClaims)
 	case "connections":
-		server.handleConfigPutConnections(w, body)
+		server.handleConfigPutConnections(w, body, tokenClaims)
 	}
 }
 
@@ -151,60 +155,85 @@ func (server *Server) handleConfigPutPolicy(w http.ResponseWriter, tokenClaims c
 	})
 }
 
-func (server *Server) handleConfigPutRuntime(w http.ResponseWriter, body []byte) {
+func (server *Server) handleConfigPutRuntime(w http.ResponseWriter, body []byte, tokenClaims capabilityToken) {
 	var rc config.RuntimeConfig
-	if err := json.Unmarshal(body, &rc); err != nil {
+	if err := decodeJSONBytes(body, &rc); err != nil {
 		http.Error(w, "invalid runtime config: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	previousRuntimeConfig := server.currentRuntimeConfigSnapshot()
 	if err := config.WriteRuntimeConfigYAML(server.repoRoot, rc); err != nil {
 		http.Error(w, "save runtime config: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	reloaded, err := config.LoadRuntimeConfig(server.repoRoot)
 	if err != nil {
-		http.Error(w, "reload runtime config: "+err.Error(), http.StatusInternalServerError)
+		rollbackErr := config.WriteRuntimeConfigYAML(server.repoRoot, previousRuntimeConfig)
+		http.Error(w, formatConfigUpdateFailure("reload runtime config", err, rollbackErr), http.StatusInternalServerError)
 		return
 	}
 
-	server.mu.Lock()
-	server.runtimeConfig = reloaded
-	server.mu.Unlock()
+	auditData, err := buildRuntimeConfigAuditData(previousRuntimeConfig, reloaded, tokenClaims)
+	if err != nil {
+		rollbackErr := config.WriteRuntimeConfigYAML(server.repoRoot, previousRuntimeConfig)
+		http.Error(w, formatConfigUpdateFailure("hash runtime config for audit", err, rollbackErr), http.StatusInternalServerError)
+		return
+	}
+	if err := server.logEvent("config.runtime.updated", tokenClaims.ControlSessionID, auditData); err != nil {
+		rollbackErr := config.WriteRuntimeConfigYAML(server.repoRoot, previousRuntimeConfig)
+		if rollbackErr != nil {
+			http.Error(w, formatConfigUpdateFailure("rollback runtime config after audit failure", err, rollbackErr), http.StatusInternalServerError)
+			return
+		}
+		server.writeJSON(w, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
+		return
+	}
 
-	w.Header().Set("Content-Type", contentTypeApplicationJSON)
-	fmt.Fprintln(w, `{"status":"ok"}`)
+	server.applyRuntimeConfigReloaded(reloaded)
+
+	server.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (server *Server) handleConfigPutConnections(w http.ResponseWriter, body []byte) {
+func (server *Server) handleConfigPutConnections(w http.ResponseWriter, body []byte, tokenClaims capabilityToken) {
 	conns, caps, err := loadConfiguredConnectionsFromJSON(body)
 	if err != nil {
 		http.Error(w, "invalid connections: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var configFiles []connectionConfigFile
-	if jsonErr := json.Unmarshal(body, &configFiles); jsonErr != nil {
-		http.Error(w, "decode connections: "+jsonErr.Error(), http.StatusBadRequest)
+	configFiles := connectionsToConfigFiles(conns, caps)
+	nextPolicyRuntime, err := server.buildPolicyRuntimeForConfiguredCapabilities(caps)
+	if err != nil {
+		http.Error(w, "build configured capability runtime: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	previousConnections, previousCapabilities := server.currentConfiguredProviderSnapshot()
+	previousConfigFiles := connectionsToConfigFiles(previousConnections, previousCapabilities)
+	auditData, err := buildConnectionsConfigAuditData(previousConfigFiles, configFiles, tokenClaims)
+	if err != nil {
+		http.Error(w, "hash connections config for audit: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	if err := config.SaveJSONConfig(server.configStateDir, "connections", configFiles); err != nil {
 		http.Error(w, "save connections: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	server.providerRuntime.mu.Lock()
-	server.providerRuntime.configuredConnections = conns
-	server.providerRuntime.configuredCapabilities = caps
-	server.providerRuntime.mu.Unlock()
-
-	// Re-register capabilities.
-	if err := server.registerConfiguredCapabilities(); err != nil {
-		http.Error(w, "re-register capabilities: "+err.Error(), http.StatusInternalServerError)
+	if err := server.logEvent("config.connections.updated", tokenClaims.ControlSessionID, auditData); err != nil {
+		rollbackErr := config.SaveJSONConfig(server.configStateDir, "connections", previousConfigFiles)
+		if rollbackErr != nil {
+			http.Error(w, formatConfigUpdateFailure("rollback connections config after audit failure", err, rollbackErr), http.StatusInternalServerError)
+			return
+		}
+		server.writeJSON(w, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
 		return
 	}
 
-	w.Header().Set("Content-Type", contentTypeApplicationJSON)
-	fmt.Fprintln(w, `{"status":"ok"}`)
+	server.applyConfiguredConnectionsReloaded(conns, caps)
+	server.storePolicyRuntime(nextPolicyRuntime)
+
+	server.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // connectionsToConfigFiles converts the runtime maps back to the array of connectionConfigFile.
@@ -227,6 +256,11 @@ func connectionsToConfigFiles(conns map[string]configuredConnection, caps map[st
 		capConfig.ResponseFields = fields
 		capsByConn[cap.ConnectionKey] = append(capsByConn[cap.ConnectionKey], capConfig)
 	}
+	for connectionKey := range capsByConn {
+		sort.Slice(capsByConn[connectionKey], func(leftIndex int, rightIndex int) bool {
+			return capsByConn[connectionKey][leftIndex].Name < capsByConn[connectionKey][rightIndex].Name
+		})
+	}
 
 	var result []connectionConfigFile
 	for connKey, conn := range conns {
@@ -234,6 +268,7 @@ func connectionsToConfigFiles(conns map[string]configuredConnection, caps map[st
 		for h := range conn.AllowedHosts {
 			allowedHosts = append(allowedHosts, h)
 		}
+		sort.Strings(allowedHosts)
 		var authURL, tokenURL, apiBaseURL string
 		if conn.AuthorizationURL != nil {
 			authURL = conn.AuthorizationURL.String()
@@ -259,5 +294,107 @@ func connectionsToConfigFiles(conns map[string]configuredConnection, caps map[st
 			Capabilities:     capsByConn[connKey],
 		})
 	}
+	sort.Slice(result, func(leftIndex int, rightIndex int) bool {
+		if result[leftIndex].Provider != result[rightIndex].Provider {
+			return result[leftIndex].Provider < result[rightIndex].Provider
+		}
+		return result[leftIndex].Subject < result[rightIndex].Subject
+	})
+	if result == nil {
+		return []connectionConfigFile{}
+	}
 	return result
+}
+
+func configSHA256(value any) (string, error) {
+	encodedBytes, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	contentHash := sha256.Sum256(encodedBytes)
+	return hex.EncodeToString(contentHash[:]), nil
+}
+
+func buildRuntimeConfigAuditData(previousRuntimeConfig config.RuntimeConfig, appliedRuntimeConfig config.RuntimeConfig, tokenClaims capabilityToken) (map[string]interface{}, error) {
+	previousRuntimeConfigSHA256, err := configSHA256(previousRuntimeConfig)
+	if err != nil {
+		return nil, err
+	}
+	appliedRuntimeConfigSHA256, err := configSHA256(appliedRuntimeConfig)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"control_session_id":          tokenClaims.ControlSessionID,
+		"actor_label":                 tokenClaims.ActorLabel,
+		"client_session_label":        tokenClaims.ClientSessionLabel,
+		"config_section":              "runtime",
+		"previous_config_sha256":      previousRuntimeConfigSHA256,
+		"applied_config_sha256":       appliedRuntimeConfigSHA256,
+		"config_changed":              previousRuntimeConfigSHA256 != appliedRuntimeConfigSHA256,
+		"audit_export_enabled":        appliedRuntimeConfig.Logging.AuditExport.Enabled,
+		"diagnostic_logging_enabled":  appliedRuntimeConfig.Logging.Diagnostic.Enabled,
+		"expected_client_pin_present": strings.TrimSpace(appliedRuntimeConfig.ControlPlane.ExpectedSessionClientExecutable) != "",
+	}, nil
+}
+
+func buildConnectionsConfigAuditData(previousConfigFiles []connectionConfigFile, appliedConfigFiles []connectionConfigFile, tokenClaims capabilityToken) (map[string]interface{}, error) {
+	previousConfigSHA256, err := configSHA256(previousConfigFiles)
+	if err != nil {
+		return nil, err
+	}
+	appliedConfigSHA256, err := configSHA256(appliedConfigFiles)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"control_session_id":        tokenClaims.ControlSessionID,
+		"actor_label":               tokenClaims.ActorLabel,
+		"client_session_label":      tokenClaims.ClientSessionLabel,
+		"config_section":            "connections",
+		"previous_config_sha256":    previousConfigSHA256,
+		"applied_config_sha256":     appliedConfigSHA256,
+		"config_changed":            previousConfigSHA256 != appliedConfigSHA256,
+		"previous_connection_count": len(previousConfigFiles),
+		"applied_connection_count":  len(appliedConfigFiles),
+		"previous_capability_count": countConfiguredConnectionCapabilities(previousConfigFiles),
+		"applied_capability_count":  countConfiguredConnectionCapabilities(appliedConfigFiles),
+	}, nil
+}
+
+func countConfiguredConnectionCapabilities(configFiles []connectionConfigFile) int {
+	totalCount := 0
+	for _, configFile := range configFiles {
+		totalCount += len(configFile.Capabilities)
+	}
+	return totalCount
+}
+
+func formatConfigUpdateFailure(action string, cause error, rollbackErr error) string {
+	if rollbackErr == nil {
+		return action + ": " + cause.Error()
+	}
+	return fmt.Sprintf("%s: %v (rollback failed: %v)", action, cause, rollbackErr)
+}
+
+func (server *Server) currentRuntimeConfigSnapshot() config.RuntimeConfig {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	return server.runtimeConfig
+}
+
+func (server *Server) applyRuntimeConfigReloaded(reloadedRuntimeConfig config.RuntimeConfig) {
+	server.mu.Lock()
+	server.runtimeConfig = reloadedRuntimeConfig
+	server.auditExportStatePath = filepath.Join(server.repoRoot, reloadedRuntimeConfig.Logging.AuditExport.StatePath)
+	server.expectedClientPath = normalizeSessionExecutablePinPath(reloadedRuntimeConfig.ControlPlane.ExpectedSessionClientExecutable)
+	server.mu.Unlock()
+}
+
+func (server *Server) applyConfiguredConnectionsReloaded(configuredConnections map[string]configuredConnection, configuredCapabilities map[string]configuredCapability) {
+	server.providerRuntime.mu.Lock()
+	server.providerRuntime.tokens = make(map[string]providerAccessToken)
+	server.providerRuntime.configuredConnections = cloneConfiguredConnections(configuredConnections)
+	server.providerRuntime.configuredCapabilities = cloneConfiguredCapabilities(configuredCapabilities)
+	server.providerRuntime.mu.Unlock()
 }
