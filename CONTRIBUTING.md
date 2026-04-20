@@ -14,6 +14,7 @@ Apache License, Version 2.0 used by this repository.
   - setup/operator flow: [docs/setup/GETTING_STARTED.md](./docs/setup/GETTING_STARTED.md)
   - architecture overview: [docs/design_overview/architecture.md](./docs/design_overview/architecture.md)
   - trust boundary or security-sensitive runtime change: [AGENTS.md](./AGENTS.md)
+  - contributor engineering guidance: [docs/contributor/README.md](./docs/contributor/README.md)
 
 ## Ground rules
 

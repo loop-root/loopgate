@@ -61,6 +61,7 @@ in the separate `ARCHIVED` repository under `ARCHIVED/docs/`.
 ## Other
 
 - `docs/README.md` — docs index entry
+- `docs/contributor/` — contributor engineering guidance that expands the root contract in `AGENTS.md`
 - `docs/assets/` — shared assets
 
 ## Relationship notes
