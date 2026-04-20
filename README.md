@@ -264,7 +264,6 @@ Experimental and under active hardening.
 
 For current behavior, prefer the operator-facing docs in [docs/](./docs), the
 running code, and the signed policy files under [core/policy/](./core/policy).
-Historical material lives in the `ARCHIVED` and `continuity` sibling repos.
 
 ## License
 
