@@ -128,7 +128,7 @@ names such as `loopgate` and `loopgate-policy-admin`.
 - checks for `python3` before Claude hook install
 - installs Claude Code hooks
 - can install and load a macOS LaunchAgent so Loopgate keeps running in the background
-- ends with a deterministic operator summary including the selected profile, signer `key_id`, policy paths, socket path, audit ledger path, and next commands
+- ends with a deterministic operator summary including `operator_mode`, the selected profile, signer `key_id`, policy paths, socket path, audit ledger path, derived `readiness_state`, and a `next_steps:` block plus next commands
 
 Starter profiles:
 - `balanced` is the recommended daily-driver: Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` stay open inside the repo root, while `Write` and allowed Bash commands require approval.

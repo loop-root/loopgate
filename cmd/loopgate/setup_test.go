@@ -72,14 +72,26 @@ func TestRunSetup_AppliesBalancedProfileAndInstallsHooks(t *testing.T) {
 	if !strings.Contains(stdout.String(), "setup OK") {
 		t.Fatalf("expected setup OK output, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "operator_mode: source-checkout") {
+		t.Fatalf("expected source-checkout operator mode in setup output, got %q", stdout.String())
+	}
 	if !strings.Contains(stdout.String(), "profile: balanced") {
 		t.Fatalf("expected profile output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "readiness_state: daemon-start-required") {
+		t.Fatalf("expected daemon-start-required readiness state, got %q", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "python3_path:") {
 		t.Fatalf("expected python3 path in setup output, got %q", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "audit_ledger_path:") {
 		t.Fatalf("expected audit ledger path in setup output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "next_steps:") {
+		t.Fatalf("expected next_steps block in setup output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "Start Loopgate with ./bin/loopgate") {
+		t.Fatalf("expected daemon start guidance in setup output, got %q", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "./bin/loopgate status") {
 		t.Fatalf("expected status command hint in setup output, got %q", stdout.String())
@@ -113,8 +125,17 @@ func TestRunSetup_ManagedInstallRootUsesBareCommandHints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runSetup: %v stderr=%s", err, stderr.String())
 	}
+	if !strings.Contains(stdout.String(), "operator_mode: managed-install") {
+		t.Fatalf("expected managed-install operator mode in setup output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "readiness_state: daemon-start-required") {
+		t.Fatalf("expected daemon-start-required readiness state in managed install output, got %q", stdout.String())
+	}
 	if !strings.Contains(stdout.String(), "loopgate status") || strings.Contains(stdout.String(), "./bin/loopgate status") {
 		t.Fatalf("expected bare status command hint in managed install output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "Start Loopgate with loopgate") || strings.Contains(stdout.String(), "Start Loopgate with ./bin/loopgate") {
+		t.Fatalf("expected bare daemon start guidance in managed install output, got %q", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "loopgate-ledger tail -verbose") || strings.Contains(stdout.String(), "./bin/loopgate-ledger tail -verbose") {
 		t.Fatalf("expected bare ledger command hint in managed install output, got %q", stdout.String())

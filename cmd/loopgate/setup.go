@@ -156,6 +156,7 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 	}
 
 	fmt.Fprintln(stdout, "setup OK")
+	fmt.Fprintf(stdout, "operator_mode: %s\n", operatorMode(repoRoot))
 	fmt.Fprintf(stdout, "profile: %s\n", selectedPreset.Name)
 	if initResult.AlreadyInitialized {
 		fmt.Fprintf(stdout, "policy_signing: reused local signer (%s)\n", initResult.KeyID)
@@ -181,16 +182,13 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 	} else {
 		fmt.Fprintln(stdout, "launch_agent_loaded: false")
 	}
-	switch {
-	case installLaunchAgentChoice && launchAgentResult.Loaded:
-		fmt.Fprintln(stdout, "next_step: Loopgate is managed by launchd and should stay running in the background.")
-	case installLaunchAgentChoice:
-		fmt.Fprintln(stdout, "next_step: Load the LaunchAgent when you are ready, or start Loopgate once in the foreground to verify startup.")
-	default:
-		fmt.Fprintf(stdout, "next_step: Start Loopgate with %s, or install a LaunchAgent later with %s install-launch-agent -load.\n",
-			operatorCommandPath(repoRoot, "loopgate"),
-			operatorCommandPath(repoRoot, "loopgate"),
-		)
+	fmt.Fprintf(stdout, "readiness_state: %s\n", deriveSetupReadinessState(installHooks, installLaunchAgentChoice, launchAgentResult.Loaded))
+	nextSteps := setupNextSteps(repoRoot, installHooks, installLaunchAgentChoice, launchAgentResult.Loaded)
+	if len(nextSteps) > 0 {
+		fmt.Fprintln(stdout, "next_steps:")
+		for _, nextStep := range nextSteps {
+			fmt.Fprintf(stdout, "  - %s\n", nextStep)
+		}
 	}
 	fmt.Fprintln(stdout, "next_commands:")
 	fmt.Fprintf(stdout, "  - %s status\n", operatorCommandPath(repoRoot, "loopgate"))
@@ -428,4 +426,42 @@ func printSetupVerificationHints(output io.Writer, repoRoot string) {
 	fmt.Fprintf(output, "  1. Run %s status for the quick operator summary.\n", operatorCommandPath(repoRoot, "loopgate"))
 	fmt.Fprintf(output, "  2. Run %s test for a governed local smoke test.\n", operatorCommandPath(repoRoot, "loopgate"))
 	fmt.Fprintf(output, "  3. Run %s tail -verbose to inspect the resulting local audit trail.\n", operatorCommandPath(repoRoot, "loopgate-ledger"))
+}
+
+func deriveSetupReadinessState(hooksInstalled bool, launchAgentInstalled bool, launchAgentLoaded bool) string {
+	switch {
+	case hooksInstalled && launchAgentLoaded:
+		return "ready-for-claude"
+	case hooksInstalled && launchAgentInstalled:
+		return "launch-agent-load-required"
+	case hooksInstalled:
+		return "daemon-start-required"
+	case launchAgentLoaded:
+		return "hooks-required"
+	case launchAgentInstalled:
+		return "hooks-and-launch-agent-load-required"
+	default:
+		return "hooks-and-daemon-required"
+	}
+}
+
+func setupNextSteps(repoRoot string, hooksInstalled bool, launchAgentInstalled bool, launchAgentLoaded bool) []string {
+	loopgateCmd := operatorCommandPath(repoRoot, "loopgate")
+	nextSteps := make([]string, 0, 3)
+	if !hooksInstalled {
+		nextSteps = append(nextSteps, fmt.Sprintf("Install Claude Code hooks with %s install-hooks before relying on Claude Code.", loopgateCmd))
+	}
+	switch {
+	case launchAgentLoaded:
+		nextSteps = append(nextSteps, "Loopgate is managed by launchd and should stay running in the background.")
+	case launchAgentInstalled:
+		nextSteps = append(nextSteps, fmt.Sprintf("Load the LaunchAgent with %s install-launch-agent -load, or start Loopgate once in the foreground to verify startup.", loopgateCmd))
+	default:
+		if runtime.GOOS == "darwin" {
+			nextSteps = append(nextSteps, fmt.Sprintf("Start Loopgate with %s, or install a LaunchAgent later with %s install-launch-agent -load.", loopgateCmd, loopgateCmd))
+		} else {
+			nextSteps = append(nextSteps, fmt.Sprintf("Start Loopgate with %s before relying on the governed path.", loopgateCmd))
+		}
+	}
+	return nextSteps
 }

@@ -91,7 +91,7 @@ Source-checkout path:
 - checking for `python3` before Claude hook install
 - installing Claude Code hooks
 - optionally installing and loading a macOS LaunchAgent so Loopgate keeps running in the background
-- printing the selected profile, signer `key_id`, policy paths, socket path, audit ledger path, and next commands at the end
+- printing `operator_mode`, the selected profile, signer `key_id`, policy paths, socket path, audit ledger path, derived `readiness_state`, a `next_steps:` block, and next commands at the end
 
 Recommended default:
 - `balanced`

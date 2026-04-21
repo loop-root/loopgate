@@ -97,7 +97,7 @@ make build
 - checks for `python3` before Claude hook install
 - installs Claude Code hooks
 - can install and load a macOS LaunchAgent
-- prints a deterministic operator summary with policy, signer, socket, audit ledger, and next commands
+- prints a deterministic operator summary with `operator_mode`, policy, signer, socket, audit ledger, derived `readiness_state`, a `next_steps:` block, and next commands
 
 Profile intent:
 - `balanced`
