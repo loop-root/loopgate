@@ -114,6 +114,12 @@ func TestHookPreValidate_DeniesToolDisabledByClaudeCodePolicy(t *testing.T) {
 	if !strings.Contains(response.Reason, "disabled by Claude Code tool policy") {
 		t.Fatalf("expected disablement reason, got %#v", response)
 	}
+	if response.OperatorOverrideClass != "repo_read_search" {
+		t.Fatalf("expected repo_read_search operator override class, got %#v", response)
+	}
+	if response.OperatorOverrideMaxDelegation != "none" {
+		t.Fatalf("expected none operator override delegation, got %#v", response)
+	}
 }
 
 func TestHookPreValidate_DeniesBashCommandDeniedPrefix(t *testing.T) {
@@ -274,6 +280,12 @@ func TestHookPreValidate_NeedsApprovalReturnsAskAndPersistsLocalHookApproval(t *
 	if response.ApprovalRequestID == "" {
 		t.Fatalf("expected approval request id, got %#v", response)
 	}
+	if response.OperatorOverrideClass != "repo_bash_safe" {
+		t.Fatalf("expected repo_bash_safe operator override class, got %#v", response)
+	}
+	if response.OperatorOverrideMaxDelegation != "none" {
+		t.Fatalf("expected none operator override delegation, got %#v", response)
+	}
 
 	approvalState := readClaudeHookApprovalState(t, repoRoot, "session-hook")
 	if len(approvalState.Approvals) != 1 {
@@ -304,6 +316,12 @@ func TestHookPreValidate_NeedsApprovalReturnsAskAndPersistsLocalHookApproval(t *
 	}
 	if actorRef, _ := lastAuditEvent.Data["actor_ref"].(string); actorRef != "claude_session:session-hook" {
 		t.Fatalf("expected claude session actor ref, got %#v", lastAuditEvent.Data["actor_ref"])
+	}
+	if overrideClass, _ := lastAuditEvent.Data["operator_override_class"].(string); overrideClass != "repo_bash_safe" {
+		t.Fatalf("expected repo_bash_safe override class in audit, got %#v", lastAuditEvent.Data["operator_override_class"])
+	}
+	if overrideDelegation, _ := lastAuditEvent.Data["operator_override_max_delegation"].(string); overrideDelegation != "none" {
+		t.Fatalf("expected none override delegation in audit, got %#v", lastAuditEvent.Data["operator_override_max_delegation"])
 	}
 	if !auditEventTypesContain(t, repoRoot, "approval.created") {
 		t.Fatalf("expected approval.created ledger event for inline Claude approval")

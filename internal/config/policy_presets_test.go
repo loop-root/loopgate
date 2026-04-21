@@ -285,6 +285,56 @@ func TestDetectSetupPolicyTemplatePresetName(t *testing.T) {
 	}
 }
 
+func TestPolicyTemplatePresets_OperatorOverrideDelegationDefaults(t *testing.T) {
+	testCases := []struct {
+		presetName     string
+		className      string
+		wantDelegation string
+	}{
+		{
+			presetName:     "strict",
+			className:      OperatorOverrideClassRepoEditSafe,
+			wantDelegation: OperatorOverrideDelegationSession,
+		},
+		{
+			presetName:     "balanced",
+			className:      OperatorOverrideClassRepoEditSafe,
+			wantDelegation: OperatorOverrideDelegationPersistent,
+		},
+		{
+			presetName:     "balanced",
+			className:      OperatorOverrideClassRepoWriteSafe,
+			wantDelegation: OperatorOverrideDelegationSession,
+		},
+		{
+			presetName:     "read-only",
+			className:      OperatorOverrideClassRepoEditSafe,
+			wantDelegation: OperatorOverrideDelegationNone,
+		},
+		{
+			presetName:     "developer",
+			className:      OperatorOverrideClassRepoBashSafe,
+			wantDelegation: OperatorOverrideDelegationPersistent,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.presetName+"_"+testCase.className, func(t *testing.T) {
+			preset, err := ResolvePolicyTemplatePreset(testCase.presetName)
+			if err != nil {
+				t.Fatalf("ResolvePolicyTemplatePreset(%q): %v", testCase.presetName, err)
+			}
+			policy, err := ParsePolicyDocument([]byte(preset.TemplateYAML))
+			if err != nil {
+				t.Fatalf("ParsePolicyDocument(%q): %v", testCase.presetName, err)
+			}
+			if got := policy.OperatorOverrideMaxDelegation(testCase.className); got != testCase.wantDelegation {
+				t.Fatalf("expected %s max delegation %q, got %q", testCase.className, testCase.wantDelegation, got)
+			}
+		})
+	}
+}
+
 func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {

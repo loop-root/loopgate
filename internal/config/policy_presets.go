@@ -134,6 +134,10 @@ tools:
     enabled: false
     allowed_commands: []
     requires_approval: true
+operator_overrides:
+  classes:
+    repo_edit_safe:
+      max_delegation: session
 logging:
   log_commands: true
   log_tool_calls: true
@@ -292,6 +296,14 @@ tools:
       - "git"
       - "go"
     requires_approval: true
+operator_overrides:
+  classes:
+    repo_edit_safe:
+      max_delegation: persistent
+    repo_write_safe:
+      max_delegation: session
+    repo_bash_safe:
+      max_delegation: session
 logging:
   log_commands: true
   log_tool_calls: true
@@ -408,6 +420,8 @@ tools:
     enabled: false
     allowed_commands: []
     requires_approval: true
+operator_overrides:
+  classes: {}
 logging:
   log_commands: true
   log_tool_calls: true
@@ -537,6 +551,16 @@ tools:
       - "swift"
       - "xcodebuild"
     requires_approval: true
+operator_overrides:
+  classes:
+    repo_edit_safe:
+      max_delegation: persistent
+    repo_write_safe:
+      max_delegation: persistent
+    repo_bash_safe:
+      max_delegation: persistent
+    web_access_trusted:
+      max_delegation: session
 logging:
   log_commands: true
   log_tool_calls: true

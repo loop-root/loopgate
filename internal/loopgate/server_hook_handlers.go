@@ -353,6 +353,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	}
 
 	result := server.evaluateClaudeCodeHookPolicy(req, toolDef)
+	operatorOverrideClass, operatorOverrideMaxDelegation, hasOperatorOverrideClass := policyRuntime.policy.ClaudeCodeToolOperatorOverride(req.ToolName)
 
 	decision := "block"
 	denialCode := controlapipkg.DenialCodePolicyDenied
@@ -427,6 +428,10 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		"peer_uid":                  peer.UID,
 		"peer_pid":                  peer.PID,
 	}, req, server.repoRoot, includeHookAuditPreviews)
+	if hasOperatorOverrideClass {
+		hookAuditData["operator_override_class"] = operatorOverrideClass
+		hookAuditData["operator_override_max_delegation"] = operatorOverrideMaxDelegation
+	}
 	if decision == "block" && strings.TrimSpace(denialCode) != "" {
 		hookAuditData["denial_code"] = denialCode
 	}
@@ -436,21 +441,36 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	}
 
 	if decision == "allow" {
-		server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{Decision: "allow"})
+		response := controlapipkg.HookPreValidateResponse{Decision: "allow"}
+		if hasOperatorOverrideClass {
+			response.OperatorOverrideClass = operatorOverrideClass
+			response.OperatorOverrideMaxDelegation = operatorOverrideMaxDelegation
+		}
+		server.writeJSON(w, http.StatusOK, response)
 		return
 	}
 	if decision == "ask" {
-		server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{
+		response := controlapipkg.HookPreValidateResponse{
 			Decision:          "ask",
 			Reason:            result.Reason,
 			ApprovalRequestID: hookApprovalRequestID,
-		})
+		}
+		if hasOperatorOverrideClass {
+			response.OperatorOverrideClass = operatorOverrideClass
+			response.OperatorOverrideMaxDelegation = operatorOverrideMaxDelegation
+		}
+		server.writeJSON(w, http.StatusOK, response)
 		return
 	}
 
-	server.writeJSON(w, http.StatusOK, controlapipkg.HookPreValidateResponse{
+	response := controlapipkg.HookPreValidateResponse{
 		Decision:   "block",
 		Reason:     result.Reason,
 		DenialCode: denialCode,
-	})
+	}
+	if hasOperatorOverrideClass {
+		response.OperatorOverrideClass = operatorOverrideClass
+		response.OperatorOverrideMaxDelegation = operatorOverrideMaxDelegation
+	}
+	server.writeJSON(w, http.StatusOK, response)
 }

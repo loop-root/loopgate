@@ -31,6 +31,7 @@ For a plain-language summary of the active signed policy, use:
 ```yaml
 version: 0.1.0
 tools: ...
+operator_overrides: ...
 logging: ...
 safety: ...
 ```
@@ -178,6 +179,49 @@ Fields:
 
 `minimal` reduces preview noise, but it does not remove mandatory audit events for approvals, denials, execution, or integrity checkpoints.
 
+## `operator_overrides`
+
+Declares which bounded operator-created exceptions the parent policy may allow in a future delegated override flow.
+
+Current v0.2 behavior:
+
+- this block does **not** widen current tool access by itself
+- absent or unconfigured classes default fail-closed to `none`
+- Loopgate uses it today as strict parent-policy metadata for explanation surfaces
+- future operator override objects must still be explicitly created, validated, signed, and audited before they can affect the effective policy
+
+Fields:
+
+- `classes`
+  - keyed by supported action class name:
+    - `repo_read_search`
+    - `repo_edit_safe`
+    - `repo_write_safe`
+    - `repo_bash_safe`
+    - `web_access_trusted`
+
+Each `classes.<name>` entry supports:
+
+- `max_delegation`
+  - `none`
+  - `session`
+  - `persistent`
+
+Semantics:
+
+- `none`
+  - the parent policy does not delegate this action class to local operator exceptions
+- `session`
+  - the parent policy may allow future session-scoped operator exceptions for this class
+- `persistent`
+  - the parent policy may allow future persistent operator exceptions for this class
+
+Important limitation:
+
+- this is intentionally a constrained class-based declaration, not a second arbitrary policy tree
+- the parent policy remains the authority boundary
+- hard-denied or non-delegable classes must stay non-overridable even after a delegated override flow is introduced
+
 ## `safety`
 
 Explicit high-risk authoring toggles.
@@ -210,16 +254,19 @@ Available starter profiles:
   - repo reads and search stay open
   - Claude `Write`, `Edit`, and `MultiEdit` require approval
   - Bash and HTTP stay disabled
+  - only `repo_edit_safe` is delegated, and only up to `session`
 - `balanced`
   - recommended daily-driver for local engineering work
   - Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` are allowed inside the repo root
   - Claude `Write` and allowed Bash commands require approval
   - HTTP stays disabled
+  - `repo_edit_safe` can be delegated persistently; `repo_write_safe` and `repo_bash_safe` are session-only
 - `read-only`
   - lowest-friction evaluation profile
   - Claude `Read`, `Glob`, and `Grep` are allowed inside the repo root
   - Claude `Write`, `Edit`, and `MultiEdit` stay disabled
   - Bash and HTTP stay disabled
+  - no delegated operator override classes are enabled
 
 Experimental manual template:
 - `developer`

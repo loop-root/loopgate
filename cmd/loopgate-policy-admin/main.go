@@ -582,6 +582,11 @@ func printClaudeCodeToolExplanation(w io.Writer, policy config.Policy, toolName 
 	fmt.Fprintf(w, "\n[%s]\n", toolName)
 	fmt.Fprintf(w, "configured: %t\n", configured)
 	fmt.Fprintf(w, "base_policy: %s (%s)\n", baseDecision, baseSource)
+	if overrideClass, maxDelegation, hasOverrideClass := policy.ClaudeCodeToolOperatorOverride(toolName); hasOverrideClass {
+		fmt.Fprintf(w, "operator_override.class: %s\n", overrideClass)
+		fmt.Fprintf(w, "operator_override.max_delegation: %s\n", maxDelegation)
+		fmt.Fprintf(w, "operator_override.effect: %s\n", describeOperatorOverrideDelegationEffect(maxDelegation))
+	}
 	if !configured {
 		fmt.Fprintln(w, "effective_policy: inherits base policy")
 		return
@@ -673,6 +678,17 @@ func describeClaudeCodeToolPolicyEffect(toolPolicy config.ClaudeCodeToolPolicy) 
 		return "inherits base policy with additional constraints"
 	}
 	return "inherits base policy"
+}
+
+func describeOperatorOverrideDelegationEffect(maxDelegation string) string {
+	switch strings.TrimSpace(maxDelegation) {
+	case config.OperatorOverrideDelegationPersistent:
+		return "parent policy allows persistent operator-created exceptions for this action class"
+	case config.OperatorOverrideDelegationSession:
+		return "parent policy allows session-scoped operator-created exceptions for this action class"
+	default:
+		return "parent policy does not delegate operator-created exceptions for this action class"
+	}
 }
 
 func formatListOrNone(values []string) string {

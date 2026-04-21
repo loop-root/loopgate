@@ -47,6 +47,8 @@ type Policy struct {
 		} `yaml:"shell" json:"shell"`
 	} `yaml:"tools" json:"tools"`
 
+	OperatorOverrides OperatorOverridePolicy `yaml:"operator_overrides" json:"operator_overrides"`
+
 	Logging struct {
 		LogCommands  bool `yaml:"log_commands" json:"log_commands"`
 		LogToolCalls bool `yaml:"log_tool_calls" json:"log_tool_calls"`
@@ -237,6 +239,9 @@ func applyPolicyDefaults(pol *Policy) error {
 		return err
 	}
 	if err := applyMCPGatewayPolicyDefaults(&pol.Tools.MCPGateway); err != nil {
+		return err
+	}
+	if err := applyOperatorOverridePolicyDefaults(&pol.OperatorOverrides); err != nil {
 		return err
 	}
 	pol.Tools.Filesystem.AllowedRoots = normalizeConfiguredPaths(pol.Tools.Filesystem.AllowedRoots)

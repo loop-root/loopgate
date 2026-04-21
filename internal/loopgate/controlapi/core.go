@@ -496,4 +496,11 @@ type HookPreValidateResponse struct {
 	AdditionalContext string `json:"additional_context,omitempty"`
 	// ApprovalRequestID is the local Loopgate approval-tracking identifier for Claude hook asks.
 	ApprovalRequestID string `json:"approval_request_id,omitempty"`
+	// OperatorOverrideClass is the parent-policy action class associated with
+	// this Claude tool, when one exists.
+	OperatorOverrideClass string `json:"operator_override_class,omitempty"`
+	// OperatorOverrideMaxDelegation describes whether the parent policy would
+	// allow future operator-created exceptions for this action class. It is
+	// metadata only and does not itself grant permission.
+	OperatorOverrideMaxDelegation string `json:"operator_override_max_delegation,omitempty"`
 }

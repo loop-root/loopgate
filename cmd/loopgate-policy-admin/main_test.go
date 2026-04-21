@@ -155,6 +155,12 @@ func TestRunExplain_PrintsToolExplanation(t *testing.T) {
 	if !strings.Contains(output, "base_policy: approval_required (tools.shell.requires_approval=true)") {
 		t.Fatalf("expected base policy explanation, got %q", output)
 	}
+	if !strings.Contains(output, "operator_override.class: repo_bash_safe") {
+		t.Fatalf("expected operator override class in explanation, got %q", output)
+	}
+	if !strings.Contains(output, "operator_override.max_delegation: persistent") {
+		t.Fatalf("expected operator override delegation in explanation, got %q", output)
+	}
 	if !strings.Contains(output, "tool_policy.allowed_command_prefixes: ls, pwd, find, grep, cat, sed -n, head, tail, wc, sort, git status, git diff, go test, rg") {
 		t.Fatalf("expected command prefixes in explanation, got %q", output)
 	}
