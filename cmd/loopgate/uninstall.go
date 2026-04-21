@@ -97,12 +97,14 @@ func runUninstall(args []string, stdout io.Writer, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "removed_managed_install_root: %t\n", purgeResult.ManagedInstallRootRemoved)
 		if purgeResult.ManagedInstallRootRemoved {
 			fmt.Fprintln(stdout, "left_in_place: signer trust outside the managed install root may still exist if it was not tied to the current policy key_id")
+			fmt.Fprintln(stdout, "next_step: managed install files are gone; remove any external trust material later if it was not owned by this install.")
 		} else {
 			fmt.Fprintln(stdout, "left_in_place: tracked repo policy files such as core/policy/policy.yaml and core/policy/policy.yaml.sig")
+			fmt.Fprintln(stdout, "next_step: delete the repo checkout yourself when you no longer want the tracked policy files that remain in place.")
 		}
 	} else {
 		fmt.Fprintln(stdout, "left_in_place: local binaries, signed policy files, and runtime/audit state")
-		fmt.Fprintln(stdout, "next_step: rerun with --purge to also remove repo runtime state, local signer material, and default installed binaries.")
+		fmt.Fprintf(stdout, "next_step: rerun with %s uninstall --purge to also remove repo runtime state, local signer material, and default installed binaries.\n", operatorCommandPath(repoRoot, "loopgate"))
 	}
 	return nil
 }

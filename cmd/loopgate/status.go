@@ -99,6 +99,7 @@ type operatorLiveStatus struct {
 type operatorStatusReport struct {
 	OK              bool                      `json:"ok"`
 	OperatorMode    string                    `json:"operator_mode"`
+	DaemonMode      string                    `json:"daemon_mode"`
 	RepoRoot        string                    `json:"repo_root"`
 	PolicyPath      string                    `json:"policy_path"`
 	SignaturePath   string                    `json:"signature_path"`
@@ -219,6 +220,7 @@ func collectOperatorStatusReport(repoRootFlag string, claudeDirFlag string, sock
 	report.ClaudeHooks = inspectClaudeHooks(repoRoot, claudeDirFlag)
 	report.LaunchAgent = inspectLaunchAgent(repoRoot)
 	report.Daemon = inspectDaemon(report.SocketPath)
+	report.DaemonMode = deriveOperatorDaemonMode(report.Daemon, report.LaunchAgent)
 
 	if live {
 		liveStatus := collectLiveOperatorStatus(report.SocketPath)
@@ -439,6 +441,7 @@ func printOperatorStatusReport(output io.Writer, report operatorStatusReport) {
 	}
 	fmt.Fprintf(output, "status: %s\n", statusLabel)
 	fmt.Fprintf(output, "operator_mode: %s\n", report.OperatorMode)
+	fmt.Fprintf(output, "daemon_mode: %s\n", report.DaemonMode)
 	fmt.Fprintf(output, "repo_root: %s\n", report.RepoRoot)
 	fmt.Fprintf(output, "policy_profile: %s\n", report.Policy.Profile)
 	fmt.Fprintf(output, "policy_path: %s\n", report.PolicyPath)
@@ -537,7 +540,14 @@ func operatorStatusNextSteps(report operatorStatusReport) []string {
 	}
 	if !report.Daemon.Healthy {
 		if report.LaunchAgent.Supported {
-			nextSteps = append(nextSteps, fmt.Sprintf("start Loopgate with %s or %s install-launch-agent -load", loopgateCmd, loopgateCmd))
+			switch {
+			case report.LaunchAgent.Installed && !report.LaunchAgent.Loaded:
+				nextSteps = append(nextSteps, fmt.Sprintf("load the existing LaunchAgent with %s install-launch-agent -load, or start Loopgate once with %s", loopgateCmd, loopgateCmd))
+			case report.LaunchAgent.Installed && report.LaunchAgent.Loaded:
+				nextSteps = append(nextSteps, fmt.Sprintf("restart the loaded LaunchAgent with %s install-launch-agent -load, or start Loopgate once with %s for foreground diagnostics", loopgateCmd, loopgateCmd))
+			default:
+				nextSteps = append(nextSteps, fmt.Sprintf("start Loopgate with %s, or install a background LaunchAgent with %s install-launch-agent -load", loopgateCmd, loopgateCmd))
+			}
 		} else {
 			nextSteps = append(nextSteps, fmt.Sprintf("start Loopgate with %s", loopgateCmd))
 		}
@@ -547,6 +557,16 @@ func operatorStatusNextSteps(report operatorStatusReport) []string {
 		nextSteps = append(nextSteps, fmt.Sprintf("run %s report if you need deeper diagnostics from derived local state", doctorCmd))
 	}
 	return nextSteps
+}
+
+func deriveOperatorDaemonMode(daemon operatorDaemonStatus, launchAgent operatorLaunchAgentStatus) string {
+	if !daemon.Healthy {
+		return "offline"
+	}
+	if launchAgent.Supported && launchAgent.Loaded {
+		return "launch-agent-managed"
+	}
+	return "foreground-or-manual"
 }
 
 func defaultCommandSessionID(prefix string) string {

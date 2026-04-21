@@ -36,6 +36,9 @@ func TestRunUninstall_DefaultPreservesRuntimeState(t *testing.T) {
 	if !strings.Contains(stdout.String(), "purge: false") {
 		t.Fatalf("expected purge=false output, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "./bin/loopgate uninstall --purge") {
+		t.Fatalf("expected source-checkout purge guidance, got %q", stdout.String())
+	}
 }
 
 func TestRunUninstall_PurgeRemovesLocalStateButLeavesTrackedPolicy(t *testing.T) {
@@ -99,6 +102,9 @@ func TestRunUninstall_PurgeRemovesLocalStateButLeavesTrackedPolicy(t *testing.T)
 	if !strings.Contains(stdout.String(), "removed_managed_install_root: false") {
 		t.Fatalf("expected non-managed install root output, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "delete the repo checkout yourself") {
+		t.Fatalf("expected repo checkout cleanup guidance, got %q", stdout.String())
+	}
 }
 
 func mustDefaultInstalledBinaryPaths(t *testing.T) []string {
@@ -133,5 +139,30 @@ func TestRunUninstall_PurgeRemovesManagedInstallRoot(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "removed_managed_install_root: true") {
 		t.Fatalf("expected managed install root removal output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "managed install files are gone") {
+		t.Fatalf("expected managed install cleanup guidance, got %q", stdout.String())
+	}
+}
+
+func TestRunUninstall_DefaultManagedInstallUsesBarePurgeHint(t *testing.T) {
+	repoRoot := prepareOperatorTestRepo(t, "balanced")
+	claudeDir := t.TempDir()
+	markerPath := filepath.Join(repoRoot, managedInstallRootMarkerFilename)
+	if err := os.WriteFile(markerPath, []byte("managed=true\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile install marker: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runUninstall([]string{
+		"-repo-root", repoRoot,
+		"-claude-dir", claudeDir,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("runUninstall: %v stderr=%s", err, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), "loopgate uninstall --purge") || strings.Contains(stdout.String(), "./bin/loopgate uninstall --purge") {
+		t.Fatalf("expected bare managed-install purge guidance, got %q", stdout.String())
 	}
 }

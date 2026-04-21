@@ -33,6 +33,9 @@ func TestRunStatus_OfflineJSONIncludesSetupSummary(t *testing.T) {
 	if report.OperatorMode != "source-checkout" {
 		t.Fatalf("operator_mode = %q, want source-checkout", report.OperatorMode)
 	}
+	if report.DaemonMode != "offline" {
+		t.Fatalf("daemon_mode = %q, want offline", report.DaemonMode)
+	}
 	if report.Policy.Profile != "balanced" {
 		t.Fatalf("policy profile = %q, want balanced", report.Policy.Profile)
 	}
@@ -67,6 +70,9 @@ func TestRunStatus_OfflineHumanOutputIncludesNextSteps(t *testing.T) {
 	if !strings.Contains(renderedOutput, "operator_mode: source-checkout") {
 		t.Fatalf("expected operator mode in human status output, got %q", renderedOutput)
 	}
+	if !strings.Contains(renderedOutput, "daemon_mode: offline") {
+		t.Fatalf("expected daemon mode in human status output, got %q", renderedOutput)
+	}
 	if !strings.Contains(renderedOutput, "claude_hooks_state: missing") {
 		t.Fatalf("expected hook state in human status output, got %q", renderedOutput)
 	}
@@ -100,6 +106,9 @@ func TestRunStatus_ManagedInstallRootUsesBareCommandHints(t *testing.T) {
 	renderedOutput := stdout.String()
 	if !strings.Contains(renderedOutput, "operator_mode: managed-install") {
 		t.Fatalf("expected managed install operator mode in status output, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "daemon_mode: offline") {
+		t.Fatalf("expected offline daemon mode in managed install status output, got %q", renderedOutput)
 	}
 	if !strings.Contains(renderedOutput, "loopgate install-hooks") || strings.Contains(renderedOutput, "./bin/loopgate install-hooks") {
 		t.Fatalf("expected bare install-hooks guidance in managed install status output, got %q", renderedOutput)
@@ -184,6 +193,9 @@ func TestRunStatus_LiveIncludesRecentEvents(t *testing.T) {
 	}
 	if report.Live == nil {
 		t.Fatalf("expected live section in status report, got %#v", report)
+	}
+	if report.DaemonMode != "foreground-or-manual" {
+		t.Fatalf("daemon_mode = %q, want foreground-or-manual", report.DaemonMode)
 	}
 	if strings.TrimSpace(report.Live.ControlSessionID) == "" {
 		t.Fatalf("expected control session id in live report, got %#v", report.Live)
