@@ -2,78 +2,72 @@
 
 **Last updated:** 2026-04-20
 
-**Loopgate** is a local-first governance layer for AI-assisted engineering work.
+**Loopgate** is a local-first authority boundary for AI-assisted engineering work.
+
+It puts **signed policy**, **explicit approvals**, and an **append-only local
+audit ledger** between an AI harness and the tools it can invoke.
+
+Current harness focus: **Claude Code + project hooks + Loopgate**
+
+## Status
+
+Loopgate is:
+- experimental
+- security-sensitive
+- local-first
+- governance-focused
+
+Loopgate is **not** yet:
+- a stable compatibility target
+- a packaged desktop product
+- a browser-based admin UI
+- a multi-harness platform
+
+## Who it is for
+
+Loopgate is for engineers and security-minded operators who want:
+- deterministic allow / approve / deny behavior for AI tool use
+- less prompt-based babysitting and less approval rubber-stamping
+- a durable local record of what the agent actually did
+- a real authority boundary instead of chat text pretending to be policy
+
+## What you can do today
+
+The current product scope is intentionally narrow:
+- govern Claude Code hooks before tool execution
+- require approval for higher-risk actions
+- allow low-risk actions with audit
+- keep policy signed and local
+- inspect a durable local audit ledger
+- use a repo-local operator CLI for setup, status, smoke testing, and uninstall
+
+The guided first-run path leads operators toward three starter profiles:
+- `balanced`
+- `strict`
+- `read-only`
 
 The current product contract is here:
 - [Loopgate V1 product contract](./docs/loopgate_v1_product_contract.md)
 
-Current product scope:
-- govern what your AI tools are allowed to do
-- require approval for higher-risk actions
-- record a durable local audit trail of what happened
-- provide a local control plane for Claude Code hook governance
-- verify local audit integrity with a hash-linked ledger plus default-on HMAC checkpoints on macOS
-
-**Current MVP harness:** **Claude Code + project hooks + Loopgate**
-
-This repository documents and ships a single product: **Loopgate**.
-
-## Project status
-
-- security-sensitive and experimental
-- local-first
-- governance-focused
-- not yet a stable compatibility target
-
-## What Loopgate does
-
-Most AI harnesses give the model broad ambient authority and rely on prompt discipline to keep it safe.
-
-Loopgate takes the opposite position:
-
-- natural language is never authority
-- model output is untrusted input
-- policy decides what can run
-- approvals are explicit
-- audit is local, durable, and append-only
-
-For the current local-first product, that means:
-
-- Claude Code hooks can be governed before tool execution
-- risky actions can be denied or approval-gated
-- low-risk actions can be allowed with audit
-- governed MCP execution can run through Loopgate’s own broker path when explicitly enabled
-- local audit stays authoritative even if later export or aggregation changes
-- setup should lead operators toward three intentional starter policies: `balanced`, `strict`, and `read-only`
-
-## Active product surface
-
-What is active now:
-- Loopgate server on a local Unix socket
-- signed policy
-- Claude Code hook governance
-- approval and denial recording
-- append-only local audit ledger
-- request-driven governed MCP broker work
-- local operator CLI flows
-
-What is not the active product story right now:
-- a new desktop UI surface
-- a separate assistant product
-- legacy worker/runtime experiments
-- distributed enterprise deployment
-- automatic memory or continuity inside Loopgate
-- provider-backed OAuth/PKCE setup as part of the main v1 operator flow
-- secret brokerage as a top-level product feature
-
 ## Quick start
+
+Today the install story is still **source-first**. There is no Homebrew
+formula or `.pkg` yet, and the release-installer script is groundwork until
+published archives exist.
+
+Release-archive groundwork now lives in:
+- `scripts/package_release.sh` for building self-contained archives
+- `scripts/install.sh` for installing published archives without Go
+
+Until release archives are published, the supported path is still a source
+checkout plus `make quickstart`.
 
 Requirements:
 - Go 1.25 or newer to build from source
 - Python 3 on `PATH` for Claude hook scripts
 - Claude Code for the active hook-based harness
 
-Fastest source-checkout path:
+Fastest path from a source checkout:
 
 ```bash
 make quickstart
@@ -85,7 +79,14 @@ which applies the recommended defaults:
 - Claude Code hook install into `~/.claude/`
 - macOS LaunchAgent install and load so Loopgate keeps running in the background
 
-If you want to choose options interactively instead, use the guided path:
+Then verify the local operator flow:
+
+```bash
+./bin/loopgate status
+./bin/loopgate test
+```
+
+If you want to choose options interactively instead, use the guided setup path:
 
 ```bash
 make build

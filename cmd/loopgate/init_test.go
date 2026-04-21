@@ -58,6 +58,11 @@ func TestRunInit_InitializesPolicySigningSetup(t *testing.T) {
 	if _, err := config.LoadPolicy(repoRoot); err != nil {
 		t.Fatalf("load signed policy: %v", err)
 	}
+	if keyID, ok, err := loadLocalPolicySignerKeyIDMarker(repoRoot); err != nil {
+		t.Fatalf("loadLocalPolicySignerKeyIDMarker: %v", err)
+	} else if !ok || keyID != "local-operator-test" {
+		t.Fatalf("expected local signer marker for local-operator-test, got key_id=%q ok=%t", keyID, ok)
+	}
 }
 
 func TestRunInit_IsIdempotent(t *testing.T) {
@@ -92,6 +97,11 @@ func TestRunInit_IsIdempotent(t *testing.T) {
 	}
 	if !bytes.Equal(firstPrivateKeyBytes, secondPrivateKeyBytes) {
 		t.Fatal("idempotent init unexpectedly rotated the private key")
+	}
+	if keyID, ok, err := loadLocalPolicySignerKeyIDMarker(repoRoot); err != nil {
+		t.Fatalf("loadLocalPolicySignerKeyIDMarker: %v", err)
+	} else if !ok || keyID != "local-operator-test" {
+		t.Fatalf("expected local signer marker for local-operator-test, got key_id=%q ok=%t", keyID, ok)
 	}
 }
 

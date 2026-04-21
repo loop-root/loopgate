@@ -96,6 +96,9 @@ func TestRunUninstall_PurgeRemovesLocalStateButLeavesTrackedPolicy(t *testing.T)
 	if !strings.Contains(stdout.String(), "purge: true") {
 		t.Fatalf("expected purge=true output, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "removed_managed_install_root: false") {
+		t.Fatalf("expected non-managed install root output, got %q", stdout.String())
+	}
 }
 
 func mustDefaultInstalledBinaryPaths(t *testing.T) []string {
@@ -105,4 +108,30 @@ func mustDefaultInstalledBinaryPaths(t *testing.T) []string {
 		t.Fatalf("defaultInstalledBinaryPaths: %v", err)
 	}
 	return paths
+}
+
+func TestRunUninstall_PurgeRemovesManagedInstallRoot(t *testing.T) {
+	repoRoot := prepareOperatorTestRepo(t, "balanced")
+	claudeDir := t.TempDir()
+	markerPath := filepath.Join(repoRoot, managedInstallRootMarkerFilename)
+	if err := os.WriteFile(markerPath, []byte("managed=true\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile install marker: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runUninstall([]string{
+		"-repo-root", repoRoot,
+		"-claude-dir", claudeDir,
+		"--purge",
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("runUninstall: %v stderr=%s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(repoRoot); !os.IsNotExist(err) {
+		t.Fatalf("expected managed install root removed by purge, got %v", err)
+	}
+	if !strings.Contains(stdout.String(), "removed_managed_install_root: true") {
+		t.Fatalf("expected managed install root removal output, got %q", stdout.String())
+	}
 }

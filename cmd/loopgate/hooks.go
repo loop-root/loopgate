@@ -277,7 +277,7 @@ func runRemoveHooks(args []string, stdout io.Writer) error {
 func parseHookCommandArgs(commandName string, args []string) (string, string, error) {
 	flagSet := flag.NewFlagSet(commandName, flag.ContinueOnError)
 	flagSet.SetOutput(io.Discard)
-	defaultRepoRoot, err := os.Getwd()
+	defaultRepoRoot, err := resolveLoopgateRepoRoot("")
 	if err != nil {
 		return "", "", fmt.Errorf("determine default repo root: %w", err)
 	}

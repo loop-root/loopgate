@@ -36,6 +36,7 @@ node_modules/
 tmp/
 output/
 /bin/
+/dist/
 claude/hooks/scripts/__pycache__/
 
 # Operator-generated runtime (logs, sockets, ledger, sandbox state, imports, local fixtures)

@@ -149,6 +149,40 @@ func TestRunInstallHooks_MissingHookBundleExplainsExpectedSourceDir(t *testing.T
 	}
 }
 
+func TestParseHookCommandArgs_PrefersLoopgateRepoRootEnv(t *testing.T) {
+	repoRoot := makeTestHookRepo(t)
+	claudeDir := t.TempDir()
+	otherDir := t.TempDir()
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+	if err := os.Chdir(otherDir); err != nil {
+		t.Fatalf("os.Chdir(%s): %v", otherDir, err)
+	}
+	defer func() {
+		if err := os.Chdir(workingDir); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	}()
+
+	t.Setenv(loopgateRepoRootEnv, repoRoot)
+
+	resolvedRepoRoot, resolvedClaudeDir, err := parseHookCommandArgs("install-hooks", []string{
+		"-claude-dir", claudeDir,
+	})
+	if err != nil {
+		t.Fatalf("parseHookCommandArgs: %v", err)
+	}
+	if resolvedRepoRoot != repoRoot {
+		t.Fatalf("expected repo root %q from %s, got %q", repoRoot, loopgateRepoRootEnv, resolvedRepoRoot)
+	}
+	if resolvedClaudeDir != claudeDir {
+		t.Fatalf("expected claude dir %q, got %q", claudeDir, resolvedClaudeDir)
+	}
+}
+
 func TestGovernedHookScriptsFailClosedWhenLoopgateUnreachable(t *testing.T) {
 	python3Path, err := exec.LookPath("python3")
 	if err != nil {

@@ -10,7 +10,7 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X main.buildVersion=$(VERSION) -X main.buildCommit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
 GOFILES := $(shell find . -type f -name '*.go' -not -path './runtime/*' | sort)
 
-.PHONY: build quickstart install-local uninstall-local fmt fmt-check vet test test-race test-e2e test-fuzz-smoke lint policy-check policy-sign-coverage-check vuln ship-check clean
+.PHONY: build quickstart install-local uninstall-local dist install-smoke fmt fmt-check vet test test-race test-e2e test-fuzz-smoke lint script-check policy-check policy-sign-coverage-check vuln ship-check clean
 
 build:
 	mkdir -p bin
@@ -43,6 +43,12 @@ uninstall-local:
 	rm -f "$(INSTALL_DIR)/loopgate-policy-admin"
 	rm -f "$(INSTALL_DIR)/loopgate-policy-sign"
 
+dist:
+	./scripts/package_release.sh
+
+install-smoke:
+	./scripts/install_smoke_test.sh
+
 fmt:
 	gofmt -w $(GOFILES)
 
@@ -69,6 +75,13 @@ test-fuzz-smoke:
 lint:
 	$(GOLANGCI_LINT) run
 
+script-check:
+	bash -n scripts/govulncheck.sh
+	bash -n scripts/policy_sign_coverage_check.sh
+	bash -n scripts/package_release.sh
+	bash -n scripts/install.sh
+	bash -n scripts/install_smoke_test.sh
+
 policy-check:
 	$(GO) run ./cmd/loopgate-policy-admin validate -repo .
 
@@ -78,7 +91,7 @@ policy-sign-coverage-check:
 vuln:
 	./scripts/govulncheck.sh
 
-ship-check: fmt-check vet test-race lint policy-check policy-sign-coverage-check vuln
+ship-check: fmt-check vet test-race lint script-check policy-check policy-sign-coverage-check vuln
 
 clean:
 	rm -rf bin

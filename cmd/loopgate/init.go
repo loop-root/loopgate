@@ -21,6 +21,8 @@ const policySigningTrustDirEnv = "LOOPGATE_POLICY_SIGNING_TRUST_DIR"
 
 const loopgateRepoRootEnv = "LOOPGATE_REPO_ROOT"
 
+const localPolicySignerKeyIDMarkerName = "local_policy_signer_key_id"
+
 type loopgateInitResult struct {
 	KeyID              string
 	SocketPath         string
@@ -85,6 +87,9 @@ func initializeLoopgatePolicySigning(repoRoot string, keyID string, force bool) 
 
 	if !force {
 		if _, err := config.VerifyPolicySigningSetup(repoRoot, privateKeyPath, keyID); err == nil {
+			if err := writeLocalPolicySignerKeyIDMarker(repoRoot, keyID); err != nil {
+				return loopgateInitResult{}, err
+			}
 			return loopgateInitResult{
 				KeyID:              keyID,
 				SocketPath:         filepath.Join(runtimeStateDir, "loopgate.sock"),
@@ -139,6 +144,9 @@ func initializeLoopgatePolicySigning(repoRoot string, keyID string, force bool) 
 	if _, err := config.VerifyPolicySigningSetup(repoRoot, privateKeyPath, keyID); err != nil {
 		return loopgateInitResult{}, fmt.Errorf("verify initialized policy signing setup: %w", err)
 	}
+	if err := writeLocalPolicySignerKeyIDMarker(repoRoot, keyID); err != nil {
+		return loopgateInitResult{}, err
+	}
 
 	return loopgateInitResult{
 		KeyID:      keyID,
@@ -171,6 +179,33 @@ func signRepoPolicyWithLocalOperatorKey(repoRoot string, keyID string) error {
 		return fmt.Errorf("write policy signature yaml: %w", err)
 	}
 	return nil
+}
+
+func localPolicySignerKeyIDMarkerPath(repoRoot string) string {
+	return filepath.Join(repoRoot, "runtime", "state", localPolicySignerKeyIDMarkerName)
+}
+
+func writeLocalPolicySignerKeyIDMarker(repoRoot string, keyID string) error {
+	markerPath := localPolicySignerKeyIDMarkerPath(repoRoot)
+	if err := os.WriteFile(markerPath, []byte(strings.TrimSpace(keyID)+"\n"), 0o600); err != nil {
+		return fmt.Errorf("write local policy signer key marker: %w", err)
+	}
+	return nil
+}
+
+func loadLocalPolicySignerKeyIDMarker(repoRoot string) (string, bool, error) {
+	rawMarkerBytes, err := os.ReadFile(localPolicySignerKeyIDMarkerPath(repoRoot))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("read local policy signer key marker: %w", err)
+	}
+	keyID := strings.TrimSpace(string(rawMarkerBytes))
+	if keyID == "" {
+		return "", false, nil
+	}
+	return keyID, true, nil
 }
 
 func resolveLoopgateRepoRoot(flagValue string) (string, error) {

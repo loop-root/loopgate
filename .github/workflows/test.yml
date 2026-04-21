@@ -101,6 +101,43 @@ jobs:
             echo "- logs artifact: \`e2e-logs-${{ github.run_id }}-${{ github.run_attempt }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  install-smoke:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: install smoke
+        shell: bash
+        env:
+          LOOPGATE_INSTALL_SMOKE_RUN_TEST: "1"
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          make install-smoke 2>&1 | tee artifacts/install-smoke.log
+      - name: upload install smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-smoke-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          if-no-files-found: ignore
+      - name: summarize install smoke job
+        if: always()
+        run: |
+          {
+            echo "## test / install-smoke"
+            echo "- status: ${{ job.status }}"
+            echo "- command: \`make install-smoke\`"
+            echo "- coverage:"
+            echo "  - package local release archive"
+            echo "  - install into a temp home without Go"
+            echo "  - run setup, status, test, hook install/remove, and uninstall --purge from outside the repo root"
+            echo "- logs artifact: \`install-smoke-logs-${{ github.run_id }}-${{ github.run_attempt }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10

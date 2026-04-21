@@ -9,17 +9,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"loopgate/internal/config"
 )
+
+const managedInstallRootMarkerFilename = ".loopgate-install-root"
 
 func runUninstall(args []string, stdout io.Writer, stderr io.Writer) error {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
-	defaultRepoRoot, err := os.Getwd()
+	defaultRepoRoot, err := resolveLoopgateRepoRoot("")
 	if err != nil {
-		return fmt.Errorf("determine default repo root: %w", err)
+		return err
 	}
 	defaultClaudeConfigDir, err := defaultClaudeDir()
 	if err != nil {
@@ -94,7 +94,12 @@ func runUninstall(args []string, stdout io.Writer, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "removed_signer_private_key: %t\n", purgeResult.SignerPrivateKeyRemoved)
 		fmt.Fprintf(stdout, "removed_signer_public_key: %t\n", purgeResult.SignerPublicKeyRemoved)
 		fmt.Fprintf(stdout, "removed_installed_binaries: %d\n", purgeResult.RemovedInstalledBinaries)
-		fmt.Fprintln(stdout, "left_in_place: tracked repo policy files such as core/policy/policy.yaml and core/policy/policy.yaml.sig")
+		fmt.Fprintf(stdout, "removed_managed_install_root: %t\n", purgeResult.ManagedInstallRootRemoved)
+		if purgeResult.ManagedInstallRootRemoved {
+			fmt.Fprintln(stdout, "left_in_place: signer trust outside the managed install root may still exist if it was not tied to the current policy key_id")
+		} else {
+			fmt.Fprintln(stdout, "left_in_place: tracked repo policy files such as core/policy/policy.yaml and core/policy/policy.yaml.sig")
+		}
 	} else {
 		fmt.Fprintln(stdout, "left_in_place: local binaries, signed policy files, and runtime/audit state")
 		fmt.Fprintln(stdout, "next_step: rerun with --purge to also remove repo runtime state, local signer material, and default installed binaries.")
@@ -103,14 +108,20 @@ func runUninstall(args []string, stdout io.Writer, stderr io.Writer) error {
 }
 
 type uninstallPurgeResult struct {
-	RuntimeDirRemoved        bool
-	SignerPrivateKeyRemoved  bool
-	SignerPublicKeyRemoved   bool
-	RemovedInstalledBinaries int
+	RuntimeDirRemoved         bool
+	SignerPrivateKeyRemoved   bool
+	SignerPublicKeyRemoved    bool
+	RemovedInstalledBinaries  int
+	ManagedInstallRootRemoved bool
 }
 
 func purgeLoopgateLocalState(ctx context.Context, repoRoot string) (uninstallPurgeResult, error) {
 	result := uninstallPurgeResult{}
+
+	ownedKeyID, ownedKeyIDPresent, err := loadLocalPolicySignerKeyIDMarker(repoRoot)
+	if err != nil {
+		return result, err
+	}
 
 	runtimeDir := filepath.Join(repoRoot, "runtime")
 	if err := os.RemoveAll(runtimeDir); err != nil {
@@ -118,13 +129,12 @@ func purgeLoopgateLocalState(ctx context.Context, repoRoot string) (uninstallPur
 	}
 	result.RuntimeDirRemoved = true
 
-	signatureFile, err := config.LoadPolicySignatureFile(repoRoot)
-	if err == nil {
-		privateKeyPath, privateKeyErr := defaultOperatorPolicySigningPrivateKeyPath(signatureFile.KeyID)
+	if ownedKeyIDPresent {
+		privateKeyPath, privateKeyErr := defaultOperatorPolicySigningPrivateKeyPath(ownedKeyID)
 		if privateKeyErr != nil {
 			return result, privateKeyErr
 		}
-		publicKeyPath, publicKeyErr := defaultOperatorPolicySigningPublicKeyPath(signatureFile.KeyID)
+		publicKeyPath, publicKeyErr := defaultOperatorPolicySigningPublicKeyPath(ownedKeyID)
 		if publicKeyErr != nil {
 			return result, publicKeyErr
 		}
@@ -155,8 +165,22 @@ func purgeLoopgateLocalState(ctx context.Context, repoRoot string) (uninstallPur
 		}
 	}
 
+	if managedInstallRootPresent(repoRoot) {
+		if err := os.RemoveAll(repoRoot); err != nil {
+			return result, fmt.Errorf("remove managed install root %s: %w", repoRoot, err)
+		}
+		result.ManagedInstallRootRemoved = true
+	}
+
 	_ = ctx
 	return result, nil
+}
+
+func managedInstallRootPresent(repoRoot string) bool {
+	if _, err := os.Stat(filepath.Join(repoRoot, managedInstallRootMarkerFilename)); err == nil {
+		return true
+	}
+	return false
 }
 
 func removePathIfPresent(path string) (bool, error) {
