@@ -13,19 +13,36 @@ It assumes the current supported product shape:
 
 ## What you will do
 
-1. build local binaries
+1. install Loopgate
 2. run the guided setup wizard
 3. verify Loopgate is running
 4. run a normal task and inspect the local audit if needed
 
 Prerequisites:
-- Go 1.25 or newer to build from source
 - Python 3 on `PATH`
 - Claude Code
+- macOS for the current published install path
+
+If you prefer a source checkout, you also need:
+- Go 1.25 or newer
 
 ## Quick path
 
 ### 1. Fastest path
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/loop-root/loopgate/main/scripts/install.sh | sh
+
+loopgate setup
+loopgate status
+loopgate test
+```
+
+That installs the latest published macOS release under
+`~/.local/share/loopgate/<version>` and installs wrapper commands under
+`~/.local/bin`.
+
+If you prefer a source checkout, the fastest source-first path is still:
 
 ```bash
 make quickstart
@@ -40,7 +57,7 @@ which accepts the recommended defaults without prompts:
 If you want to choose the profile or skip individual setup steps, use the guided
 path below instead.
 
-### 2. Guided path: build local binaries
+### 2. Guided source path: build local binaries
 
 ```bash
 make build
@@ -52,7 +69,15 @@ If you ran `make install-local`, replace `./bin/...` below with the bare
 command names such as `loopgate`, `loopgate-ledger`, and
 `loopgate-policy-admin`.
 
-### 3. Guided path: run the setup wizard
+### 3. Guided setup: run the setup wizard
+
+Installed-binary path:
+
+```bash
+loopgate setup
+```
+
+Source-checkout path:
 
 ```bash
 ./bin/loopgate setup
@@ -101,6 +126,14 @@ If you prefer the manual path, see [SETUP.md](./SETUP.md).
 
 If setup loaded the macOS LaunchAgent, Loopgate should already be running in the
 background. Verify with:
+
+```bash
+loopgate status
+loopgate test
+loopgate-doctor report
+```
+
+Source-checkout equivalents:
 
 ```bash
 ./bin/loopgate status
@@ -167,6 +200,12 @@ Setup normally installs Claude Code hooks for you. If you skipped that step,
 you can run it manually later:
 
 ```bash
+loopgate install-hooks
+```
+
+Source-checkout equivalent:
+
+```bash
 ./bin/loopgate install-hooks
 ```
 
@@ -175,6 +214,13 @@ Quick smoke check after hook install:
 - verify the installed commands point at `~/.claude/hooks/loopgate_*.py`
 
 If you later want to remove the integration again:
+
+```bash
+loopgate uninstall
+loopgate uninstall --purge
+```
+
+Source-checkout equivalent:
 
 ```bash
 ./bin/loopgate uninstall
@@ -195,6 +241,15 @@ Use Claude Code normally and watch for:
 - hard denials that indicate policy or path issues
 
 If you need quick visibility:
+
+```bash
+loopgate status
+loopgate test
+loopgate-ledger tail -verbose
+loopgate-doctor report
+```
+
+Source-checkout equivalents:
 
 ```bash
 ./bin/loopgate status

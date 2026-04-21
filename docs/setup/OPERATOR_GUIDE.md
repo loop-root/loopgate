@@ -13,7 +13,13 @@ If you are setting up Loopgate for the first time, start with:
 For most operators, the recommended first command is:
 
 ```bash
-make quickstart
+curl -fsSL https://raw.githubusercontent.com/loop-root/loopgate/main/scripts/install.sh | sh
+```
+
+Then run:
+
+```bash
+loopgate setup
 ```
 
 ## What an operator does
@@ -37,14 +43,27 @@ The guided setup path is intentionally opinionated:
 - `strict` is the higher-sensitivity option for repos that should stay read-first until you widen policy deliberately
 - `read-only` is the lowest-friction evaluation option when you want governed reads without any write path
 
-The command examples below use the built binaries under `./bin/`. If you ran
-`make install-local`, use the bare command names instead.
+The command examples below show both paths:
+- published-install operators can use the bare command names such as `loopgate`
+- source-checkout operators can use `./bin/loopgate`
 
 ## Basic workflow
 
 ### 1. Run guided setup
 
-Fastest path:
+Fastest macOS path without Go:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/loop-root/loopgate/main/scripts/install.sh | sh
+loopgate setup
+```
+
+That installs the latest published Loopgate release under
+`~/.local/share/loopgate/<version>`, installs wrapper commands under
+`~/.local/bin`, and then runs the guided setup flow from the installed
+binaries.
+
+Fastest source-checkout path:
 
 ```bash
 make quickstart
@@ -52,13 +71,18 @@ make quickstart
 
 That builds the local binaries and runs `./bin/loopgate quickstart`, which uses
 the same signed-policy setup path as `loopgate setup` but accepts the
-recommended defaults:
-- starter profile: `balanced`
-- Claude hooks installed into `~/.claude/`
-- macOS LaunchAgent installed and loaded so Loopgate stays running in the background
+recommended defaults.
 
 If you want to choose the profile or skip hooks / LaunchAgent installation, use
 the guided path instead:
+
+Installed-binary path:
+
+```bash
+loopgate setup
+```
+
+Source-checkout path:
 
 ```bash
 make build
@@ -103,6 +127,14 @@ If you later re-sign policy intentionally through the manual path, reuse the
 
 ### 2. Start Loopgate
 
+Installed-binary path:
+
+```bash
+loopgate
+```
+
+Source-checkout path:
+
 ```bash
 ./bin/loopgate
 ```
@@ -111,6 +143,13 @@ If setup installed and loaded the LaunchAgent, Loopgate should already be
 running in the background.
 
 Quick operator checks:
+
+```bash
+loopgate status
+loopgate test
+```
+
+Source-checkout equivalents:
 
 ```bash
 ./bin/loopgate status
@@ -166,6 +205,14 @@ kill "$(cat runtime/state/loopgate.pid)"
 
 ### 3. Install Claude hooks
 
+Installed-binary path:
+
+```bash
+loopgate install-hooks
+```
+
+Source-checkout path:
+
 ```bash
 ./bin/loopgate install-hooks
 ```
@@ -200,6 +247,14 @@ Expected outcomes:
 
 If you want to stop using Loopgate on this machine or repo:
 
+Installed-binary path:
+
+```bash
+loopgate uninstall
+```
+
+Source-checkout equivalent:
+
 ```bash
 ./bin/loopgate uninstall
 ```
@@ -210,6 +265,14 @@ macOS LaunchAgent when present.
 
 If you also want to remove repo-scoped runtime state, current signer material,
 and default installed binaries, use:
+
+Installed-binary path:
+
+```bash
+loopgate uninstall --purge
+```
+
+Source-checkout equivalent:
 
 ```bash
 ./bin/loopgate uninstall --purge

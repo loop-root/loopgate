@@ -5,7 +5,20 @@
 This is the manual and advanced setup companion to
 [Getting started](./GETTING_STARTED.md).
 
-If you want the shortest supported operator path, use:
+If you want the shortest supported operator path on macOS, use:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/loop-root/loopgate/main/scripts/install.sh | sh
+
+loopgate setup
+loopgate status
+loopgate test
+```
+
+That installs the latest published Loopgate release under `~/.local/share/loopgate/<version>`
+and installs wrapper commands under `~/.local/bin`.
+
+If you prefer to work from a source checkout instead, use:
 
 ```bash
 make quickstart
@@ -23,6 +36,7 @@ make build
 ```
 
 Use this page when you need one of these instead:
+- the published-install versus source-checkout tradeoffs
 - the fully manual policy-signing path
 - a manual background-run choice
 - explicit hook install details
@@ -31,12 +45,21 @@ Use this page when you need one of these instead:
 
 ## Prerequisites
 
-- Go 1.25 or newer to build from source
+- macOS for supported production use
 - Python 3 on `PATH` for Claude hook scripts
 - Claude Code for the active hook-based harness
-- macOS for supported production use
 
-## Build local binaries
+Published release install:
+- no Go toolchain required
+- current published archives target macOS `arm64` and `amd64`
+
+Source checkout:
+- Go 1.25 or newer to build from source
+
+Linux note:
+- Linux remains source-first and experimental today; the published install script is only a supported path for macOS release archives right now
+
+## Build from source
 
 ```bash
 make build
@@ -58,6 +81,15 @@ go test ./...
 
 ### 1. Initialize local policy signing
 
+Installed-binary path:
+
+```bash
+loopgate init
+loopgate-policy-admin validate
+```
+
+Source-checkout path:
+
 ```bash
 ./bin/loopgate init
 ./bin/loopgate-policy-admin validate
@@ -72,7 +104,13 @@ printed `key_id`.
 
 ### 2. Start Loopgate
 
-Foreground:
+Installed-binary foreground path:
+
+```bash
+loopgate
+```
+
+Source-checkout foreground path:
 
 ```bash
 ./bin/loopgate
@@ -107,6 +145,9 @@ Default socket:
 runtime/state/loopgate.sock
 ```
 
+For a published install, that resolves under the installed Loopgate root, for
+example `~/.local/share/loopgate/<version>/runtime/state/loopgate.sock`.
+
 On the first successful Loopgate start, the default Keychain-backed audit HMAC
 checkpoint key is bootstrapped automatically for the shipped macOS-first
 runtime config.
@@ -121,6 +162,14 @@ trigger repeated macOS approval prompts.
 
 ### 3. Install Claude Code hooks
 
+Installed-binary path:
+
+```bash
+loopgate install-hooks
+```
+
+Source-checkout path:
+
 ```bash
 ./bin/loopgate install-hooks
 ```
@@ -133,6 +182,10 @@ Important:
 Useful flags:
 
 ```bash
+loopgate status
+loopgate test
+loopgate uninstall
+loopgate uninstall --purge
 ./bin/loopgate status
 ./bin/loopgate test
 ./bin/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
@@ -151,6 +204,7 @@ Removal notes:
 - `remove-launch-agent` unloads/removes the per-repo macOS LaunchAgent
 - `uninstall` performs both steps and also removes the copied Loopgate hook scripts under `~/.claude/hooks/`
 - `uninstall --purge` additionally removes repo-scoped `runtime/` state, current signer material, and default installed binaries such as `~/.local/bin/loopgate`
+- for a published install, `uninstall --purge` also removes the managed install root under `~/.local/share/loopgate/<version>`
 - `make uninstall-local` only removes locally installed binaries such as `~/.local/bin/loopgate`
 - tracked repo policy files such as `core/policy/policy.yaml` and `core/policy/policy.yaml.sig` remain in place either way
 
