@@ -48,6 +48,17 @@ func TestResolvePolicyTemplatePreset(t *testing.T) {
 			wantWriteApproval:     true,
 		},
 		{
+			name:                  "read-only canonical",
+			input:                 "read-only",
+			wantName:              "read-only",
+			wantHTTP:              false,
+			wantShell:             false,
+			wantBashApproval:      false,
+			wantEditApproval:      false,
+			wantMultiEditApproval: false,
+			wantWriteApproval:     false,
+		},
+		{
 			name:                  "developer alias",
 			input:                 "dev",
 			wantName:              "developer",
@@ -129,6 +140,11 @@ func TestResolveSetupPolicyTemplatePreset(t *testing.T) {
 			wantName: "balanced",
 		},
 		{
+			name:     "read-only supported in setup",
+			input:    "read-only",
+			wantName: "read-only",
+		},
+		{
 			name:    "developer excluded from setup",
 			input:   "developer",
 			wantErr: true,
@@ -186,6 +202,86 @@ func TestBalancedPreset_DeniesSensitivePathsForReadAndEdit(t *testing.T) {
 		if !containsString(editPolicy.DeniedPaths, deniedPath) {
 			t.Fatalf("expected Edit denied_paths to contain %q; got %#v", deniedPath, editPolicy.DeniedPaths)
 		}
+	}
+}
+
+func TestReadOnlyPreset_DisablesWritesAndShell(t *testing.T) {
+	preset, err := ResolvePolicyTemplatePreset("read-only")
+	if err != nil {
+		t.Fatalf("ResolvePolicyTemplatePreset: %v", err)
+	}
+	policy, err := ParsePolicyDocument([]byte(preset.TemplateYAML))
+	if err != nil {
+		t.Fatalf("ParsePolicyDocument: %v", err)
+	}
+
+	if policy.Tools.Filesystem.WriteEnabled {
+		t.Fatal("expected read-only preset to disable filesystem writes")
+	}
+	if policy.Tools.Shell.Enabled {
+		t.Fatal("expected read-only preset to disable shell")
+	}
+
+	for _, toolName := range []string{"Write", "Edit", "MultiEdit"} {
+		toolPolicy, ok := policy.ClaudeCodeToolPolicy(toolName)
+		if !ok {
+			t.Fatalf("expected %s tool policy", toolName)
+		}
+		if toolPolicy.Enabled == nil || *toolPolicy.Enabled {
+			t.Fatalf("expected %s to be disabled in read-only preset, got %#v", toolName, toolPolicy.Enabled)
+		}
+	}
+}
+
+func TestDetectSetupPolicyTemplatePresetName(t *testing.T) {
+	testCases := []struct {
+		name       string
+		presetName string
+		want       string
+		mutate     func(*Policy)
+	}{
+		{
+			name:       "balanced",
+			presetName: "balanced",
+			want:       "balanced",
+		},
+		{
+			name:       "strict",
+			presetName: "strict",
+			want:       "strict",
+		},
+		{
+			name:       "read-only",
+			presetName: "read-only",
+			want:       "read-only",
+		},
+		{
+			name:       "custom",
+			presetName: "balanced",
+			want:       "custom",
+			mutate: func(policy *Policy) {
+				policy.Tools.HTTP.TimeoutSeconds = 42
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			preset, err := ResolvePolicyTemplatePreset(testCase.presetName)
+			if err != nil {
+				t.Fatalf("ResolvePolicyTemplatePreset: %v", err)
+			}
+			policy, err := ParsePolicyDocument([]byte(preset.TemplateYAML))
+			if err != nil {
+				t.Fatalf("ParsePolicyDocument: %v", err)
+			}
+			if testCase.mutate != nil {
+				testCase.mutate(&policy)
+			}
+			if got := DetectSetupPolicyTemplatePresetName(policy); got != testCase.want {
+				t.Fatalf("DetectSetupPolicyTemplatePresetName() = %q, want %q", got, testCase.want)
+			}
+		})
 	}
 }
 

@@ -35,6 +35,7 @@ customize the policy surface before signing and applying it.
 The guided setup path is intentionally opinionated:
 - `balanced` is the recommended daily-driver for normal local engineering work
 - `strict` is the higher-sensitivity option for repos that should stay read-first until you widen policy deliberately
+- `read-only` is the lowest-friction evaluation option when you want governed reads without any write path
 
 The command examples below use the built binaries under `./bin/`. If you ran
 `make install-local`, use the bare command names instead.
@@ -66,12 +67,13 @@ make build
 
 `loopgate setup` is the fastest supported path for operators. It:
 - initializes or reuses the local signer
-- lets you choose `strict` or `balanced`
+- lets you choose `balanced`, `strict`, or `read-only`
 - shows the setup plan before applying it
 - signs the selected policy
 - checks for `python3` before Claude hook install
 - installs Claude Code hooks
 - can install and load a macOS LaunchAgent
+- prints a deterministic operator summary with policy, signer, socket, audit ledger, and next commands
 
 Profile intent:
 - `balanced`
@@ -81,6 +83,10 @@ Profile intent:
 - `strict`
   - allows repo reads and search
   - keeps all Claude file edits behind approval
+  - keeps Bash and HTTP disabled
+- `read-only`
+  - allows Claude `Read`, `Glob`, and `Grep` inside the repo root
+  - keeps Claude writes and edits disabled
   - keeps Bash and HTTP disabled
 
 If you need the broader `developer` template, render it manually with
@@ -103,6 +109,13 @@ If you later re-sign policy intentionally through the manual path, reuse the
 
 If setup installed and loaded the LaunchAgent, Loopgate should already be
 running in the background.
+
+Quick operator checks:
+
+```bash
+./bin/loopgate status
+./bin/loopgate test
+```
 
 Expected local socket:
 
@@ -194,6 +207,13 @@ If you want to stop using Loopgate on this machine or repo:
 That command removes Loopgate-managed Claude hook entries, removes the copied
 Loopgate hook scripts from `~/.claude/hooks/`, and unloads/removes the per-repo
 macOS LaunchAgent when present.
+
+If you also want to remove repo-scoped runtime state, current signer material,
+and default installed binaries, use:
+
+```bash
+./bin/loopgate uninstall --purge
+```
 
 Lower-level offboarding commands:
 

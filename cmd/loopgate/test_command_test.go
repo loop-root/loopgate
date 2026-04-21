@@ -1,0 +1,115 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"loopgate/internal/config"
+	"loopgate/internal/loopgate"
+)
+
+func TestRunTest_ReusesRunningDaemon(t *testing.T) {
+	repoRoot := prepareOperatorTestRepo(t, "balanced")
+	socketPath, stopServer := startOperatorTestServer(t, repoRoot)
+	defer stopServer()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runTest([]string{
+		"-repo-root", repoRoot,
+		"-socket", socketPath,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("runTest: %v stderr=%s", err, stderr.String())
+	}
+
+	renderedOutput := stdout.String()
+	if !strings.Contains(renderedOutput, "test OK") {
+		t.Fatalf("expected test OK output, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "daemon_source: running") {
+		t.Fatalf("expected running daemon source, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "audit_entry_found: true") {
+		t.Fatalf("expected audit evidence confirmation, got %q", renderedOutput)
+	}
+}
+
+func TestRunTest_StartsTemporaryDaemonWhenNeeded(t *testing.T) {
+	repoRoot := prepareOperatorTestRepo(t, "balanced")
+	socketPath := newShortOperatorSocketPath(t)
+
+	originalStartTemporary := startTemporaryLoopgateServer
+	defer func() {
+		startTemporaryLoopgateServer = originalStartTemporary
+	}()
+	startTemporaryLoopgateServer = func(repoRoot string, requestedSocketPath string) (temporaryLoopgateHandle, error) {
+		server, err := loopgate.NewServerWithOptions(repoRoot, requestedSocketPath)
+		if err != nil {
+			return temporaryLoopgateHandle{}, err
+		}
+		serverContext, cancel := context.WithCancel(context.Background())
+		serveDone := make(chan error, 1)
+		go func() {
+			serveDone <- server.Serve(serverContext)
+		}()
+		if err := waitForHealthyLoopgate(requestedSocketPath, 5*time.Second); err != nil {
+			cancel()
+			serveErr := <-serveDone
+			server.CloseDiagnosticLogs()
+			if serveErr != nil {
+				return temporaryLoopgateHandle{}, serveErr
+			}
+			return temporaryLoopgateHandle{}, err
+		}
+		return temporaryLoopgateHandle{
+			source: "spawned",
+			shutdown: func() error {
+				cancel()
+				defer server.CloseDiagnosticLogs()
+				if serveErr := <-serveDone; serveErr != nil {
+					return serveErr
+				}
+				return nil
+			},
+		}, nil
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runTest([]string{
+		"-repo-root", repoRoot,
+		"-socket", socketPath,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("runTest: %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "daemon_source: spawned") {
+		t.Fatalf("expected spawned daemon source, got %q", stdout.String())
+	}
+}
+
+func TestRunTest_FailsWhenSignerSetupIsMissing(t *testing.T) {
+	repoRoot := prepareOperatorTestRepo(t, "balanced")
+	signatureFile, err := config.LoadPolicySignatureFile(repoRoot)
+	if err != nil {
+		t.Fatalf("LoadPolicySignatureFile: %v", err)
+	}
+	privateKeyPath, err := defaultOperatorPolicySigningPrivateKeyPath(signatureFile.KeyID)
+	if err != nil {
+		t.Fatalf("defaultOperatorPolicySigningPrivateKeyPath: %v", err)
+	}
+	if err := os.Remove(privateKeyPath); err != nil {
+		t.Fatalf("os.Remove(%s): %v", privateKeyPath, err)
+	}
+
+	err = runTest([]string{"-repo-root", repoRoot}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected runTest to fail when signer setup is missing")
+	}
+	if !strings.Contains(err.Error(), "signer setup is not ready") {
+		t.Fatalf("expected signer setup failure, got %v", err)
+	}
+}

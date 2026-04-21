@@ -76,12 +76,14 @@ status views and summaries are derived from it, not the other way around.
 A starter signed-policy template intended to reduce first-time setup friction.
 
 Supported guided-setup profiles are:
-- `strict`
 - `balanced`
+- `strict`
+- `read-only`
 
 In practice:
-- `strict` keeps Bash disabled and requires approval for Claude file edits
 - `balanced` allows patch-style Claude edits in-repo, while keeping raw writes and Bash behind approval
+- `strict` keeps Bash disabled and requires approval for Claude file edits
+- `read-only` keeps Claude reads and search open while disabling Claude writes/edits plus Bash and web access
 
 An additional `developer` template exists for manual rendering and review, but
 it is treated as experimental rather than part of the supported v1 setup path.

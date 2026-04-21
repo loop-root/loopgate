@@ -61,7 +61,7 @@ func printUsage(w io.Writer) {
   loopgate-policy-admin validate        [-repo DIR] [-policy-file PATH] [-signature-file PATH]
   loopgate-policy-admin explain         [-repo DIR] [-policy-file PATH] [-signature-file PATH] [-tool NAME]
   loopgate-policy-admin diff            [-repo DIR] [-left-policy-file PATH] [-left-signature-file PATH] -right-policy-file PATH [-right-signature-file PATH]
-  loopgate-policy-admin render-template [-preset strict|balanced|developer]
+  loopgate-policy-admin render-template [-preset strict|balanced|read-only|developer]
   loopgate-policy-admin apply           [-repo DIR] [-socket PATH] [-verify-setup] [-private-key-file PATH] [-key-id ID]
   loopgate-policy-admin approvals list  [-repo DIR] [-socket PATH]
   loopgate-policy-admin approvals approve <id> [-repo DIR] [-socket PATH] [-reason TEXT]
@@ -432,7 +432,7 @@ func runDiff(args []string, stdout io.Writer, stderr io.Writer) int {
 func runRenderTemplate(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("render-template", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	presetFlag := fs.String("preset", "strict", "template preset to render: strict, balanced, or developer")
+	presetFlag := fs.String("preset", "strict", "template preset to render: strict, balanced, read-only, or developer")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}

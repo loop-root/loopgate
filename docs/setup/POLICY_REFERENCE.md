@@ -215,6 +215,11 @@ Available starter profiles:
   - Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` are allowed inside the repo root
   - Claude `Write` and allowed Bash commands require approval
   - HTTP stays disabled
+- `read-only`
+  - lowest-friction evaluation profile
+  - Claude `Read`, `Glob`, and `Grep` are allowed inside the repo root
+  - Claude `Write`, `Edit`, and `MultiEdit` stay disabled
+  - Bash and HTTP stay disabled
 
 Experimental manual template:
 - `developer`

@@ -127,6 +127,20 @@ func handleLoopgateSubcommand(args []string) bool {
 		}
 		exitProcess(0)
 		return true
+	case "status":
+		if err := runStatus(args[1:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: status:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
+	case "test":
+		if err := runTest(args[1:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: test:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
 	case "install-hooks":
 		if err := runInstallHooks(args[1:], os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: install hooks:", err)
@@ -175,11 +189,13 @@ func printLoopgateUsage(output io.Writer) {
   loopgate init            Initialize or verify local policy-signing trust
   loopgate setup           Guided first-run setup for signed policy + Claude hooks
   loopgate quickstart      Apply the recommended setup defaults non-interactively
+  loopgate status          Print the quick operator summary for this repo
+  loopgate test            Run a governed local smoke test without Claude
   loopgate install-hooks   Install Loopgate Claude Code hooks
   loopgate remove-hooks    Remove Loopgate Claude Code hooks
   loopgate install-launch-agent   Install the macOS LaunchAgent
   loopgate remove-launch-agent    Remove the macOS LaunchAgent
-  loopgate uninstall     Remove Loopgate hooks and background startup wiring
+  loopgate uninstall      Remove Loopgate hooks and background startup wiring
 
 Companion tools:
   loopgate-doctor          Diagnostics and denial explanations

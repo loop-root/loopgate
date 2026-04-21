@@ -78,6 +78,15 @@ func TestRunSetup_AppliesBalancedProfileAndInstallsHooks(t *testing.T) {
 	if !strings.Contains(stdout.String(), "python3_path:") {
 		t.Fatalf("expected python3 path in setup output, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "audit_ledger_path:") {
+		t.Fatalf("expected audit ledger path in setup output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "./bin/loopgate status") {
+		t.Fatalf("expected status command hint in setup output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "./bin/loopgate test") {
+		t.Fatalf("expected test command hint in setup output, got %q", stdout.String())
+	}
 	if !strings.Contains(stdout.String(), "verify:") {
 		t.Fatalf("expected verification hints in setup output, got %q", stdout.String())
 	}
@@ -111,7 +120,7 @@ func TestRunSetup_RejectsDeveloperProfileInGuidedSetup(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected developer profile to be rejected in guided setup")
 	}
-	if !strings.Contains(err.Error(), "supported: strict, balanced") {
+	if !strings.Contains(err.Error(), "supported: strict, balanced, read-only") {
 		t.Fatalf("expected supported setup profiles in error, got %v", err)
 	}
 }
@@ -192,6 +201,9 @@ func TestPromptForPolicyTemplatePreset_ShowsProfileDetails(t *testing.T) {
 	renderedOutput := stdout.String()
 	if !strings.Contains(renderedOutput, "balanced (recommended)") {
 		t.Fatalf("expected recommended profile in prompt output, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "read-only") {
+		t.Fatalf("expected read-only profile in prompt output, got %q", renderedOutput)
 	}
 	if !strings.Contains(renderedOutput, "Approval required:") {
 		t.Fatalf("expected approval details in prompt output, got %q", renderedOutput)

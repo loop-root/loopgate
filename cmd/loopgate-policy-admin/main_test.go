@@ -192,6 +192,22 @@ func TestRunRenderTemplate_RendersBalancedPreset(t *testing.T) {
 	}
 }
 
+func TestRunRenderTemplate_RendersReadOnlyPreset(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"render-template", "-preset", "read-only"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stderr=%s", exitCode, stderr.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "shell:\n    enabled: false") {
+		t.Fatalf("expected read-only template to disable shell, got %q", output)
+	}
+	if !strings.Contains(output, "Edit:\n        enabled: false") {
+		t.Fatalf("expected read-only template to disable Claude Edit, got %q", output)
+	}
+}
+
 func TestRunExplain_RejectsUnsupportedToolName(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeSignedPolicyFixture(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))

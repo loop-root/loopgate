@@ -60,12 +60,13 @@ command names such as `loopgate`, `loopgate-ledger`, and
 
 `loopgate setup` is the shortest supported operator path. It guides you through:
 - local policy-signing setup
-- choosing a starter policy profile: `strict` or `balanced`
+- choosing a starter policy profile: `balanced`, `strict`, or `read-only`
 - reviewing the setup plan before local state is changed
 - signing the selected policy
 - checking for `python3` before Claude hook install
 - installing Claude Code hooks
 - optionally installing and loading a macOS LaunchAgent so Loopgate keeps running in the background
+- printing the selected profile, signer `key_id`, policy paths, socket path, audit ledger path, and next commands at the end
 
 Recommended default:
 - `balanced`
@@ -77,6 +78,12 @@ Higher-sensitivity option:
 - `strict`
   - Claude reads and search stay allowed inside the repo root
   - all Claude file edits require approval
+  - Bash and HTTP stay disabled
+
+Low-friction evaluation option:
+- `read-only`
+  - Claude `Read`, `Glob`, and `Grep` are allowed inside the repo root
+  - Claude `Write`, `Edit`, and `MultiEdit` stay disabled
   - Bash and HTTP stay disabled
 
 If you need the broader `developer` template, render it manually with
@@ -96,8 +103,13 @@ If setup loaded the macOS LaunchAgent, Loopgate should already be running in the
 background. Verify with:
 
 ```bash
+./bin/loopgate status
+./bin/loopgate test
 ./bin/loopgate-doctor report
 ```
+
+Use `loopgate status` as the quick operator summary and `loopgate-doctor report`
+for deeper derived diagnostics.
 
 If you skipped the LaunchAgent, start Loopgate yourself:
 
@@ -166,10 +178,14 @@ If you later want to remove the integration again:
 
 ```bash
 ./bin/loopgate uninstall
+./bin/loopgate uninstall --purge
 ```
 
 That removes Loopgate-managed Claude hook entries, removes the copied Loopgate
 hook scripts, and on macOS unloads/removes the per-repo LaunchAgent.
+Use `--purge` when you also want to remove repo-scoped runtime state, current
+signer material, and default installed binaries. Tracked policy files remain in
+the repo either way.
 
 ### 5. Run a normal task
 
@@ -181,6 +197,8 @@ Use Claude Code normally and watch for:
 If you need quick visibility:
 
 ```bash
+./bin/loopgate status
+./bin/loopgate test
 ./bin/loopgate-ledger tail -verbose
 ./bin/loopgate-doctor report
 ```

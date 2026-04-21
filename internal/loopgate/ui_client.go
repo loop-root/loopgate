@@ -21,6 +21,24 @@ func (client *Client) UIStatus(ctx context.Context) (controlapipkg.UIStatusRespo
 	return response, nil
 }
 
+func (client *Client) UIRecentEvents(ctx context.Context, lastEventID string) (controlapipkg.UIRecentEventsResponse, error) {
+	token, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		return controlapipkg.UIRecentEventsResponse{}, err
+	}
+
+	path := "/v1/ui/events/recent"
+	if trimmedLastEventID := strings.TrimSpace(lastEventID); trimmedLastEventID != "" {
+		path += "?last_event_id=" + trimmedLastEventID
+	}
+
+	var response controlapipkg.UIRecentEventsResponse
+	if err := client.doJSON(ctx, http.MethodGet, path, token, nil, &response, nil); err != nil {
+		return controlapipkg.UIRecentEventsResponse{}, err
+	}
+	return response, nil
+}
+
 func (client *Client) UpdateUIOperatorMountWriteGrant(ctx context.Context, request controlapipkg.UIOperatorMountWriteGrantUpdateRequest) (controlapipkg.UIOperatorMountWriteGrantStatusResponse, error) {
 	token, err := client.ensureCapabilityToken(ctx)
 	if err != nil {

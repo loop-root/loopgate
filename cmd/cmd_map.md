@@ -20,18 +20,23 @@ Use it when changing:
   - also provides operator subcommands:
     - `quickstart`
     - `setup`
+    - `status`
+    - `test`
     - `install-hooks`
     - `install-launch-agent`
     - `remove-launch-agent`
     - `remove-hooks`
     - `uninstall`
   - `quickstart` is the non-interactive recommended-default path: it delegates to `setup -yes` so first-time onboarding stays on the same signer-init, signed-policy, hook-install, and optional LaunchAgent code path
-  - `setup` is the guided first-run path: local signer init/reuse, `strict` or `balanced` starter policy selection, signed policy write, hook install, and optional macOS LaunchAgent install
+  - `setup` is the guided first-run path: local signer init/reuse, `balanced` / `strict` / `read-only` starter policy selection, signed policy write, hook install, and optional macOS LaunchAgent install, ending with a deterministic operator summary
+  - `status` is the quick operator summary: repo-local signed-policy posture, signer verification, hook install state, LaunchAgent state, socket health, and optional live UI-approved status/event projection
+  - `test` is the local governed smoke test: it verifies setup, reuses or temporarily starts Loopgate, executes a governed `fs_list`, and confirms matching UI/audit evidence
   - `install-hooks` copies the tracked hook bundle from `claude/hooks/scripts/` into the target Claude config dir and wires the supported hook events into `settings.json`
   - `install-launch-agent` writes a per-repo macOS LaunchAgent plist pointed at the current Loopgate binary and can load it immediately with `launchctl`
   - `remove-launch-agent` unloads the per-repo macOS LaunchAgent when present and removes its plist
   - `remove-hooks` removes only the Loopgate-managed hook entries and leaves copied scripts in place
   - `uninstall` removes Loopgate-managed Claude hooks, removes the copied Loopgate hook scripts, unloads/removes the per-repo macOS LaunchAgent on macOS, and deliberately leaves binaries plus runtime/audit state in place for manual cleanup
+  - `uninstall --purge` additionally removes repo-scoped `runtime/` state, current signer material, and default installed binaries, while still leaving tracked repo policy files in place
 
 ## `cmd/loopgate-policy-sign/`
 
@@ -49,7 +54,7 @@ Use it when changing:
   - validates signed repo policy or an arbitrary policy YAML file against the same strict parser used at runtime
   - explains the current Claude Code tool policy surface, including deny-unknown-tools behavior and per-tool overrides
   - diffs two normalized policy documents so operators can review effective changes before signing
-  - renders starter admin policy templates for `strict`, `balanced`, and the experimental `developer` escape hatch (still accepting `strict-mvp` as a compatibility alias)
+  - renders starter admin policy templates for `strict`, `balanced`, `read-only`, and the experimental `developer` escape hatch (still accepting `strict-mvp` as a compatibility alias)
   - hot-applies the already signed on-disk policy to a running local Loopgate instance via `apply`
   - `apply -verify-setup` also verifies the local signer key against the trusted public key set before hot reload
   - treats detached signature verification as required for the default repo policy path and optional for ad hoc template files

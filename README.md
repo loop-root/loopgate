@@ -44,7 +44,7 @@ For the current local-first product, that means:
 - low-risk actions can be allowed with audit
 - governed MCP execution can run through Loopgate’s own broker path when explicitly enabled
 - local audit stays authoritative even if later export or aggregation changes
-- setup should lead operators toward two intentional starter policies: `strict` and `balanced`
+- setup should lead operators toward three intentional starter policies: `balanced`, `strict`, and `read-only`
 
 ## Active product surface
 
@@ -100,16 +100,18 @@ names such as `loopgate` and `loopgate-policy-admin`.
 
 `loopgate setup` is the guided first-run path. It:
 - initializes or reuses your local policy-signing key
-- lets you choose a starter policy profile: `strict` or `balanced`
+- lets you choose a starter policy profile: `balanced`, `strict`, or `read-only`
 - shows the setup plan before it mutates local state
 - signs the selected policy
 - checks for `python3` before Claude hook install
 - installs Claude Code hooks
 - can install and load a macOS LaunchAgent so Loopgate keeps running in the background
+- ends with a deterministic operator summary including the selected profile, signer `key_id`, policy paths, socket path, audit ledger path, and next commands
 
 Starter profiles:
 - `balanced` is the recommended daily-driver: Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` stay open inside the repo root, while `Write` and allowed Bash commands require approval.
 - `strict` is the higher-sensitivity option: repo reads stay open, but all Claude file edits require approval and Bash stays disabled.
+- `read-only` is the lowest-friction evaluation profile: Claude `Read`, `Glob`, and `Grep` stay open inside the repo root, while Claude writes and edits, Bash, and web access stay disabled.
 
 If you need the broader `developer` template, render and review it manually
 with `./bin/loopgate-policy-admin render-template -preset developer`. That
@@ -121,11 +123,15 @@ Important:
 - until you remove those hooks, Claude Code will keep routing governed hook events through Loopgate
 
 Fast smoke test after setup:
-1. run `/hooks` inside Claude Code and confirm the 7 Loopgate hook entries are present
-2. ask Claude Code to read `README.md`
-3. run `./bin/loopgate-ledger tail -verbose`
+1. run `./bin/loopgate status`
+2. run `./bin/loopgate test`
+3. if you are using Claude Code, run `/hooks` inside Claude Code and confirm the 7 Loopgate hook entries are present
+4. ask Claude Code to read `README.md`
+5. run `./bin/loopgate-ledger tail -verbose`
 
 Expected result:
+- `loopgate status` should show the signed policy, signer, hook-install state, socket path, and daemon health
+- `loopgate test` should print a governed `fs_list` proof plus the matching `request_id` and audit ledger path
 - you should see a recent `hook.pre_validate` audit event for the Claude action you just triggered
 - if the request needed approval or was denied, the tail output should make that obvious too
 
@@ -152,6 +158,7 @@ If you later want to remove Loopgate's machine-level wiring again:
 
 ```bash
 ./bin/loopgate uninstall
+./bin/loopgate uninstall --purge
 ```
 
 `loopgate uninstall` removes Loopgate-managed Claude hook entries, removes the
@@ -159,6 +166,12 @@ copied Loopgate hook scripts from `~/.claude/hooks/`, and unloads/removes the
 per-repo macOS LaunchAgent when present. It deliberately leaves the local
 binaries, signed policy files, and runtime/audit state in place so removal of
 evidence or operator data is always explicit.
+
+`loopgate uninstall --purge` is the stronger local offboarding path. It also
+removes repo-scoped `runtime/` state, default installed Loopgate binaries under
+`~/.local/bin` when present, and the local signer material tied to the current
+policy `key_id`. It still does not delete tracked repo files such as
+`core/policy/policy.yaml` or `core/policy/policy.yaml.sig`.
 
 Useful lower-level removal commands:
 
@@ -241,7 +254,7 @@ Loopgate is publishable, but it is still an experimental local-first alpha.
 Current realities to keep in mind:
 - macOS-first, single-node operator flow is the active shipped scope
 - Claude Code hooks and the governed MCP broker path are the practical attachment surface today
-- the supported starter policy profiles for the guided path are intentionally narrow: `strict` and `balanced`
+- the supported starter policy profiles for the guided path are intentionally narrow: `balanced`, `strict`, and `read-only`
 - provider-backed OAuth/PKCE connection flows still exist in-tree as experimental groundwork, but they are not part of the main v1 onboarding story
 - local audit integrity is strong local-machine evidence, not remote notarization; see [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md) for the exact hash-chain and checkpoint limits
 - internal package cleanup is in progress, so contributor ergonomics are improving but not yet boring

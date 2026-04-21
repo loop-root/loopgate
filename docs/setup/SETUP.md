@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-19
+**Last updated:** 2026-04-20
 
 # Loopgate Setup
 
@@ -26,6 +26,7 @@ Use this page when you need one of these instead:
 - the fully manual policy-signing path
 - a manual background-run choice
 - explicit hook install details
+- status / smoke-test / uninstall details
 - config and environment reference
 
 ## Prerequisites
@@ -132,10 +133,13 @@ Important:
 Useful flags:
 
 ```bash
+./bin/loopgate status
+./bin/loopgate test
 ./bin/loopgate install-hooks -repo /path/to/loopgate -claude-dir ~/.claude
 ./bin/loopgate remove-hooks
 ./bin/loopgate remove-launch-agent
 ./bin/loopgate uninstall
+./bin/loopgate uninstall --purge
 ```
 
 Quick validation:
@@ -146,7 +150,9 @@ Removal notes:
 - `remove-hooks` removes Loopgate-managed hook entries but leaves the copied hook scripts in place
 - `remove-launch-agent` unloads/removes the per-repo macOS LaunchAgent
 - `uninstall` performs both steps and also removes the copied Loopgate hook scripts under `~/.claude/hooks/`
+- `uninstall --purge` additionally removes repo-scoped `runtime/` state, current signer material, and default installed binaries such as `~/.local/bin/loopgate`
 - `make uninstall-local` only removes locally installed binaries such as `~/.local/bin/loopgate`
+- tracked repo policy files such as `core/policy/policy.yaml` and `core/policy/policy.yaml.sig` remain in place either way
 
 ### 4. Re-sign and apply policy
 

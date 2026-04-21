@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 )
@@ -300,6 +301,122 @@ safety:
 `,
 	},
 	{
+		Name:               "read-only",
+		Aliases:            []string{"readonly"},
+		Summary:            "Trial-safe starter. Repo reads stay open; all writes, edits, shell, and web are blocked.",
+		UseCase:            "Best for evaluations, lower-trust repositories, and operators who want to prove governance before allowing any mutation.",
+		RecommendedInSetup: false,
+		AlwaysAllowed: []string{
+			"Claude Read, Glob, and Grep inside the repo root",
+			"Local audit logging and signed-policy enforcement",
+		},
+		ApprovalRequired: nil,
+		HardBlocks: []string{
+			"Claude Write, Edit, and MultiEdit",
+			"Bash, WebFetch, and WebSearch",
+			"Filesystem writes, policy, persona, runtime state, and .git internal paths",
+		},
+		TemplateYAML: `version: 0.1.0
+tools:
+  claude_code:
+    deny_unknown_tools: true
+    tool_policies:
+      Bash:
+        enabled: false
+      Read:
+        enabled: true
+        allowed_roots:
+          - "."
+        denied_paths:
+          - ".git"
+          - "persona"
+          - "runtime/state"
+          - "core/policy"
+      Glob:
+        enabled: true
+        allowed_roots:
+          - "."
+        denied_paths:
+          - ".git"
+          - "persona"
+          - "runtime/state"
+          - "core/policy"
+      Grep:
+        enabled: true
+        allowed_roots:
+          - "."
+        denied_paths:
+          - ".git"
+          - "persona"
+          - "runtime/state"
+          - "core/policy"
+      Write:
+        enabled: false
+        allowed_roots:
+          - "."
+        denied_paths:
+          - ".git"
+          - "persona"
+          - "core/policy"
+          - "runtime/state"
+          - ".claude/settings.json"
+      Edit:
+        enabled: false
+        allowed_roots:
+          - "."
+        denied_paths:
+          - ".git"
+          - "persona"
+          - "core/policy"
+          - "runtime/state"
+          - ".claude/settings.json"
+      MultiEdit:
+        enabled: false
+        allowed_roots:
+          - "."
+        denied_paths:
+          - ".git"
+          - "persona"
+          - "core/policy"
+          - "runtime/state"
+          - ".claude/settings.json"
+      WebFetch:
+        enabled: false
+      WebSearch:
+        enabled: false
+  mcp_gateway:
+    deny_unknown_servers: true
+    servers: {}
+  filesystem:
+    allowed_roots:
+      - "."
+    denied_paths:
+      - ".git"
+      - "core/policy"
+      - "persona"
+      - "runtime/state"
+      - ".claude/settings.json"
+    read_enabled: true
+    write_enabled: false
+    write_requires_approval: false
+  http:
+    enabled: false
+    allowed_domains: []
+    requires_approval: true
+    timeout_seconds: 10
+  shell:
+    enabled: false
+    allowed_commands: []
+    requires_approval: true
+logging:
+  log_commands: true
+  log_tool_calls: true
+safety:
+  allow_persona_modification: false
+  allow_policy_modification: false
+`,
+	},
+	{
 		Name:    "developer",
 		Aliases: []string{"dev"},
 		Summary: "Experimental escape hatch. Broader local development shell tooling and HTTP are enabled, still behind approval.",
@@ -433,6 +550,7 @@ safety:
 var setupPolicyTemplatePresetNames = []string{
 	"strict",
 	"balanced",
+	"read-only",
 }
 
 // PolicyTemplatePresets returns the supported starter policy profiles in
@@ -480,6 +598,22 @@ func ResolvePolicyTemplatePreset(name string) (PolicyTemplatePreset, error) {
 // policy profiles.
 func ResolveSetupPolicyTemplatePreset(name string) (PolicyTemplatePreset, error) {
 	return resolvePolicyTemplatePreset(name, SetupPolicyTemplatePresets(), SetupPolicyTemplatePresetNames())
+}
+
+// DetectSetupPolicyTemplatePresetName classifies a normalized policy document as
+// one of the supported guided-setup profiles, or "custom" when it does not
+// exactly match a shipped starter template.
+func DetectSetupPolicyTemplatePresetName(policy Policy) string {
+	for _, preset := range SetupPolicyTemplatePresets() {
+		presetPolicy, err := ParsePolicyDocument([]byte(preset.TemplateYAML))
+		if err != nil {
+			continue
+		}
+		if reflect.DeepEqual(policy, presetPolicy) {
+			return preset.Name
+		}
+	}
+	return "custom"
 }
 
 func resolvePolicyTemplatePreset(name string, presets []PolicyTemplatePreset, supportedNames []string) (PolicyTemplatePreset, error) {
