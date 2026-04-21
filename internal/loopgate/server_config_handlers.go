@@ -15,9 +15,10 @@ import (
 )
 
 var validConfigSections = map[string]struct{}{
-	"policy":      {},
-	"runtime":     {},
-	"connections": {},
+	"policy":             {},
+	"runtime":            {},
+	"connections":        {},
+	"operator-overrides": {},
 }
 
 func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +71,8 @@ func (server *Server) handleConfigGet(w http.ResponseWriter, section string) {
 	case "connections":
 		conns, caps := server.currentConfiguredProviderSnapshot()
 		result = connectionsToConfigFiles(conns, caps)
+	case "operator-overrides":
+		result = server.currentOperatorOverrideRuntime().document
 	}
 
 	w.Header().Set("Content-Type", contentTypeApplicationJSON)
@@ -86,6 +89,8 @@ func (server *Server) handleConfigPut(w http.ResponseWriter, section string, bod
 		server.handleConfigPutRuntime(w, body, tokenClaims)
 	case "connections":
 		server.handleConfigPutConnections(w, body, tokenClaims)
+	case "operator-overrides":
+		server.handleConfigPutOperatorOverrides(w, tokenClaims, body)
 	}
 }
 
@@ -149,6 +154,44 @@ func (server *Server) handleConfigPutPolicy(w http.ResponseWriter, tokenClaims c
 		PreviousPolicySHA256: currentPolicyRuntime.policyContentSHA256,
 		PolicySHA256:         reloadedPolicyRuntime.policyContentSHA256,
 		PolicyChanged:        policyChanged,
+	})
+}
+
+func (server *Server) handleConfigPutOperatorOverrides(w http.ResponseWriter, tokenClaims capabilityToken, body []byte) {
+	_ = body
+	currentOperatorOverrideRuntime := server.currentOperatorOverrideRuntime()
+	reloadedOperatorOverrideRuntime, err := server.reloadOperatorOverrideRuntimeFromDisk()
+	if err != nil {
+		http.Error(w, "reload signed operator overrides: "+err.Error(), http.StatusConflict)
+		return
+	}
+
+	operatorOverrideChanged := currentOperatorOverrideRuntime.contentSHA256 != reloadedOperatorOverrideRuntime.contentSHA256 ||
+		currentOperatorOverrideRuntime.present != reloadedOperatorOverrideRuntime.present
+	activeGrantCount := len(config.ActiveOperatorOverrideGrants(reloadedOperatorOverrideRuntime.document, config.OperatorOverrideClassRepoEditSafe))
+	if err := server.logEvent("config.operator_overrides.reloaded", tokenClaims.ControlSessionID, map[string]interface{}{
+		"control_session_id":                tokenClaims.ControlSessionID,
+		"actor_label":                       tokenClaims.ActorLabel,
+		"client_session_label":              tokenClaims.ClientSessionLabel,
+		"previous_operator_override_sha256": currentOperatorOverrideRuntime.contentSHA256,
+		"reloaded_operator_override_sha256": reloadedOperatorOverrideRuntime.contentSHA256,
+		"operator_override_changed":         operatorOverrideChanged,
+		"operator_override_present":         reloadedOperatorOverrideRuntime.present,
+		"active_grant_count":                activeGrantCount,
+		"signature_key_id":                  reloadedOperatorOverrideRuntime.signatureKeyID,
+	}); err != nil {
+		server.writeJSON(w, http.StatusServiceUnavailable, auditUnavailableCapabilityResponse(""))
+		return
+	}
+
+	server.storeOperatorOverrideRuntime(reloadedOperatorOverrideRuntime)
+	server.writeJSON(w, http.StatusOK, controlapipkg.ConfigOperatorOverrideReloadResponse{
+		Status:                         "ok",
+		PreviousOperatorOverrideSHA256: currentOperatorOverrideRuntime.contentSHA256,
+		OperatorOverrideSHA256:         reloadedOperatorOverrideRuntime.contentSHA256,
+		OperatorOverrideChanged:        operatorOverrideChanged,
+		OperatorOverridePresent:        reloadedOperatorOverrideRuntime.present,
+		ActiveGrantCount:               activeGrantCount,
 	})
 }
 

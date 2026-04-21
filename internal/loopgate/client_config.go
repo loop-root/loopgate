@@ -33,3 +33,29 @@ func (client *Client) ReloadPolicyFromDisk(ctx context.Context) (controlapipkg.C
 	}
 	return response, nil
 }
+
+func (client *Client) LoadOperatorOverrideConfig(ctx context.Context) (config.OperatorOverrideDocument, error) {
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		return config.OperatorOverrideDocument{}, err
+	}
+
+	var response config.OperatorOverrideDocument
+	if err := client.doJSON(ctx, http.MethodGet, "/v1/config/operator-overrides", capabilityToken, nil, &response, nil); err != nil {
+		return config.OperatorOverrideDocument{}, err
+	}
+	return response, nil
+}
+
+func (client *Client) ReloadOperatorOverridesFromDisk(ctx context.Context) (controlapipkg.ConfigOperatorOverrideReloadResponse, error) {
+	capabilityToken, err := client.ensureCapabilityToken(ctx)
+	if err != nil {
+		return controlapipkg.ConfigOperatorOverrideReloadResponse{}, err
+	}
+
+	var response controlapipkg.ConfigOperatorOverrideReloadResponse
+	if err := client.doJSON(ctx, http.MethodPut, "/v1/config/operator-overrides", capabilityToken, nil, &response, nil); err != nil {
+		return controlapipkg.ConfigOperatorOverrideReloadResponse{}, err
+	}
+	return response, nil
+}

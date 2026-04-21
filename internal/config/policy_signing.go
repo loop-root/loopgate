@@ -117,6 +117,10 @@ func validatePolicySignatureFile(signatureFile PolicySignatureFile) error {
 // VerifyPolicyDocumentSignature verifies a detached policy signature file
 // against the provided raw policy YAML bytes.
 func VerifyPolicyDocumentSignature(rawPolicyBytes []byte, signatureFile PolicySignatureFile) error {
+	return verifyDetachedDocumentSignature(rawPolicyBytes, policySignatureMessagePrefix, signatureFile)
+}
+
+func verifyDetachedDocumentSignature(rawDocumentBytes []byte, messagePrefix string, signatureFile PolicySignatureFile) error {
 	trustedKeys, err := trustedPolicySigningKeys()
 	if err != nil {
 		return err
@@ -133,7 +137,7 @@ func VerifyPolicyDocumentSignature(rawPolicyBytes []byte, signatureFile PolicySi
 	if len(signatureBytes) != ed25519.SignatureSize {
 		return fmt.Errorf("policy signature must be %d bytes", ed25519.SignatureSize)
 	}
-	if !ed25519.Verify(trustedPublicKey, policySignatureMessage(rawPolicyBytes), signatureBytes) {
+	if !ed25519.Verify(trustedPublicKey, detachedSignatureMessage(messagePrefix, rawDocumentBytes), signatureBytes) {
 		return fmt.Errorf("policy signature verification failed for key %q", signatureFile.KeyID)
 	}
 	return nil
@@ -311,15 +315,19 @@ func publicKeysEqual(left ed25519.PublicKey, right ed25519.PublicKey) bool {
 	return true
 }
 
-func policySignatureMessage(rawPolicyBytes []byte) []byte {
-	messageBytes := make([]byte, 0, len(policySignatureMessagePrefix)+len(rawPolicyBytes))
-	messageBytes = append(messageBytes, policySignatureMessagePrefix...)
-	messageBytes = append(messageBytes, rawPolicyBytes...)
+func detachedSignatureMessage(messagePrefix string, rawDocumentBytes []byte) []byte {
+	messageBytes := make([]byte, 0, len(messagePrefix)+len(rawDocumentBytes))
+	messageBytes = append(messageBytes, messagePrefix...)
+	messageBytes = append(messageBytes, rawDocumentBytes...)
 	return messageBytes
 }
 
 // SignPolicyDocument builds a detached signature file for raw policy YAML bytes.
 func SignPolicyDocument(rawPolicyBytes []byte, keyID string, privateKey ed25519.PrivateKey) (PolicySignatureFile, error) {
+	return signDetachedDocument(rawPolicyBytes, policySignatureMessagePrefix, keyID, privateKey)
+}
+
+func signDetachedDocument(rawDocumentBytes []byte, messagePrefix string, keyID string, privateKey ed25519.PrivateKey) (PolicySignatureFile, error) {
 	trimmedKeyID := strings.TrimSpace(keyID)
 	if err := identifiers.ValidateSafeIdentifier("policy signing key_id", trimmedKeyID); err != nil {
 		return PolicySignatureFile{}, fmt.Errorf("invalid policy signing key_id: %w", err)
@@ -327,7 +335,7 @@ func SignPolicyDocument(rawPolicyBytes []byte, keyID string, privateKey ed25519.
 	if len(privateKey) != ed25519.PrivateKeySize {
 		return PolicySignatureFile{}, fmt.Errorf("policy signing private key must be %d bytes", ed25519.PrivateKeySize)
 	}
-	signatureBytes := ed25519.Sign(privateKey, policySignatureMessage(rawPolicyBytes))
+	signatureBytes := ed25519.Sign(privateKey, detachedSignatureMessage(messagePrefix, rawDocumentBytes))
 	return PolicySignatureFile{
 		Version:   policySignatureSchemaVersion,
 		Algorithm: policySignatureAlgorithmEd25519,

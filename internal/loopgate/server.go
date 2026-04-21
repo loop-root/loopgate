@@ -348,10 +348,11 @@ type Server struct {
 	// providerRuntime owns live provider token state plus configured connection and
 	// configured capability maps.
 	// See providerRuntimeState above and docs/design_overview/loopgate_locking.md.
-	providerRuntime     providerRuntimeState
-	httpClient          *http.Client
-	policyRuntime       serverPolicyRuntime
-	policyContentSHA256 string
+	providerRuntime         providerRuntimeState
+	httpClient              *http.Client
+	policyRuntime           serverPolicyRuntime
+	policyContentSHA256     string
+	operatorOverrideRuntime serverOperatorOverrideRuntime
 
 	// policyRuntimeMu protects the immutable-ish serverPolicyRuntime snapshot used
 	// by request paths. Reads are far more common than writes, so this is the one
@@ -366,6 +367,10 @@ type Server struct {
 	//   - read/copy the runtime snapshot under policyRuntimeMu, then release it
 	//   - never hold policyRuntimeMu across capability execution or audit append
 	policyRuntimeMu sync.RWMutex
+	// operatorOverrideRuntimeMu protects the current signed operator override
+	// document snapshot. This stays separate from policyRuntimeMu so the checked-in
+	// signed parent policy remains distinguishable from the local delegated layer.
+	operatorOverrideRuntimeMu sync.RWMutex
 
 	// pkceRuntime owns short-lived PKCE/OAuth browser handoff sessions.
 	// See pkceRuntimeState above and docs/design_overview/loopgate_locking.md.
@@ -635,6 +640,18 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		return nil, err
 	}
 	server.storePolicyRuntime(initialPolicyRuntime)
+	initialOperatorOverrideRuntime, err := server.reloadOperatorOverrideRuntimeFromDisk()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "WARN: operator overrides unavailable class=%s\n", secrets.LoopgateOperatorErrorClass(err))
+		server.storeOperatorOverrideRuntime(serverOperatorOverrideRuntime{
+			document: config.OperatorOverrideDocument{
+				Version: "1",
+				Grants:  []config.OperatorOverrideGrant{},
+			},
+		})
+	} else {
+		server.storeOperatorOverrideRuntime(initialOperatorOverrideRuntime)
+	}
 	server.appendAuditEvent = func(path string, auditEvent ledger.Event) error {
 		if server.auditLedgerRuntime != nil {
 			return server.auditLedgerRuntime.AppendWithRotation(path, auditEvent, server.auditLedgerRotationSettings())

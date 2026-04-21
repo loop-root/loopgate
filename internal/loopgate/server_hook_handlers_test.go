@@ -13,7 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"loopgate/internal/config"
 	"loopgate/internal/ledger"
+	"loopgate/internal/testutil"
 )
 
 type claudeHookSessionStateTestFile struct {
@@ -244,6 +246,177 @@ func TestHookPreValidate_DeniesReadOutsideAllowedRoots(t *testing.T) {
 	}
 	if !strings.Contains(response.Reason, "outside allowed roots") {
 		t.Fatalf("expected allowed roots reason, got %#v", response)
+	}
+}
+
+func TestHookPreValidate_AllowsEditWithDelegatedOperatorOverride(t *testing.T) {
+	repoRoot := t.TempDir()
+	docsDir := filepath.Join(repoRoot, "docs")
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatalf("mkdir docs dir: %v", err)
+	}
+	editPath := filepath.Join(docsDir, "guide.md")
+	if err := os.WriteFile(editPath, []byte("hello\n"), 0o600); err != nil {
+		t.Fatalf("write edit target: %v", err)
+	}
+
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Edit:\n        enabled: true\n        requires_approval: true\n        allowed_roots:\n          - \"docs\"\n      MultiEdit:\n        enabled: true\n        requires_approval: true\n        allowed_roots:\n          - \"docs\"\n", 1)
+	policyYAML = strings.Replace(policyYAML, "logging:\n", "operator_overrides:\n  classes:\n    repo_edit_safe:\n      max_delegation: persistent\nlogging:\n", 1)
+
+	policySigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new test policy signer: %v", err)
+	}
+	_, _, server := startLoopgateServerWithSignerAndRuntime(t, repoRoot, policyYAML, policySigner, nil, true)
+
+	firstBody := bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_use_id":"toolu_edit_before_override","tool_input":{"file_path":"` + editPath + `","old_string":"hello","new_string":"hi"},"session_id":"session-hook"}`)
+	firstRequest := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", firstBody)
+	firstRequest = firstRequest.WithContext(context.WithValue(firstRequest.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	firstRecorder := httptest.NewRecorder()
+	server.handleHookPreValidate(firstRecorder, firstRequest)
+
+	var firstResponse controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(firstRecorder.Body.Bytes(), &firstResponse); err != nil {
+		t.Fatalf("decode first hook response: %v", err)
+	}
+	if firstResponse.Decision != "ask" {
+		t.Fatalf("expected edit without override to require approval, got %#v", firstResponse)
+	}
+	if firstResponse.OperatorOverrideClass != config.OperatorOverrideClassRepoEditSafe {
+		t.Fatalf("expected repo_edit_safe operator override class, got %#v", firstResponse)
+	}
+	if firstResponse.OperatorOverrideMaxDelegation != config.OperatorOverrideDelegationPersistent {
+		t.Fatalf("expected persistent operator override delegation, got %#v", firstResponse)
+	}
+
+	writeSignedTestOperatorOverrideDocument(t, repoRoot, policySigner, config.OperatorOverrideDocument{
+		Version: "1",
+		Grants: []config.OperatorOverrideGrant{
+			{
+				ID:           "override-20260421010101-abcd1234ef56",
+				Class:        config.OperatorOverrideClassRepoEditSafe,
+				State:        "active",
+				PathPrefixes: []string{"docs"},
+				CreatedAtUTC: time.Now().UTC().Format(time.RFC3339),
+			},
+		},
+	})
+	overrideRuntime, err := server.reloadOperatorOverrideRuntimeFromDisk()
+	if err != nil {
+		t.Fatalf("reload operator override runtime: %v", err)
+	}
+	server.storeOperatorOverrideRuntime(overrideRuntime)
+
+	secondBody := bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_use_id":"toolu_edit_after_override","tool_input":{"file_path":"` + editPath + `","old_string":"hello","new_string":"hi"},"session_id":"session-hook"}`)
+	secondRequest := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", secondBody)
+	secondRequest = secondRequest.WithContext(context.WithValue(secondRequest.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	secondRecorder := httptest.NewRecorder()
+	server.handleHookPreValidate(secondRecorder, secondRequest)
+
+	if secondRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200 after delegated override, got %d body=%s", secondRecorder.Code, secondRecorder.Body.String())
+	}
+	var secondResponse controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(secondRecorder.Body.Bytes(), &secondResponse); err != nil {
+		t.Fatalf("decode second hook response: %v", err)
+	}
+	if secondResponse.Decision != "allow" {
+		t.Fatalf("expected delegated override to allow edit, got %#v", secondResponse)
+	}
+	if secondResponse.OperatorOverrideClass != config.OperatorOverrideClassRepoEditSafe {
+		t.Fatalf("expected repo_edit_safe operator override class on allow, got %#v", secondResponse)
+	}
+	if secondResponse.OperatorOverrideMaxDelegation != config.OperatorOverrideDelegationPersistent {
+		t.Fatalf("expected persistent operator override delegation on allow, got %#v", secondResponse)
+	}
+
+	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
+	if decision, _ := lastAuditEvent.Data["decision"].(string); decision != "allow" {
+		t.Fatalf("expected delegated override audit decision allow, got %#v", lastAuditEvent.Data["decision"])
+	}
+	if reason, _ := lastAuditEvent.Data["reason"].(string); !strings.Contains(reason, "delegated operator override override-20260421010101-abcd1234ef56") {
+		t.Fatalf("expected delegated override reason in audit, got %#v", lastAuditEvent.Data["reason"])
+	}
+	if overrideClass, _ := lastAuditEvent.Data["operator_override_class"].(string); overrideClass != config.OperatorOverrideClassRepoEditSafe {
+		t.Fatalf("expected repo_edit_safe operator override class in audit, got %#v", lastAuditEvent.Data["operator_override_class"])
+	}
+	if overrideDelegation, _ := lastAuditEvent.Data["operator_override_max_delegation"].(string); overrideDelegation != config.OperatorOverrideDelegationPersistent {
+		t.Fatalf("expected persistent operator override delegation in audit, got %#v", lastAuditEvent.Data["operator_override_max_delegation"])
+	}
+}
+
+func TestHookPreValidate_DoesNotBypassDisabledEditWithDelegatedOperatorOverride(t *testing.T) {
+	repoRoot := t.TempDir()
+	docsDir := filepath.Join(repoRoot, "docs")
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatalf("mkdir docs dir: %v", err)
+	}
+	editPath := filepath.Join(docsDir, "guide.md")
+	if err := os.WriteFile(editPath, []byte("hello\n"), 0o600); err != nil {
+		t.Fatalf("write edit target: %v", err)
+	}
+
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Edit:\n        enabled: false\n        allowed_roots:\n          - \"docs\"\n      MultiEdit:\n        enabled: false\n        allowed_roots:\n          - \"docs\"\n", 1)
+	policyYAML = strings.Replace(policyYAML, "logging:\n", "operator_overrides:\n  classes:\n    repo_edit_safe:\n      max_delegation: persistent\nlogging:\n", 1)
+
+	policySigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new test policy signer: %v", err)
+	}
+	_, _, server := startLoopgateServerWithSignerAndRuntime(t, repoRoot, policyYAML, policySigner, nil, true)
+	writeSignedTestOperatorOverrideDocument(t, repoRoot, policySigner, config.OperatorOverrideDocument{
+		Version: "1",
+		Grants: []config.OperatorOverrideGrant{
+			{
+				ID:           "override-20260421010101-fedcba987654",
+				Class:        config.OperatorOverrideClassRepoEditSafe,
+				State:        "active",
+				PathPrefixes: []string{"docs"},
+				CreatedAtUTC: time.Now().UTC().Format(time.RFC3339),
+			},
+		},
+	})
+	overrideRuntime, err := server.reloadOperatorOverrideRuntimeFromDisk()
+	if err != nil {
+		t.Fatalf("reload operator override runtime: %v", err)
+	}
+	server.storeOperatorOverrideRuntime(overrideRuntime)
+
+	requestBody := bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_use_id":"toolu_edit_disabled_with_override","tool_input":{"file_path":"` + editPath + `","old_string":"hello","new_string":"hi"},"session_id":"session-hook"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+	server.handleHookPreValidate(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for disabled edit, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode hook response: %v", err)
+	}
+	if response.Decision != "block" {
+		t.Fatalf("expected disabled edit to remain blocked, got %#v", response)
+	}
+	if !strings.Contains(response.Reason, "disabled by Claude Code tool policy") {
+		t.Fatalf("expected disabled-tool reason, got %#v", response)
+	}
+
+	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
+	if decision, _ := lastAuditEvent.Data["decision"].(string); decision != "block" {
+		t.Fatalf("expected disabled edit audit decision block, got %#v", lastAuditEvent.Data["decision"])
+	}
+	if reason, _ := lastAuditEvent.Data["reason"].(string); !strings.Contains(reason, "disabled by Claude Code tool policy") {
+		t.Fatalf("expected disabled-tool audit reason, got %#v", lastAuditEvent.Data["reason"])
 	}
 }
 

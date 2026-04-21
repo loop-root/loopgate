@@ -102,6 +102,49 @@ func (fixture testPolicySignerFixture) writeSignedPolicy(t *testing.T, repoRoot 
 	}
 }
 
+func delegatedRepoEditPolicyYAML() string {
+	return "version: 0.1.0\n\n" +
+		"tools:\n" +
+		"  claude_code:\n" +
+		"    tool_policies:\n" +
+		"      Edit:\n" +
+		"        enabled: true\n" +
+		"        requires_approval: true\n" +
+		"        allowed_roots:\n" +
+		"          - \"docs\"\n" +
+		"      MultiEdit:\n" +
+		"        enabled: true\n" +
+		"        requires_approval: true\n" +
+		"        allowed_roots:\n" +
+		"          - \"docs\"\n" +
+		"  filesystem:\n" +
+		"    allowed_roots:\n" +
+		"      - \".\"\n" +
+		"    denied_paths: []\n" +
+		"    read_enabled: true\n" +
+		"    write_enabled: true\n" +
+		"    write_requires_approval: false\n" +
+		"  http:\n" +
+		"    enabled: false\n" +
+		"    allowed_domains: []\n" +
+		"    requires_approval: true\n" +
+		"    timeout_seconds: 10\n" +
+		"  shell:\n" +
+		"    enabled: false\n" +
+		"    allowed_commands: []\n" +
+		"    requires_approval: true\n" +
+		"operator_overrides:\n" +
+		"  classes:\n" +
+		"    repo_edit_safe:\n" +
+		"      max_delegation: persistent\n" +
+		"logging:\n" +
+		"  log_commands: true\n" +
+		"  log_tool_calls: true\n" +
+		"safety:\n" +
+		"  allow_persona_modification: false\n" +
+		"  allow_policy_modification: false\n"
+}
+
 func TestRunValidate_ValidatesSignedRepoPolicy(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeSignedPolicyFixture(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
@@ -482,6 +525,105 @@ func TestRunApply_WithVerifySetup_RejectsMismatchedSigner(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "does not match trusted public key") {
 		t.Fatalf("expected signer mismatch error, got %q", stderr.String())
+	}
+}
+
+func TestRunOverridesGrantEditPath_WritesAndReloadsSignedOverride(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, delegatedRepoEditPolicyYAML())
+	if err := os.MkdirAll(filepath.Join(repoRoot, "docs"), 0o755); err != nil {
+		t.Fatalf("mkdir docs dir: %v", err)
+	}
+
+	privateKeyPath := filepath.Join(t.TempDir(), signerFixture.keyID()+".pem")
+	writePEMEncodedEd25519PrivateKey(t, privateKeyPath, signerFixture.privateKey, 0o600)
+
+	socketPath := newTempSocketPath(t)
+	_ = startPolicyAdminTestServer(t, repoRoot, socketPath)
+
+	var grantStdout bytes.Buffer
+	var grantStderr bytes.Buffer
+	exitCode := run([]string{"overrides", "grant-edit-path", "-repo", repoRoot, "-socket", socketPath, "-path", "docs", "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID()}, &grantStdout, &grantStderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, grantStdout.String(), grantStderr.String())
+	}
+	if !strings.Contains(grantStdout.String(), "operator override grant applied") {
+		t.Fatalf("expected grant success output, got %q", grantStdout.String())
+	}
+	if !strings.Contains(grantStdout.String(), "grant_class: repo_edit_safe") {
+		t.Fatalf("expected repo_edit_safe grant output, got %q", grantStdout.String())
+	}
+	if !strings.Contains(grantStdout.String(), "path_prefix: docs") {
+		t.Fatalf("expected docs path prefix output, got %q", grantStdout.String())
+	}
+
+	loadResult, err := config.LoadOperatorOverrideDocumentWithHash(repoRoot)
+	if err != nil {
+		t.Fatalf("LoadOperatorOverrideDocumentWithHash after grant: %v", err)
+	}
+	if !loadResult.Present {
+		t.Fatal("expected signed operator override document after grant")
+	}
+	if loadResult.SignatureKeyID != signerFixture.keyID() {
+		t.Fatalf("expected signature key id %q, got %q", signerFixture.keyID(), loadResult.SignatureKeyID)
+	}
+	activeGrants := config.ActiveOperatorOverrideGrants(loadResult.Document, config.OperatorOverrideClassRepoEditSafe)
+	if len(activeGrants) != 1 {
+		t.Fatalf("expected one active repo_edit_safe grant, got %#v", loadResult.Document.Grants)
+	}
+	if got := activeGrants[0].PathPrefixes; len(got) != 1 || got[0] != "docs" {
+		t.Fatalf("expected docs path prefix, got %#v", got)
+	}
+
+	configClient := loopgate.NewClient(socketPath)
+	configClient.ConfigureSession("policy-admin-overrides", "policy-admin-overrides", []string{"config.read"})
+	time.Sleep(600 * time.Millisecond)
+	runningOverrideDocument, err := configClient.LoadOperatorOverrideConfig(context.Background())
+	if err != nil {
+		t.Fatalf("LoadOperatorOverrideConfig after grant: %v", err)
+	}
+	if active := config.ActiveOperatorOverrideGrants(runningOverrideDocument, config.OperatorOverrideClassRepoEditSafe); len(active) != 1 {
+		t.Fatalf("expected running server override runtime to expose one active grant, got %#v", runningOverrideDocument.Grants)
+	}
+
+	time.Sleep(600 * time.Millisecond)
+	var revokeStdout bytes.Buffer
+	var revokeStderr bytes.Buffer
+	exitCode = run([]string{"overrides", "revoke", activeGrants[0].ID, "-repo", repoRoot, "-socket", socketPath, "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID()}, &revokeStdout, &revokeStderr)
+	if exitCode != 0 {
+		t.Fatalf("expected revoke exit code 0, got %d stdout=%s stderr=%s", exitCode, revokeStdout.String(), revokeStderr.String())
+	}
+	if !strings.Contains(revokeStdout.String(), "revoked") {
+		t.Fatalf("expected revoke output, got %q", revokeStdout.String())
+	}
+
+	time.Sleep(600 * time.Millisecond)
+	reloadedDocument, err := configClient.LoadOperatorOverrideConfig(context.Background())
+	if err != nil {
+		t.Fatalf("LoadOperatorOverrideConfig after revoke: %v", err)
+	}
+	if active := config.ActiveOperatorOverrideGrants(reloadedDocument, config.OperatorOverrideClassRepoEditSafe); len(active) != 0 {
+		t.Fatalf("expected no active grants after revoke, got %#v", reloadedDocument.Grants)
+	}
+}
+
+func TestRunOverridesGrantEditPath_RejectsNonPersistentParentDelegation(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "strict"))
+
+	privateKeyPath := filepath.Join(t.TempDir(), signerFixture.keyID()+".pem")
+	writePEMEncodedEd25519PrivateKey(t, privateKeyPath, signerFixture.privateKey, 0o600)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"overrides", "grant-edit-path", "-repo", repoRoot, "-path", "docs", "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID()}, &stdout, &stderr)
+	if exitCode != 1 {
+		t.Fatalf("expected exit code 1, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "repo_edit_safe max_delegation=session is not compatible with persistent edit-path overrides") {
+		t.Fatalf("expected delegation rejection error, got %q", stderr.String())
 	}
 }
 

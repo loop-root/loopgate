@@ -24,7 +24,11 @@ func (server *Server) evaluateClaudeCodeHookPolicy(req controlapipkg.HookPreVali
 
 	toolPolicy, hasToolPolicy := policyRuntime.policy.ClaudeCodeToolPolicy(req.ToolName)
 	if !hasToolPolicy {
-		return baseResult
+		toolPolicy = config.ClaudeCodeToolPolicy{}
+	}
+
+	if constraintResult, constrained := server.applyClaudeCodeHookConstraints(req, toolPolicy); constrained {
+		return constraintResult
 	}
 
 	if toolPolicy.Enabled != nil && !*toolPolicy.Enabled {
@@ -34,8 +38,22 @@ func (server *Server) evaluateClaudeCodeHookPolicy(req controlapipkg.HookPreVali
 		}
 	}
 
-	if constraintResult, constrained := server.applyClaudeCodeHookConstraints(req, toolPolicy); constrained {
-		return constraintResult
+	overrideEligible := false
+	switch {
+	case toolPolicy.RequiresApproval != nil && *toolPolicy.RequiresApproval && baseResult.Decision != policypkg.Deny:
+		overrideEligible = true
+	case toolPolicy.RequiresApproval == nil && baseResult.Decision == policypkg.NeedsApproval:
+		overrideEligible = true
+	}
+	if overrideEligible {
+		if overrideClass, maxDelegation, hasOverrideClass := policyRuntime.policy.ClaudeCodeToolOperatorOverride(req.ToolName); hasOverrideClass && maxDelegation == config.OperatorOverrideDelegationPersistent {
+			if grant, matched := server.matchClaudeCodeOperatorOverride(req, overrideClass); matched {
+				return policypkg.CheckResult{
+					Decision: policypkg.Allow,
+					Reason:   fmt.Sprintf("%s allowed by delegated operator override %s", req.ToolName, grant.ID),
+				}
+			}
+		}
 	}
 
 	if toolPolicy.RequiresApproval != nil {
@@ -50,6 +68,9 @@ func (server *Server) evaluateClaudeCodeHookPolicy(req controlapipkg.HookPreVali
 
 	if toolPolicy.Enabled != nil && *toolPolicy.Enabled {
 		return policypkg.CheckResult{Decision: policypkg.Allow}
+	}
+	if !hasToolPolicy {
+		return baseResult
 	}
 
 	return baseResult

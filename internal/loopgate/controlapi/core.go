@@ -142,6 +142,15 @@ type ConfigPolicyReloadResponse struct {
 	PolicyChanged        bool   `json:"policy_changed"`
 }
 
+type ConfigOperatorOverrideReloadResponse struct {
+	Status                         string `json:"status"`
+	PreviousOperatorOverrideSHA256 string `json:"previous_operator_override_sha256"`
+	OperatorOverrideSHA256         string `json:"operator_override_sha256"`
+	OperatorOverrideChanged        bool   `json:"operator_override_changed"`
+	OperatorOverridePresent        bool   `json:"operator_override_present"`
+	ActiveGrantCount               int    `json:"active_grant_count"`
+}
+
 type OpenSessionRequest struct {
 	Actor                 string   `json:"actor"`
 	SessionID             string   `json:"session_id"`

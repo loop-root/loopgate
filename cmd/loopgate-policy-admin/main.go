@@ -46,6 +46,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runApply(args[1:], stdout, stderr)
 	case "approvals":
 		return runApprovals(args[1:], stdout, stderr)
+	case "overrides":
+		return runOverrides(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stderr)
 		return 0
@@ -66,6 +68,9 @@ func printUsage(w io.Writer) {
   loopgate-policy-admin approvals list  [-repo DIR] [-socket PATH]
   loopgate-policy-admin approvals approve <id> [-repo DIR] [-socket PATH] [-reason TEXT]
   loopgate-policy-admin approvals deny <id>    [-repo DIR] [-socket PATH] [-reason TEXT]
+  loopgate-policy-admin overrides list  [-repo DIR]
+  loopgate-policy-admin overrides grant-edit-path -path PATH [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID]
+  loopgate-policy-admin overrides revoke <id> [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID]
 
 Defaults:
   -repo defaults to the current working directory.

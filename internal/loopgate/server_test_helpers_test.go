@@ -89,6 +89,26 @@ func writeSignedTestPolicyYAML(t *testing.T, repoRoot string, policyYAML string)
 	}
 }
 
+func writeSignedTestOperatorOverrideDocument(t *testing.T, repoRoot string, policySigner *testutil.PolicyTestSigner, document config.OperatorOverrideDocument) {
+	t.Helper()
+
+	policySigner.ConfigureEnv(t.Setenv)
+	documentBytes, err := config.MarshalOperatorOverrideDocumentYAML(document)
+	if err != nil {
+		t.Fatalf("marshal operator override document: %v", err)
+	}
+	signatureFile, err := config.SignOperatorOverrideDocument(documentBytes, policySigner.KeyID, policySigner.PrivateKey)
+	if err != nil {
+		t.Fatalf("sign operator override document: %v", err)
+	}
+	if err := config.WriteOperatorOverrideDocumentYAML(repoRoot, document); err != nil {
+		t.Fatalf("write operator override document: %v", err)
+	}
+	if err := config.WriteOperatorOverrideSignatureYAML(repoRoot, signatureFile); err != nil {
+		t.Fatalf("write operator override signature: %v", err)
+	}
+}
+
 func pinTestProcessAsExpectedClient(t *testing.T, server *Server) {
 	t.Helper()
 
@@ -112,6 +132,12 @@ func startLoopgateServerWithRuntime(t *testing.T, repoRoot string, policyYAML st
 	if err != nil {
 		t.Fatalf("new test policy signer: %v", err)
 	}
+	return startLoopgateServerWithSignerAndRuntime(t, repoRoot, policyYAML, policySigner, runtimeCfg, runSessionBootstrap)
+}
+
+func startLoopgateServerWithSignerAndRuntime(t *testing.T, repoRoot string, policyYAML string, policySigner *testutil.PolicyTestSigner, runtimeCfg *config.RuntimeConfig, runSessionBootstrap bool) (*Client, controlapipkg.StatusResponse, *Server) {
+	t.Helper()
+
 	policySigner.ConfigureEnv(t.Setenv)
 	if err := policySigner.WriteSignedPolicyYAML(repoRoot, policyYAML); err != nil {
 		t.Fatalf("write signed policy: %v", err)
