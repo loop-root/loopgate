@@ -145,7 +145,7 @@ func TestRegisterConnection_PersistsSecretRefOnly(t *testing.T) {
 func TestResolveConnectionSecret_UsesLoopgateOwnedReference(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
-	t.Setenv("LOOPGATE_SLACK_TOKEN", "xoxb-loopgate-secret")
+	t.Setenv("LOOPGATE_SLACK_TOKEN", "slack-test-credential")
 
 	_, err := server.RegisterConnection(context.Background(), connectionRegistration{
 		Provider:  "slack",
@@ -167,13 +167,13 @@ func TestResolveConnectionSecret_UsesLoopgateOwnedReference(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve connection secret: %v", err)
 	}
-	if string(rawSecret) != "xoxb-loopgate-secret" {
+	if string(rawSecret) != "slack-test-credential" {
 		t.Fatalf("unexpected resolved secret: %q", string(rawSecret))
 	}
 	if connectionStatus.Provider != "slack" || connectionStatus.Subject != "workspace-bot" {
 		t.Fatalf("unexpected connection status after resolve: %#v", connectionStatus)
 	}
-	if secretMetadata.Fingerprint == "" || strings.Contains(secretMetadata.Fingerprint, "xoxb-loopgate-secret") {
+	if secretMetadata.Fingerprint == "" || strings.Contains(secretMetadata.Fingerprint, "slack-test-credential") {
 		t.Fatalf("unexpected secret metadata fingerprint: %#v", secretMetadata)
 	}
 	if strings.TrimSpace(connectionStatus.LastUsedAtUTC) == "" {
@@ -367,7 +367,7 @@ func TestValidateConnection_UpdatesStatusAndValidationTimestamp(t *testing.T) {
 
 	fakeStore := &fakeConnectionSecretStore{
 		storedSecret: map[string][]byte{
-			"slack-bot-token": []byte("xoxb-loopgate-secret"),
+			"slack-bot-token": []byte("slack-test-credential"),
 		},
 		metadata: map[string]secrets.SecretMetadata{
 			"slack-bot-token": {
