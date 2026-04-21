@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -35,6 +36,13 @@ func TestRunStatus_OfflineJSONIncludesSetupSummary(t *testing.T) {
 	}
 	if report.DaemonMode != "offline" {
 		t.Fatalf("daemon_mode = %q, want offline", report.DaemonMode)
+	}
+	expectedLaunchAgentState := "not-supported"
+	if runtime.GOOS == "darwin" {
+		expectedLaunchAgentState = "missing"
+	}
+	if report.LaunchAgent.State != expectedLaunchAgentState {
+		t.Fatalf("launch_agent.state = %q, want %q", report.LaunchAgent.State, expectedLaunchAgentState)
 	}
 	if report.Policy.Profile != "balanced" {
 		t.Fatalf("policy profile = %q, want balanced", report.Policy.Profile)
@@ -73,6 +81,11 @@ func TestRunStatus_OfflineHumanOutputIncludesNextSteps(t *testing.T) {
 	if !strings.Contains(renderedOutput, "daemon_mode: offline") {
 		t.Fatalf("expected daemon mode in human status output, got %q", renderedOutput)
 	}
+	if runtime.GOOS == "darwin" {
+		if !strings.Contains(renderedOutput, "launch_agent_state: missing") {
+			t.Fatalf("expected launch agent state in human status output, got %q", renderedOutput)
+		}
+	}
 	if !strings.Contains(renderedOutput, "claude_hooks_state: missing") {
 		t.Fatalf("expected hook state in human status output, got %q", renderedOutput)
 	}
@@ -109,6 +122,11 @@ func TestRunStatus_ManagedInstallRootUsesBareCommandHints(t *testing.T) {
 	}
 	if !strings.Contains(renderedOutput, "daemon_mode: offline") {
 		t.Fatalf("expected offline daemon mode in managed install status output, got %q", renderedOutput)
+	}
+	if runtime.GOOS == "darwin" {
+		if !strings.Contains(renderedOutput, "launch_agent_state: missing") {
+			t.Fatalf("expected launch agent state in managed install status output, got %q", renderedOutput)
+		}
 	}
 	if !strings.Contains(renderedOutput, "loopgate install-hooks") || strings.Contains(renderedOutput, "./bin/loopgate install-hooks") {
 		t.Fatalf("expected bare install-hooks guidance in managed install status output, got %q", renderedOutput)
@@ -196,6 +214,9 @@ func TestRunStatus_LiveIncludesRecentEvents(t *testing.T) {
 	}
 	if report.DaemonMode != "foreground-or-manual" {
 		t.Fatalf("daemon_mode = %q, want foreground-or-manual", report.DaemonMode)
+	}
+	if runtime.GOOS == "darwin" && report.LaunchAgent.State != "missing" {
+		t.Fatalf("launch_agent.state = %q, want missing", report.LaunchAgent.State)
 	}
 	if strings.TrimSpace(report.Live.ControlSessionID) == "" {
 		t.Fatalf("expected control session id in live report, got %#v", report.Live)

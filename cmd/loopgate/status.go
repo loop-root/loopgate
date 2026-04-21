@@ -57,6 +57,7 @@ type operatorHooksStatus struct {
 
 type operatorLaunchAgentStatus struct {
 	Supported bool   `json:"supported"`
+	State     string `json:"state"`
 	Label     string `json:"label,omitempty"`
 	PlistPath string `json:"plist_path,omitempty"`
 	Installed bool   `json:"installed"`
@@ -300,6 +301,7 @@ func inspectLaunchAgent(repoRoot string) operatorLaunchAgentStatus {
 		Supported: runtimeGOOS() == "darwin",
 	}
 	if !status.Supported {
+		status.State = deriveLaunchAgentState(status)
 		return status
 	}
 
@@ -307,6 +309,7 @@ func inspectLaunchAgent(repoRoot string) operatorLaunchAgentStatus {
 	launchAgentsDir, err := resolveLaunchAgentsDir("", deps)
 	if err != nil {
 		status.Error = err.Error()
+		status.State = deriveLaunchAgentState(status)
 		return status
 	}
 	label := defaultLoopgateLaunchAgentLabel(repoRoot)
@@ -316,6 +319,7 @@ func inspectLaunchAgent(repoRoot string) operatorLaunchAgentStatus {
 		status.Installed = true
 	} else if !os.IsNotExist(err) {
 		status.Error = fmt.Sprintf("stat launch agent plist: %v", err)
+		status.State = deriveLaunchAgentState(status)
 		return status
 	}
 
@@ -329,6 +333,7 @@ func inspectLaunchAgent(repoRoot string) operatorLaunchAgentStatus {
 			status.Error = fmt.Sprintf("check launch agent state: %v", err)
 		}
 	}
+	status.State = deriveLaunchAgentState(status)
 	return status
 }
 
@@ -469,6 +474,7 @@ func printOperatorStatusReport(output io.Writer, report operatorStatusReport) {
 		fmt.Fprintf(output, "daemon_version: %s\n", report.Daemon.Version)
 	}
 	if report.LaunchAgent.Supported {
+		fmt.Fprintf(output, "launch_agent_state: %s\n", report.LaunchAgent.State)
 		fmt.Fprintf(output, "launch_agent_installed: %t\n", report.LaunchAgent.Installed)
 		fmt.Fprintf(output, "launch_agent_loaded: %t\n", report.LaunchAgent.Loaded)
 		if report.LaunchAgent.PlistPath != "" {
@@ -567,6 +573,21 @@ func deriveOperatorDaemonMode(daemon operatorDaemonStatus, launchAgent operatorL
 		return "launch-agent-managed"
 	}
 	return "foreground-or-manual"
+}
+
+func deriveLaunchAgentState(status operatorLaunchAgentStatus) string {
+	switch {
+	case !status.Supported:
+		return "not-supported"
+	case strings.TrimSpace(status.Error) != "":
+		return "error"
+	case status.Loaded:
+		return "loaded"
+	case status.Installed:
+		return "installed-not-loaded"
+	default:
+		return "missing"
+	}
 }
 
 func defaultCommandSessionID(prefix string) string {

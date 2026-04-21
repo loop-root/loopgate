@@ -152,7 +152,7 @@ Fast smoke test after setup:
 5. run `./bin/loopgate-ledger tail -verbose`
 
 Expected result:
-- `loopgate status` should show the signed policy, signer, `operator_mode`, `daemon_mode`, Claude hook state, socket path, and daemon health
+- `loopgate status` should show the signed policy, signer, `operator_mode`, `daemon_mode`, `launch_agent_state`, Claude hook state, socket path, and daemon health
 - `loopgate test` should print a governed `fs_list` proof plus the matching `request_id` and audit ledger path
 - you should see a recent `hook.pre_validate` audit event for the Claude action you just triggered
 - if the request needed approval or was denied, the tail output should make that obvious too

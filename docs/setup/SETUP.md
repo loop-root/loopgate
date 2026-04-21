@@ -196,9 +196,9 @@ loopgate uninstall --purge
 ```
 
 `loopgate status` is the quick operator summary. It reports the signed-policy
-posture plus `operator_mode`, `daemon_mode`, Claude hook state, LaunchAgent
-state on macOS, socket health, and optional live UI-safe runtime details when
-you pass `-live`.
+posture plus `operator_mode`, `daemon_mode`, `launch_agent_state`, Claude hook
+state, LaunchAgent state on macOS, socket health, and optional live UI-safe
+runtime details when you pass `-live`.
 
 Quick validation:
 - run `/hooks` inside Claude Code and confirm the Loopgate hook entries are present

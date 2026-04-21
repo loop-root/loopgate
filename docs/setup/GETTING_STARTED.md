@@ -143,9 +143,9 @@ Source-checkout equivalents:
 
 Use `loopgate status` as the quick operator summary and `loopgate-doctor report`
 for deeper derived diagnostics. `status` now calls out the current
-`operator_mode`, `daemon_mode`, and Claude hook state directly, so you can tell
-at a glance whether Loopgate looks offline, LaunchAgent-managed, or manually
-started.
+`operator_mode`, `daemon_mode`, `launch_agent_state`, and Claude hook state
+directly, so you can tell at a glance whether Loopgate looks offline,
+LaunchAgent-managed, or manually started.
 
 If you skipped the LaunchAgent, start Loopgate yourself:
 
