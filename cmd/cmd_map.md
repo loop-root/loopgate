@@ -35,7 +35,7 @@ Use it when changing:
   - `install-launch-agent` writes a per-repo macOS LaunchAgent plist pointed at the current Loopgate binary and can load it immediately with `launchctl`
   - `remove-launch-agent` unloads the per-repo macOS LaunchAgent when present and removes its plist
   - `remove-hooks` removes only the Loopgate-managed hook entries and leaves copied scripts in place
-  - `uninstall` removes Loopgate-managed Claude hooks, removes the copied Loopgate hook scripts, unloads/removes the per-repo macOS LaunchAgent on macOS, and deliberately leaves binaries plus runtime/audit state in place for manual cleanup
+  - `uninstall` removes Loopgate-managed Claude hooks, removes the copied Loopgate hook scripts, unloads/removes the per-repo macOS LaunchAgent on macOS, deliberately leaves binaries plus runtime/audit state in place for manual cleanup, and reports a compact derived `offboarding_state`
   - `uninstall --purge` additionally removes repo-scoped `runtime/` state, current signer material, and default installed binaries; source checkouts still keep tracked repo policy files in place, while published installs also remove the managed install root
 
 ## `cmd/loopgate-policy-sign/`

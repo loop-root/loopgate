@@ -207,7 +207,7 @@ Quick validation:
 Removal notes:
 - `remove-hooks` removes Loopgate-managed hook entries but leaves the copied hook scripts in place
 - `remove-launch-agent` unloads/removes the per-repo macOS LaunchAgent
-- `uninstall` performs both steps and also removes the copied Loopgate hook scripts under `~/.claude/hooks/`
+- `uninstall` performs both steps and also removes the copied Loopgate hook scripts under `~/.claude/hooks/`; its output now includes a compact `offboarding_state`
 - `uninstall --purge` additionally removes repo-scoped `runtime/` state, current signer material, and default installed binaries such as `~/.local/bin/loopgate`
 - for a published install, `uninstall --purge` also removes the managed install root under `~/.local/share/loopgate/<version>`
 - `make uninstall-local` only removes locally installed binaries such as `~/.local/bin/loopgate`

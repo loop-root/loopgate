@@ -189,7 +189,8 @@ per-repo macOS LaunchAgent when present. It deliberately leaves the local
 binaries, signed policy files, and runtime/audit state in place so removal of
 evidence or operator data is always explicit. The command now points you at the
 right next offboarding step for your mode, including `loopgate uninstall
---purge` or `./bin/loopgate uninstall --purge`.
+--purge` or `./bin/loopgate uninstall --purge`, and prints a compact
+`offboarding_state` summary.
 
 `loopgate uninstall --purge` is the stronger local offboarding path. It also
 removes repo-scoped `runtime/` state, default installed Loopgate binaries under

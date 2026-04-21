@@ -90,6 +90,7 @@ func runUninstall(args []string, stdout io.Writer, stderr io.Writer) error {
 		fmt.Fprintln(stdout, "launch_agent_removed: skipped (not macOS)")
 	}
 	if *purgeFlag {
+		fmt.Fprintf(stdout, "offboarding_state: %s\n", deriveOffboardingState(*purgeFlag, purgeResult))
 		fmt.Fprintf(stdout, "removed_runtime_dir: %t\n", purgeResult.RuntimeDirRemoved)
 		fmt.Fprintf(stdout, "removed_signer_private_key: %t\n", purgeResult.SignerPrivateKeyRemoved)
 		fmt.Fprintf(stdout, "removed_signer_public_key: %t\n", purgeResult.SignerPublicKeyRemoved)
@@ -103,6 +104,7 @@ func runUninstall(args []string, stdout io.Writer, stderr io.Writer) error {
 			fmt.Fprintln(stdout, "next_step: delete the repo checkout yourself when you no longer want the tracked policy files that remain in place.")
 		}
 	} else {
+		fmt.Fprintln(stdout, "offboarding_state: hooks-only")
 		fmt.Fprintln(stdout, "left_in_place: local binaries, signed policy files, and runtime/audit state")
 		fmt.Fprintf(stdout, "next_step: rerun with %s uninstall --purge to also remove repo runtime state, local signer material, and default installed binaries.\n", operatorCommandPath(repoRoot, "loopgate"))
 	}
@@ -223,4 +225,14 @@ func removeLoopgateHookScripts(claudeDir string) (int, error) {
 		}
 	}
 	return removedScripts, nil
+}
+
+func deriveOffboardingState(purge bool, result uninstallPurgeResult) string {
+	if !purge {
+		return "hooks-only"
+	}
+	if result.ManagedInstallRootRemoved {
+		return "purged-managed-install"
+	}
+	return "purged-source-checkout"
 }

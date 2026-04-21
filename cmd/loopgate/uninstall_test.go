@@ -36,6 +36,9 @@ func TestRunUninstall_DefaultPreservesRuntimeState(t *testing.T) {
 	if !strings.Contains(stdout.String(), "purge: false") {
 		t.Fatalf("expected purge=false output, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "offboarding_state: hooks-only") {
+		t.Fatalf("expected hooks-only offboarding state, got %q", stdout.String())
+	}
 	if !strings.Contains(stdout.String(), "./bin/loopgate uninstall --purge") {
 		t.Fatalf("expected source-checkout purge guidance, got %q", stdout.String())
 	}
@@ -102,6 +105,9 @@ func TestRunUninstall_PurgeRemovesLocalStateButLeavesTrackedPolicy(t *testing.T)
 	if !strings.Contains(stdout.String(), "removed_managed_install_root: false") {
 		t.Fatalf("expected non-managed install root output, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "offboarding_state: purged-source-checkout") {
+		t.Fatalf("expected purged-source-checkout state, got %q", stdout.String())
+	}
 	if !strings.Contains(stdout.String(), "delete the repo checkout yourself") {
 		t.Fatalf("expected repo checkout cleanup guidance, got %q", stdout.String())
 	}
@@ -140,6 +146,9 @@ func TestRunUninstall_PurgeRemovesManagedInstallRoot(t *testing.T) {
 	if !strings.Contains(stdout.String(), "removed_managed_install_root: true") {
 		t.Fatalf("expected managed install root removal output, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "offboarding_state: purged-managed-install") {
+		t.Fatalf("expected purged-managed-install state, got %q", stdout.String())
+	}
 	if !strings.Contains(stdout.String(), "managed install files are gone") {
 		t.Fatalf("expected managed install cleanup guidance, got %q", stdout.String())
 	}
@@ -164,5 +173,8 @@ func TestRunUninstall_DefaultManagedInstallUsesBarePurgeHint(t *testing.T) {
 
 	if !strings.Contains(stdout.String(), "loopgate uninstall --purge") || strings.Contains(stdout.String(), "./bin/loopgate uninstall --purge") {
 		t.Fatalf("expected bare managed-install purge guidance, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "offboarding_state: hooks-only") {
+		t.Fatalf("expected hooks-only offboarding state for managed install default uninstall, got %q", stdout.String())
 	}
 }

@@ -262,7 +262,8 @@ Source-checkout equivalent:
 That command removes Loopgate-managed Claude hook entries, removes the copied
 Loopgate hook scripts from `~/.claude/hooks/`, and unloads/removes the per-repo
 macOS LaunchAgent when present. It deliberately leaves runtime/audit state and
-tracked repo content in place so evidence removal is always explicit.
+tracked repo content in place so evidence removal is always explicit. The
+command output includes a compact `offboarding_state` summary.
 
 If you also want to remove repo-scoped runtime state, current signer material,
 and default installed binaries, use:

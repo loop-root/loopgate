@@ -236,6 +236,8 @@ Use `--purge` when you also want to remove repo-scoped runtime state, current
 signer material, and default installed binaries. Tracked policy files remain in
 the repo either way, so deleting a source checkout is still an explicit manual
 step. On a published install, `--purge` also removes the managed install root.
+The uninstall output includes a compact `offboarding_state` summary so the
+remaining cleanup posture is easy to scan.
 
 ### 5. Run a normal task
 
