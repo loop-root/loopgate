@@ -58,7 +58,7 @@ func runTest(args []string, stdout io.Writer, stderr io.Writer) error {
 	if !statusReport.Daemon.Healthy {
 		temporaryHandle, err = startTemporaryLoopgateServer(repoRoot, socketPath)
 		if err != nil {
-			return formatLoopgateTestStartupError(err)
+			return formatLoopgateTestStartupError(err, repoRoot)
 		}
 		defer func() {
 			_ = temporaryHandle.Shutdown()
@@ -158,7 +158,7 @@ func auditLedgerContainsRequestID(auditPath string, requestID string) (bool, err
 	return false, nil
 }
 
-func formatLoopgateTestStartupError(err error) error {
+func formatLoopgateTestStartupError(err error, repoRoot string) error {
 	if err == nil {
 		return nil
 	}
@@ -167,7 +167,8 @@ func formatLoopgateTestStartupError(err error) error {
 	if strings.Contains(lowerError, "keychain") ||
 		strings.Contains(lowerError, "audit checkpoint secret") ||
 		strings.Contains(lowerError, "secret backend unavailable") {
-		return fmt.Errorf("start temporary loopgate daemon: %s\nhint: start ./bin/loopgate once from an interactive macOS login session so Keychain-backed audit setup can complete, then rerun ./bin/loopgate test", trimmedError)
+		loopgateCmd := operatorCommandPath(repoRoot, "loopgate")
+		return fmt.Errorf("start temporary loopgate daemon: %s\nhint: start %s once from an interactive macOS login session so Keychain-backed audit setup can complete, then rerun %s test", trimmedError, loopgateCmd, loopgateCmd)
 	}
 	return fmt.Errorf("start temporary loopgate daemon: %w", err)
 }

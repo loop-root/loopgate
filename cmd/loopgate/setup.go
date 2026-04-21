@@ -187,13 +187,16 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 	case installLaunchAgentChoice:
 		fmt.Fprintln(stdout, "next_step: Load the LaunchAgent when you are ready, or start Loopgate once in the foreground to verify startup.")
 	default:
-		fmt.Fprintln(stdout, "next_step: Start Loopgate with ./bin/loopgate, or install a LaunchAgent later with ./bin/loopgate install-launch-agent -load.")
+		fmt.Fprintf(stdout, "next_step: Start Loopgate with %s, or install a LaunchAgent later with %s install-launch-agent -load.\n",
+			operatorCommandPath(repoRoot, "loopgate"),
+			operatorCommandPath(repoRoot, "loopgate"),
+		)
 	}
 	fmt.Fprintln(stdout, "next_commands:")
-	fmt.Fprintln(stdout, "  - ./bin/loopgate status")
-	fmt.Fprintln(stdout, "  - ./bin/loopgate test")
-	fmt.Fprintln(stdout, "  - ./bin/loopgate uninstall")
-	printSetupVerificationHints(stdout)
+	fmt.Fprintf(stdout, "  - %s status\n", operatorCommandPath(repoRoot, "loopgate"))
+	fmt.Fprintf(stdout, "  - %s test\n", operatorCommandPath(repoRoot, "loopgate"))
+	fmt.Fprintf(stdout, "  - %s uninstall\n", operatorCommandPath(repoRoot, "loopgate"))
+	printSetupVerificationHints(stdout, repoRoot)
 	return nil
 }
 
@@ -420,9 +423,9 @@ func printSetupPlanSummary(output io.Writer, plan loopgateSetupPlan) {
 	fmt.Fprintln(output)
 }
 
-func printSetupVerificationHints(output io.Writer) {
+func printSetupVerificationHints(output io.Writer, repoRoot string) {
 	fmt.Fprintln(output, "verify:")
-	fmt.Fprintln(output, "  1. Run ./bin/loopgate status for the quick operator summary.")
-	fmt.Fprintln(output, "  2. Run ./bin/loopgate test for a governed local smoke test.")
-	fmt.Fprintln(output, "  3. Run ./bin/loopgate-ledger tail -verbose to inspect the resulting local audit trail.")
+	fmt.Fprintf(output, "  1. Run %s status for the quick operator summary.\n", operatorCommandPath(repoRoot, "loopgate"))
+	fmt.Fprintf(output, "  2. Run %s test for a governed local smoke test.\n", operatorCommandPath(repoRoot, "loopgate"))
+	fmt.Fprintf(output, "  3. Run %s tail -verbose to inspect the resulting local audit trail.\n", operatorCommandPath(repoRoot, "loopgate-ledger"))
 }

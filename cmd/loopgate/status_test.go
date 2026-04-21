@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -62,6 +63,31 @@ func TestRunStatus_OfflineHumanOutputIncludesNextSteps(t *testing.T) {
 	}
 	if !strings.Contains(renderedOutput, "./bin/loopgate status and ./bin/loopgate test") {
 		t.Fatalf("expected status/test rerun guidance in human status output, got %q", renderedOutput)
+	}
+}
+
+func TestRunStatus_ManagedInstallRootUsesBareCommandHints(t *testing.T) {
+	repoRoot := prepareOperatorTestRepo(t, "balanced")
+	claudeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoRoot, managedInstallRootMarkerFilename), []byte("version=test\n"), 0o600); err != nil {
+		t.Fatalf("write managed install marker: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runStatus([]string{
+		"-repo-root", repoRoot,
+		"-claude-dir", claudeDir,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("runStatus: %v stderr=%s", err, stderr.String())
+	}
+
+	renderedOutput := stdout.String()
+	if !strings.Contains(renderedOutput, "loopgate install-hooks") || strings.Contains(renderedOutput, "./bin/loopgate install-hooks") {
+		t.Fatalf("expected bare install-hooks guidance in managed install status output, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "loopgate status and loopgate test") || strings.Contains(renderedOutput, "./bin/loopgate status and ./bin/loopgate test") {
+		t.Fatalf("expected bare status/test rerun guidance in managed install status output, got %q", renderedOutput)
 	}
 }
 

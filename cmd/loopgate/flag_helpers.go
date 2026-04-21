@@ -11,3 +11,10 @@ func normalizeFlagParseError(err error) error {
 	}
 	return err
 }
+
+func operatorCommandPath(repoRoot string, toolName string) string {
+	if managedInstallRootPresent(repoRoot) {
+		return toolName
+	}
+	return "./bin/" + toolName
+}

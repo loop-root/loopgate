@@ -506,24 +506,27 @@ func printOperatorStatusReport(output io.Writer, report operatorStatusReport) {
 
 func operatorStatusNextSteps(report operatorStatusReport) []string {
 	nextSteps := make([]string, 0, 4)
+	loopgateCmd := operatorCommandPath(report.RepoRoot, "loopgate")
+	policyAdminCmd := operatorCommandPath(report.RepoRoot, "loopgate-policy-admin")
+	policySignCmd := operatorCommandPath(report.RepoRoot, "loopgate-policy-sign")
 	if !report.Policy.Loaded {
-		nextSteps = append(nextSteps, "validate the signed policy with ./bin/loopgate-policy-admin validate")
+		nextSteps = append(nextSteps, fmt.Sprintf("validate the signed policy with %s validate", policyAdminCmd))
 	}
 	if !report.Signer.Verified {
-		nextSteps = append(nextSteps, "repair signer setup with ./bin/loopgate init or ./bin/loopgate-policy-sign -verify-setup")
+		nextSteps = append(nextSteps, fmt.Sprintf("repair signer setup with %s init or %s -verify-setup", loopgateCmd, policySignCmd))
 	}
 	if !report.ClaudeHooks.Installed {
-		nextSteps = append(nextSteps, "install Claude Code hooks with ./bin/loopgate install-hooks")
+		nextSteps = append(nextSteps, fmt.Sprintf("install Claude Code hooks with %s install-hooks", loopgateCmd))
 	}
 	if !report.Daemon.Healthy {
 		if report.LaunchAgent.Supported {
-			nextSteps = append(nextSteps, "start Loopgate with ./bin/loopgate or ./bin/loopgate install-launch-agent -load")
+			nextSteps = append(nextSteps, fmt.Sprintf("start Loopgate with %s or %s install-launch-agent -load", loopgateCmd, loopgateCmd))
 		} else {
-			nextSteps = append(nextSteps, "start Loopgate with ./bin/loopgate")
+			nextSteps = append(nextSteps, fmt.Sprintf("start Loopgate with %s", loopgateCmd))
 		}
 	}
 	if len(nextSteps) > 0 {
-		nextSteps = append(nextSteps, "rerun ./bin/loopgate status and ./bin/loopgate test after the missing pieces are in place")
+		nextSteps = append(nextSteps, fmt.Sprintf("rerun %s status and %s test after the missing pieces are in place", loopgateCmd, loopgateCmd))
 	}
 	return nextSteps
 }

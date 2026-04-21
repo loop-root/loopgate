@@ -92,6 +92,35 @@ func TestRunSetup_AppliesBalancedProfileAndInstallsHooks(t *testing.T) {
 	}
 }
 
+func TestRunSetup_ManagedInstallRootUsesBareCommandHints(t *testing.T) {
+	repoRoot := makeSetupTestRepo(t)
+	claudeDir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(policySigningTrustDirEnv, filepath.Join(t.TempDir(), "trusted"))
+	if err := os.WriteFile(filepath.Join(repoRoot, managedInstallRootMarkerFilename), []byte("version=test\n"), 0o600); err != nil {
+		t.Fatalf("write managed install marker: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := runSetup([]string{
+		"-repo-root", repoRoot,
+		"-profile", "balanced",
+		"-install-hooks",
+		"-skip-launch-agent",
+		"-claude-dir", claudeDir,
+	}, strings.NewReader(""), &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("runSetup: %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "loopgate status") || strings.Contains(stdout.String(), "./bin/loopgate status") {
+		t.Fatalf("expected bare status command hint in managed install output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "loopgate-ledger tail -verbose") || strings.Contains(stdout.String(), "./bin/loopgate-ledger tail -verbose") {
+		t.Fatalf("expected bare ledger command hint in managed install output, got %q", stdout.String())
+	}
+}
+
 func TestRunSetup_RequiresExplicitChoicesWhenNonInteractive(t *testing.T) {
 	repoRoot := makeSetupTestRepo(t)
 	t.Setenv("HOME", t.TempDir())
