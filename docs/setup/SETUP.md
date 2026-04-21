@@ -200,6 +200,10 @@ posture plus `operator_mode`, `daemon_mode`, `launch_agent_state`, Claude hook
 state, LaunchAgent state on macOS, socket health, and optional live UI-safe
 runtime details when you pass `-live`.
 
+`loopgate test` is the governed smoke proof. It reports whether it reused a
+running daemon or started a temporary one, confirms UI plus audit evidence, and
+prints the next steps required before Claude Code can rely on the same path.
+
 Quick validation:
 - run `/hooks` inside Claude Code and confirm the Loopgate hook entries are present
 - if your home directory has spaces, confirm the installed command paths remain quoted in Claude's hook view

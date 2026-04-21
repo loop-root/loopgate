@@ -109,20 +109,67 @@ func runTest(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 
 	fmt.Fprintln(stdout, "test OK")
+	fmt.Fprintln(stdout, "test_state: governed-path-verified")
+	fmt.Fprintf(stdout, "operator_mode: %s\n", statusReport.OperatorMode)
+	fmt.Fprintf(stdout, "daemon_mode_before_test: %s\n", statusReport.DaemonMode)
+	if statusReport.LaunchAgent.Supported {
+		fmt.Fprintf(stdout, "launch_agent_state: %s\n", statusReport.LaunchAgent.State)
+	}
 	fmt.Fprintf(stdout, "policy_profile: %s\n", statusReport.Policy.Profile)
 	fmt.Fprintf(stdout, "daemon_source: %s\n", daemonSource)
 	fmt.Fprintf(stdout, "capability: fs_list\n")
 	fmt.Fprintf(stdout, "request_id: %s\n", requestID)
 	fmt.Fprintf(stdout, "audit_ledger_path: %s\n", auditPath)
+	fmt.Fprintln(stdout, "evidence_state: ui-and-audit-confirmed")
 	fmt.Fprintf(stdout, "ui_event_found: %t\n", uiEventFound)
 	fmt.Fprintf(stdout, "audit_entry_found: %t\n", auditEntryFound)
-	loopgateCmd := operatorCommandPath(repoRoot, "loopgate")
-	if statusReport.ClaudeHooks.Installed {
-		fmt.Fprintln(stdout, "next_step: Everything is working. Try using Claude Code now.")
-	} else {
-		fmt.Fprintf(stdout, "next_step: Install Claude Code hooks with %s install-hooks, then try using Claude Code.\n", loopgateCmd)
+	nextSteps := operatorTestNextSteps(statusReport, daemonSource, repoRoot)
+	if len(nextSteps) > 0 {
+		fmt.Fprintln(stdout, "next_steps:")
+		for _, nextStep := range nextSteps {
+			fmt.Fprintf(stdout, "  - %s\n", nextStep)
+		}
 	}
 	return nil
+}
+
+func operatorTestNextSteps(statusReport operatorStatusReport, daemonSource string, repoRoot string) []string {
+	loopgateCmd := operatorCommandPath(repoRoot, "loopgate")
+	nextSteps := make([]string, 0, 3)
+
+	if daemonSource == "spawned" {
+		if statusReport.LaunchAgent.Supported {
+			switch statusReport.LaunchAgent.State {
+			case "installed-not-loaded":
+				nextSteps = append(nextSteps, fmt.Sprintf("Loopgate was offline, so this smoke test started a temporary daemon. Load the existing LaunchAgent with %s install-launch-agent -load before using Claude Code.", loopgateCmd))
+			case "loaded":
+				nextSteps = append(nextSteps, fmt.Sprintf("Loopgate was offline, so this smoke test started a temporary daemon. Restart the loaded LaunchAgent with %s install-launch-agent -load before using Claude Code.", loopgateCmd))
+			default:
+				nextSteps = append(nextSteps, fmt.Sprintf("Loopgate was offline, so this smoke test started a temporary daemon. Start Loopgate with %s, or install a background LaunchAgent with %s install-launch-agent -load before using Claude Code.", loopgateCmd, loopgateCmd))
+			}
+		} else {
+			nextSteps = append(nextSteps, fmt.Sprintf("Loopgate was offline, so this smoke test started a temporary daemon. Start Loopgate with %s before using Claude Code.", loopgateCmd))
+		}
+	} else if statusReport.ClaudeHooks.Installed {
+		switch statusReport.DaemonMode {
+		case "launch-agent-managed":
+			nextSteps = append(nextSteps, "Loopgate is already running in the background via launchd. Try using Claude Code now.")
+		default:
+			if statusReport.LaunchAgent.Supported {
+				nextSteps = append(nextSteps, fmt.Sprintf("Loopgate is already running for this repo. Try using Claude Code now, or use %s install-launch-agent -load if you want it background-managed.", loopgateCmd))
+			} else {
+				nextSteps = append(nextSteps, "Loopgate is already running for this repo. Try using Claude Code now.")
+			}
+		}
+	}
+
+	if !statusReport.ClaudeHooks.Installed {
+		nextSteps = append(nextSteps, fmt.Sprintf("Install Claude Code hooks with %s install-hooks.", loopgateCmd))
+	}
+	if daemonSource == "spawned" || !statusReport.ClaudeHooks.Installed {
+		nextSteps = append(nextSteps, fmt.Sprintf("Rerun %s test after the missing pieces are in place.", loopgateCmd))
+	}
+	return nextSteps
 }
 
 func waitForRecentUIRequestID(client *loopgate.Client, requestID string, timeout time.Duration) (bool, error) {

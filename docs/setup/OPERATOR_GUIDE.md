@@ -156,6 +156,10 @@ Source-checkout equivalents:
 ./bin/loopgate test
 ```
 
+`loopgate test` reports whether it reused a running daemon or had to start a
+temporary one for the smoke test, so the proof output matches the actual
+operator posture before you rely on Claude Code.
+
 Expected local socket:
 
 ```text

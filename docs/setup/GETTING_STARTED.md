@@ -146,6 +146,9 @@ for deeper derived diagnostics. `status` now calls out the current
 `operator_mode`, `daemon_mode`, `launch_agent_state`, and Claude hook state
 directly, so you can tell at a glance whether Loopgate looks offline,
 LaunchAgent-managed, or manually started.
+`loopgate test` now also tells you whether it reused a running daemon or had to
+start a temporary one for the smoke test, plus the next steps needed before
+Claude Code can rely on the governed path.
 
 If you skipped the LaunchAgent, start Loopgate yourself:
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -30,14 +31,26 @@ func TestRunTest_ReusesRunningDaemon(t *testing.T) {
 	if !strings.Contains(renderedOutput, "test OK") {
 		t.Fatalf("expected test OK output, got %q", renderedOutput)
 	}
+	if !strings.Contains(renderedOutput, "test_state: governed-path-verified") {
+		t.Fatalf("expected test_state in output, got %q", renderedOutput)
+	}
 	if !strings.Contains(renderedOutput, "daemon_source: running") {
 		t.Fatalf("expected running daemon source, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "evidence_state: ui-and-audit-confirmed") {
+		t.Fatalf("expected evidence_state in output, got %q", renderedOutput)
 	}
 	if !strings.Contains(renderedOutput, "audit_entry_found: true") {
 		t.Fatalf("expected audit evidence confirmation, got %q", renderedOutput)
 	}
-	if !strings.Contains(renderedOutput, "./bin/loopgate install-hooks") {
+	if !strings.Contains(renderedOutput, "next_steps:") {
+		t.Fatalf("expected next_steps block, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "./bin/loopgate install-hooks.") {
 		t.Fatalf("expected hook-install guidance when hooks are missing, got %q", renderedOutput)
+	}
+	if !strings.Contains(renderedOutput, "./bin/loopgate test after the missing pieces are in place.") {
+		t.Fatalf("expected rerun guidance when hooks are missing, got %q", renderedOutput)
 	}
 }
 
@@ -92,7 +105,16 @@ func TestRunTest_StartsTemporaryDaemonWhenNeeded(t *testing.T) {
 	if !strings.Contains(stdout.String(), "daemon_source: spawned") {
 		t.Fatalf("expected spawned daemon source, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "./bin/loopgate install-hooks") {
+	if !strings.Contains(stdout.String(), "daemon_mode_before_test: offline") {
+		t.Fatalf("expected offline daemon_mode_before_test, got %q", stdout.String())
+	}
+	if runtime.GOOS == "darwin" && !strings.Contains(stdout.String(), "launch_agent_state: missing") {
+		t.Fatalf("expected launch_agent_state in spawned output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "started a temporary daemon") {
+		t.Fatalf("expected temporary-daemon guidance, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "./bin/loopgate install-hooks.") {
 		t.Fatalf("expected hook-install guidance when hooks are missing, got %q", stdout.String())
 	}
 }
@@ -146,10 +168,10 @@ func TestRunTest_InstalledHooksSuggestsTryingClaude(t *testing.T) {
 	}
 
 	renderedOutput := stdout.String()
-	if !strings.Contains(renderedOutput, "Try using Claude Code now.") {
+	if !strings.Contains(renderedOutput, "Loopgate is already running for this repo. Try using Claude Code now") {
 		t.Fatalf("expected Claude-ready next step when hooks are installed, got %q", renderedOutput)
 	}
-	if strings.Contains(renderedOutput, "install-hooks") {
+	if strings.Contains(renderedOutput, "Install Claude Code hooks") {
 		t.Fatalf("did not expect install-hooks guidance when hooks are installed, got %q", renderedOutput)
 	}
 }
