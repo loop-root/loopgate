@@ -36,6 +36,9 @@ func TestRunTest_ReusesRunningDaemon(t *testing.T) {
 	if !strings.Contains(renderedOutput, "audit_entry_found: true") {
 		t.Fatalf("expected audit evidence confirmation, got %q", renderedOutput)
 	}
+	if !strings.Contains(renderedOutput, "./bin/loopgate install-hooks") {
+		t.Fatalf("expected hook-install guidance when hooks are missing, got %q", renderedOutput)
+	}
 }
 
 func TestRunTest_StartsTemporaryDaemonWhenNeeded(t *testing.T) {
@@ -89,6 +92,9 @@ func TestRunTest_StartsTemporaryDaemonWhenNeeded(t *testing.T) {
 	if !strings.Contains(stdout.String(), "daemon_source: spawned") {
 		t.Fatalf("expected spawned daemon source, got %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "./bin/loopgate install-hooks") {
+		t.Fatalf("expected hook-install guidance when hooks are missing, got %q", stdout.String())
+	}
 }
 
 func TestRunTest_FailsWhenSignerSetupIsMissing(t *testing.T) {
@@ -111,5 +117,39 @@ func TestRunTest_FailsWhenSignerSetupIsMissing(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "signer setup is not ready") {
 		t.Fatalf("expected signer setup failure, got %v", err)
+	}
+}
+
+func TestRunTest_InstalledHooksSuggestsTryingClaude(t *testing.T) {
+	repoRoot := prepareOperatorTestRepo(t, "balanced")
+	socketPath, stopServer := startOperatorTestServer(t, repoRoot)
+	defer stopServer()
+
+	claudeDir, err := defaultClaudeDir()
+	if err != nil {
+		t.Fatalf("defaultClaudeDir: %v", err)
+	}
+	if err := runInstallHooks([]string{
+		"-repo", repoRoot,
+		"-claude-dir", claudeDir,
+	}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInstallHooks: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runTest([]string{
+		"-repo-root", repoRoot,
+		"-socket", socketPath,
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("runTest: %v stderr=%s", err, stderr.String())
+	}
+
+	renderedOutput := stdout.String()
+	if !strings.Contains(renderedOutput, "Try using Claude Code now.") {
+		t.Fatalf("expected Claude-ready next step when hooks are installed, got %q", renderedOutput)
+	}
+	if strings.Contains(renderedOutput, "install-hooks") {
+		t.Fatalf("did not expect install-hooks guidance when hooks are installed, got %q", renderedOutput)
 	}
 }

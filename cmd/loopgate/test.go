@@ -116,7 +116,12 @@ func runTest(args []string, stdout io.Writer, stderr io.Writer) error {
 	fmt.Fprintf(stdout, "audit_ledger_path: %s\n", auditPath)
 	fmt.Fprintf(stdout, "ui_event_found: %t\n", uiEventFound)
 	fmt.Fprintf(stdout, "audit_entry_found: %t\n", auditEntryFound)
-	fmt.Fprintln(stdout, "next_step: Everything is working. Try using Claude Code now.")
+	loopgateCmd := operatorCommandPath(repoRoot, "loopgate")
+	if statusReport.ClaudeHooks.Installed {
+		fmt.Fprintln(stdout, "next_step: Everything is working. Try using Claude Code now.")
+	} else {
+		fmt.Fprintf(stdout, "next_step: Install Claude Code hooks with %s install-hooks, then try using Claude Code.\n", loopgateCmd)
+	}
 	return nil
 }
 
