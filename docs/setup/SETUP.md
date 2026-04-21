@@ -195,6 +195,11 @@ loopgate uninstall --purge
 ./bin/loopgate uninstall --purge
 ```
 
+`loopgate status` is the quick operator summary. It reports the signed-policy
+posture plus `operator_mode`, `daemon_mode`, Claude hook state, LaunchAgent
+state on macOS, socket health, and optional live UI-safe runtime details when
+you pass `-live`.
+
 Quick validation:
 - run `/hooks` inside Claude Code and confirm the Loopgate hook entries are present
 - if your home directory has spaces, confirm the installed command paths remain quoted in Claude's hook view
@@ -206,7 +211,7 @@ Removal notes:
 - `uninstall --purge` additionally removes repo-scoped `runtime/` state, current signer material, and default installed binaries such as `~/.local/bin/loopgate`
 - for a published install, `uninstall --purge` also removes the managed install root under `~/.local/share/loopgate/<version>`
 - `make uninstall-local` only removes locally installed binaries such as `~/.local/bin/loopgate`
-- tracked repo policy files such as `core/policy/policy.yaml` and `core/policy/policy.yaml.sig` remain in place either way
+- tracked repo policy files such as `core/policy/policy.yaml` and `core/policy/policy.yaml.sig` remain in place either way, so deleting a source checkout is still a separate manual step
 
 ### 4. Re-sign and apply policy
 

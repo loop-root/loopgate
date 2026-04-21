@@ -142,7 +142,10 @@ Source-checkout equivalents:
 ```
 
 Use `loopgate status` as the quick operator summary and `loopgate-doctor report`
-for deeper derived diagnostics.
+for deeper derived diagnostics. `status` now calls out the current
+`operator_mode`, `daemon_mode`, and Claude hook state directly, so you can tell
+at a glance whether Loopgate looks offline, LaunchAgent-managed, or manually
+started.
 
 If you skipped the LaunchAgent, start Loopgate yourself:
 
@@ -231,7 +234,8 @@ That removes Loopgate-managed Claude hook entries, removes the copied Loopgate
 hook scripts, and on macOS unloads/removes the per-repo LaunchAgent.
 Use `--purge` when you also want to remove repo-scoped runtime state, current
 signer material, and default installed binaries. Tracked policy files remain in
-the repo either way.
+the repo either way, so deleting a source checkout is still an explicit manual
+step. On a published install, `--purge` also removes the managed install root.
 
 ### 5. Run a normal task
 

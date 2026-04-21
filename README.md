@@ -152,7 +152,7 @@ Fast smoke test after setup:
 5. run `./bin/loopgate-ledger tail -verbose`
 
 Expected result:
-- `loopgate status` should show the signed policy, signer, hook-install state, socket path, and daemon health
+- `loopgate status` should show the signed policy, signer, `operator_mode`, `daemon_mode`, Claude hook state, socket path, and daemon health
 - `loopgate test` should print a governed `fs_list` proof plus the matching `request_id` and audit ledger path
 - you should see a recent `hook.pre_validate` audit event for the Claude action you just triggered
 - if the request needed approval or was denied, the tail output should make that obvious too
@@ -187,13 +187,18 @@ If you later want to remove Loopgate's machine-level wiring again:
 copied Loopgate hook scripts from `~/.claude/hooks/`, and unloads/removes the
 per-repo macOS LaunchAgent when present. It deliberately leaves the local
 binaries, signed policy files, and runtime/audit state in place so removal of
-evidence or operator data is always explicit.
+evidence or operator data is always explicit. The command now points you at the
+right next offboarding step for your mode, including `loopgate uninstall
+--purge` or `./bin/loopgate uninstall --purge`.
 
 `loopgate uninstall --purge` is the stronger local offboarding path. It also
 removes repo-scoped `runtime/` state, default installed Loopgate binaries under
 `~/.local/bin` when present, and the local signer material tied to the current
 policy `key_id`. It still does not delete tracked repo files such as
-`core/policy/policy.yaml` or `core/policy/policy.yaml.sig`.
+`core/policy/policy.yaml` or `core/policy/policy.yaml.sig`. For a source
+checkout, deleting the repo itself remains an explicit manual step. For a
+published install, the managed install root is removed, but external signer
+trust material may still remain if it was not owned by that install.
 
 Useful lower-level removal commands:
 

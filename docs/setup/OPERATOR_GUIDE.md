@@ -261,7 +261,8 @@ Source-checkout equivalent:
 
 That command removes Loopgate-managed Claude hook entries, removes the copied
 Loopgate hook scripts from `~/.claude/hooks/`, and unloads/removes the per-repo
-macOS LaunchAgent when present.
+macOS LaunchAgent when present. It deliberately leaves runtime/audit state and
+tracked repo content in place so evidence removal is always explicit.
 
 If you also want to remove repo-scoped runtime state, current signer material,
 and default installed binaries, use:
@@ -288,6 +289,11 @@ make uninstall-local
 
 `make uninstall-local` only removes binaries copied into your local install
 directory. It does not remove policy files or runtime/audit state.
+
+For source checkouts, `uninstall --purge` still leaves tracked files such as
+`core/policy/policy.yaml` and `core/policy/policy.yaml.sig`, so deleting the
+repo itself is still a separate manual step. For published installs,
+`uninstall --purge` also removes the managed install root.
 
 ### 4. Re-sign policy when you intentionally change it
 
