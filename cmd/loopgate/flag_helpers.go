@@ -18,3 +18,10 @@ func operatorCommandPath(repoRoot string, toolName string) string {
 	}
 	return "./bin/" + toolName
 }
+
+func operatorMode(repoRoot string) string {
+	if managedInstallRootPresent(repoRoot) {
+		return "managed-install"
+	}
+	return "source-checkout"
+}

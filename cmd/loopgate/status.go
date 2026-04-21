@@ -47,6 +47,7 @@ type operatorSignerStatus struct {
 
 type operatorHooksStatus struct {
 	ClaudeDir         string   `json:"claude_dir"`
+	State             string   `json:"state"`
 	Installed         bool     `json:"installed"`
 	SettingsPaths     []string `json:"settings_paths,omitempty"`
 	ManagedEventCount int      `json:"managed_event_count"`
@@ -97,6 +98,7 @@ type operatorLiveStatus struct {
 
 type operatorStatusReport struct {
 	OK              bool                      `json:"ok"`
+	OperatorMode    string                    `json:"operator_mode"`
 	RepoRoot        string                    `json:"repo_root"`
 	PolicyPath      string                    `json:"policy_path"`
 	SignaturePath   string                    `json:"signature_path"`
@@ -161,6 +163,7 @@ func collectOperatorStatusReport(repoRootFlag string, claudeDirFlag string, sock
 	}
 
 	report := operatorStatusReport{
+		OperatorMode:    operatorMode(repoRoot),
 		RepoRoot:        repoRoot,
 		PolicyPath:      filepath.Join(repoRoot, "core", "policy", "policy.yaml"),
 		SignaturePath:   config.PolicySignaturePath(repoRoot),
@@ -238,6 +241,7 @@ func collectOperatorStatusReport(repoRootFlag string, claudeDirFlag string, sock
 func inspectClaudeHooks(repoRoot string, claudeDir string) operatorHooksStatus {
 	status := operatorHooksStatus{
 		ClaudeDir: filepath.Clean(claudeDir),
+		State:     "missing",
 	}
 	settingsPaths := collectClaudeSettingsPaths(repoRoot, claudeDir)
 	for _, settingsPath := range settingsPaths {
@@ -260,6 +264,14 @@ func inspectClaudeHooks(repoRoot string, claudeDir string) operatorHooksStatus {
 		}
 	}
 
+	switch {
+	case status.ManagedEventCount >= len(loopgateHookEvents) && status.CopiedScriptCount == len(loopgateHookBundleFiles):
+		status.State = "installed"
+	case status.ManagedEventCount > 0 || status.CopiedScriptCount > 0:
+		status.State = "partial"
+	default:
+		status.State = "missing"
+	}
 	status.Installed = status.ManagedEventCount >= len(loopgateHookEvents) && status.CopiedScriptCount == len(loopgateHookBundleFiles)
 	return status
 }
@@ -426,6 +438,7 @@ func printOperatorStatusReport(output io.Writer, report operatorStatusReport) {
 		statusLabel = "ok"
 	}
 	fmt.Fprintf(output, "status: %s\n", statusLabel)
+	fmt.Fprintf(output, "operator_mode: %s\n", report.OperatorMode)
 	fmt.Fprintf(output, "repo_root: %s\n", report.RepoRoot)
 	fmt.Fprintf(output, "policy_profile: %s\n", report.Policy.Profile)
 	fmt.Fprintf(output, "policy_path: %s\n", report.PolicyPath)
@@ -442,6 +455,7 @@ func printOperatorStatusReport(output io.Writer, report operatorStatusReport) {
 	if report.Signer.PrivateKeyPath != "" {
 		fmt.Fprintf(output, "signer_key_path: %s\n", report.Signer.PrivateKeyPath)
 	}
+	fmt.Fprintf(output, "claude_hooks_state: %s\n", report.ClaudeHooks.State)
 	fmt.Fprintf(output, "claude_hooks_installed: %t\n", report.ClaudeHooks.Installed)
 	fmt.Fprintf(output, "claude_dir: %s\n", report.ClaudeHooks.ClaudeDir)
 	if len(report.ClaudeHooks.SettingsPaths) > 0 {
@@ -509,13 +523,16 @@ func operatorStatusNextSteps(report operatorStatusReport) []string {
 	loopgateCmd := operatorCommandPath(report.RepoRoot, "loopgate")
 	policyAdminCmd := operatorCommandPath(report.RepoRoot, "loopgate-policy-admin")
 	policySignCmd := operatorCommandPath(report.RepoRoot, "loopgate-policy-sign")
+	doctorCmd := operatorCommandPath(report.RepoRoot, "loopgate-doctor")
 	if !report.Policy.Loaded {
 		nextSteps = append(nextSteps, fmt.Sprintf("validate the signed policy with %s validate", policyAdminCmd))
 	}
 	if !report.Signer.Verified {
 		nextSteps = append(nextSteps, fmt.Sprintf("repair signer setup with %s init or %s -verify-setup", loopgateCmd, policySignCmd))
 	}
-	if !report.ClaudeHooks.Installed {
+	if report.ClaudeHooks.State == "partial" {
+		nextSteps = append(nextSteps, fmt.Sprintf("repair Claude Code hooks with %s install-hooks, or remove stale entries with %s remove-hooks", loopgateCmd, loopgateCmd))
+	} else if !report.ClaudeHooks.Installed {
 		nextSteps = append(nextSteps, fmt.Sprintf("install Claude Code hooks with %s install-hooks", loopgateCmd))
 	}
 	if !report.Daemon.Healthy {
@@ -527,6 +544,7 @@ func operatorStatusNextSteps(report operatorStatusReport) []string {
 	}
 	if len(nextSteps) > 0 {
 		nextSteps = append(nextSteps, fmt.Sprintf("rerun %s status and %s test after the missing pieces are in place", loopgateCmd, loopgateCmd))
+		nextSteps = append(nextSteps, fmt.Sprintf("run %s report if you need deeper diagnostics from derived local state", doctorCmd))
 	}
 	return nextSteps
 }
