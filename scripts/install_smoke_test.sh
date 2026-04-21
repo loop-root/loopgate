@@ -23,10 +23,12 @@ RUN_LOOPGATE_TEST="${LOOPGATE_INSTALL_SMOKE_RUN_TEST:-0}"
 
 TMPDIR="$(mktemp -d)"
 BASE_DIR="/tmp/lg-smoke-$$"
+GOCACHE_DIR="/tmp/lg-smoke-gocache-$$"
 ORIGINAL_HOME="${HOME}"
 ORIGINAL_PATH="${PATH}"
 cleanup() {
   rm -rf "$BASE_DIR"
+  rm -rf "$GOCACHE_DIR"
   rm -rf "$TMPDIR"
 }
 trap cleanup EXIT
@@ -36,6 +38,8 @@ WORK_DIR="$BASE_DIR/work"
 HOME_DIR="$BASE_DIR/home"
 CLAUDE_DIR="$HOME_DIR/.claude"
 mkdir -p "$DIST_DIR" "$WORK_DIR" "$CLAUDE_DIR"
+
+export GOCACHE="$GOCACHE_DIR"
 
 "$ROOT_DIR/scripts/package_release.sh" -version "$VERSION" -dist-dir "$DIST_DIR"
 

@@ -51,16 +51,37 @@ The current product contract is here:
 
 ## Quick start
 
-Today the install story is still **source-first**. There is no Homebrew
-formula or `.pkg` yet, and the release-installer script is groundwork until
-published archives exist.
+There are now two practical ways to try Loopgate:
+- published macOS release install without Go
+- source checkout plus `make quickstart`
 
-Release-archive groundwork now lives in:
-- `scripts/package_release.sh` for building self-contained archives
-- `scripts/install.sh` for installing published archives without Go
+The published install path currently targets macOS release archives.
+Linux remains source-first and experimental for now.
 
-Until release archives are published, the supported path is still a source
-checkout plus `make quickstart`.
+Fastest path without a Go toolchain:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/loop-root/loopgate/main/scripts/install.sh | sh
+
+loopgate setup
+loopgate status
+loopgate test
+```
+
+The installer downloads the latest published release archive for your macOS
+architecture, installs a self-contained Loopgate root under
+`~/.local/share/loopgate/<version>`, and installs wrapper commands under
+`~/.local/bin`.
+
+If you want to pin a specific release candidate:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/loop-root/loopgate/main/scripts/install.sh | sh -s -- --version v0.2.0-rc2
+```
+
+Release packaging and install logic lives in:
+- `scripts/package_release.sh`
+- `scripts/install.sh`
 
 Requirements:
 - Go 1.25 or newer to build from source

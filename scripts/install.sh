@@ -154,6 +154,9 @@ done
 TARGET_OS="$(detect_os)"
 TARGET_ARCH="$(detect_arch)"
 if [[ "$TARGET_OS" == "linux" ]]; then
+  if [[ -z "$ARCHIVE_FILE" ]]; then
+    die "published Linux release archives are not available yet; use a source checkout or pass --archive-file/--checksums-file for a local experimental build"
+  fi
   printf 'warning: Loopgate is macOS-first today; Linux install remains experimental.\n' >&2
 fi
 

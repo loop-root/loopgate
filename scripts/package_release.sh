@@ -38,8 +38,10 @@ sha256_file() {
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${VERSION:-$(git -C "$ROOT_DIR" describe --tags --always --dirty 2>/dev/null || echo dev)}"
-TARGET_OS="${GOOS:-$(go env GOOS)}"
-TARGET_ARCH="${GOARCH:-$(go env GOARCH)}"
+HOST_OS="$(go env GOOS)"
+HOST_ARCH="$(go env GOARCH)"
+TARGET_OS="${GOOS:-$HOST_OS}"
+TARGET_ARCH="${GOARCH:-$HOST_ARCH}"
 DIST_DIR="$ROOT_DIR/dist"
 
 while [[ $# -gt 0 ]]; do
@@ -85,6 +87,22 @@ mkdir -p "$STAGE_DIR/bin" "$STAGE_DIR/claude/hooks/scripts" "$STAGE_DIR/core/pol
 build_binary() {
   local output_path="$1"
   local package_path="$2"
+  if [[ "$TARGET_OS" == "darwin" && "$HOST_OS" == "darwin" && "$TARGET_ARCH" != "$HOST_ARCH" ]]; then
+    local clang_arch
+    case "$TARGET_ARCH" in
+      amd64) clang_arch="x86_64" ;;
+      arm64) clang_arch="arm64" ;;
+      *) die "unsupported darwin target architecture for cgo cross-build: $TARGET_ARCH" ;;
+    esac
+    GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" CGO_ENABLED=1 \
+      CC="clang -arch ${clang_arch}" \
+      CXX="clang++ -arch ${clang_arch}" \
+      CGO_CFLAGS="-arch ${clang_arch}" \
+      CGO_LDFLAGS="-arch ${clang_arch}" \
+      go build -ldflags "$LDFLAGS" -o "$output_path" "$package_path"
+    return
+  fi
+
   GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" \
     go build -ldflags "$LDFLAGS" -o "$output_path" "$package_path"
 }
