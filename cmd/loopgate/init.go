@@ -23,6 +23,10 @@ const loopgateRepoRootEnv = "LOOPGATE_REPO_ROOT"
 
 const localPolicySignerKeyIDMarkerName = "local_policy_signer_key_id"
 
+const loopgateInitDefaultKeyIDPrefix = "local-operator-"
+
+const loopgateInitMaxKeyIDLength = 64
+
 type loopgateInitResult struct {
 	KeyID              string
 	SocketPath         string
@@ -232,27 +236,61 @@ func resolveLoopgateRepoRootEnv() string {
 func resolveLoopgateInitKeyID(flagValue string) (string, error) {
 	keyID := strings.TrimSpace(flagValue)
 	if keyID == "" {
-		shortHostname, err := os.Hostname()
+		hostname, err := os.Hostname()
 		if err != nil {
 			return "", fmt.Errorf("determine hostname for default key_id: %w", err)
 		}
-		shortHostname = strings.TrimSpace(shortHostname)
-		if idx := strings.Index(shortHostname, "."); idx >= 0 {
-			shortHostname = shortHostname[:idx]
-		}
-		shortHostname = strings.ToLower(shortHostname)
-		shortHostname = strings.ReplaceAll(shortHostname, "_", "-")
-		shortHostname = strings.ReplaceAll(shortHostname, " ", "-")
-		shortHostname = strings.Trim(shortHostname, "-")
-		if shortHostname == "" {
-			shortHostname = "local"
-		}
-		keyID = "local-operator-" + shortHostname
+		keyID = defaultLoopgateInitKeyID(hostname)
 	}
 	if err := identifiers.ValidateSafeIdentifier("loopgate init key_id", keyID); err != nil {
 		return "", err
 	}
 	return keyID, nil
+}
+
+func defaultLoopgateInitKeyID(hostname string) string {
+	shortHostname := strings.TrimSpace(hostname)
+	if idx := strings.Index(shortHostname, "."); idx >= 0 {
+		shortHostname = shortHostname[:idx]
+	}
+	shortHostname = strings.ToLower(shortHostname)
+
+	var normalizedHostname strings.Builder
+	lastWasHyphen := false
+	for _, hostnameRune := range shortHostname {
+		switch {
+		case hostnameRune >= 'a' && hostnameRune <= 'z':
+			normalizedHostname.WriteRune(hostnameRune)
+			lastWasHyphen = false
+		case hostnameRune >= '0' && hostnameRune <= '9':
+			normalizedHostname.WriteRune(hostnameRune)
+			lastWasHyphen = false
+		case hostnameRune == '-' || hostnameRune == '_' || hostnameRune == ' ':
+			if !lastWasHyphen {
+				normalizedHostname.WriteRune('-')
+				lastWasHyphen = true
+			}
+		default:
+			if !lastWasHyphen {
+				normalizedHostname.WriteRune('-')
+				lastWasHyphen = true
+			}
+		}
+	}
+
+	suffix := strings.Trim(normalizedHostname.String(), "-")
+	if suffix == "" {
+		suffix = "local"
+	}
+
+	maxSuffixLength := loopgateInitMaxKeyIDLength - len(loopgateInitDefaultKeyIDPrefix)
+	if len(suffix) > maxSuffixLength {
+		suffix = strings.TrimRight(suffix[:maxSuffixLength], "-")
+		if suffix == "" {
+			suffix = "local"
+		}
+	}
+	return loopgateInitDefaultKeyIDPrefix + suffix
 }
 
 func defaultOperatorPolicySigningPrivateKeyPath(keyID string) (string, error) {

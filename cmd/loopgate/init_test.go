@@ -148,6 +148,44 @@ func TestRunInit_ForceRotatesKeyMaterial(t *testing.T) {
 	}
 }
 
+func TestResolveLoopgateInitKeyID_DefaultLongHostnameFitsIdentifierLimit(t *testing.T) {
+	keyID := defaultLoopgateInitKeyID(strings.Repeat("github-actions-runner-", 8))
+
+	if len(keyID) > loopgateInitMaxKeyIDLength {
+		t.Fatalf("expected default key_id length <= %d, got %d: %q", loopgateInitMaxKeyIDLength, len(keyID), keyID)
+	}
+	if !strings.HasPrefix(keyID, loopgateInitDefaultKeyIDPrefix) {
+		t.Fatalf("expected default key_id prefix %q, got %q", loopgateInitDefaultKeyIDPrefix, keyID)
+	}
+	if strings.HasSuffix(keyID, "-") {
+		t.Fatalf("expected default key_id not to end with hyphen: %q", keyID)
+	}
+	if _, err := resolveLoopgateInitKeyID(keyID); err != nil {
+		t.Fatalf("validate generated default key_id: %v", err)
+	}
+}
+
+func TestResolveLoopgateInitKeyID_DefaultHostnameNormalization(t *testing.T) {
+	keyID := defaultLoopgateInitKeyID(" Runner_01.example.internal ")
+
+	if keyID != "local-operator-runner-01" {
+		t.Fatalf("unexpected default key_id: %q", keyID)
+	}
+	if _, err := resolveLoopgateInitKeyID(keyID); err != nil {
+		t.Fatalf("validate generated default key_id: %v", err)
+	}
+}
+
+func TestResolveLoopgateInitKeyID_ExplicitLongKeyIDStillFails(t *testing.T) {
+	_, err := resolveLoopgateInitKeyID(loopgateInitDefaultKeyIDPrefix + strings.Repeat("a", 80))
+	if err == nil {
+		t.Fatal("expected explicit overlong key_id to fail")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum length") {
+		t.Fatalf("expected maximum length error, got %v", err)
+	}
+}
+
 func TestResolveLoopgateRepoRoot_PrefersLoopgateEnvOverLegacyMorphEnv(t *testing.T) {
 	loopgateRepoRoot := filepath.Join(t.TempDir(), "loopgate-root")
 	t.Setenv(loopgateRepoRootEnv, loopgateRepoRoot)
