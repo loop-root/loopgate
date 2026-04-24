@@ -89,9 +89,10 @@ For `PreToolUse`, Loopgate returns:
 - `denial_code`: present for blocks
 - `approval_owner`: `harness` for asks
 - `approval_options`: scopes the harness may offer, starting with `once` and
-  optionally adding `session` or `persistent`
+  optionally adding `session` or `permanent`
 - `operator_override_class`: the root-policy action class, when known
 - `operator_override_max_delegation`: the root-policy ceiling for that class
+- `operator_override_max_grant_scope`: the resolved grant scope label for that class
 
 The approval ownership split is intentional:
 

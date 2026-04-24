@@ -24,13 +24,13 @@ func runOverrides(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 	switch args[0] {
 	case "list":
-		return runOverrideList(args[1:], stdout, stderr)
+		return runOverrideList(args[1:], stdout, stderr, "overrides list")
 	case "grant":
-		return runOverrideGrant(args[1:], stdout, stderr)
+		return runOverrideGrant(args[1:], stdout, stderr, "overrides grant")
 	case "grant-edit-path":
 		return runOverrideGrantEditPath(args[1:], stdout, stderr)
 	case "revoke":
-		return runOverrideRevoke(args[1:], stdout, stderr)
+		return runOverrideRevoke(args[1:], stdout, stderr, "overrides revoke")
 	default:
 		fmt.Fprintf(stderr, "ERROR: unknown overrides subcommand %q\n", args[0])
 		printUsage(stderr)
@@ -44,22 +44,23 @@ func runGrants(args []string, stdout io.Writer, stderr io.Writer) int {
 		printUsage(stderr)
 		return 2
 	}
-	switch args[0] {
+	sub := args[0]
+	switch sub {
 	case "list":
-		return runOverrideList(args[1:], stdout, stderr)
+		return runOverrideList(args[1:], stdout, stderr, "grants list")
 	case "add", "grant":
-		return runOverrideGrant(args[1:], stdout, stderr)
+		return runOverrideGrant(args[1:], stdout, stderr, "grants "+sub)
 	case "revoke", "remove":
-		return runOverrideRevoke(args[1:], stdout, stderr)
+		return runOverrideRevoke(args[1:], stdout, stderr, "grants "+sub)
 	default:
-		fmt.Fprintf(stderr, "ERROR: unknown grants subcommand %q\n", args[0])
+		fmt.Fprintf(stderr, "ERROR: unknown grants subcommand %q\n", sub)
 		printUsage(stderr)
 		return 2
 	}
 }
 
-func runOverrideList(args []string, stdout io.Writer, stderr io.Writer) int {
-	fs := flag.NewFlagSet("overrides list", flag.ContinueOnError)
+func runOverrideList(args []string, stdout io.Writer, stderr io.Writer, cmdName string) int {
+	fs := flag.NewFlagSet(cmdName, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	repoRootFlag := fs.String("repo", "", "repository root used to resolve the operator override document")
 	allFlag := fs.Bool("all", false, "include revoked operator grants")
@@ -157,14 +158,14 @@ func runOverrideGrantEditPath(args []string, stdout io.Writer, stderr io.Writer)
 	}, stdout, stderr)
 }
 
-func runOverrideGrant(args []string, stdout io.Writer, stderr io.Writer) int {
+func runOverrideGrant(args []string, stdout io.Writer, stderr io.Writer, cmdName string) int {
 	overrideClass := ""
 	parseArgs := args
 	if len(args) > 0 && !strings.HasPrefix(strings.TrimSpace(args[0]), "-") {
 		overrideClass = strings.TrimSpace(args[0])
 		parseArgs = args[1:]
 	}
-	fs := flag.NewFlagSet("overrides grant", flag.ContinueOnError)
+	fs := flag.NewFlagSet(cmdName, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	repoRootFlag := fs.String("repo", "", "repository root used to resolve the operator override document")
 	socketPathFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
@@ -177,12 +178,12 @@ func runOverrideGrant(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 	if overrideClass == "" {
 		if fs.NArg() != 1 {
-			fmt.Fprintln(stderr, "ERROR: overrides grant requires exactly one class name")
+			fmt.Fprintf(stderr, "ERROR: %s requires exactly one class name\n", cmdName)
 			return 2
 		}
 		overrideClass = strings.TrimSpace(fs.Arg(0))
 	} else if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "ERROR: overrides grant requires exactly one class name")
+		fmt.Fprintf(stderr, "ERROR: %s requires exactly one class name\n", cmdName)
 		return 2
 	}
 
@@ -299,14 +300,14 @@ func applyOverrideGrantPath(request overrideGrantPathRequest, stdout io.Writer, 
 	return 0
 }
 
-func runOverrideRevoke(args []string, stdout io.Writer, stderr io.Writer) int {
+func runOverrideRevoke(args []string, stdout io.Writer, stderr io.Writer, cmdName string) int {
 	overrideID := ""
 	parseArgs := args
 	if len(args) > 0 && !strings.HasPrefix(strings.TrimSpace(args[0]), "-") {
 		overrideID = strings.TrimSpace(args[0])
 		parseArgs = args[1:]
 	}
-	fs := flag.NewFlagSet("overrides revoke", flag.ContinueOnError)
+	fs := flag.NewFlagSet(cmdName, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	repoRootFlag := fs.String("repo", "", "repository root used to resolve the operator override document")
 	socketPathFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
@@ -318,12 +319,12 @@ func runOverrideRevoke(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 	if overrideID == "" {
 		if fs.NArg() != 1 {
-			fmt.Fprintln(stderr, "ERROR: overrides revoke requires exactly one override id")
+			fmt.Fprintf(stderr, "ERROR: %s requires exactly one grant id\n", cmdName)
 			return 2
 		}
 		overrideID = strings.TrimSpace(fs.Arg(0))
 	} else if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "ERROR: overrides revoke requires exactly one override id")
+		fmt.Fprintf(stderr, "ERROR: %s requires exactly one grant id\n", cmdName)
 		return 2
 	}
 

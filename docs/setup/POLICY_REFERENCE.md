@@ -1,6 +1,6 @@
 # Policy reference
 
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-24
 
 This page is the operator-facing reference for `core/policy/policy.yaml`.
 
