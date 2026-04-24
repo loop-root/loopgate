@@ -18,7 +18,7 @@ Use this flow when the human operator wants:
 - Claude Code governed through Loopgate hooks
 - a signed root policy
 - local audit and setup diagnostics
-- optional persistent operator grants that stay inside the root policy ceiling
+- optional permanent operator grants that stay inside the root policy ceiling
 
 This flow does not make the assisting setup agent governed. For example, Codex
 may help install Loopgate, while Claude Code becomes the governed harness after
@@ -35,9 +35,9 @@ The assisting agent must follow these rules:
   authority source.
 - Do not edit `core/policy/policy.yaml` directly unless the human has asked for
   a policy edit and has reviewed the resulting diff.
-- Do not create persistent operator grants without showing a dry-run preview.
+- Do not create permanent operator grants without showing a dry-run preview.
 - Do not install Claude hooks, install a LaunchAgent, re-sign policy, or write
-  persistent operator overrides without explicit human confirmation.
+  permanent operator grants without explicit human confirmation.
 - Do not tell the human Claude Code is governed until `loopgate status`,
   `loopgate test`, and `loopgate-doctor setup-check --json` have been run.
 
@@ -53,7 +53,7 @@ The assisting agent must ask before these actions:
 - creating or rotating policy signing keys
 - re-signing root policy
 - hot-applying policy
-- creating or revoking persistent operator grants
+- creating or revoking permanent operator grants
 - purging runtime state or uninstalling
 
 Read-only inspection commands may be run without a separate confirmation when
@@ -67,7 +67,7 @@ loopgate explain --tool Grep --path .
 loopgate explain --tool Write --path README.md
 loopgate-policy-admin validate
 loopgate-policy-admin explain
-loopgate-policy-admin overrides list
+loopgate-policy-admin grants list
 ```
 
 ## Conversation flow
@@ -78,7 +78,7 @@ The assisting agent should begin by asking:
 2. Is Claude Code the only harness you want governed right now?
 3. Which policy profile do you want: `balanced`, `strict`, or `read-only`?
 4. Should Loopgate run in the background with a macOS LaunchAgent?
-5. Are there repo paths that should never be delegated to persistent grants?
+5. Are there repo paths that should never be delegated to permanent grants?
 
 Recommended first answer for most local developers:
 
@@ -86,7 +86,7 @@ Recommended first answer for most local developers:
 - Claude Code only
 - `balanced`
 - LaunchAgent enabled
-- no persistent grants until after the first setup check
+- no permanent grants until after the first setup check
 
 ## Setup plan
 
@@ -142,27 +142,29 @@ Use `read-only` when evaluating Loopgate without allowing code changes:
 
 The assisting agent may recommend a profile, but the human chooses it.
 
-## Persistent grants
+## Permanent grants
 
-Persistent operator grants are signed override documents. They are useful when
+Permanent operator grants are signed operator policy records. They are useful when
 the human wants to reduce repeated prompts for a bounded class and path.
 
 The assisting agent must always preview first:
 
 ```bash
-loopgate-policy-admin overrides grant repo_edit_safe -path docs -dry-run
+loopgate-policy-admin grants add repo_edit_safe -path docs -dry-run
 ```
 
 Only after explicit human confirmation may it write the grant:
 
 ```bash
-loopgate-policy-admin overrides grant repo_edit_safe -path docs
-loopgate-policy-admin overrides list
+loopgate-policy-admin grants add repo_edit_safe -path docs
+loopgate-policy-admin grants list
 loopgate-doctor setup-check --json
 ```
 
-Persistent grants are refused unless the signed root policy gives that class
-`max_delegation: persistent`.
+Permanent grants are refused unless the signed root policy gives that class
+`max_delegation: persistent`. The policy value remains `persistent` for
+backward compatibility; operator-facing output calls the same scope
+`permanent`.
 
 Supported path-scoped classes:
 

@@ -87,6 +87,7 @@ func ExplainClaudeCodeHookDecision(repoRoot string, req controlapipkg.HookPreVal
 	if hasOperatorOverrideClass {
 		response.OperatorOverrideClass = operatorOverrideClass
 		response.OperatorOverrideMaxDelegation = operatorOverrideMaxDelegation
+		response.OperatorOverrideMaxGrantScope = hookGrantScopeLabel(operatorOverrideMaxDelegation)
 	}
 	return response, nil
 }

@@ -398,6 +398,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	if hasOperatorOverrideClass {
 		hookAuditData["operator_override_class"] = operatorOverrideClass
 		hookAuditData["operator_override_max_delegation"] = operatorOverrideMaxDelegation
+		hookAuditData["operator_override_max_grant_scope"] = hookGrantScopeLabel(operatorOverrideMaxDelegation)
 	}
 	if decisionMetadata.approvalOwner != "" {
 		hookAuditData["approval_owner"] = decisionMetadata.approvalOwner
@@ -421,6 +422,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		if hasOperatorOverrideClass {
 			response.OperatorOverrideClass = operatorOverrideClass
 			response.OperatorOverrideMaxDelegation = operatorOverrideMaxDelegation
+			response.OperatorOverrideMaxGrantScope = hookGrantScopeLabel(operatorOverrideMaxDelegation)
 		}
 		server.writeJSON(w, http.StatusOK, response)
 		return
@@ -437,6 +439,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		if hasOperatorOverrideClass {
 			response.OperatorOverrideClass = operatorOverrideClass
 			response.OperatorOverrideMaxDelegation = operatorOverrideMaxDelegation
+			response.OperatorOverrideMaxGrantScope = hookGrantScopeLabel(operatorOverrideMaxDelegation)
 		}
 		server.writeJSON(w, http.StatusOK, response)
 		return
@@ -451,6 +454,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	if hasOperatorOverrideClass {
 		response.OperatorOverrideClass = operatorOverrideClass
 		response.OperatorOverrideMaxDelegation = operatorOverrideMaxDelegation
+		response.OperatorOverrideMaxGrantScope = hookGrantScopeLabel(operatorOverrideMaxDelegation)
 	}
 	server.writeJSON(w, http.StatusOK, response)
 }

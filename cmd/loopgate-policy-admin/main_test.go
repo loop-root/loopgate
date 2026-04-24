@@ -204,6 +204,9 @@ func TestRunExplain_PrintsToolExplanation(t *testing.T) {
 	if !strings.Contains(output, "operator_override.max_delegation: persistent") {
 		t.Fatalf("expected operator override delegation in explanation, got %q", output)
 	}
+	if !strings.Contains(output, "operator_override.maximum_grant_scope: permanent") {
+		t.Fatalf("expected operator grant scope in explanation, got %q", output)
+	}
 	if !strings.Contains(output, "tool_policy.allowed_command_prefixes: ls, pwd, find, grep, cat, sed -n, head, tail, wc, sort, git status, git diff, go test, rg") {
 		t.Fatalf("expected command prefixes in explanation, got %q", output)
 	}
@@ -548,11 +551,14 @@ func TestRunOverridesGrantEditPath_WritesAndReloadsSignedOverride(t *testing.T) 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, grantStdout.String(), grantStderr.String())
 	}
-	if !strings.Contains(grantStdout.String(), "operator override grant applied") {
+	if !strings.Contains(grantStdout.String(), "operator grant applied") {
 		t.Fatalf("expected grant success output, got %q", grantStdout.String())
 	}
 	if !strings.Contains(grantStdout.String(), "grant_class: repo_edit_safe") {
 		t.Fatalf("expected repo_edit_safe grant output, got %q", grantStdout.String())
+	}
+	if !strings.Contains(grantStdout.String(), "grant_scope: permanent") {
+		t.Fatalf("expected permanent grant scope output, got %q", grantStdout.String())
 	}
 	if !strings.Contains(grantStdout.String(), "path_prefix: docs") {
 		t.Fatalf("expected docs path prefix output, got %q", grantStdout.String())
@@ -587,14 +593,31 @@ func TestRunOverridesGrantEditPath_WritesAndReloadsSignedOverride(t *testing.T) 
 		t.Fatalf("expected running server override runtime to expose one active grant, got %#v", runningOverrideDocument.Grants)
 	}
 
+	var dryRunRevokeStdout bytes.Buffer
+	var dryRunRevokeStderr bytes.Buffer
+	exitCode = run([]string{"grants", "revoke", activeGrants[0].ID, "-repo", repoRoot, "-socket", socketPath, "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID(), "-dry-run"}, &dryRunRevokeStdout, &dryRunRevokeStderr)
+	if exitCode != 0 {
+		t.Fatalf("expected dry-run revoke exit code 0, got %d stdout=%s stderr=%s", exitCode, dryRunRevokeStdout.String(), dryRunRevokeStderr.String())
+	}
+	if !strings.Contains(dryRunRevokeStdout.String(), "operator grant revoke preview") || !strings.Contains(dryRunRevokeStdout.String(), "would_write: false") {
+		t.Fatalf("expected dry-run revoke output, got %q", dryRunRevokeStdout.String())
+	}
+	afterDryRunRevoke, err := config.LoadOperatorOverrideDocumentWithHash(repoRoot)
+	if err != nil {
+		t.Fatalf("LoadOperatorOverrideDocumentWithHash after dry-run revoke: %v", err)
+	}
+	if active := config.ActiveOperatorOverrideGrants(afterDryRunRevoke.Document, config.OperatorOverrideClassRepoEditSafe); len(active) != 1 {
+		t.Fatalf("expected dry-run revoke not to remove active grant, got %#v", afterDryRunRevoke.Document.Grants)
+	}
+
 	time.Sleep(600 * time.Millisecond)
 	var revokeStdout bytes.Buffer
 	var revokeStderr bytes.Buffer
-	exitCode = run([]string{"overrides", "revoke", activeGrants[0].ID, "-repo", repoRoot, "-socket", socketPath, "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID()}, &revokeStdout, &revokeStderr)
+	exitCode = run([]string{"grants", "revoke", activeGrants[0].ID, "-repo", repoRoot, "-socket", socketPath, "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID()}, &revokeStdout, &revokeStderr)
 	if exitCode != 0 {
 		t.Fatalf("expected revoke exit code 0, got %d stdout=%s stderr=%s", exitCode, revokeStdout.String(), revokeStderr.String())
 	}
-	if !strings.Contains(revokeStdout.String(), "revoked") {
+	if !strings.Contains(revokeStdout.String(), "operator grant") || !strings.Contains(revokeStdout.String(), "revoked") {
 		t.Fatalf("expected revoke output, got %q", revokeStdout.String())
 	}
 
@@ -622,7 +645,7 @@ func TestRunOverridesGrantEditPath_RejectsNonPersistentParentDelegation(t *testi
 	if exitCode != 1 {
 		t.Fatalf("expected exit code 1, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "repo_edit_safe max_delegation=session does not allow persistent operator override grants") {
+	if !strings.Contains(stderr.String(), "repo_edit_safe max_delegation=session does not allow permanent operator grants") {
 		t.Fatalf("expected delegation rejection error, got %q", stderr.String())
 	}
 }
@@ -643,16 +666,19 @@ func TestRunOverridesGrant_WritesGenericPathScopedGrant(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	exitCode := run([]string{"overrides", "grant", config.OperatorOverrideClassRepoWriteSafe, "-repo", repoRoot, "-socket", socketPath, "-path", "docs", "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID()}, &stdout, &stderr)
+	exitCode := run([]string{"grants", "add", config.OperatorOverrideClassRepoWriteSafe, "-repo", repoRoot, "-socket", socketPath, "-path", "docs", "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID()}, &stdout, &stderr)
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "operator override grant applied") {
+	if !strings.Contains(output, "operator grant applied") {
 		t.Fatalf("expected grant success output, got %q", output)
 	}
 	if !strings.Contains(output, "grant_class: "+config.OperatorOverrideClassRepoWriteSafe) {
 		t.Fatalf("expected repo_write_safe output, got %q", output)
+	}
+	if !strings.Contains(output, "grant_scope: permanent") {
+		t.Fatalf("expected permanent grant scope output, got %q", output)
 	}
 	if !strings.Contains(output, "path_prefix: docs") {
 		t.Fatalf("expected docs path output, got %q", output)
@@ -686,7 +712,7 @@ func TestRunOverridesGrant_DryRunDoesNotWriteOverrideDocument(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "operator override grant preview") || !strings.Contains(output, "would_write: false") {
+	if !strings.Contains(output, "operator grant preview") || !strings.Contains(output, "grant_scope: permanent") || !strings.Contains(output, "would_write: false") {
 		t.Fatalf("expected dry-run preview output, got %q", output)
 	}
 	loadResult, err := config.LoadOperatorOverrideDocumentWithHash(repoRoot)

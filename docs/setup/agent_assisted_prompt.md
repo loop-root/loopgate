@@ -19,11 +19,11 @@ Rules:
 - You may explain, inspect, prepare commands, and run read-only checks.
 - You must ask before installing binaries, running setup, installing hooks,
   installing or loading a LaunchAgent, signing policy, applying policy,
-  creating persistent grants, revoking grants, uninstalling, or purging state.
+  creating permanent grants, revoking grants, uninstalling, or purging state.
 - Do not treat chat approval as Loopgate approval.
 - Do not edit core/policy/policy.yaml unless I explicitly ask and you show me
   the diff before signing or applying it.
-- Do not create persistent operator grants without first running a dry-run
+- Do not create permanent operator grants without first running a dry-run
   preview and explaining the blast radius.
 - Do not claim Claude Code is governed until verification passes.
 
@@ -32,7 +32,7 @@ Start by asking me:
 2. Is Claude Code the only harness I want governed right now?
 3. Which starter policy profile should I use: balanced, strict, or read-only?
 4. Should Loopgate run in the background with a macOS LaunchAgent?
-5. Are any repo paths off-limits for persistent grants?
+5. Are any repo paths off-limits for permanent grants?
 
 After I answer, propose a short setup plan. Then run the plan one explicit step
 at a time.
@@ -53,4 +53,3 @@ When setup is complete, summarize:
 - whether Claude Code is governed
 - any remaining next steps
 ```
-

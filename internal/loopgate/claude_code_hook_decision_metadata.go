@@ -47,7 +47,18 @@ func hookApprovalOptions(maxDelegation string) []string {
 	case config.OperatorOverrideDelegationSession:
 		options = append(options, controlapipkg.HookApprovalOptionSession)
 	case config.OperatorOverrideDelegationPersistent:
-		options = append(options, controlapipkg.HookApprovalOptionPersistent)
+		options = append(options, controlapipkg.HookApprovalOptionPermanent)
 	}
 	return options
+}
+
+func hookGrantScopeLabel(maxDelegation string) string {
+	switch strings.TrimSpace(maxDelegation) {
+	case config.OperatorOverrideDelegationPersistent:
+		return "permanent"
+	case config.OperatorOverrideDelegationSession:
+		return "session"
+	default:
+		return "none"
+	}
 }

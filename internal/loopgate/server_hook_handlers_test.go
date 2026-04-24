@@ -321,6 +321,9 @@ func TestHookPreValidate_WriteApprovalDelegatesToHarnessWithoutLoopgateApprovalR
 	if response.OperatorOverrideMaxDelegation != config.OperatorOverrideDelegationPersistent {
 		t.Fatalf("expected persistent root delegation ceiling, got %#v", response)
 	}
+	if response.OperatorOverrideMaxGrantScope != "permanent" {
+		t.Fatalf("expected permanent max grant scope, got %#v", response)
+	}
 	if claudeHookApprovalStateFileExists(t, repoRoot, "session-hook") {
 		t.Fatalf("expected harness-owned approval not to create Loopgate approval state")
 	}
@@ -336,6 +339,9 @@ func TestHookPreValidate_WriteApprovalDelegatesToHarnessWithoutLoopgateApprovalR
 		t.Fatalf("expected harness approval owner in audit, got %#v", lastAuditEvent.Data["approval_owner"])
 	}
 	requireHookApprovalOptions(t, auditStringSlice(lastAuditEvent.Data["approval_options"]), controlapipkg.HookApprovalOptionOnce, controlapipkg.HookApprovalOptionPersistent)
+	if maxGrantScope, _ := lastAuditEvent.Data["operator_override_max_grant_scope"].(string); maxGrantScope != "permanent" {
+		t.Fatalf("expected permanent max grant scope in audit, got %#v", lastAuditEvent.Data["operator_override_max_grant_scope"])
+	}
 }
 
 func TestHookPreValidate_AllowsWriteWithPersistentOperatorOverrideWithinRoot(t *testing.T) {
@@ -530,6 +536,9 @@ func TestHookPreValidate_AllowsEditWithDelegatedOperatorOverride(t *testing.T) {
 	}
 	if firstResponse.OperatorOverrideMaxDelegation != config.OperatorOverrideDelegationPersistent {
 		t.Fatalf("expected persistent operator override delegation, got %#v", firstResponse)
+	}
+	if firstResponse.OperatorOverrideMaxGrantScope != "permanent" {
+		t.Fatalf("expected permanent operator grant scope, got %#v", firstResponse)
 	}
 
 	writeSignedTestOperatorOverrideDocument(t, repoRoot, policySigner, config.OperatorOverrideDocument{

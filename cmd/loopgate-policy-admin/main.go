@@ -48,6 +48,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runApprovals(args[1:], stdout, stderr)
 	case "overrides":
 		return runOverrides(args[1:], stdout, stderr)
+	case "grants":
+		return runGrants(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stderr)
 		return 0
@@ -68,10 +70,13 @@ func printUsage(w io.Writer) {
   loopgate-policy-admin approvals list  [-repo DIR] [-socket PATH]
   loopgate-policy-admin approvals approve <id> [-repo DIR] [-socket PATH] [-reason TEXT]
   loopgate-policy-admin approvals deny <id>    [-repo DIR] [-socket PATH] [-reason TEXT]
+  loopgate-policy-admin grants list     [-repo DIR]
+  loopgate-policy-admin grants add <class> -path PATH [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID] [-dry-run]
+  loopgate-policy-admin grants revoke <id> [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID] [-dry-run]
   loopgate-policy-admin overrides list  [-repo DIR]
   loopgate-policy-admin overrides grant <class> -path PATH [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID] [-dry-run]
   loopgate-policy-admin overrides grant-edit-path -path PATH [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID]
-  loopgate-policy-admin overrides revoke <id> [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID]
+  loopgate-policy-admin overrides revoke <id> [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID] [-dry-run]
 
 Defaults:
   -repo defaults to the current working directory.
@@ -591,6 +596,7 @@ func printClaudeCodeToolExplanation(w io.Writer, policy config.Policy, toolName 
 	if overrideClass, maxDelegation, hasOverrideClass := policy.ClaudeCodeToolOperatorOverride(toolName); hasOverrideClass {
 		fmt.Fprintf(w, "operator_override.class: %s\n", overrideClass)
 		fmt.Fprintf(w, "operator_override.max_delegation: %s\n", maxDelegation)
+		fmt.Fprintf(w, "operator_override.maximum_grant_scope: %s\n", operatorGrantScopeLabel(maxDelegation))
 		fmt.Fprintf(w, "operator_override.effect: %s\n", describeOperatorOverrideDelegationEffect(maxDelegation))
 	}
 	if !configured {
@@ -689,11 +695,22 @@ func describeClaudeCodeToolPolicyEffect(toolPolicy config.ClaudeCodeToolPolicy) 
 func describeOperatorOverrideDelegationEffect(maxDelegation string) string {
 	switch strings.TrimSpace(maxDelegation) {
 	case config.OperatorOverrideDelegationPersistent:
-		return "parent policy allows persistent operator-created exceptions for this action class"
+		return "parent policy allows permanent operator grants for this action class"
 	case config.OperatorOverrideDelegationSession:
-		return "parent policy allows session-scoped operator-created exceptions for this action class"
+		return "parent policy allows session operator grants for this action class"
 	default:
-		return "parent policy does not delegate operator-created exceptions for this action class"
+		return "parent policy does not allow operator grants for this action class"
+	}
+}
+
+func operatorGrantScopeLabel(maxDelegation string) string {
+	switch strings.TrimSpace(maxDelegation) {
+	case config.OperatorOverrideDelegationPersistent:
+		return "permanent"
+	case config.OperatorOverrideDelegationSession:
+		return "session"
+	default:
+		return "none"
 	}
 }
 

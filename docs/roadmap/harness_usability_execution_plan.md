@@ -39,7 +39,7 @@ Deliverables:
 - `approval_owner`, with initial value `harness` for `ask` decisions
 - `operator_override_class`
 - `operator_override_max_delegation`
-- explicit approval option metadata for once vs persistent delegation
+- explicit approval option metadata for one-time, session, and permanent grant scopes
 - stable reason codes for common allow, ask, and block outcomes
 - tests proving Claude Code still works through the generic contract
 
@@ -120,20 +120,22 @@ Deliverables:
 
 - `loopgate policy show`
 - `loopgate policy explain <tool-or-class>`
-- `loopgate-policy-admin overrides grant <class> -path <path> [-dry-run]`
-- `loopgate-policy-admin overrides revoke <grant-id>`
+- `loopgate-policy-admin grants add <class> -path <path> [-dry-run]`
+- `loopgate-policy-admin grants revoke <grant-id> [-dry-run]`
 - preview-before-write behavior for policy and operator override mutations
 
 Initial implementation status:
 
-- `loopgate-policy-admin overrides grant <class> -path <path>` supports
-  persistent path-scoped grants for `repo_read_search`, `repo_edit_safe`,
+- `loopgate-policy-admin grants add <class> -path <path>` supports
+  permanent path-scoped grants for `repo_read_search`, `repo_edit_safe`,
   `repo_write_safe`, and `repo_bash_safe`
-- persistent grants are refused unless the signed root policy gives that class
+- permanent grants are refused unless the signed root policy gives that class
   `max_delegation: persistent`
 - `-dry-run` previews the grant without writing or reloading operator overrides
-- existing `grant-edit-path` remains as a compatibility alias for
-  `repo_edit_safe`
+- `loopgate-policy-admin grants revoke <grant-id> -dry-run` previews revocation
+  without writing or reloading operator overrides
+- `overrides grant`, `overrides revoke`, and `grant-edit-path` remain
+  compatibility aliases; `grant-edit-path` maps to `repo_edit_safe`
 
 Tests:
 
@@ -151,7 +153,7 @@ Deliverables:
 - canonical agent-assisted setup contract
 - copy-paste prompt for Codex, Claude, Pi, or another setup assistant
 - explicit human-confirmation boundaries for signing, hook install, LaunchAgent
-  install, hot apply, and persistent grants
+  install, hot apply, and permanent grants
 - verification sequence that proves Claude Code is actually governed
 
 Initial implementation status:

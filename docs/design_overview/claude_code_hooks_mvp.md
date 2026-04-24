@@ -77,7 +77,7 @@ The hook must not:
 - treat prompt text as authority
 - bypass Loopgate when Loopgate is required for governance
 - approve permanently unless Loopgate's root policy metadata says the action
-  class may be delegated persistently
+  class may receive permanent grants
 
 ### 4.2 Hook decision contract
 

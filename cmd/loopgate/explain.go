@@ -137,5 +137,21 @@ func printExplainResponse(stdout io.Writer, repoRoot string, cwd string, toolNam
 	}
 	if response.OperatorOverrideMaxDelegation != "" {
 		fmt.Fprintf(stdout, "operator_override.max_delegation: %s\n", response.OperatorOverrideMaxDelegation)
+		maxGrantScope := response.OperatorOverrideMaxGrantScope
+		if maxGrantScope == "" {
+			maxGrantScope = hookMaxGrantScopeLabel(response.OperatorOverrideMaxDelegation)
+		}
+		fmt.Fprintf(stdout, "operator_override.maximum_grant_scope: %s\n", maxGrantScope)
+	}
+}
+
+func hookMaxGrantScopeLabel(maxDelegation string) string {
+	switch strings.TrimSpace(maxDelegation) {
+	case "persistent":
+		return "permanent"
+	case "session":
+		return "session"
+	default:
+		return "none"
 	}
 }

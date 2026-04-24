@@ -187,9 +187,9 @@ Current v0.2 behavior:
 
 - this block does **not** widen current tool access by itself
 - absent or unconfigured classes default fail-closed to `none`
-- persistent operator override objects must be explicitly created, validated,
+- permanent operator grants must be explicitly created, validated,
   signed, and hot-applied before they can affect the effective policy
-- the current CLI supports persistent path-scoped grants only when the parent
+- the current CLI supports permanent path-scoped grants only when the parent
   class has `max_delegation: persistent`
 - session-scoped approvals are harness-owned; they are not written into the
   durable operator override document
@@ -218,14 +218,16 @@ Semantics:
 - `session`
   - the parent policy may allow future session-scoped operator exceptions for this class
 - `persistent`
-  - the parent policy may allow future persistent operator exceptions for this class
+  - the parent policy may allow future permanent operator grants for this class
+  - `persistent` is the serialized policy value; operator-facing CLI output
+    calls this grant scope `permanent`
 
-Persistent path-scoped grant command:
+Permanent path-scoped grant command:
 
 ```bash
-./bin/loopgate-policy-admin overrides grant repo_edit_safe -path docs -dry-run
-./bin/loopgate-policy-admin overrides grant repo_edit_safe -path docs
-./bin/loopgate-policy-admin overrides revoke <grant-id>
+./bin/loopgate-policy-admin grants add repo_edit_safe -path docs -dry-run
+./bin/loopgate-policy-admin grants add repo_edit_safe -path docs
+./bin/loopgate-policy-admin grants revoke <grant-id>
 ```
 
 Supported path-scoped classes are `repo_read_search`, `repo_edit_safe`,
@@ -276,7 +278,7 @@ Available starter profiles:
   - Claude `Read`, `Glob`, `Grep`, `Edit`, and `MultiEdit` are allowed inside the repo root
   - Claude `Write` and allowed Bash commands require approval
   - HTTP stays disabled
-  - `repo_edit_safe` can be delegated persistently; `repo_write_safe` and `repo_bash_safe` are session-only
+  - `repo_edit_safe` can receive permanent grants; `repo_write_safe` and `repo_bash_safe` are session-only
 - `read-only`
   - lowest-friction evaluation profile
   - Claude `Read`, `Glob`, and `Grep` are allowed inside the repo root

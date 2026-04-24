@@ -25,7 +25,8 @@ const (
 	HookApprovalOwnerHarness     = "harness"
 	HookApprovalOptionOnce       = "once"
 	HookApprovalOptionSession    = "session"
-	HookApprovalOptionPersistent = "persistent"
+	HookApprovalOptionPermanent  = "permanent"
+	HookApprovalOptionPersistent = HookApprovalOptionPermanent
 )
 
 const (
@@ -533,4 +534,7 @@ type HookPreValidateResponse struct {
 	// allow future operator-created exceptions for this action class. It is
 	// metadata only and does not itself grant permission.
 	OperatorOverrideMaxDelegation string `json:"operator_override_max_delegation,omitempty"`
+	// OperatorOverrideMaxGrantScope is the operator-facing label for the same
+	// policy ceiling exposed by OperatorOverrideMaxDelegation.
+	OperatorOverrideMaxGrantScope string `json:"operator_override_max_grant_scope,omitempty"`
 }

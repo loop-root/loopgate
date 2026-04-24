@@ -48,6 +48,7 @@ func TestRunExplain_WriteShowsHarnessApprovalOptions(t *testing.T) {
 	requireExplainOutput(t, output, "approval_options: once,session")
 	requireExplainOutput(t, output, "operator_override.class: repo_write_safe")
 	requireExplainOutput(t, output, "operator_override.max_delegation: session")
+	requireExplainOutput(t, output, "operator_override.maximum_grant_scope: session")
 }
 
 func TestRunExplain_BashShowsHarnessApprovalOptions(t *testing.T) {

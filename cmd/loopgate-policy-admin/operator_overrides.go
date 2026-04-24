@@ -38,6 +38,26 @@ func runOverrides(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 }
 
+func runGrants(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) < 1 {
+		fmt.Fprintln(stderr, "ERROR: grants subcommand is required")
+		printUsage(stderr)
+		return 2
+	}
+	switch args[0] {
+	case "list":
+		return runOverrideList(args[1:], stdout, stderr)
+	case "add", "grant":
+		return runOverrideGrant(args[1:], stdout, stderr)
+	case "revoke", "remove":
+		return runOverrideRevoke(args[1:], stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "ERROR: unknown grants subcommand %q\n", args[0])
+		printUsage(stderr)
+		return 2
+	}
+}
+
 func runOverrideList(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("overrides list", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -88,6 +108,7 @@ func runOverrideList(args []string, stdout io.Writer, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "grant.id: %s\n", grant.ID)
 		fmt.Fprintf(stdout, "grant.class: %s\n", grant.Class)
+		fmt.Fprintln(stdout, "grant.scope: permanent")
 		fmt.Fprintf(stdout, "grant.path_prefixes: %s\n", strings.Join(grant.PathPrefixes, ", "))
 		fmt.Fprintf(stdout, "grant.created_at_utc: %s\n", grant.CreatedAtUTC)
 	}
@@ -187,7 +208,7 @@ func applyOverrideGrantPath(request overrideGrantPathRequest, stdout io.Writer, 
 		return 1
 	}
 	if got := loadedPolicy.Policy.OperatorOverrideMaxDelegation(overrideClass); got != config.OperatorOverrideDelegationPersistent {
-		fmt.Fprintf(stderr, "ERROR: parent policy %s max_delegation=%s does not allow persistent operator override grants\n", overrideClass, got)
+		fmt.Fprintf(stderr, "ERROR: parent policy %s max_delegation=%s does not allow permanent operator grants\n", overrideClass, got)
 		return 1
 	}
 
@@ -203,7 +224,7 @@ func applyOverrideGrantPath(request overrideGrantPathRequest, stdout io.Writer, 
 	}
 	for _, grant := range config.ActiveOperatorOverrideGrants(loadResult.Document, overrideClass) {
 		if len(grant.PathPrefixes) == 1 && grant.PathPrefixes[0] == normalizedPath {
-			fmt.Fprintf(stdout, "operator override already present id=%s path=%s\n", grant.ID, normalizedPath)
+			fmt.Fprintf(stdout, "operator grant already present id=%s path=%s scope=permanent\n", grant.ID, normalizedPath)
 			return 0
 		}
 	}
@@ -214,8 +235,9 @@ func applyOverrideGrantPath(request overrideGrantPathRequest, stdout io.Writer, 
 		return 1
 	}
 	if request.DryRun {
-		fmt.Fprintln(stdout, "operator override grant preview")
+		fmt.Fprintln(stdout, "operator grant preview")
 		fmt.Fprintf(stdout, "grant_class: %s\n", overrideClass)
+		fmt.Fprintln(stdout, "grant_scope: permanent")
 		fmt.Fprintf(stdout, "path_prefix: %s\n", normalizedPath)
 		fmt.Fprintf(stdout, "key_id: %s\n", keyID)
 		fmt.Fprintln(stdout, "would_write: false")
@@ -252,9 +274,10 @@ func applyOverrideGrantPath(request overrideGrantPathRequest, stdout io.Writer, 
 		return 1
 	}
 
-	fmt.Fprintln(stdout, "operator override grant applied")
+	fmt.Fprintln(stdout, "operator grant applied")
 	fmt.Fprintf(stdout, "grant_id: %s\n", grantID)
 	fmt.Fprintf(stdout, "grant_class: %s\n", overrideClass)
+	fmt.Fprintln(stdout, "grant_scope: permanent")
 	fmt.Fprintf(stdout, "path_prefix: %s\n", normalizedPath)
 	return 0
 }
@@ -272,6 +295,7 @@ func runOverrideRevoke(args []string, stdout io.Writer, stderr io.Writer) int {
 	socketPathFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
 	privateKeyPathFlag := fs.String("private-key-file", "", "path to a PKCS#8 PEM-encoded Ed25519 private key")
 	keyIDFlag := fs.String("key-id", "", "trusted signing key identifier (defaults to the current signed policy key_id)")
+	dryRunFlag := fs.Bool("dry-run", false, "preview the revocation without writing or reloading operator grants")
 	if err := fs.Parse(parseArgs); err != nil {
 		return 2
 	}
@@ -309,15 +333,22 @@ func runOverrideRevoke(args []string, stdout io.Writer, stderr io.Writer) int {
 		}
 		found = true
 		if nextDocument.Grants[index].State == "revoked" {
-			fmt.Fprintf(stdout, "operator override %s already revoked\n", overrideID)
+			fmt.Fprintf(stdout, "operator grant %s already revoked\n", overrideID)
 			return 0
 		}
 		nextDocument.Grants[index].State = "revoked"
 		nextDocument.Grants[index].RevokedAtUTC = time.Now().UTC().Format(time.RFC3339)
 	}
 	if !found {
-		fmt.Fprintf(stderr, "ERROR: operator override %q not found\n", overrideID)
+		fmt.Fprintf(stderr, "ERROR: operator grant %q not found\n", overrideID)
 		return 1
+	}
+
+	if *dryRunFlag {
+		fmt.Fprintln(stdout, "operator grant revoke preview")
+		fmt.Fprintf(stdout, "grant_id: %s\n", overrideID)
+		fmt.Fprintln(stdout, "would_write: false")
+		return 0
 	}
 
 	keyID, err := resolveOperatorOverrideKeyID(baseRoot, *keyIDFlag)
@@ -340,7 +371,7 @@ func runOverrideRevoke(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "operator override %s revoked\n", overrideID)
+	fmt.Fprintf(stdout, "operator grant %s revoked\n", overrideID)
 	return 0
 }
 
