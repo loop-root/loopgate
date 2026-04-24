@@ -370,9 +370,11 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	default:
 		decision = "block"
 	}
+	decisionMetadata := buildHookDecisionMetadata(decision, result, operatorOverrideMaxDelegation)
 
 	hookAuditData := mergeHookAuditProjection(map[string]interface{}{
 		"decision":                  decision,
+		"reason_code":               decisionMetadata.reasonCode,
 		"hook_event_name":           hookEventName,
 		"hook_surface_class":        hookSurfaceClass,
 		"hook_handling_mode":        hookHandlingMode,
@@ -397,6 +399,12 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		hookAuditData["operator_override_class"] = operatorOverrideClass
 		hookAuditData["operator_override_max_delegation"] = operatorOverrideMaxDelegation
 	}
+	if decisionMetadata.approvalOwner != "" {
+		hookAuditData["approval_owner"] = decisionMetadata.approvalOwner
+	}
+	if len(decisionMetadata.approvalOptions) > 0 {
+		hookAuditData["approval_options"] = decisionMetadata.approvalOptions
+	}
 	if decision == "block" && strings.TrimSpace(denialCode) != "" {
 		hookAuditData["denial_code"] = denialCode
 	}
@@ -406,7 +414,10 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	}
 
 	if decision == "allow" {
-		response := controlapipkg.HookPreValidateResponse{Decision: "allow"}
+		response := controlapipkg.HookPreValidateResponse{
+			Decision:   "allow",
+			ReasonCode: decisionMetadata.reasonCode,
+		}
 		if hasOperatorOverrideClass {
 			response.OperatorOverrideClass = operatorOverrideClass
 			response.OperatorOverrideMaxDelegation = operatorOverrideMaxDelegation
@@ -418,7 +429,10 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 		response := controlapipkg.HookPreValidateResponse{
 			Decision:          "ask",
 			Reason:            result.Reason,
+			ReasonCode:        decisionMetadata.reasonCode,
 			ApprovalRequestID: hookApprovalRequestID,
+			ApprovalOwner:     decisionMetadata.approvalOwner,
+			ApprovalOptions:   decisionMetadata.approvalOptions,
 		}
 		if hasOperatorOverrideClass {
 			response.OperatorOverrideClass = operatorOverrideClass
@@ -431,6 +445,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	response := controlapipkg.HookPreValidateResponse{
 		Decision:   "block",
 		Reason:     result.Reason,
+		ReasonCode: decisionMetadata.reasonCode,
 		DenialCode: denialCode,
 	}
 	if hasOperatorOverrideClass {

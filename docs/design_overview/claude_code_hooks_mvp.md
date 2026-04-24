@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-12
+**Last updated:** 2026-04-24
 
 # Claude Code Hooks MVP
 
@@ -16,8 +16,9 @@ That means:
 - Claude Code is the operator-facing shell
 - Loopgate is the sole authority for governance decisions
 - project-local `.claude/` configuration is part of the active product surface
-- Loopgate owns the governed path for hook validation, approvals, policy, and
+- Loopgate owns hook validation, root policy evaluation, hard denials, and
   audit
+- Claude Code owns the operator approval prompt for hook `ask` decisions
 
 ## 2. Why this is the conservative path
 
@@ -68,14 +69,38 @@ The hook may:
 - inspect the pending tool call
 - ask Loopgate whether the tool call should proceed
 - block the tool call with a clear reason
+- render an operator prompt when Loopgate returns `ask`
 
 The hook must not:
 
 - invent permissions locally
 - treat prompt text as authority
 - bypass Loopgate when Loopgate is required for governance
+- approve permanently unless Loopgate's root policy metadata says the action
+  class may be delegated persistently
 
-### 4.2 Fail closed by default
+### 4.2 Hook decision contract
+
+For `PreToolUse`, Loopgate returns:
+
+- `decision`: `allow`, `ask`, or `block`
+- `reason`: human-readable text for asks and blocks
+- `reason_code`: stable machine-readable decision reason
+- `denial_code`: present for blocks
+- `approval_owner`: `harness` for asks
+- `approval_options`: scopes the harness may offer, starting with `once` and
+  optionally adding `session` or `persistent`
+- `operator_override_class`: the root-policy action class, when known
+- `operator_override_max_delegation`: the root-policy ceiling for that class
+
+The approval ownership split is intentional:
+
+- `block` is final and enforced by Loopgate
+- `allow` may proceed without prompting
+- `ask` means the harness prompts the operator, but the options it presents
+  must not exceed Loopgate's root policy metadata
+
+### 4.3 Fail closed by default
 
 For this MVP, the hook path is part of the primary governance story.
 
@@ -84,7 +109,7 @@ That means:
 - unreachable Loopgate should block governed tool execution by default
 - any opt-out to fail-open is an explicit operator override, not the repo default
 
-### 4.3 Use command hooks for primary enforcement
+### 4.4 Use command hooks for primary enforcement
 
 Claude Code supports command hooks, HTTP hooks, prompt hooks, and agent hooks.
 
@@ -99,7 +124,7 @@ Reason:
 
 That makes raw HTTP hooks the wrong primitive for primary deny behavior.
 
-### 4.4 Start narrow
+### 4.5 Start narrow
 
 The MVP should gate only the tools we actually understand and classify.
 

@@ -43,6 +43,13 @@ Deliverables:
 - stable reason codes for common allow, ask, and block outcomes
 - tests proving Claude Code still works through the generic contract
 
+Initial implementation status:
+
+- hook responses include `reason_code`, `approval_owner`, and
+  `approval_options`
+- hook audit records include the same decision metadata
+- Claude Code remains the only supported harness
+
 Non-goals:
 
 - no new harness implementation
@@ -61,6 +68,14 @@ Deliverables:
 - `loopgate explain --tool Bash --command "grep -R Loopgate ."`
 - output showing decision, root reason, operator override class, max delegation,
   active grant match, and controlling policy fields
+
+Initial implementation status:
+
+- `loopgate explain` evaluates signed local policy without starting a daemon,
+  appending audit, or creating approval state
+- supported first-slice examples include `Grep`, `Write`, and `Bash`
+- output includes decision, reason code, approval owner/options, and operator
+  override class/delegation metadata
 
 Tests:
 

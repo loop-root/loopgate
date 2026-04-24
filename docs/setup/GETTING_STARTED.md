@@ -323,6 +323,19 @@ That is the core product proof: the real harness path is governed, low-risk
 work can proceed under policy, and meaningful decisions become inspectable
 events instead of disposable chat context.
 
+## Explain a decision
+
+You can inspect the signed local policy without starting Claude Code:
+
+```sh
+loopgate explain --tool Grep --path .
+loopgate explain --tool Write --path README.md
+loopgate explain --tool Bash --command "git status --short"
+```
+
+The output shows the decision, reason code, approval owner, approval options,
+and operator override ceiling for the action class.
+
 ## Optional contributor checkout validation
 
 If you are validating a fresh source checkout rather than just installing

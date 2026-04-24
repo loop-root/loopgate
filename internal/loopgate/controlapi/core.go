@@ -17,6 +17,18 @@ const (
 )
 
 const (
+	HookReasonCodePolicyAllowed           = "policy_allowed"
+	HookReasonCodeOperatorOverrideAllowed = "operator_override_allowed"
+	HookReasonCodeApprovalRequired        = "approval_required"
+	HookReasonCodePolicyDenied            = "policy_denied"
+
+	HookApprovalOwnerHarness     = "harness"
+	HookApprovalOptionOnce       = "once"
+	HookApprovalOptionSession    = "session"
+	HookApprovalOptionPersistent = "persistent"
+)
+
+const (
 	GrantTypePublicRead        = "public_read"
 	GrantTypePKCE              = "pkce"
 	GrantTypeAuthorizationCode = "authorization_code"
@@ -499,12 +511,21 @@ type HookPreValidateResponse struct {
 	Decision string `json:"decision"`
 	// Reason is a human-readable explanation. Present when Decision != "allow".
 	Reason string `json:"reason,omitempty"`
+	// ReasonCode is a stable machine-readable explanation for the decision.
+	ReasonCode string `json:"reason_code,omitempty"`
 	// DenialCode is a machine-readable denial code. Present when Decision == "block".
 	DenialCode string `json:"denial_code,omitempty"`
 	// AdditionalContext is bounded historical context for events like SessionStart.
 	AdditionalContext string `json:"additional_context,omitempty"`
-	// ApprovalRequestID is the local Loopgate approval-tracking identifier for Claude hook asks.
+	// ApprovalRequestID is reserved for Loopgate-owned approval records. Claude
+	// hook asks are currently harness-owned, so this remains empty for ask
+	// decisions.
 	ApprovalRequestID string `json:"approval_request_id,omitempty"`
+	// ApprovalOwner names who should prompt the operator when Decision == "ask".
+	ApprovalOwner string `json:"approval_owner,omitempty"`
+	// ApprovalOptions lists the approval scopes the harness may offer without
+	// exceeding the root policy ceiling.
+	ApprovalOptions []string `json:"approval_options,omitempty"`
 	// OperatorOverrideClass is the parent-policy action class associated with
 	// this Claude tool, when one exists.
 	OperatorOverrideClass string `json:"operator_override_class,omitempty"`

@@ -141,6 +141,13 @@ func handleLoopgateSubcommand(args []string) bool {
 		}
 		exitProcess(0)
 		return true
+	case "explain":
+		if err := runExplain(args[1:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR: explain:", err)
+			exitProcess(1)
+		}
+		exitProcess(0)
+		return true
 	case "test":
 		if err := runTest(args[1:], os.Stdout, os.Stderr); err != nil {
 			fmt.Fprintln(os.Stderr, "ERROR: test:", err)
@@ -198,6 +205,7 @@ func printLoopgateUsage(output io.Writer) {
   loopgate quickstart      Apply the recommended setup defaults non-interactively
   loopgate status          Print the quick operator summary for this repo
   loopgate console         Open the local admin console
+  loopgate explain         Explain a Claude tool policy decision without running Claude
   loopgate test            Run a governed local smoke test without Claude
   loopgate install-hooks   Install Loopgate Claude Code hooks
   loopgate remove-hooks    Remove Loopgate Claude Code hooks

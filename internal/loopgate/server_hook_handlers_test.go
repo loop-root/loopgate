@@ -276,11 +276,22 @@ func TestHookPreValidate_AllowsRepoReadSearchWithoutApproval(t *testing.T) {
 	if response.Decision != "allow" {
 		t.Fatalf("expected safe repo search to allow without approval, got %#v", response)
 	}
+	if response.ReasonCode != controlapipkg.HookReasonCodePolicyAllowed {
+		t.Fatalf("expected policy allowed reason code, got %#v", response)
+	}
 	if response.ApprovalRequestID != "" {
 		t.Fatalf("expected safe repo search to avoid approval request ids, got %#v", response)
 	}
+	if response.ApprovalOwner != "" || len(response.ApprovalOptions) != 0 {
+		t.Fatalf("expected safe repo search to omit approval metadata, got %#v", response)
+	}
 	if claudeHookApprovalStateFileExists(t, repoRoot, "session-hook") {
 		t.Fatalf("expected safe repo search not to create Loopgate approval state")
+	}
+
+	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
+	if reasonCode, _ := lastAuditEvent.Data["reason_code"].(string); reasonCode != controlapipkg.HookReasonCodePolicyAllowed {
+		t.Fatalf("expected policy allowed reason code in audit, got %#v", lastAuditEvent.Data["reason_code"])
 	}
 }
 
@@ -313,9 +324,16 @@ func TestHookPreValidate_WriteApprovalDelegatesToHarnessWithoutLoopgateApprovalR
 	if response.Decision != "ask" {
 		t.Fatalf("expected write inside root to ask the harness, got %#v", response)
 	}
+	if response.ReasonCode != controlapipkg.HookReasonCodeApprovalRequired {
+		t.Fatalf("expected approval required reason code, got %#v", response)
+	}
 	if response.ApprovalRequestID != "" {
 		t.Fatalf("expected harness-owned approval without a Loopgate approval id, got %#v", response)
 	}
+	if response.ApprovalOwner != controlapipkg.HookApprovalOwnerHarness {
+		t.Fatalf("expected harness approval owner, got %#v", response)
+	}
+	requireHookApprovalOptions(t, response.ApprovalOptions, controlapipkg.HookApprovalOptionOnce, controlapipkg.HookApprovalOptionPersistent)
 	if response.OperatorOverrideClass != config.OperatorOverrideClassRepoWriteSafe {
 		t.Fatalf("expected repo_write_safe override class, got %#v", response)
 	}
@@ -328,6 +346,15 @@ func TestHookPreValidate_WriteApprovalDelegatesToHarnessWithoutLoopgateApprovalR
 	if auditEventTypesContain(t, repoRoot, "approval.created") {
 		t.Fatalf("expected harness-owned approval not to emit Loopgate approval.created")
 	}
+
+	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
+	if reasonCode, _ := lastAuditEvent.Data["reason_code"].(string); reasonCode != controlapipkg.HookReasonCodeApprovalRequired {
+		t.Fatalf("expected approval required reason code in audit, got %#v", lastAuditEvent.Data["reason_code"])
+	}
+	if approvalOwner, _ := lastAuditEvent.Data["approval_owner"].(string); approvalOwner != controlapipkg.HookApprovalOwnerHarness {
+		t.Fatalf("expected harness approval owner in audit, got %#v", lastAuditEvent.Data["approval_owner"])
+	}
+	requireHookApprovalOptions(t, auditStringSlice(lastAuditEvent.Data["approval_options"]), controlapipkg.HookApprovalOptionOnce, controlapipkg.HookApprovalOptionPersistent)
 }
 
 func TestHookPreValidate_AllowsWriteWithPersistentOperatorOverrideWithinRoot(t *testing.T) {
@@ -376,6 +403,9 @@ func TestHookPreValidate_AllowsWriteWithPersistentOperatorOverrideWithinRoot(t *
 	if response.Decision != "allow" {
 		t.Fatalf("expected persistent operator override to allow write, got %#v", response)
 	}
+	if response.ReasonCode != controlapipkg.HookReasonCodeOperatorOverrideAllowed {
+		t.Fatalf("expected operator override reason code, got %#v", response)
+	}
 	if response.ApprovalRequestID != "" {
 		t.Fatalf("expected delegated write to avoid approval request ids, got %#v", response)
 	}
@@ -384,6 +414,11 @@ func TestHookPreValidate_AllowsWriteWithPersistentOperatorOverrideWithinRoot(t *
 	}
 	if response.OperatorOverrideMaxDelegation != config.OperatorOverrideDelegationPersistent {
 		t.Fatalf("expected persistent root delegation ceiling, got %#v", response)
+	}
+
+	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
+	if reasonCode, _ := lastAuditEvent.Data["reason_code"].(string); reasonCode != controlapipkg.HookReasonCodeOperatorOverrideAllowed {
+		t.Fatalf("expected operator override reason code in audit, got %#v", lastAuditEvent.Data["reason_code"])
 	}
 }
 
@@ -441,6 +476,9 @@ func TestHookPreValidate_RootDeniedPathHardDeniesDespiteOperatorOverride(t *test
 	if response.Decision != "block" {
 		t.Fatalf("expected denied path to hard deny despite operator override, got %#v", response)
 	}
+	if response.ReasonCode != controlapipkg.HookReasonCodePolicyDenied {
+		t.Fatalf("expected policy denied reason code, got %#v", response)
+	}
 	if !strings.Contains(response.Reason, "matches denied path policy") {
 		t.Fatalf("expected denied path reason, got %#v", response)
 	}
@@ -452,6 +490,14 @@ func TestHookPreValidate_RootDeniedPathHardDeniesDespiteOperatorOverride(t *test
 	}
 	if auditEventTypesContain(t, repoRoot, "approval.created") {
 		t.Fatalf("expected hard deny not to emit approval.created")
+	}
+
+	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
+	if reasonCode, _ := lastAuditEvent.Data["reason_code"].(string); reasonCode != controlapipkg.HookReasonCodePolicyDenied {
+		t.Fatalf("expected policy denied reason code in audit, got %#v", lastAuditEvent.Data["reason_code"])
+	}
+	if _, exists := lastAuditEvent.Data["approval_owner"]; exists {
+		t.Fatalf("expected hard deny not to include approval owner, got %#v", lastAuditEvent.Data["approval_owner"])
 	}
 }
 
@@ -491,6 +537,13 @@ func TestHookPreValidate_AllowsEditWithDelegatedOperatorOverride(t *testing.T) {
 	if firstResponse.Decision != "ask" {
 		t.Fatalf("expected edit without override to require approval, got %#v", firstResponse)
 	}
+	if firstResponse.ReasonCode != controlapipkg.HookReasonCodeApprovalRequired {
+		t.Fatalf("expected approval required reason code, got %#v", firstResponse)
+	}
+	if firstResponse.ApprovalOwner != controlapipkg.HookApprovalOwnerHarness {
+		t.Fatalf("expected harness approval owner, got %#v", firstResponse)
+	}
+	requireHookApprovalOptions(t, firstResponse.ApprovalOptions, controlapipkg.HookApprovalOptionOnce, controlapipkg.HookApprovalOptionPersistent)
 	if firstResponse.OperatorOverrideClass != config.OperatorOverrideClassRepoEditSafe {
 		t.Fatalf("expected repo_edit_safe operator override class, got %#v", firstResponse)
 	}
@@ -535,6 +588,9 @@ func TestHookPreValidate_AllowsEditWithDelegatedOperatorOverride(t *testing.T) {
 	if secondResponse.Decision != "allow" {
 		t.Fatalf("expected delegated override to allow edit, got %#v", secondResponse)
 	}
+	if secondResponse.ReasonCode != controlapipkg.HookReasonCodeOperatorOverrideAllowed {
+		t.Fatalf("expected operator override reason code, got %#v", secondResponse)
+	}
 	if secondResponse.OperatorOverrideClass != config.OperatorOverrideClassRepoEditSafe {
 		t.Fatalf("expected repo_edit_safe operator override class on allow, got %#v", secondResponse)
 	}
@@ -545,6 +601,9 @@ func TestHookPreValidate_AllowsEditWithDelegatedOperatorOverride(t *testing.T) {
 	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
 	if decision, _ := lastAuditEvent.Data["decision"].(string); decision != "allow" {
 		t.Fatalf("expected delegated override audit decision allow, got %#v", lastAuditEvent.Data["decision"])
+	}
+	if reasonCode, _ := lastAuditEvent.Data["reason_code"].(string); reasonCode != controlapipkg.HookReasonCodeOperatorOverrideAllowed {
+		t.Fatalf("expected delegated override reason code in audit, got %#v", lastAuditEvent.Data["reason_code"])
 	}
 	if reason, _ := lastAuditEvent.Data["reason"].(string); !strings.Contains(reason, "delegated operator override override-20260421010101-abcd1234ef56") {
 		t.Fatalf("expected delegated override reason in audit, got %#v", lastAuditEvent.Data["reason"])
@@ -656,9 +715,16 @@ func TestHookPreValidate_NeedsApprovalReturnsHarnessOwnedAsk(t *testing.T) {
 	if response.Decision != "ask" {
 		t.Fatalf("expected approval-required Bash call to ask, got %#v", response)
 	}
+	if response.ReasonCode != controlapipkg.HookReasonCodeApprovalRequired {
+		t.Fatalf("expected approval required reason code, got %#v", response)
+	}
 	if response.ApprovalRequestID != "" {
 		t.Fatalf("expected harness-owned ask without Loopgate approval id, got %#v", response)
 	}
+	if response.ApprovalOwner != controlapipkg.HookApprovalOwnerHarness {
+		t.Fatalf("expected harness approval owner, got %#v", response)
+	}
+	requireHookApprovalOptions(t, response.ApprovalOptions, controlapipkg.HookApprovalOptionOnce)
 	if response.OperatorOverrideClass != "repo_bash_safe" {
 		t.Fatalf("expected repo_bash_safe operator override class, got %#v", response)
 	}
@@ -674,6 +740,13 @@ func TestHookPreValidate_NeedsApprovalReturnsHarnessOwnedAsk(t *testing.T) {
 	if decision, _ := lastAuditEvent.Data["decision"].(string); decision != "ask" {
 		t.Fatalf("expected ask decision in audit, got %#v", lastAuditEvent.Data["decision"])
 	}
+	if reasonCode, _ := lastAuditEvent.Data["reason_code"].(string); reasonCode != controlapipkg.HookReasonCodeApprovalRequired {
+		t.Fatalf("expected approval required reason code in audit, got %#v", lastAuditEvent.Data["reason_code"])
+	}
+	if approvalOwner, _ := lastAuditEvent.Data["approval_owner"].(string); approvalOwner != controlapipkg.HookApprovalOwnerHarness {
+		t.Fatalf("expected harness approval owner in audit, got %#v", lastAuditEvent.Data["approval_owner"])
+	}
+	requireHookApprovalOptions(t, auditStringSlice(lastAuditEvent.Data["approval_options"]), controlapipkg.HookApprovalOptionOnce)
 	if approvalRequestID, _ := lastAuditEvent.Data["hook_approval_request_id"].(string); approvalRequestID != "" {
 		t.Fatalf("expected no Loopgate hook approval id in audit, got %#v", lastAuditEvent.Data["hook_approval_request_id"])
 	}
@@ -1452,6 +1525,38 @@ func claudeHookApprovalStateFileExists(t *testing.T, repoRoot string, sessionID 
 	}
 	t.Fatalf("stat claude hook approval state: %v", err)
 	return false
+}
+
+func requireHookApprovalOptions(t *testing.T, got []string, want ...string) {
+	t.Helper()
+
+	if len(got) != len(want) {
+		t.Fatalf("approval options = %#v, want %#v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("approval options = %#v, want %#v", got, want)
+		}
+	}
+}
+
+func auditStringSlice(rawValue interface{}) []string {
+	switch typedValue := rawValue.(type) {
+	case []string:
+		return typedValue
+	case []interface{}:
+		values := make([]string, 0, len(typedValue))
+		for _, item := range typedValue {
+			stringItem, ok := item.(string)
+			if !ok {
+				return nil
+			}
+			values = append(values, stringItem)
+		}
+		return values
+	default:
+		return nil
+	}
 }
 
 func readClaudeHookApprovalState(t *testing.T, repoRoot string, sessionID string) claudeHookApprovalStateTestFile {
