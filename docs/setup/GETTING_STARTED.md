@@ -30,6 +30,11 @@ The setup below gives you a governed path where:
 3. verify Loopgate is running
 4. run a normal task and inspect the local audit if needed
 
+If you want another AI assistant to walk you through setup, use
+[Agent-assisted setup](./AGENT_ASSISTED_SETUP.md). That path gives the assisting
+agent explicit rules for explaining and preparing setup while keeping the human
+operator and Loopgate policy as the authority sources.
+
 Prerequisites:
 - Python 3 on `PATH`
 - Claude Code

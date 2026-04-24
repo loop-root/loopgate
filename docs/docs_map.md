@@ -9,6 +9,7 @@ This file maps **`docs/`** — design intent, setup, RFCs, and benchmarks. Use w
 - `docs/loopgate_v1_product_contract.md` — the current v1 product boundary and success bar
 - `docs/README.md` — top-level docs index
 - `docs/setup/GETTING_STARTED.md` — shortest path to a governed local Claude workflow
+- `docs/setup/AGENT_ASSISTED_SETUP.md` — contract for using another agent to help set up governed Claude Code
 - `docs/roadmap/admin_console_tui_mvp.md` — bounded local admin-console TUI spec
 - `docs/roadmap/harness_usability_execution_plan.md` — focused plan for Claude usability and future harness readiness
 
@@ -39,7 +40,8 @@ separate `ARCHIVED` repository.
 
 ## Setup (`docs/setup/`)
 
-- Start with `GETTING_STARTED.md`, `SETUP.md`, and `OPERATOR_GUIDE.md`
+- Start with `GETTING_STARTED.md`, `AGENT_ASSISTED_SETUP.md`, `SETUP.md`, and `OPERATOR_GUIDE.md`
+- `agent_assisted_prompt.md` — copy-paste setup prompt for an assisting agent
 - `LEDGER_AND_AUDIT_INTEGRITY.md`, `SECRETS.md`, `TOOL_USAGE.md`
 - `DOCTOR_AND_LEDGER.md` — when to use `loopgate-ledger` versus `loopgate-doctor`
 - `LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — HTTP over Unix socket for integrators

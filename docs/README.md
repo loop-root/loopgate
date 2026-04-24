@@ -24,6 +24,7 @@ separate `ARCHIVED` repository and are not part of the public operator path.
 ## Start here
 
 - [Getting started](./setup/GETTING_STARTED.md)
+- [Agent-assisted setup](./setup/AGENT_ASSISTED_SETUP.md)
 - [V1 product contract](./loopgate_v1_product_contract.md)
 - [Operator guide](./setup/OPERATOR_GUIDE.md)
 - [Setup](./setup/SETUP.md)
@@ -54,6 +55,8 @@ separate `ARCHIVED` repository and are not part of the public operator path.
 ## Operator and setup docs
 
 - [Getting started](./setup/GETTING_STARTED.md)
+- [Agent-assisted setup](./setup/AGENT_ASSISTED_SETUP.md)
+- [Agent-assisted setup prompt](./setup/agent_assisted_prompt.md)
 - [Operator guide](./setup/OPERATOR_GUIDE.md)
 - [Setup](./setup/SETUP.md)
 - [Doctor and ledger tools](./setup/DOCTOR_AND_LEDGER.md)

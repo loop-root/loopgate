@@ -1,9 +1,13 @@
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-24
 
 # Loopgate Setup
 
 This is the manual and advanced setup companion to
 [Getting started](./GETTING_STARTED.md).
+
+If you want an AI assistant to help you through setup interactively, start with
+[Agent-assisted setup](./AGENT_ASSISTED_SETUP.md) and the copy-paste
+[agent setup prompt](./agent_assisted_prompt.md).
 
 If you want the shortest supported operator path on macOS, use:
 

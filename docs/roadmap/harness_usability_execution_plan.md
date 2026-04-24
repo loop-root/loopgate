@@ -139,6 +139,25 @@ Tests:
 - revoked grants do not resurrect after reload
 - malformed or unsigned operator override documents fail closed
 
+## Phase 4.5: Agent-Assisted Setup
+
+Make Loopgate easier to install with help from another agent that is not itself
+governed by Loopgate yet.
+
+Deliverables:
+
+- canonical agent-assisted setup contract
+- copy-paste prompt for Codex, Claude, Pi, or another setup assistant
+- explicit human-confirmation boundaries for signing, hook install, LaunchAgent
+  install, hot apply, and persistent grants
+- verification sequence that proves Claude Code is actually governed
+
+Initial implementation status:
+
+- `docs/setup/AGENT_ASSISTED_SETUP.md` defines the setup contract
+- `docs/setup/agent_assisted_prompt.md` provides a reusable prompt
+- docs index and setup docs link to the agent-assisted path
+
 ## Phase 5: Local Admin Console
 
 Keep the console as a readable local admin surface over existing authority APIs.
