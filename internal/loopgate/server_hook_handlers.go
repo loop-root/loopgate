@@ -355,7 +355,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	result := server.evaluateClaudeCodeHookPolicy(req, toolDef)
 	operatorOverrideClass, operatorOverrideMaxDelegation, hasOperatorOverrideClass := policyRuntime.policy.ClaudeCodeToolOperatorOverride(req.ToolName)
 
-	decision := "block"
+	var decision string
 	denialCode := controlapipkg.DenialCodePolicyDenied
 	hookApprovalRequestID := ""
 	hookApprovalState := ""

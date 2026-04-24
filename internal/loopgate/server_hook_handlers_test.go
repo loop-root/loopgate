@@ -31,25 +31,6 @@ type claudeHookSessionTestWire struct {
 	ExitReason   string `json:"exit_reason,omitempty"`
 }
 
-type claudeHookApprovalStateTestFile struct {
-	SchemaVersion string                       `json:"schema_version"`
-	Approvals     []claudeHookApprovalTestWire `json:"approvals,omitempty"`
-}
-
-type claudeHookApprovalTestWire struct {
-	ApprovalRequestID string `json:"approval_request_id"`
-	SessionID         string `json:"session_id"`
-	ToolUseID         string `json:"tool_use_id"`
-	ToolName          string `json:"tool_name"`
-	ApprovalSurface   string `json:"approval_surface,omitempty"`
-	Reason            string `json:"reason,omitempty"`
-	State             string `json:"state"`
-	CreatedAtUTC      string `json:"created_at_utc"`
-	ResolvedAtUTC     string `json:"resolved_at_utc,omitempty"`
-	ResolutionReason  string `json:"resolution_reason,omitempty"`
-	HookEventName     string `json:"hook_event_name,omitempty"`
-}
-
 func TestHookPreValidate_DeniesUnknownToolByDefault(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
@@ -1557,20 +1538,4 @@ func auditStringSlice(rawValue interface{}) []string {
 	default:
 		return nil
 	}
-}
-
-func readClaudeHookApprovalState(t *testing.T, repoRoot string, sessionID string) claudeHookApprovalStateTestFile {
-	t.Helper()
-
-	storageKey := claudeHookSessionStorageKey(sessionID)
-	statePath := filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions", storageKey, claudeHookApprovalsFileName)
-	stateBytes, err := os.ReadFile(statePath)
-	if err != nil {
-		t.Fatalf("read claude hook approval state: %v", err)
-	}
-	var stateFile claudeHookApprovalStateTestFile
-	if err := json.Unmarshal(stateBytes, &stateFile); err != nil {
-		t.Fatalf("decode claude hook approval state: %v", err)
-	}
-	return stateFile
 }

@@ -54,7 +54,7 @@ func ExplainClaudeCodeHookDecision(repoRoot string, req controlapipkg.HookPreVal
 	result := server.evaluateClaudeCodeHookPolicy(req, toolDef)
 	operatorOverrideClass, operatorOverrideMaxDelegation, hasOperatorOverrideClass := policyLoadResult.Policy.ClaudeCodeToolOperatorOverride(req.ToolName)
 
-	decision := "block"
+	var decision string
 	denialCode := controlapipkg.DenialCodePolicyDenied
 	switch result.Decision {
 	case policypkg.Allow:

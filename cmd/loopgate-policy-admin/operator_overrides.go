@@ -503,10 +503,6 @@ func normalizePathScopedOperatorOverridePath(policy config.Policy, repoRoot stri
 	return filepath.Clean(relativePath), nil
 }
 
-func normalizeRepoEditSafeOverridePath(policy config.Policy, repoRoot string, rawPath string) (string, error) {
-	return normalizePathScopedOperatorOverridePath(policy, repoRoot, config.OperatorOverrideClassRepoEditSafe, rawPath)
-}
-
 func pathScopedOperatorOverrideTools(overrideClass string) []string {
 	switch overrideClass {
 	case config.OperatorOverrideClassRepoReadSearch:
