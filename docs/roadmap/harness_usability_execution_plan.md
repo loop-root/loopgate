@@ -93,9 +93,16 @@ Deliverables:
 - signed root policy status
 - signed operator override status
 - Claude hook install status
-- last real hook event status
 - sample policy probes for read/search/write/bash
 - clear repair commands for missing or stale setup
+
+Initial implementation status:
+
+- `loopgate-doctor setup-check` prints human-readable setup readiness
+- output includes daemon/socket health, signed root policy status, signed
+  operator override status, Claude hook install status, sample read/search,
+  write, and bash policy probes, plus repair commands
+- last real hook event status remains a later refinement
 
 Tests:
 

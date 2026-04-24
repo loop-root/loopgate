@@ -142,6 +142,7 @@ background. Verify with:
 ```bash
 loopgate status
 loopgate test
+loopgate-doctor setup-check
 loopgate-doctor report
 ```
 
@@ -150,14 +151,18 @@ Source-checkout equivalents:
 ```bash
 ./bin/loopgate status
 ./bin/loopgate test
+./bin/loopgate-doctor setup-check
 ./bin/loopgate-doctor report
 ```
 
-Use `loopgate status` as the quick operator summary and `loopgate-doctor report`
-for deeper derived diagnostics. `status` now calls out the current
-`operator_mode`, `daemon_mode`, `launch_agent_state`, and Claude hook state
-directly, so you can tell at a glance whether Loopgate looks offline,
-LaunchAgent-managed, or manually started.
+Use `loopgate status` as the quick operator summary,
+`loopgate-doctor setup-check` when setup does not feel ready, and
+`loopgate-doctor report` for deeper derived diagnostics. `status` now calls out
+the current `operator_mode`, `daemon_mode`, `launch_agent_state`, and Claude
+hook state directly, so you can tell at a glance whether Loopgate looks offline,
+LaunchAgent-managed, or manually started. `setup-check` prints signed policy
+status, signed operator override status, daemon/socket health, Claude hook
+install state, sample allow/ask/block decisions, and concrete repair commands.
 `loopgate test` now also tells you whether it reused a running daemon or had to
 start a temporary one for the smoke test, plus the next steps needed before
 Claude Code can rely on the governed path.

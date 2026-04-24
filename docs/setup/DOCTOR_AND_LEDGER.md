@@ -43,6 +43,7 @@ Use `loopgate-ledger` first when the question is:
 ## Use `loopgate-doctor` when you need a broader local diagnostic snapshot
 
 Primary uses:
+- check whether a local setup is ready for Claude Code governance
 - build an offline diagnostic report from repo state
 - write a troubleshooting bundle with log tails
 - explain one approval, capability-request, or blocked hook outcome directly from the verified audit ledger
@@ -51,6 +52,7 @@ Primary uses:
 Most useful commands:
 
 ```bash
+./bin/loopgate-doctor setup-check
 ./bin/loopgate-doctor report
 ./bin/loopgate-doctor bundle -out ./tmp/loopgate-bundle
 ./bin/loopgate-doctor explain-denial -approval-id <approval-id>
@@ -64,6 +66,10 @@ For keychain-backed diagnostics, prefer the stable `./bin/...` binaries over
 repeated macOS approval prompts.
 
 What each one is for:
+- `setup-check`
+  - human-readable setup readiness: signed root policy, signed operator
+    overrides, daemon/socket health, Claude hook install state, sample policy
+    decisions, and repair commands
 - `report`
   - offline JSON summary of runtime config, diagnostics, ledger verification
     state, and nonce replay persistence/utilization warnings
@@ -78,6 +84,7 @@ What each one is for:
   - live query against a running Loopgate instance for audit-export trust preflight
 
 Use `loopgate-doctor` first when the question is:
+- "Is this machine ready for Claude Code to run through Loopgate?"
 - "What is this repo/runtime configured to do right now?"
 - "Can I package a local troubleshooting bundle?"
 - "Why did approval `X` get denied?"
