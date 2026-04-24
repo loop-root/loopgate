@@ -174,7 +174,7 @@ func applyOperatorOverrideDocumentDefaults(document *OperatorOverrideDocument) e
 		validatedGrantIDs[grant.ID] = struct{}{}
 
 		grant.Class = strings.TrimSpace(grant.Class)
-		if grant.Class != OperatorOverrideClassRepoEditSafe {
+		if _, supported := supportedOperatorOverrideClasses[grant.Class]; !supported {
 			return fmt.Errorf("operator override grant class %q is unsupported in this document version", grant.Class)
 		}
 

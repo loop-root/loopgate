@@ -6,13 +6,21 @@ import (
 )
 
 func (server *Server) matchClaudeCodeOperatorOverride(req controlapipkg.HookPreValidateRequest, overrideClass string) (config.OperatorOverrideGrant, bool) {
-	if overrideClass != config.OperatorOverrideClassRepoEditSafe {
+	switch overrideClass {
+	case config.OperatorOverrideClassRepoReadSearch,
+		config.OperatorOverrideClassRepoEditSafe,
+		config.OperatorOverrideClassRepoWriteSafe,
+		config.OperatorOverrideClassRepoBashSafe:
+	default:
 		return config.OperatorOverrideGrant{}, false
 	}
 
 	targetPaths, ok := hookTargetPaths(req)
 	if !ok || len(targetPaths) == 0 {
-		return config.OperatorOverrideGrant{}, false
+		if overrideClass != config.OperatorOverrideClassRepoBashSafe || req.CWD == "" {
+			return config.OperatorOverrideGrant{}, false
+		}
+		targetPaths = []string{req.CWD}
 	}
 
 	overrideRuntime := server.currentOperatorOverrideRuntime()

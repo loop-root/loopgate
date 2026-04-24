@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-24
 
 # Docs Map
 
@@ -9,6 +9,8 @@ This file maps **`docs/`** — design intent, setup, RFCs, and benchmarks. Use w
 - `docs/loopgate_v1_product_contract.md` — the current v1 product boundary and success bar
 - `docs/README.md` — top-level docs index
 - `docs/setup/GETTING_STARTED.md` — shortest path to a governed local Claude workflow
+- `docs/roadmap/admin_console_tui_mvp.md` — bounded local admin-console TUI spec
+- `docs/roadmap/harness_usability_execution_plan.md` — focused plan for Claude usability and future harness readiness
 
 ## Architecture Decision Records (`docs/ADR/`)
 
@@ -47,6 +49,9 @@ separate `ARCHIVED` repository.
 ## Roadmap and threat model
 
 - `docs/roadmap/roadmap.md`
+- `docs/roadmap/admin_console_tui_mvp.md`
+- `docs/roadmap/harness_usability_execution_plan.md`
+- `docs/roadmap/future_enterprise_direction.md`
 - `docs/roadmap/loopgate_v1_hardening_plan.md`
 - `docs/loopgate-threat-model.md`
 

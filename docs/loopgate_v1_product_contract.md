@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-24
 
 # Loopgate V1 Product Contract
 
@@ -6,6 +6,14 @@ Loopgate v1 is the **local authority boundary between Claude Code and the
 tools, files, and sites it can touch**.
 
 That is the product.
+
+The practical user value is two-fold:
+
+1. reduce repeated permission prompts for safe-ish work by converting them into
+   signed allow-with-audit policy
+2. create the local foundation for business-grade AI tool administration:
+   policy control, approvals, access boundaries, and audit review outside the
+   chat client
 
 ## What v1 must do
 
@@ -29,7 +37,10 @@ local machine.
 - allow / approval / block decisions
 - append-only local audit with integrity checks
 - guided first-run setup
-- two supported starter policy profiles: `strict` and `balanced`
+- three supported starter policy profiles: `balanced`, `strict`, and
+  `read-only`
+- CLI-first local admin/operator commands for setup, status, smoke testing,
+  policy review, approvals, and audit inspection
 
 ## Explicit non-v1 surface
 
@@ -40,7 +51,12 @@ These may exist in the repo, but they are not the supported v1 product story:
 - remote admin node or policy push
 - multi-harness parity across Cursor, Codex, and others
 - a new desktop UI as the core product
+- a centralized enterprise policy server
 - continuity or memory inside Loopgate
+
+The planned admin-console TUI is in scope as a local operator/admin surface
+over existing Loopgate authority paths. It is not a separate authority source
+and not a remote management plane.
 
 ## Product standard
 
@@ -53,6 +69,8 @@ The product should:
 - reduce babysitting
 - increase policy clarity
 - increase operator confidence in what the agent actually did
+- make the admin boundary visible: policy and approvals live in Loopgate, not
+  in prompt text or UI convenience state
 
 ## Practical success criteria
 

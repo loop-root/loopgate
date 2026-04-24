@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-24
 
 # Getting Started
 
@@ -10,6 +10,18 @@ It assumes the current supported product shape:
 - Claude Code hooks as the active harness
 - signed policy
 - local authoritative audit
+
+## Why run it
+
+Loopgate is useful when you want an AI coding agent to stop asking for the same
+low-risk permissions over and over, without giving it broad ambient access.
+
+The setup below gives you a governed path where:
+
+- common safe-ish actions can be allowed by signed policy and audited
+- higher-risk actions can require explicit approval
+- forbidden actions are denied instead of left to prompt instructions
+- recent actions can be inspected through the local audit ledger
 
 ## What you will do
 
@@ -290,7 +302,9 @@ approval or capability request, use the Claude hook session and tool use id:
 
 ## Did it work?
 
-Use one real governed path instead of guessing from startup text alone:
+Use one real governed path instead of guessing from startup text alone. The
+goal is to prove that Claude Code is actually going through Loopgate before
+tool execution:
 
 1. run `/hooks` inside Claude Code and confirm the 7 Loopgate hook entries are present
 2. ask Claude Code to read `README.md`
@@ -304,6 +318,10 @@ Expected result:
 - you should see a recent `hook.pre_validate` event
 - if the action was denied or approval-gated, that should also be visible in the tail output
 - if nothing new appears, the first thing to re-check is whether the Claude hooks are installed and pointing at `~/.claude/hooks/loopgate_*.py`
+
+That is the core product proof: the real harness path is governed, low-risk
+work can proceed under policy, and meaningful decisions become inspectable
+events instead of disposable chat context.
 
 ## Optional contributor checkout validation
 

@@ -366,42 +366,7 @@ func (server *Server) handleHookPreValidate(w http.ResponseWriter, r *http.Reque
 	case policypkg.Allow:
 		decision = "allow"
 	case policypkg.NeedsApproval:
-		hookApprovalRecord, claudeHookSessionRecord, approvalCreated, previousApprovalRecords, approvalErr := server.createClaudeHookApprovalRequest(req, result.Reason)
-		if approvalErr != nil {
-			result = policypkg.CheckResult{
-				Decision: policypkg.Deny,
-				Reason:   "failed to create local Claude hook approval: " + approvalErr.Error(),
-			}
-			denialCode = controlapipkg.DenialCodeApprovalCreationFailed
-			break
-		}
-		if approvalCreated {
-			approvalCreatedAuditData := mergeHookAuditProjection(map[string]interface{}{
-				"approval_request_id":    hookApprovalRecord.ApprovalRequestID,
-				"approval_surface":       hookApprovalRecord.ApprovalSurface,
-				"approval_class":         "claude_builtin_inline",
-				"approval_state":         hookApprovalRecord.State,
-				"capability":             req.ToolName,
-				"tool_name":              req.ToolName,
-				"tool_use_id":            req.ToolUseID,
-				"control_session_id":     req.SessionID,
-				"client_session_label":   req.SessionID,
-				"actor_ref":              formatHookAuditActor(peer.UID, req.SessionID),
-				"claude_hook_session_id": claudeHookSessionRecord.SessionID,
-				"reason":                 hookApprovalRecord.Reason,
-			}, req, server.repoRoot, includeHookAuditPreviews)
-			if err := server.logEvent("approval.created", req.SessionID, approvalCreatedAuditData); err != nil {
-				_ = server.restoreClaudeHookApprovalState(req.SessionID, previousApprovalRecords)
-				http.Error(w, "audit unavailable: required append failed before hook decision", http.StatusInternalServerError)
-				return
-			}
-		}
 		decision = "ask"
-		hookApprovalRequestID = hookApprovalRecord.ApprovalRequestID
-		hookApprovalState = hookApprovalRecord.State
-		hookApprovalSurface = hookApprovalRecord.ApprovalSurface
-		claudeHookSessionID = claudeHookSessionRecord.SessionID
-		claudeHookSessionState = claudeHookSessionRecord.State
 	default:
 		decision = "block"
 	}

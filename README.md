@@ -1,6 +1,6 @@
 # Loopgate
 
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-24
 
 **Loopgate** is a local-first authority boundary for AI-assisted engineering work.
 
@@ -8,6 +8,29 @@ It puts **signed policy**, **explicit approvals**, and an **append-only local
 audit ledger** between an AI harness and the tools it can invoke.
 
 Current harness focus: **Claude Code + project hooks + Loopgate**
+
+## What Loopgate gives you
+
+AI coding tools tend to push operators toward two bad choices:
+- approve the same low-risk actions over and over until approval becomes
+  rubber-stamping
+- grant broad ambient access and hope the model stays inside the lines
+
+Loopgate is the middle path. It turns repeated permission prompts into explicit
+policy:
+- routine low-risk work can be allowed and audited
+- higher-risk work can require a real operator approval
+- forbidden tools, paths, sites, and actions can be denied deterministically
+- important actions leave a local audit trail that can be inspected later
+
+For one developer, this means less babysitting while still keeping a real
+boundary around writes, shell commands, and other risky actions.
+
+For a business or security-minded team, this is the foundation for an admin
+surface: signed policy, approval review, audit inspection, hook status, and
+eventually broader policy and access control across managed AI tooling. The
+current repo is still local-first and single-node; remote fleet management is a
+future direction, not a shipped guarantee.
 
 ## Status
 
@@ -22,6 +45,7 @@ Loopgate is **not** yet:
 - a packaged desktop product
 - a browser-based admin UI
 - a multi-harness platform
+- a centralized enterprise policy server
 
 ## Who it is for
 
@@ -30,6 +54,8 @@ Loopgate is for engineers and security-minded operators who want:
 - less prompt-based babysitting and less approval rubber-stamping
 - a durable local record of what the agent actually did
 - a real authority boundary instead of chat text pretending to be policy
+- a path toward business-grade AI tool policy without treating the chat client
+  as the control plane
 
 ## What you can do today
 
@@ -40,6 +66,10 @@ The current product scope is intentionally narrow:
 - keep policy signed and local
 - inspect a durable local audit ledger
 - use a repo-local operator CLI for setup, status, smoke testing, and uninstall
+
+The current admin surface is CLI-first. A console TUI is planned as an operator
+surface over the same Loopgate authority APIs; it must not become a separate
+source of approval or policy truth.
 
 The guided first-run path leads operators toward three starter profiles:
 - `balanced`
@@ -157,6 +187,9 @@ Expected result:
 - you should see a recent `hook.pre_validate` audit event for the Claude action you just triggered
 - if the request needed approval or was denied, the tail output should make that obvious too
 
+That proof matters more than startup text: Loopgate is useful only when the real
+tool path is governed, not when policy exists on paper.
+
 If you prefer the manual operator path, see [Setup](./docs/setup/SETUP.md).
 
 On first start, Loopgate may ask macOS Keychain to create the default audit
@@ -270,6 +303,7 @@ Start here:
 - [Policy signing](./docs/setup/POLICY_SIGNING.md)
 - [Ledger and audit integrity](./docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./docs/loopgate-threat-model.md)
+- [Admin console TUI MVP](./docs/roadmap/admin_console_tui_mvp.md)
 - [Release candidate checklist](./docs/roadmap/release_candidate_checklist.md)
 - [Changelog](./CHANGELOG.md)
 - [Support](./SUPPORT.md)

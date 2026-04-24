@@ -249,6 +249,212 @@ func TestHookPreValidate_DeniesReadOutsideAllowedRoots(t *testing.T) {
 	}
 }
 
+func TestHookPreValidate_AllowsRepoReadSearchWithoutApproval(t *testing.T) {
+	repoRoot := t.TempDir()
+	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Grep:\n        enabled: true\n        allowed_roots:\n          - \".\"\n", 1)
+	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	requestBody := bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Grep","tool_use_id":"toolu_grep_safe","tool_input":{"pattern":"Loopgate","path":"` + repoRoot + `"},"cwd":"` + repoRoot + `","session_id":"session-hook"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+
+	server.handleHookPreValidate(recorder, request)
+
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode hook response: %v", err)
+	}
+	if response.Decision != "allow" {
+		t.Fatalf("expected safe repo search to allow without approval, got %#v", response)
+	}
+	if response.ApprovalRequestID != "" {
+		t.Fatalf("expected safe repo search to avoid approval request ids, got %#v", response)
+	}
+	if claudeHookApprovalStateFileExists(t, repoRoot, "session-hook") {
+		t.Fatalf("expected safe repo search not to create Loopgate approval state")
+	}
+}
+
+func TestHookPreValidate_WriteApprovalDelegatesToHarnessWithoutLoopgateApprovalRecord(t *testing.T) {
+	repoRoot := t.TempDir()
+	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Write:\n        enabled: true\n        requires_approval: true\n        allowed_roots:\n          - \".\"\n", 1)
+	policyYAML = strings.Replace(policyYAML, "logging:\n", "operator_overrides:\n  classes:\n    repo_write_safe:\n      max_delegation: persistent\nlogging:\n", 1)
+	writeSignedTestPolicyYAML(t, repoRoot, policyYAML)
+	server, err := NewServer(repoRoot, socketPath)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	writePath := filepath.Join(repoRoot, "notes.md")
+	requestBody := bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Write","tool_use_id":"toolu_write_harness_approval","tool_input":{"file_path":"` + writePath + `","content":"hello"},"cwd":"` + repoRoot + `","session_id":"session-hook"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+
+	server.handleHookPreValidate(recorder, request)
+
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode hook response: %v", err)
+	}
+	if response.Decision != "ask" {
+		t.Fatalf("expected write inside root to ask the harness, got %#v", response)
+	}
+	if response.ApprovalRequestID != "" {
+		t.Fatalf("expected harness-owned approval without a Loopgate approval id, got %#v", response)
+	}
+	if response.OperatorOverrideClass != config.OperatorOverrideClassRepoWriteSafe {
+		t.Fatalf("expected repo_write_safe override class, got %#v", response)
+	}
+	if response.OperatorOverrideMaxDelegation != config.OperatorOverrideDelegationPersistent {
+		t.Fatalf("expected persistent root delegation ceiling, got %#v", response)
+	}
+	if claudeHookApprovalStateFileExists(t, repoRoot, "session-hook") {
+		t.Fatalf("expected harness-owned approval not to create Loopgate approval state")
+	}
+	if auditEventTypesContain(t, repoRoot, "approval.created") {
+		t.Fatalf("expected harness-owned approval not to emit Loopgate approval.created")
+	}
+}
+
+func TestHookPreValidate_AllowsWriteWithPersistentOperatorOverrideWithinRoot(t *testing.T) {
+	repoRoot := t.TempDir()
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Write:\n        enabled: true\n        requires_approval: true\n        allowed_roots:\n          - \".\"\n", 1)
+	policyYAML = strings.Replace(policyYAML, "logging:\n", "operator_overrides:\n  classes:\n    repo_write_safe:\n      max_delegation: persistent\nlogging:\n", 1)
+
+	policySigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new test policy signer: %v", err)
+	}
+	_, _, server := startLoopgateServerWithSignerAndRuntime(t, repoRoot, policyYAML, policySigner, nil, true)
+	writeSignedTestOperatorOverrideDocument(t, repoRoot, policySigner, config.OperatorOverrideDocument{
+		Version: "1",
+		Grants: []config.OperatorOverrideGrant{
+			{
+				ID:           "override-20260424010101-write12345678",
+				Class:        config.OperatorOverrideClassRepoWriteSafe,
+				State:        "active",
+				PathPrefixes: []string{"."},
+				CreatedAtUTC: time.Now().UTC().Format(time.RFC3339),
+			},
+		},
+	})
+	overrideRuntime, err := server.reloadOperatorOverrideRuntimeFromDisk()
+	if err != nil {
+		t.Fatalf("reload operator override runtime: %v", err)
+	}
+	server.storeOperatorOverrideRuntime(overrideRuntime)
+
+	writePath := filepath.Join(repoRoot, "notes.md")
+	requestBody := bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Write","tool_use_id":"toolu_write_operator_override","tool_input":{"file_path":"` + writePath + `","content":"hello"},"cwd":"` + repoRoot + `","session_id":"session-hook"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+
+	server.handleHookPreValidate(recorder, request)
+
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode hook response: %v", err)
+	}
+	if response.Decision != "allow" {
+		t.Fatalf("expected persistent operator override to allow write, got %#v", response)
+	}
+	if response.ApprovalRequestID != "" {
+		t.Fatalf("expected delegated write to avoid approval request ids, got %#v", response)
+	}
+	if response.OperatorOverrideClass != config.OperatorOverrideClassRepoWriteSafe {
+		t.Fatalf("expected repo_write_safe override class, got %#v", response)
+	}
+	if response.OperatorOverrideMaxDelegation != config.OperatorOverrideDelegationPersistent {
+		t.Fatalf("expected persistent root delegation ceiling, got %#v", response)
+	}
+}
+
+func TestHookPreValidate_RootDeniedPathHardDeniesDespiteOperatorOverride(t *testing.T) {
+	repoRoot := t.TempDir()
+	secretsDir := filepath.Join(repoRoot, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("mkdir secrets dir: %v", err)
+	}
+	secretPath := filepath.Join(secretsDir, "token.txt")
+	if err := os.WriteFile(secretPath, []byte("secret\n"), 0o600); err != nil {
+		t.Fatalf("write secret target: %v", err)
+	}
+
+	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Edit:\n        enabled: true\n        requires_approval: true\n        allowed_roots:\n          - \".\"\n        denied_paths:\n          - \"secrets\"\n", 1)
+	policyYAML = strings.Replace(policyYAML, "logging:\n", "operator_overrides:\n  classes:\n    repo_edit_safe:\n      max_delegation: persistent\nlogging:\n", 1)
+
+	policySigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new test policy signer: %v", err)
+	}
+	_, _, server := startLoopgateServerWithSignerAndRuntime(t, repoRoot, policyYAML, policySigner, nil, true)
+	writeSignedTestOperatorOverrideDocument(t, repoRoot, policySigner, config.OperatorOverrideDocument{
+		Version: "1",
+		Grants: []config.OperatorOverrideGrant{
+			{
+				ID:           "override-20260424010101-edit123456789",
+				Class:        config.OperatorOverrideClassRepoEditSafe,
+				State:        "active",
+				PathPrefixes: []string{"."},
+				CreatedAtUTC: time.Now().UTC().Format(time.RFC3339),
+			},
+		},
+	})
+	overrideRuntime, err := server.reloadOperatorOverrideRuntimeFromDisk()
+	if err != nil {
+		t.Fatalf("reload operator override runtime: %v", err)
+	}
+	server.storeOperatorOverrideRuntime(overrideRuntime)
+
+	requestBody := bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_use_id":"toolu_edit_denied_path","tool_input":{"file_path":"` + secretPath + `","old_string":"secret","new_string":"changed"},"cwd":"` + repoRoot + `","session_id":"session-hook"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v1/hook/pre-validate", requestBody)
+	request = request.WithContext(context.WithValue(request.Context(), peerIdentityContextKey, peerIdentity{
+		UID: uint32(os.Getuid()),
+		PID: 4242,
+	}))
+	recorder := httptest.NewRecorder()
+
+	server.handleHookPreValidate(recorder, request)
+
+	var response controlapipkg.HookPreValidateResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode hook response: %v", err)
+	}
+	if response.Decision != "block" {
+		t.Fatalf("expected denied path to hard deny despite operator override, got %#v", response)
+	}
+	if !strings.Contains(response.Reason, "matches denied path policy") {
+		t.Fatalf("expected denied path reason, got %#v", response)
+	}
+	if response.ApprovalRequestID != "" {
+		t.Fatalf("expected hard deny not to carry approval id, got %#v", response)
+	}
+	if claudeHookApprovalStateFileExists(t, repoRoot, "session-hook") {
+		t.Fatalf("expected hard deny not to create Loopgate approval state")
+	}
+	if auditEventTypesContain(t, repoRoot, "approval.created") {
+		t.Fatalf("expected hard deny not to emit approval.created")
+	}
+}
+
 func TestHookPreValidate_AllowsEditWithDelegatedOperatorOverride(t *testing.T) {
 	repoRoot := t.TempDir()
 	docsDir := filepath.Join(repoRoot, "docs")
@@ -420,7 +626,7 @@ func TestHookPreValidate_DoesNotBypassDisabledEditWithDelegatedOperatorOverride(
 	}
 }
 
-func TestHookPreValidate_NeedsApprovalReturnsAskAndPersistsLocalHookApproval(t *testing.T) {
+func TestHookPreValidate_NeedsApprovalReturnsHarnessOwnedAsk(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        requires_approval: true\n", 1)
@@ -450,8 +656,8 @@ func TestHookPreValidate_NeedsApprovalReturnsAskAndPersistsLocalHookApproval(t *
 	if response.Decision != "ask" {
 		t.Fatalf("expected approval-required Bash call to ask, got %#v", response)
 	}
-	if response.ApprovalRequestID == "" {
-		t.Fatalf("expected approval request id, got %#v", response)
+	if response.ApprovalRequestID != "" {
+		t.Fatalf("expected harness-owned ask without Loopgate approval id, got %#v", response)
 	}
 	if response.OperatorOverrideClass != "repo_bash_safe" {
 		t.Fatalf("expected repo_bash_safe operator override class, got %#v", response)
@@ -460,26 +666,16 @@ func TestHookPreValidate_NeedsApprovalReturnsAskAndPersistsLocalHookApproval(t *
 		t.Fatalf("expected none operator override delegation, got %#v", response)
 	}
 
-	approvalState := readClaudeHookApprovalState(t, repoRoot, "session-hook")
-	if len(approvalState.Approvals) != 1 {
-		t.Fatalf("expected one local hook approval, got %#v", approvalState)
-	}
-	if approvalState.Approvals[0].State != claudeHookApprovalStatePending {
-		t.Fatalf("expected pending hook approval state, got %#v", approvalState.Approvals[0])
-	}
-	if approvalState.Approvals[0].ToolUseID != "toolu_approve_shell" {
-		t.Fatalf("expected tracked tool_use_id, got %#v", approvalState.Approvals[0])
-	}
-	if approvalState.Approvals[0].ApprovalSurface != claudeHookApprovalSurfaceInlineClaude {
-		t.Fatalf("expected inline Claude approval surface, got %#v", approvalState.Approvals[0])
+	if claudeHookApprovalStateFileExists(t, repoRoot, "session-hook") {
+		t.Fatalf("expected harness-owned ask not to create Loopgate approval state")
 	}
 
 	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
 	if decision, _ := lastAuditEvent.Data["decision"].(string); decision != "ask" {
 		t.Fatalf("expected ask decision in audit, got %#v", lastAuditEvent.Data["decision"])
 	}
-	if approvalRequestID, _ := lastAuditEvent.Data["hook_approval_request_id"].(string); approvalRequestID == "" {
-		t.Fatalf("expected hook_approval_request_id in audit, got %#v", lastAuditEvent.Data["hook_approval_request_id"])
+	if approvalRequestID, _ := lastAuditEvent.Data["hook_approval_request_id"].(string); approvalRequestID != "" {
+		t.Fatalf("expected no Loopgate hook approval id in audit, got %#v", lastAuditEvent.Data["hook_approval_request_id"])
 	}
 	if toolTargetKind, _ := lastAuditEvent.Data["tool_target_kind"].(string); toolTargetKind != "shell_command" {
 		t.Fatalf("expected shell_command tool target kind, got %#v", lastAuditEvent.Data["tool_target_kind"])
@@ -496,8 +692,8 @@ func TestHookPreValidate_NeedsApprovalReturnsAskAndPersistsLocalHookApproval(t *
 	if overrideDelegation, _ := lastAuditEvent.Data["operator_override_max_delegation"].(string); overrideDelegation != "none" {
 		t.Fatalf("expected none override delegation in audit, got %#v", lastAuditEvent.Data["operator_override_max_delegation"])
 	}
-	if !auditEventTypesContain(t, repoRoot, "approval.created") {
-		t.Fatalf("expected approval.created ledger event for inline Claude approval")
+	if auditEventTypesContain(t, repoRoot, "approval.created") {
+		t.Fatalf("expected harness-owned ask not to emit approval.created")
 	}
 }
 
@@ -545,11 +741,11 @@ func TestHookPreValidate_PermissionRequestMatchesPendingClaudeApproval(t *testin
 	if hookEventName, _ := lastAuditEvent.Data["hook_event_name"].(string); hookEventName != "PermissionRequest" {
 		t.Fatalf("expected PermissionRequest hook event, got %#v", lastAuditEvent.Data["hook_event_name"])
 	}
-	if hookApprovalRequestID, _ := lastAuditEvent.Data["hook_approval_request_id"].(string); hookApprovalRequestID == "" {
-		t.Fatalf("expected matched approval id in audit, got %#v", lastAuditEvent.Data["hook_approval_request_id"])
+	if hookApprovalRequestID, _ := lastAuditEvent.Data["hook_approval_request_id"].(string); hookApprovalRequestID != "" {
+		t.Fatalf("expected PermissionRequest not to match a Loopgate-tracked approval id, got %#v", lastAuditEvent.Data["hook_approval_request_id"])
 	}
-	if hookApprovalSurface, _ := lastAuditEvent.Data["hook_approval_surface"].(string); hookApprovalSurface != claudeHookApprovalSurfaceInlineClaude {
-		t.Fatalf("expected inline Claude approval surface in audit, got %#v", lastAuditEvent.Data["hook_approval_surface"])
+	if hookApprovalSurface, _ := lastAuditEvent.Data["hook_approval_surface"].(string); hookApprovalSurface != "" {
+		t.Fatalf("expected PermissionRequest not to carry a Loopgate approval surface, got %#v", lastAuditEvent.Data["hook_approval_surface"])
 	}
 	if toolRequestFingerprint, _ := lastAuditEvent.Data["tool_request_fingerprint_sha256"].(string); toolRequestFingerprint == "" {
 		t.Fatalf("expected tool request fingerprint in audit, got %#v", lastAuditEvent.Data["tool_request_fingerprint_sha256"])
@@ -680,7 +876,7 @@ func TestHookPreValidate_BlocksSecondaryGovernanceHookEventUntilImplemented(t *t
 	}
 }
 
-func TestHookPreValidate_PostToolUseResolvesPendingLocalHookApproval(t *testing.T) {
+func TestHookPreValidate_PostToolUseRecordsWithoutPendingHarnessApprovalState(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        requires_approval: true\n", 1)
@@ -720,26 +916,19 @@ func TestHookPreValidate_PostToolUseResolvesPendingLocalHookApproval(t *testing.
 		t.Fatalf("expected PostToolUse to allow, got %#v", response)
 	}
 
-	approvalState := readClaudeHookApprovalState(t, repoRoot, "session-hook")
-	if len(approvalState.Approvals) != 1 {
-		t.Fatalf("expected one local hook approval, got %#v", approvalState)
-	}
-	if approvalState.Approvals[0].State != claudeHookApprovalStateExecuted {
-		t.Fatalf("expected executed hook approval state, got %#v", approvalState.Approvals[0])
-	}
-	if approvalState.Approvals[0].HookEventName != claudeCodeHookEventPostToolUse {
-		t.Fatalf("expected PostToolUse hook event recorded on approval, got %#v", approvalState.Approvals[0])
+	if claudeHookApprovalStateFileExists(t, repoRoot, "session-hook") {
+		t.Fatalf("expected PostToolUse not to create Loopgate approval state for harness-owned approval")
 	}
 
 	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
-	if hookHandlingMode, _ := lastAuditEvent.Data["hook_handling_mode"].(string); hookHandlingMode != claudeCodeHookHandlingModeStateTransition {
-		t.Fatalf("expected state transition handling mode, got %#v", lastAuditEvent.Data["hook_handling_mode"])
+	if hookHandlingMode, _ := lastAuditEvent.Data["hook_handling_mode"].(string); hookHandlingMode != claudeCodeHookHandlingModeEnforced {
+		t.Fatalf("expected enforced handling mode, got %#v", lastAuditEvent.Data["hook_handling_mode"])
 	}
-	if hookApprovalState, _ := lastAuditEvent.Data["hook_approval_state"].(string); hookApprovalState != claudeHookApprovalStateExecuted {
-		t.Fatalf("expected executed hook approval state in audit, got %#v", lastAuditEvent.Data["hook_approval_state"])
+	if hookApprovalState, _ := lastAuditEvent.Data["hook_approval_state"].(string); hookApprovalState != "" {
+		t.Fatalf("expected no Loopgate hook approval state in audit, got %#v", lastAuditEvent.Data["hook_approval_state"])
 	}
-	if !auditEventTypesContain(t, repoRoot, "approval.granted") {
-		t.Fatalf("expected approval.granted ledger event for inline Claude approval execution")
+	if auditEventTypesContain(t, repoRoot, "approval.granted") {
+		t.Fatalf("expected harness-owned approval not to emit Loopgate approval.granted")
 	}
 }
 
@@ -1152,7 +1341,7 @@ func TestHookPreValidate_SessionEndRecordsLifecycleReason(t *testing.T) {
 	}
 }
 
-func TestHookPreValidate_SessionEndAbandonsPendingLocalHookApprovals(t *testing.T) {
+func TestHookPreValidate_SessionEndDoesNotAbandonHarnessOwnedApprovals(t *testing.T) {
 	repoRoot := t.TempDir()
 	socketPath := filepath.Join(t.TempDir(), "loopgate.sock")
 	policyYAML := strings.Replace(loopgatePolicyYAML(false), "tools:\n", "tools:\n  claude_code:\n    tool_policies:\n      Bash:\n        enabled: true\n        requires_approval: true\n", 1)
@@ -1185,23 +1374,16 @@ func TestHookPreValidate_SessionEndAbandonsPendingLocalHookApprovals(t *testing.
 		t.Fatalf("expected status 200, got %d body=%s", sessionEndRecorder.Code, sessionEndRecorder.Body.String())
 	}
 
-	approvalState := readClaudeHookApprovalState(t, repoRoot, "session-hook")
-	if len(approvalState.Approvals) != 1 {
-		t.Fatalf("expected one local hook approval, got %#v", approvalState)
-	}
-	if approvalState.Approvals[0].State != claudeHookApprovalStateAbandoned {
-		t.Fatalf("expected abandoned hook approval state, got %#v", approvalState.Approvals[0])
-	}
-	if approvalState.Approvals[0].HookEventName != claudeCodeHookEventSessionEnd {
-		t.Fatalf("expected SessionEnd hook event recorded on approval, got %#v", approvalState.Approvals[0])
+	if claudeHookApprovalStateFileExists(t, repoRoot, "session-hook") {
+		t.Fatalf("expected SessionEnd not to create Loopgate approval state for harness-owned approval")
 	}
 
 	lastAuditEvent := readLastHookAuditEvent(t, repoRoot)
-	if hookHandlingMode, _ := lastAuditEvent.Data["hook_handling_mode"].(string); hookHandlingMode != claudeCodeHookHandlingModeStateTransition {
-		t.Fatalf("expected state transition handling mode, got %#v", lastAuditEvent.Data["hook_handling_mode"])
+	if hookHandlingMode, _ := lastAuditEvent.Data["hook_handling_mode"].(string); hookHandlingMode != claudeCodeHookHandlingModeAuditOnly {
+		t.Fatalf("expected audit-only handling mode, got %#v", lastAuditEvent.Data["hook_handling_mode"])
 	}
-	if !auditEventTypesContain(t, repoRoot, "approval.cancelled") {
-		t.Fatalf("expected approval.cancelled ledger event for abandoned inline Claude approval")
+	if auditEventTypesContain(t, repoRoot, "approval.cancelled") {
+		t.Fatalf("expected harness-owned approval not to emit approval.cancelled")
 	}
 }
 
@@ -1254,6 +1436,22 @@ func readClaudeHookSessionState(t *testing.T, repoRoot string) claudeHookSession
 		t.Fatalf("decode claude hook session state: %v", err)
 	}
 	return stateFile
+}
+
+func claudeHookApprovalStateFileExists(t *testing.T, repoRoot string, sessionID string) bool {
+	t.Helper()
+
+	storageKey := claudeHookSessionStorageKey(sessionID)
+	statePath := filepath.Join(repoRoot, "runtime", "state", "claude_hook_sessions", storageKey, claudeHookApprovalsFileName)
+	_, err := os.Stat(statePath)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	t.Fatalf("stat claude hook approval state: %v", err)
+	return false
 }
 
 func readClaudeHookApprovalState(t *testing.T, repoRoot string, sessionID string) claudeHookApprovalStateTestFile {

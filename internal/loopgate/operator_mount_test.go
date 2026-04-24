@@ -31,10 +31,10 @@ func TestNormalizeOperatorMountPathsForSession_acceptsOperator(t *testing.T) {
 	}
 }
 
-func TestNormalizeOperatorMountPathsForSession_rejectsLegacyHavenAlias(t *testing.T) {
+func TestNormalizeOperatorMountPathsForSession_rejectsLegacyActorAlias(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := normalizeOperatorMountPathsForSession("haven", []string{dir}); err == nil {
-		t.Fatal("expected haven alias to be rejected")
+	if _, err := normalizeOperatorMountPathsForSession("legacy", []string{dir}); err == nil {
+		t.Fatal("expected legacy alias to be rejected")
 	}
 }
 

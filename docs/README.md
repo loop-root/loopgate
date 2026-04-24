@@ -1,10 +1,12 @@
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-24
 
 # Docs Index
 
 This repository documents a single product:
 
-**Loopgate** — a local-first governance layer that tracks and constrains what your AI is doing on your machine.
+**Loopgate** — a local-first governance layer that lets routine safe-ish AI
+tool work proceed under signed policy, requires explicit approval for higher
+risk actions, denies forbidden actions, and records what happened.
 
 The current active story is:
 - Loopgate
@@ -32,6 +34,7 @@ separate `ARCHIVED` repository and are not part of the public operator path.
 - [Ledger & audit integrity](./setup/LEDGER_AND_AUDIT_INTEGRITY.md)
 - [Threat model](./loopgate-threat-model.md)
 - [Active product gaps](./roadmap/loopgate_v1_product_gaps.md)
+- [Admin console TUI MVP](./roadmap/admin_console_tui_mvp.md)
 - [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
 - [Release candidate checklist](./roadmap/release_candidate_checklist.md)
 - [Changelog](../CHANGELOG.md)
@@ -56,6 +59,15 @@ separate `ARCHIVED` repository and are not part of the public operator path.
 - [Doctor and ledger tools](./setup/DOCTOR_AND_LEDGER.md)
 - [Secrets and experimental provider connections](./setup/SECRETS.md)
 - [Tool usage](./setup/TOOL_USAGE.md)
+
+## Roadmap docs
+
+- [Admin console TUI MVP](./roadmap/admin_console_tui_mvp.md)
+- [Harness usability execution plan](./roadmap/harness_usability_execution_plan.md)
+- [Future enterprise direction](./roadmap/future_enterprise_direction.md)
+- [Active product gaps](./roadmap/loopgate_v1_product_gaps.md)
+- [Loopgate V1 hardening plan](./roadmap/loopgate_v1_hardening_plan.md)
+- [Release candidate checklist](./roadmap/release_candidate_checklist.md)
 
 ## Historical material
 

@@ -34,13 +34,13 @@ func TestNewServerWithOptions_InitializesWithoutAdminSurface(t *testing.T) {
 	server.CloseDiagnosticLogs()
 }
 
-func TestRetiredHavenRoutesAreNotRegistered(t *testing.T) {
+func TestRetiredAdminRoutesAreNotRegistered(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, _, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
 	var statusResponse controlapipkg.StatusResponse
 	if err := client.doJSON(context.Background(), http.MethodGet, "/v1/status", client.capabilityToken, nil, &statusResponse, nil); err != nil {
-		t.Fatalf("status with retired Haven routes absent: %v", err)
+		t.Fatalf("status with retired admin routes absent: %v", err)
 	}
 
 	err := client.doJSON(context.Background(), http.MethodPost, "/v1/chat", client.capabilityToken, map[string]string{
@@ -51,7 +51,7 @@ func TestRetiredHavenRoutesAreNotRegistered(t *testing.T) {
 	}
 }
 
-func TestRetiredHavenSandboxCapabilitiesAreAbsent(t *testing.T) {
+func TestRetiredSandboxCapabilitiesAreAbsent(t *testing.T) {
 	repoRoot := t.TempDir()
 	client, status, _ := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 
@@ -63,7 +63,6 @@ func TestRetiredHavenSandboxCapabilitiesAreAbsent(t *testing.T) {
 		"journal.list",
 		"journal.read",
 		"journal.write",
-		"haven.operator_context",
 		"notes.list",
 		"notes.read",
 		"notes.write",
@@ -74,7 +73,7 @@ func TestRetiredHavenSandboxCapabilitiesAreAbsent(t *testing.T) {
 	}
 	for _, capabilityName := range hiddenCapabilities {
 		if containsCapability(status.Capabilities, capabilityName) {
-			t.Fatalf("expected %s to be absent after Haven retirement", capabilityName)
+			t.Fatalf("expected retired capability %s to be absent", capabilityName)
 		}
 	}
 
