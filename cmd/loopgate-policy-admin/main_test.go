@@ -622,8 +622,95 @@ func TestRunOverridesGrantEditPath_RejectsNonPersistentParentDelegation(t *testi
 	if exitCode != 1 {
 		t.Fatalf("expected exit code 1, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "repo_edit_safe max_delegation=session is not compatible with persistent edit-path overrides") {
+	if !strings.Contains(stderr.String(), "repo_edit_safe max_delegation=session does not allow persistent operator override grants") {
 		t.Fatalf("expected delegation rejection error, got %q", stderr.String())
+	}
+}
+
+func TestRunOverridesGrant_WritesGenericPathScopedGrant(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
+	if err := os.MkdirAll(filepath.Join(repoRoot, "docs"), 0o755); err != nil {
+		t.Fatalf("mkdir docs dir: %v", err)
+	}
+
+	privateKeyPath := filepath.Join(t.TempDir(), signerFixture.keyID()+".pem")
+	writePEMEncodedEd25519PrivateKey(t, privateKeyPath, signerFixture.privateKey, 0o600)
+
+	socketPath := newTempSocketPath(t)
+	_ = startPolicyAdminTestServer(t, repoRoot, socketPath)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"overrides", "grant", config.OperatorOverrideClassRepoWriteSafe, "-repo", repoRoot, "-socket", socketPath, "-path", "docs", "-private-key-file", privateKeyPath, "-key-id", signerFixture.keyID()}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "operator override grant applied") {
+		t.Fatalf("expected grant success output, got %q", output)
+	}
+	if !strings.Contains(output, "grant_class: "+config.OperatorOverrideClassRepoWriteSafe) {
+		t.Fatalf("expected repo_write_safe output, got %q", output)
+	}
+	if !strings.Contains(output, "path_prefix: docs") {
+		t.Fatalf("expected docs path output, got %q", output)
+	}
+
+	loadResult, err := config.LoadOperatorOverrideDocumentWithHash(repoRoot)
+	if err != nil {
+		t.Fatalf("LoadOperatorOverrideDocumentWithHash after grant: %v", err)
+	}
+	activeGrants := config.ActiveOperatorOverrideGrants(loadResult.Document, config.OperatorOverrideClassRepoWriteSafe)
+	if len(activeGrants) != 1 {
+		t.Fatalf("expected one active repo_write_safe grant, got %#v", loadResult.Document.Grants)
+	}
+	if got := activeGrants[0].PathPrefixes; len(got) != 1 || got[0] != "docs" {
+		t.Fatalf("expected docs path prefix, got %#v", got)
+	}
+}
+
+func TestRunOverridesGrant_DryRunDoesNotWriteOverrideDocument(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, delegatedRepoEditPolicyYAML())
+	if err := os.MkdirAll(filepath.Join(repoRoot, "docs"), 0o755); err != nil {
+		t.Fatalf("mkdir docs dir: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"overrides", "grant", config.OperatorOverrideClassRepoEditSafe, "-repo", repoRoot, "-path", "docs", "-dry-run"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "operator override grant preview") || !strings.Contains(output, "would_write: false") {
+		t.Fatalf("expected dry-run preview output, got %q", output)
+	}
+	loadResult, err := config.LoadOperatorOverrideDocumentWithHash(repoRoot)
+	if err != nil {
+		t.Fatalf("LoadOperatorOverrideDocumentWithHash after dry run: %v", err)
+	}
+	if loadResult.Present {
+		t.Fatalf("expected dry-run not to write operator override document, got %#v", loadResult)
+	}
+}
+
+func TestRunOverridesGrant_RejectsUnsupportedPathScopedClass(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"overrides", "grant", config.OperatorOverrideClassWebAccessTrusted, "-repo", repoRoot, "-path", "docs"}, &stdout, &stderr)
+	if exitCode != 2 {
+		t.Fatalf("expected exit code 2, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "unsupported path-scoped operator override class") {
+		t.Fatalf("expected unsupported class error, got %q", stderr.String())
 	}
 }
 

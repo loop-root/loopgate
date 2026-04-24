@@ -25,6 +25,8 @@ func runOverrides(args []string, stdout io.Writer, stderr io.Writer) int {
 	switch args[0] {
 	case "list":
 		return runOverrideList(args[1:], stdout, stderr)
+	case "grant":
+		return runOverrideGrant(args[1:], stdout, stderr)
 	case "grant-edit-path":
 		return runOverrideGrantEditPath(args[1:], stdout, stderr)
 	case "revoke":
@@ -107,8 +109,74 @@ func runOverrideGrantEditPath(args []string, stdout io.Writer, stderr io.Writer)
 		fmt.Fprintf(stderr, "ERROR: unexpected positional arguments: %s\n", strings.Join(fs.Args(), " "))
 		return 2
 	}
+	return applyOverrideGrantPath(overrideGrantPathRequest{
+		ClassName:          config.OperatorOverrideClassRepoEditSafe,
+		RawPath:            *pathFlag,
+		RepoRootFlag:       *repoRootFlag,
+		SocketPathFlag:     *socketPathFlag,
+		PrivateKeyPathFlag: *privateKeyPathFlag,
+		KeyIDFlag:          *keyIDFlag,
+	}, stdout, stderr)
+}
 
-	baseRoot, err := resolveBaseRoot(*repoRootFlag)
+func runOverrideGrant(args []string, stdout io.Writer, stderr io.Writer) int {
+	overrideClass := ""
+	parseArgs := args
+	if len(args) > 0 && !strings.HasPrefix(strings.TrimSpace(args[0]), "-") {
+		overrideClass = strings.TrimSpace(args[0])
+		parseArgs = args[1:]
+	}
+	fs := flag.NewFlagSet("overrides grant", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	repoRootFlag := fs.String("repo", "", "repository root used to resolve the operator override document")
+	socketPathFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
+	pathFlag := fs.String("path", "", "repo-relative or absolute subtree path to grant")
+	privateKeyPathFlag := fs.String("private-key-file", "", "path to a PKCS#8 PEM-encoded Ed25519 private key")
+	keyIDFlag := fs.String("key-id", "", "trusted signing key identifier (defaults to the current signed policy key_id)")
+	dryRunFlag := fs.Bool("dry-run", false, "preview the grant without writing or reloading operator overrides")
+	if err := fs.Parse(parseArgs); err != nil {
+		return 2
+	}
+	if overrideClass == "" {
+		if fs.NArg() != 1 {
+			fmt.Fprintln(stderr, "ERROR: overrides grant requires exactly one class name")
+			return 2
+		}
+		overrideClass = strings.TrimSpace(fs.Arg(0))
+	} else if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "ERROR: overrides grant requires exactly one class name")
+		return 2
+	}
+
+	return applyOverrideGrantPath(overrideGrantPathRequest{
+		ClassName:          overrideClass,
+		RawPath:            *pathFlag,
+		RepoRootFlag:       *repoRootFlag,
+		SocketPathFlag:     *socketPathFlag,
+		PrivateKeyPathFlag: *privateKeyPathFlag,
+		KeyIDFlag:          *keyIDFlag,
+		DryRun:             *dryRunFlag,
+	}, stdout, stderr)
+}
+
+type overrideGrantPathRequest struct {
+	ClassName          string
+	RawPath            string
+	RepoRootFlag       string
+	SocketPathFlag     string
+	PrivateKeyPathFlag string
+	KeyIDFlag          string
+	DryRun             bool
+}
+
+func applyOverrideGrantPath(request overrideGrantPathRequest, stdout io.Writer, stderr io.Writer) int {
+	overrideClass := strings.TrimSpace(request.ClassName)
+	if !isPathScopedOperatorOverrideClass(overrideClass) {
+		fmt.Fprintf(stderr, "ERROR: unsupported path-scoped operator override class %q (supported: %s)\n", overrideClass, strings.Join(pathScopedOperatorOverrideClasses(), ", "))
+		return 2
+	}
+
+	baseRoot, err := resolveBaseRoot(request.RepoRootFlag)
 	if err != nil {
 		fmt.Fprintln(stderr, "ERROR:", err)
 		return 1
@@ -118,12 +186,12 @@ func runOverrideGrantEditPath(args []string, stdout io.Writer, stderr io.Writer)
 		fmt.Fprintln(stderr, "ERROR: load signed policy:", err)
 		return 1
 	}
-	if got := loadedPolicy.Policy.OperatorOverrideMaxDelegation(config.OperatorOverrideClassRepoEditSafe); got != config.OperatorOverrideDelegationPersistent {
-		fmt.Fprintf(stderr, "ERROR: parent policy repo_edit_safe max_delegation=%s is not compatible with persistent edit-path overrides\n", got)
+	if got := loadedPolicy.Policy.OperatorOverrideMaxDelegation(overrideClass); got != config.OperatorOverrideDelegationPersistent {
+		fmt.Fprintf(stderr, "ERROR: parent policy %s max_delegation=%s does not allow persistent operator override grants\n", overrideClass, got)
 		return 1
 	}
 
-	normalizedPath, err := normalizeRepoEditSafeOverridePath(loadedPolicy.Policy, baseRoot, *pathFlag)
+	normalizedPath, err := normalizePathScopedOperatorOverridePath(loadedPolicy.Policy, baseRoot, overrideClass, request.RawPath)
 	if err != nil {
 		fmt.Fprintln(stderr, "ERROR:", err)
 		return 2
@@ -133,19 +201,28 @@ func runOverrideGrantEditPath(args []string, stdout io.Writer, stderr io.Writer)
 		fmt.Fprintln(stderr, "ERROR: load current operator override document:", err)
 		return 1
 	}
-	for _, grant := range config.ActiveOperatorOverrideGrants(loadResult.Document, config.OperatorOverrideClassRepoEditSafe) {
+	for _, grant := range config.ActiveOperatorOverrideGrants(loadResult.Document, overrideClass) {
 		if len(grant.PathPrefixes) == 1 && grant.PathPrefixes[0] == normalizedPath {
 			fmt.Fprintf(stdout, "operator override already present id=%s path=%s\n", grant.ID, normalizedPath)
 			return 0
 		}
 	}
 
-	keyID, err := resolveOperatorOverrideKeyID(baseRoot, *keyIDFlag)
+	keyID, err := resolveOperatorOverrideKeyID(baseRoot, request.KeyIDFlag)
 	if err != nil {
 		fmt.Fprintln(stderr, "ERROR:", err)
 		return 1
 	}
-	privateKeyPath, _, err := resolvePolicySigningPrivateKeyPath(strings.TrimSpace(*privateKeyPathFlag), strings.TrimSpace(os.Getenv(policySigningPrivateKeyFileEnv)), keyID)
+	if request.DryRun {
+		fmt.Fprintln(stdout, "operator override grant preview")
+		fmt.Fprintf(stdout, "grant_class: %s\n", overrideClass)
+		fmt.Fprintf(stdout, "path_prefix: %s\n", normalizedPath)
+		fmt.Fprintf(stdout, "key_id: %s\n", keyID)
+		fmt.Fprintln(stdout, "would_write: false")
+		return 0
+	}
+
+	privateKeyPath, _, err := resolvePolicySigningPrivateKeyPath(strings.TrimSpace(request.PrivateKeyPathFlag), strings.TrimSpace(os.Getenv(policySigningPrivateKeyFileEnv)), keyID)
 	if err != nil {
 		fmt.Fprintln(stderr, "ERROR:", err)
 		return 2
@@ -164,20 +241,20 @@ func runOverrideGrantEditPath(args []string, stdout io.Writer, stderr io.Writer)
 	}
 	nextDocument.Grants = append(nextDocument.Grants, config.OperatorOverrideGrant{
 		ID:           grantID,
-		Class:        config.OperatorOverrideClassRepoEditSafe,
+		Class:        overrideClass,
 		State:        "active",
 		PathPrefixes: []string{normalizedPath},
 		CreatedAtUTC: time.Now().UTC().Format(time.RFC3339),
 	})
 
-	if err := writeAndApplyOperatorOverrideDocument(baseRoot, resolveSocketPath(baseRoot, *socketPathFlag), nextDocument, privateKey, keyID); err != nil {
+	if err := writeAndApplyOperatorOverrideDocument(baseRoot, resolveSocketPath(baseRoot, request.SocketPathFlag), nextDocument, privateKey, keyID); err != nil {
 		fmt.Fprintln(stderr, "ERROR:", err)
 		return 1
 	}
 
 	fmt.Fprintln(stdout, "operator override grant applied")
 	fmt.Fprintf(stdout, "grant_id: %s\n", grantID)
-	fmt.Fprintf(stdout, "grant_class: %s\n", config.OperatorOverrideClassRepoEditSafe)
+	fmt.Fprintf(stdout, "grant_class: %s\n", overrideClass)
 	fmt.Fprintf(stdout, "path_prefix: %s\n", normalizedPath)
 	return 0
 }
@@ -374,7 +451,25 @@ func formatOperatorOverrideWriteFailure(action string, err error, restoreErr err
 	return fmt.Errorf("%s: %v (rollback failed: %v)", action, err, restoreErr)
 }
 
-func normalizeRepoEditSafeOverridePath(policy config.Policy, repoRoot string, rawPath string) (string, error) {
+func isPathScopedOperatorOverrideClass(className string) bool {
+	for _, supportedClass := range pathScopedOperatorOverrideClasses() {
+		if strings.TrimSpace(className) == supportedClass {
+			return true
+		}
+	}
+	return false
+}
+
+func pathScopedOperatorOverrideClasses() []string {
+	return []string{
+		config.OperatorOverrideClassRepoReadSearch,
+		config.OperatorOverrideClassRepoEditSafe,
+		config.OperatorOverrideClassRepoWriteSafe,
+		config.OperatorOverrideClassRepoBashSafe,
+	}
+}
+
+func normalizePathScopedOperatorOverridePath(policy config.Policy, repoRoot string, overrideClass string, rawPath string) (string, error) {
 	trimmedPath := strings.TrimSpace(rawPath)
 	if trimmedPath == "" {
 		return "", fmt.Errorf("override path is required")
@@ -388,7 +483,7 @@ func normalizeRepoEditSafeOverridePath(policy config.Policy, repoRoot string, ra
 		return "", fmt.Errorf("override path %q must stay within the repository root", resolvedPath)
 	}
 
-	for _, toolName := range []string{"Edit", "MultiEdit"} {
+	for _, toolName := range pathScopedOperatorOverrideTools(overrideClass) {
 		allowedRoots, deniedPaths := effectiveClaudeCodePathPolicy(policy, toolName)
 		if len(allowedRoots) > 0 && !localPathMatchesAnyPolicyRoot(resolvedPath, allowedRoots, repoRoot) {
 			return "", fmt.Errorf("override path %q is outside %s allowed_roots", resolvedPath, toolName)
@@ -406,6 +501,23 @@ func normalizeRepoEditSafeOverridePath(policy config.Policy, repoRoot string, ra
 		return ".", nil
 	}
 	return filepath.Clean(relativePath), nil
+}
+
+func normalizeRepoEditSafeOverridePath(policy config.Policy, repoRoot string, rawPath string) (string, error) {
+	return normalizePathScopedOperatorOverridePath(policy, repoRoot, config.OperatorOverrideClassRepoEditSafe, rawPath)
+}
+
+func pathScopedOperatorOverrideTools(overrideClass string) []string {
+	switch overrideClass {
+	case config.OperatorOverrideClassRepoReadSearch:
+		return []string{"Read", "Glob", "Grep"}
+	case config.OperatorOverrideClassRepoEditSafe:
+		return []string{"Edit", "MultiEdit"}
+	case config.OperatorOverrideClassRepoWriteSafe:
+		return []string{"Write"}
+	default:
+		return nil
+	}
 }
 
 func effectiveClaudeCodePathPolicy(policy config.Policy, toolName string) ([]string, []string) {

@@ -69,6 +69,7 @@ func printUsage(w io.Writer) {
   loopgate-policy-admin approvals approve <id> [-repo DIR] [-socket PATH] [-reason TEXT]
   loopgate-policy-admin approvals deny <id>    [-repo DIR] [-socket PATH] [-reason TEXT]
   loopgate-policy-admin overrides list  [-repo DIR]
+  loopgate-policy-admin overrides grant <class> -path PATH [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID] [-dry-run]
   loopgate-policy-admin overrides grant-edit-path -path PATH [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID]
   loopgate-policy-admin overrides revoke <id> [-repo DIR] [-socket PATH] [-private-key-file PATH] [-key-id ID]
 

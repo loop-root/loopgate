@@ -118,9 +118,20 @@ Deliverables:
 
 - `loopgate policy show`
 - `loopgate policy explain <tool-or-class>`
-- `loopgate operator grant <class> --path <path> --delegation <session|persistent>`
-- `loopgate operator revoke <grant-id>`
+- `loopgate-policy-admin overrides grant <class> -path <path> [-dry-run]`
+- `loopgate-policy-admin overrides revoke <grant-id>`
 - preview-before-write behavior for policy and operator override mutations
+
+Initial implementation status:
+
+- `loopgate-policy-admin overrides grant <class> -path <path>` supports
+  persistent path-scoped grants for `repo_read_search`, `repo_edit_safe`,
+  `repo_write_safe`, and `repo_bash_safe`
+- persistent grants are refused unless the signed root policy gives that class
+  `max_delegation: persistent`
+- `-dry-run` previews the grant without writing or reloading operator overrides
+- existing `grant-edit-path` remains as a compatibility alias for
+  `repo_edit_safe`
 
 Tests:
 

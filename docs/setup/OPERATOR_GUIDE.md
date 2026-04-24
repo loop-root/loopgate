@@ -396,6 +396,38 @@ For a Claude hook block that never became an approval or capability request, use
 If you only know the hook session id, you can omit `-tool-use-id`; doctor will
 select the latest blocked hook event recorded for that session.
 
+### Add or revoke a persistent operator grant
+
+Persistent operator grants are signed override documents. They can only narrow
+within the root policy ceiling. If the root policy says
+`max_delegation: session` or `none`, the CLI refuses to write a persistent
+grant.
+
+Preview a grant before writing it:
+
+```bash
+./bin/loopgate-policy-admin overrides grant repo_edit_safe -path docs -dry-run
+```
+
+Write and hot-apply a persistent path-scoped grant:
+
+```bash
+./bin/loopgate-policy-admin overrides grant repo_edit_safe -path docs
+```
+
+Supported path-scoped classes are `repo_read_search`, `repo_edit_safe`,
+`repo_write_safe`, and `repo_bash_safe`. List active grants with:
+
+```bash
+./bin/loopgate-policy-admin overrides list
+```
+
+Revoke by grant id:
+
+```bash
+./bin/loopgate-policy-admin overrides revoke <grant-id>
+```
+
 ### Apply a policy change safely
 
 Use this flow:

@@ -181,14 +181,18 @@ Fields:
 
 ## `operator_overrides`
 
-Declares which bounded operator-created exceptions the parent policy may allow in a future delegated override flow.
+Declares which bounded operator-created exceptions the parent policy may allow.
 
 Current v0.2 behavior:
 
 - this block does **not** widen current tool access by itself
 - absent or unconfigured classes default fail-closed to `none`
-- Loopgate uses it today as strict parent-policy metadata for explanation surfaces
-- future operator override objects must still be explicitly created, validated, signed, and audited before they can affect the effective policy
+- persistent operator override objects must be explicitly created, validated,
+  signed, and hot-applied before they can affect the effective policy
+- the current CLI supports persistent path-scoped grants only when the parent
+  class has `max_delegation: persistent`
+- session-scoped approvals are harness-owned; they are not written into the
+  durable operator override document
 
 Fields:
 
@@ -215,6 +219,18 @@ Semantics:
   - the parent policy may allow future session-scoped operator exceptions for this class
 - `persistent`
   - the parent policy may allow future persistent operator exceptions for this class
+
+Persistent path-scoped grant command:
+
+```bash
+./bin/loopgate-policy-admin overrides grant repo_edit_safe -path docs -dry-run
+./bin/loopgate-policy-admin overrides grant repo_edit_safe -path docs
+./bin/loopgate-policy-admin overrides revoke <grant-id>
+```
+
+Supported path-scoped classes are `repo_read_search`, `repo_edit_safe`,
+`repo_write_safe`, and `repo_bash_safe`. `web_access_trusted` is not path-scoped
+in the current CLI.
 
 Important limitation:
 
