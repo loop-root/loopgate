@@ -40,7 +40,7 @@ at a time.
 Use these verification commands before declaring setup complete:
 - loopgate status
 - loopgate test
-- loopgate-doctor setup-check
+- loopgate-doctor setup-check --json
 
 If using a source checkout, use ./bin/loopgate, ./bin/loopgate-doctor, and
 ./bin/loopgate-policy-admin instead of the installed command names.

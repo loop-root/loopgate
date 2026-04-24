@@ -63,7 +63,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 
 func printUsage(w io.Writer) {
 	fmt.Fprintf(w, `Usage:
-  loopgate-doctor setup-check [-repo DIR] [-socket PATH] [-claude-dir DIR]  Print human-readable setup readiness
+  loopgate-doctor setup-check [-repo DIR] [-socket PATH] [-claude-dir DIR] [-json]  Print setup readiness
   loopgate-doctor report      [-repo DIR]                        Print offline JSON diagnostic report to stdout
   loopgate-doctor bundle      [-repo DIR] -out DIR [-log-lines N]   Write report.json + diagnostic log tails
   loopgate-doctor explain-denial [-repo DIR] (-approval-id ID | -request-id ID | -hook-session-id ID [-tool-use-id ID] [-hook-event-name NAME])    Explain one approval, request, or hook block outcome from the verified audit ledger
@@ -76,56 +76,57 @@ Effective runtime config for offline report/bundle matches Loopgate: config/runt
 }
 
 type setupCheckReport struct {
-	RepoRoot          string
-	SocketPath        string
-	Policy            setupCheckPolicyStatus
-	OperatorOverrides setupCheckOperatorOverrideStatus
-	Daemon            setupCheckDaemonStatus
-	ClaudeHooks       setupCheckClaudeHooksStatus
-	SampleDecisions   []setupCheckSampleDecision
+	RepoRoot          string                           `json:"repo_root"`
+	SocketPath        string                           `json:"socket_path"`
+	Policy            setupCheckPolicyStatus           `json:"policy"`
+	OperatorOverrides setupCheckOperatorOverrideStatus `json:"operator_overrides"`
+	Daemon            setupCheckDaemonStatus           `json:"daemon"`
+	ClaudeHooks       setupCheckClaudeHooksStatus      `json:"claude_hooks"`
+	SampleDecisions   []setupCheckSampleDecision       `json:"sample_decisions"`
+	NextSteps         []string                         `json:"next_steps,omitempty"`
 }
 
 type setupCheckPolicyStatus struct {
-	Loaded         bool
-	Profile        string
-	ContentSHA256  string
-	SignatureKeyID string
-	Error          string
+	Loaded         bool   `json:"loaded"`
+	Profile        string `json:"profile"`
+	ContentSHA256  string `json:"content_sha256,omitempty"`
+	SignatureKeyID string `json:"signature_key_id,omitempty"`
+	Error          string `json:"error,omitempty"`
 }
 
 type setupCheckOperatorOverrideStatus struct {
-	Present          bool
-	ActiveGrantCount int
-	ContentSHA256    string
-	SignatureKeyID   string
-	Error            string
+	Present          bool   `json:"present"`
+	ActiveGrantCount int    `json:"active_grant_count"`
+	ContentSHA256    string `json:"content_sha256,omitempty"`
+	SignatureKeyID   string `json:"signature_key_id,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 type setupCheckDaemonStatus struct {
-	Healthy bool
-	Version string
-	Error   string
+	Healthy bool   `json:"healthy"`
+	Version string `json:"version,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 type setupCheckClaudeHooksStatus struct {
-	ClaudeDir         string
-	State             string
-	Installed         bool
-	SettingsPaths     []string
-	ConfiguredEntries int
-	CopiedScriptCount int
-	Error             string
+	ClaudeDir         string   `json:"claude_dir"`
+	State             string   `json:"state"`
+	Installed         bool     `json:"installed"`
+	SettingsPaths     []string `json:"settings_paths,omitempty"`
+	ConfiguredEntries int      `json:"configured_entries"`
+	CopiedScriptCount int      `json:"copied_script_count"`
+	Error             string   `json:"error,omitempty"`
 }
 
 type setupCheckSampleDecision struct {
-	Label           string
-	Decision        string
-	ReasonCode      string
-	DenialCode      string
-	ApprovalOwner   string
-	ApprovalOptions []string
-	Reason          string
-	Error           string
+	Label           string   `json:"label"`
+	Decision        string   `json:"decision,omitempty"`
+	ReasonCode      string   `json:"reason_code,omitempty"`
+	DenialCode      string   `json:"denial_code,omitempty"`
+	ApprovalOwner   string   `json:"approval_owner,omitempty"`
+	ApprovalOptions []string `json:"approval_options,omitempty"`
+	Reason          string   `json:"reason,omitempty"`
+	Error           string   `json:"error,omitempty"`
 }
 
 func runSetupCheck(args []string, stdout io.Writer, stderr io.Writer) int {
@@ -134,6 +135,7 @@ func runSetupCheck(args []string, stdout io.Writer, stderr io.Writer) int {
 	repoFn := parseRepoFlag(fs)
 	socketPathFlag := fs.String("socket", "", "Unix socket path (default: LOOPGATE_SOCKET or <repo>/runtime/state/loopgate.sock)")
 	claudeDirFlag := fs.String("claude-dir", "", "Claude config directory (default: ~/.claude)")
+	jsonFlag := fs.Bool("json", false, "print machine-readable JSON")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -143,6 +145,15 @@ func runSetupCheck(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	report := collectSetupCheckReport(repoRoot, resolveSocketPath(repoRoot, *socketPathFlag), resolveClaudeDir(*claudeDirFlag))
+	if *jsonFlag {
+		encoder := json.NewEncoder(stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(report); err != nil {
+			fmt.Fprintln(stderr, "ERROR: encode setup check:", err)
+			return 1
+		}
+		return 0
+	}
 	writeSetupCheckReport(stdout, report)
 	return 0
 }
@@ -189,6 +200,7 @@ func collectSetupCheckReport(repoRoot string, socketPath string, claudeDir strin
 	}
 
 	report.SampleDecisions = collectSetupSampleDecisions(repoRoot)
+	report.NextSteps = setupCheckNextSteps(report)
 	return report
 }
 
@@ -278,10 +290,9 @@ func writeSetupCheckReport(output io.Writer, report setupCheckReport) {
 	for _, decision := range report.SampleDecisions {
 		fmt.Fprintf(output, "  - %s: %s\n", decision.Label, formatSetupSampleDecision(decision))
 	}
-	nextSteps := setupCheckNextSteps(report)
-	if len(nextSteps) > 0 {
+	if len(report.NextSteps) > 0 {
 		fmt.Fprintln(output, "next_steps:")
-		for _, nextStep := range nextSteps {
+		for _, nextStep := range report.NextSteps {
 			fmt.Fprintf(output, "  - %s\n", nextStep)
 		}
 	}

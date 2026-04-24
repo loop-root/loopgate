@@ -39,7 +39,7 @@ The assisting agent must follow these rules:
 - Do not install Claude hooks, install a LaunchAgent, re-sign policy, or write
   persistent operator overrides without explicit human confirmation.
 - Do not tell the human Claude Code is governed until `loopgate status`,
-  `loopgate test`, and `loopgate-doctor setup-check` have been run.
+  `loopgate test`, and `loopgate-doctor setup-check --json` have been run.
 
 ## Human confirmations
 
@@ -62,7 +62,7 @@ the human has asked for setup help. Examples:
 ```bash
 loopgate status
 loopgate test
-loopgate-doctor setup-check
+loopgate-doctor setup-check --json
 loopgate explain --tool Grep --path .
 loopgate explain --tool Write --path README.md
 loopgate-policy-admin validate
@@ -99,7 +99,7 @@ curl -fsSL https://raw.githubusercontent.com/loop-root/loopgate/main/scripts/ins
 loopgate setup
 loopgate status
 loopgate test
-loopgate-doctor setup-check
+loopgate-doctor setup-check --json
 ```
 
 Source checkout path:
@@ -109,7 +109,7 @@ make build
 ./bin/loopgate setup
 ./bin/loopgate status
 ./bin/loopgate test
-./bin/loopgate-doctor setup-check
+./bin/loopgate-doctor setup-check --json
 ```
 
 The human should approve the setup command after the agent explains:
@@ -158,7 +158,7 @@ Only after explicit human confirmation may it write the grant:
 ```bash
 loopgate-policy-admin overrides grant repo_edit_safe -path docs
 loopgate-policy-admin overrides list
-loopgate-doctor setup-check
+loopgate-doctor setup-check --json
 ```
 
 Persistent grants are refused unless the signed root policy gives that class
@@ -181,7 +181,7 @@ The setup is not complete until these pass or produce clear remediation:
 ```bash
 loopgate status
 loopgate test
-loopgate-doctor setup-check
+loopgate-doctor setup-check --json
 ```
 
 The assisting agent should summarize:
@@ -196,7 +196,7 @@ The assisting agent should summarize:
 If setup fails, prefer diagnostic commands before editing state:
 
 ```bash
-loopgate-doctor setup-check
+loopgate-doctor setup-check --json
 loopgate-doctor report
 loopgate-policy-admin validate
 ```
@@ -222,4 +222,3 @@ At the end, the assisting agent should report:
 - which commands verified the setup
 - whether Claude Code is governed yet
 - where the human can inspect policy and audit state
-

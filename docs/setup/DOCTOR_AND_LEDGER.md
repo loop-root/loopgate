@@ -53,6 +53,7 @@ Most useful commands:
 
 ```bash
 ./bin/loopgate-doctor setup-check
+./bin/loopgate-doctor setup-check --json
 ./bin/loopgate-doctor report
 ./bin/loopgate-doctor bundle -out ./tmp/loopgate-bundle
 ./bin/loopgate-doctor explain-denial -approval-id <approval-id>
@@ -70,6 +71,8 @@ What each one is for:
   - human-readable setup readiness: signed root policy, signed operator
     overrides, daemon/socket health, Claude hook install state, sample policy
     decisions, and repair commands
+  - add `--json` for agent-assisted setup or other machine-readable readiness
+    checks
 - `report`
   - offline JSON summary of runtime config, diagnostics, ledger verification
     state, and nonce replay persistence/utilization warnings

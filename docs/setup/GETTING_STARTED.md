@@ -168,6 +168,8 @@ hook state directly, so you can tell at a glance whether Loopgate looks offline,
 LaunchAgent-managed, or manually started. `setup-check` prints signed policy
 status, signed operator override status, daemon/socket health, Claude hook
 install state, sample allow/ask/block decisions, and concrete repair commands.
+Use `loopgate-doctor setup-check --json` when another agent is helping you
+because the JSON includes the same readiness checks plus `next_steps`.
 `loopgate test` now also tells you whether it reused a running daemon or had to
 start a temporary one for the smoke test, plus the next steps needed before
 Claude Code can rely on the governed path.

@@ -99,6 +99,8 @@ Deliverables:
 Initial implementation status:
 
 - `loopgate-doctor setup-check` prints human-readable setup readiness
+- `loopgate-doctor setup-check --json` prints the same readiness projection plus
+  machine-readable `next_steps`
 - output includes daemon/socket health, signed root policy status, signed
   operator override status, Claude hook install status, sample read/search,
   write, and bash policy probes, plus repair commands

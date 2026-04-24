@@ -235,6 +235,68 @@ func TestRunSetupCheck_PrintsNextStepsForMissingSetup(t *testing.T) {
 	}
 }
 
+func TestRunSetupCheck_JSONIncludesMachineReadableReadiness(t *testing.T) {
+	repoRoot := t.TempDir()
+	policySigner, err := testutil.NewPolicyTestSigner()
+	if err != nil {
+		t.Fatalf("new policy test signer: %v", err)
+	}
+	policySigner.ConfigureEnv(t.Setenv)
+	preset, err := config.ResolvePolicyTemplatePreset("balanced")
+	if err != nil {
+		t.Fatalf("resolve policy preset: %v", err)
+	}
+	if err := policySigner.WriteSignedPolicyYAML(repoRoot, preset.TemplateYAML); err != nil {
+		t.Fatalf("write signed policy yaml: %v", err)
+	}
+
+	claudeDir := filepath.Join(repoRoot, "claude-home")
+	socketPath := filepath.Join(repoRoot, "runtime", "state", "loopgate.sock")
+	previousCheckLoopgateHealth := checkLoopgateHealth
+	checkLoopgateHealth = func(actualSocketPath string) (controlapipkg.HealthResponse, error) {
+		if actualSocketPath != socketPath {
+			t.Fatalf("expected socket path %q, got %q", socketPath, actualSocketPath)
+		}
+		return controlapipkg.HealthResponse{OK: false, Version: "test"}, nil
+	}
+	t.Cleanup(func() {
+		checkLoopgateHealth = previousCheckLoopgateHealth
+	})
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"setup-check", "-repo", repoRoot, "-claude-dir", claudeDir, "-socket", socketPath, "-json"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected setup-check json success, got exit code %d stderr=%s", exitCode, stderr.String())
+	}
+
+	var report setupCheckReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("decode setup-check json: %v\nstdout=%s", err, stdout.String())
+	}
+	if report.RepoRoot != repoRoot {
+		t.Fatalf("expected repo root %q, got %#v", repoRoot, report)
+	}
+	if !report.Policy.Loaded || report.Policy.Profile != "balanced" {
+		t.Fatalf("expected loaded balanced policy, got %#v", report.Policy)
+	}
+	if report.Daemon.Healthy {
+		t.Fatalf("expected unhealthy daemon projection, got %#v", report.Daemon)
+	}
+	if report.ClaudeHooks.State != "missing" || report.ClaudeHooks.Installed {
+		t.Fatalf("expected missing hook projection, got %#v", report.ClaudeHooks)
+	}
+	if len(report.SampleDecisions) != 3 {
+		t.Fatalf("expected three sample decisions, got %#v", report.SampleDecisions)
+	}
+	if report.SampleDecisions[0].Label != "repo search" || report.SampleDecisions[0].Decision != "allow" {
+		t.Fatalf("expected repo search allow sample, got %#v", report.SampleDecisions[0])
+	}
+	if len(report.NextSteps) == 0 {
+		t.Fatalf("expected next steps for missing hooks/unhealthy daemon, got %#v", report)
+	}
+}
+
 func TestResolveSocketPath_PrefersEnvOverRepoDefault(t *testing.T) {
 	t.Setenv("LOOPGATE_SOCKET", "/tmp/loopgate-env.sock")
 	resolvedSocketPath := resolveSocketPath("/repo/root", "")
