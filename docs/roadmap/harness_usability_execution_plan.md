@@ -134,6 +134,8 @@ Initial implementation status:
 - `-dry-run` previews the grant without writing or reloading operator overrides
 - `loopgate-policy-admin grants revoke <grant-id> -dry-run` previews revocation
   without writing or reloading operator overrides
+- `loopgate-policy-admin grants list -all` includes revoked grant records for
+  lifecycle history
 - `overrides grant`, `overrides revoke`, and `grant-edit-path` remain
   compatibility aliases; `grant-edit-path` maps to `repo_edit_safe`
 

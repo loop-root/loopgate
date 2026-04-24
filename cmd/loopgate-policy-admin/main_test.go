@@ -102,6 +102,25 @@ func (fixture testPolicySignerFixture) writeSignedPolicy(t *testing.T, repoRoot 
 	}
 }
 
+func (fixture testPolicySignerFixture) writeSignedOperatorOverrideDocument(t *testing.T, repoRoot string, document config.OperatorOverrideDocument) {
+	t.Helper()
+
+	documentBytes, err := config.MarshalOperatorOverrideDocumentYAML(document)
+	if err != nil {
+		t.Fatalf("marshal operator override document: %v", err)
+	}
+	signatureFile, err := config.SignOperatorOverrideDocument(documentBytes, fixture.keyID(), fixture.privateKey)
+	if err != nil {
+		t.Fatalf("sign operator override document: %v", err)
+	}
+	if err := config.WriteOperatorOverrideDocumentYAML(repoRoot, document); err != nil {
+		t.Fatalf("write operator override document: %v", err)
+	}
+	if err := config.WriteOperatorOverrideSignatureYAML(repoRoot, signatureFile); err != nil {
+		t.Fatalf("write operator override signature: %v", err)
+	}
+}
+
 func delegatedRepoEditPolicyYAML() string {
 	return "version: 0.1.0\n\n" +
 		"tools:\n" +
@@ -694,6 +713,98 @@ func TestRunOverridesGrant_WritesGenericPathScopedGrant(t *testing.T) {
 	}
 	if got := activeGrants[0].PathPrefixes; len(got) != 1 || got[0] != "docs" {
 		t.Fatalf("expected docs path prefix, got %#v", got)
+	}
+}
+
+func TestRunGrantsList_PrintsActiveGrantState(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
+	signerFixture.writeSignedOperatorOverrideDocument(t, repoRoot, config.OperatorOverrideDocument{
+		Version: "1",
+		Grants: []config.OperatorOverrideGrant{
+			{
+				ID:           "override-20260424010101-active1",
+				Class:        config.OperatorOverrideClassRepoWriteSafe,
+				State:        "active",
+				PathPrefixes: []string{"docs"},
+				CreatedAtUTC: "2026-04-24T01:01:01Z",
+			},
+			{
+				ID:           "override-20260424020202-revoked1",
+				Class:        config.OperatorOverrideClassRepoEditSafe,
+				State:        "revoked",
+				PathPrefixes: []string{"notes"},
+				CreatedAtUTC: "2026-04-24T02:02:02Z",
+				RevokedAtUTC: "2026-04-24T03:03:03Z",
+			},
+		},
+	})
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"grants", "list", "-repo", repoRoot}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	output := stdout.String()
+	for _, expected := range []string{
+		"active_grant_count: 1",
+		"revoked_grant_count: 1",
+		"grant.id: override-20260424010101-active1",
+		"grant.class: " + config.OperatorOverrideClassRepoWriteSafe,
+		"grant.state: active",
+		"grant.scope: permanent",
+		"grant.path_prefixes: docs",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected grants list output to contain %q, got %q", expected, output)
+		}
+	}
+	if strings.Contains(output, "override-20260424020202-revoked1") {
+		t.Fatalf("expected default grants list to omit revoked grants, got %q", output)
+	}
+}
+
+func TestRunGrantsListAll_PrintsRevokedGrantHistory(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, mustPolicyPresetTemplate(t, "developer"))
+	signerFixture.writeSignedOperatorOverrideDocument(t, repoRoot, config.OperatorOverrideDocument{
+		Version: "1",
+		Grants: []config.OperatorOverrideGrant{
+			{
+				ID:           "override-20260424020202-revoked1",
+				Class:        config.OperatorOverrideClassRepoEditSafe,
+				State:        "revoked",
+				PathPrefixes: []string{"notes"},
+				CreatedAtUTC: "2026-04-24T02:02:02Z",
+				RevokedAtUTC: "2026-04-24T03:03:03Z",
+			},
+		},
+	})
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"grants", "list", "-repo", repoRoot, "-all"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	output := stdout.String()
+	for _, expected := range []string{
+		"active_grant_count: 0",
+		"revoked_grant_count: 1",
+		"active_grants: (none)",
+		"grant.id: override-20260424020202-revoked1",
+		"grant.class: " + config.OperatorOverrideClassRepoEditSafe,
+		"grant.state: revoked",
+		"grant.scope: permanent",
+		"grant.path_prefixes: notes",
+		"grant.revoked_at_utc: 2026-04-24T03:03:03Z",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected grants list -all output to contain %q, got %q", expected, output)
+		}
 	}
 }
 

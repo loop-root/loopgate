@@ -227,6 +227,8 @@ Permanent path-scoped grant command:
 ```bash
 ./bin/loopgate-policy-admin grants add repo_edit_safe -path docs -dry-run
 ./bin/loopgate-policy-admin grants add repo_edit_safe -path docs
+./bin/loopgate-policy-admin grants list
+./bin/loopgate-policy-admin grants list -all
 ./bin/loopgate-policy-admin grants revoke <grant-id>
 ```
 

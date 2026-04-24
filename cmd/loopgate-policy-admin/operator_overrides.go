@@ -62,6 +62,7 @@ func runOverrideList(args []string, stdout io.Writer, stderr io.Writer) int {
 	fs := flag.NewFlagSet("overrides list", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	repoRootFlag := fs.String("repo", "", "repository root used to resolve the operator override document")
+	allFlag := fs.Bool("all", false, "include revoked operator grants")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -92,25 +93,41 @@ func runOverrideList(args []string, stdout io.Writer, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "signature_key_id: %s\n", loadResult.SignatureKeyID)
 
 	activeGrantCount := 0
+	revokedGrantCount := 0
 	for _, grant := range loadResult.Document.Grants {
-		if grant.State == "active" {
+		switch grant.State {
+		case "active":
 			activeGrantCount++
+		case "revoked":
+			revokedGrantCount++
 		}
 	}
 	fmt.Fprintf(stdout, "active_grant_count: %d\n", activeGrantCount)
+	fmt.Fprintf(stdout, "revoked_grant_count: %d\n", revokedGrantCount)
 	if activeGrantCount == 0 {
 		fmt.Fprintln(stdout, "active_grants: (none)")
-		return 0
+		if !*allFlag {
+			return 0
+		}
 	}
+	printedGrantCount := 0
 	for _, grant := range loadResult.Document.Grants {
-		if grant.State != "active" {
+		if grant.State != "active" && !*allFlag {
 			continue
 		}
+		printedGrantCount++
 		fmt.Fprintf(stdout, "grant.id: %s\n", grant.ID)
 		fmt.Fprintf(stdout, "grant.class: %s\n", grant.Class)
+		fmt.Fprintf(stdout, "grant.state: %s\n", grant.State)
 		fmt.Fprintln(stdout, "grant.scope: permanent")
 		fmt.Fprintf(stdout, "grant.path_prefixes: %s\n", strings.Join(grant.PathPrefixes, ", "))
 		fmt.Fprintf(stdout, "grant.created_at_utc: %s\n", grant.CreatedAtUTC)
+		if strings.TrimSpace(grant.RevokedAtUTC) != "" {
+			fmt.Fprintf(stdout, "grant.revoked_at_utc: %s\n", grant.RevokedAtUTC)
+		}
+	}
+	if printedGrantCount == 0 && *allFlag {
+		fmt.Fprintln(stdout, "grants: (none)")
 	}
 	return 0
 }

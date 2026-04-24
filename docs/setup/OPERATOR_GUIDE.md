@@ -424,6 +424,12 @@ Supported path-scoped classes are `repo_read_search`, `repo_edit_safe`,
 ./bin/loopgate-policy-admin grants list
 ```
 
+Include revoked grant records when you need lifecycle history:
+
+```bash
+./bin/loopgate-policy-admin grants list -all
+```
+
 Revoke by grant id:
 
 ```bash
