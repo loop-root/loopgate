@@ -25,6 +25,7 @@ const defaultConsoleRecentEventCount = 20
 type consoleSnapshot struct {
 	FetchedAtUTC      string
 	Status            operatorStatusReport
+	PolicyExplanation consolePolicyExplanation
 	OperatorGrants    consoleOperatorGrantStatus
 	Approvals         []controlapipkg.OperatorApprovalSummary
 	ApprovalError     string
@@ -156,8 +157,9 @@ func collectConsoleSnapshot(repoRoot string, claudeDir string, socketPath string
 		return consoleSnapshot{}, err
 	}
 	snapshot := consoleSnapshot{
-		FetchedAtUTC: time.Now().UTC().Format(time.RFC3339),
-		Status:       statusReport,
+		FetchedAtUTC:      time.Now().UTC().Format(time.RFC3339),
+		Status:            statusReport,
+		PolicyExplanation: collectConsolePolicyExplanation(repoRoot),
 	}
 	snapshot.OperatorGrants = collectConsoleOperatorGrantStatus(repoRoot)
 
@@ -384,6 +386,7 @@ func printConsoleSnapshot(output io.Writer, snapshot consoleSnapshot, interactiv
 	fmt.Fprintln(output)
 
 	printConsoleOverview(output, snapshot.Status)
+	printConsolePolicyExplanation(output, snapshot.PolicyExplanation)
 	printConsoleGrantSummary(output, snapshot.OperatorGrants)
 	printConsoleDecisionSummary(output, snapshot)
 	printConsoleApprovals(output, snapshot)

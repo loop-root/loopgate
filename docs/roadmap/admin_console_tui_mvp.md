@@ -272,6 +272,7 @@ Rules:
 The first implementation should include:
 
 - unit tests for redaction and display formatting
+- tests for compact policy posture rendering
 - tests that the first console slice does not expose mutation commands
 - tests for unreachable Loopgate state
 - tests that audit-derived activity is hidden when verification fails
@@ -285,11 +286,13 @@ Build only the useful center first:
 
 1. `loopgate console` opens to Overview.
 2. It can refresh daemon, policy, hook, and audit-integrity status.
-3. It summarizes signed operator grants without treating them as authority.
-4. It lists pending approvals as display-safe summaries.
-5. It shows recent allow, ask, and block decision counts from verified audit
+3. It shows compact policy posture for Claude Code tools, including base
+   decisions, effective decisions, configured limits, and maximum grant scope.
+4. It summarizes signed operator grants without treating them as authority.
+5. It lists pending approvals as display-safe summaries.
+6. It shows recent allow, ask, and block decision counts from verified audit
    events.
-6. It shows the last 20 recent audit-derived events.
+7. It shows the last 20 recent audit-derived events.
 
 That slice proves the console is an admin surface for the real governed path,
 not a parallel product shell.
