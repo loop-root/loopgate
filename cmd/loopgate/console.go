@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -24,11 +25,29 @@ const defaultConsoleRecentEventCount = 20
 type consoleSnapshot struct {
 	FetchedAtUTC      string
 	Status            operatorStatusReport
+	OperatorGrants    consoleOperatorGrantStatus
 	Approvals         []controlapipkg.OperatorApprovalSummary
 	ApprovalError     string
 	AuditVerified     bool
 	AuditVerifyError  string
 	RecentAuditEvents []consoleAuditEvent
+	DecisionSummary   consoleDecisionSummary
+}
+
+type consoleOperatorGrantStatus struct {
+	Present           bool
+	SignatureKeyID    string
+	ContentSHA256     string
+	ActiveGrantCount  int
+	RevokedGrantCount int
+	ActiveByClass     map[string]int
+	Error             string
+}
+
+type consoleDecisionSummary struct {
+	Allow int
+	Ask   int
+	Block int
 }
 
 type consoleAuditEvent struct {
@@ -63,17 +82,11 @@ func runConsole(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 	socketPathFlag := fs.String("socket", "", "Loopgate socket path (default: <repo>/runtime/state/loopgate.sock)")
 	onceFlag := fs.Bool("once", false, "render one console snapshot and exit")
 	eventCountFlag := fs.Int("events", defaultConsoleRecentEventCount, "number of recent verified audit events to show")
-	approveFlag := fs.String("approve", "", "approve one pending approval id, then render a snapshot")
-	denyFlag := fs.String("deny", "", "deny one pending approval id, then render a snapshot")
-	reasonFlag := fs.String("reason", "", "operator reason for -approve or -deny")
 	if err := fs.Parse(args); err != nil {
 		return normalizeFlagParseError(err)
 	}
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
-	}
-	if strings.TrimSpace(*approveFlag) != "" && strings.TrimSpace(*denyFlag) != "" {
-		return fmt.Errorf("-approve and -deny are mutually exclusive")
 	}
 	if *eventCountFlag < 1 {
 		*eventCountFlag = 1
@@ -89,17 +102,7 @@ func runConsole(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writ
 	}
 	claudeDir := strings.TrimSpace(*claudeDirFlag)
 
-	if approvalID := strings.TrimSpace(*approveFlag); approvalID != "" {
-		if err := runConsoleApprovalDecision(context.Background(), stdout, socketPath, approvalID, true, strings.TrimSpace(*reasonFlag)); err != nil {
-			return err
-		}
-	} else if approvalID := strings.TrimSpace(*denyFlag); approvalID != "" {
-		if err := runConsoleApprovalDecision(context.Background(), stdout, socketPath, approvalID, false, strings.TrimSpace(*reasonFlag)); err != nil {
-			return err
-		}
-	}
-
-	if *onceFlag || strings.TrimSpace(*approveFlag) != "" || strings.TrimSpace(*denyFlag) != "" {
+	if *onceFlag {
 		return renderConsoleOnce(stdout, repoRoot, claudeDir, socketPath, *eventCountFlag)
 	}
 
@@ -143,83 +146,8 @@ func runInteractiveConsole(stdin io.Reader, stdout io.Writer, repoRoot string, c
 			printConsoleHelp(stdout)
 			continue
 		}
-		if handled, err := handleConsoleDecisionCommand(context.Background(), stdout, reader, socketPath, line); handled {
-			if err != nil {
-				fmt.Fprintf(stdout, "decision_error: %v\n", err)
-			}
-			continue
-		}
 		fmt.Fprintf(stdout, "unknown command %q; type help for commands\n", line)
 	}
-}
-
-func handleConsoleDecisionCommand(ctx context.Context, stdout io.Writer, reader *bufio.Reader, socketPath string, line string) (bool, error) {
-	fields := strings.Fields(line)
-	if len(fields) == 0 {
-		return false, nil
-	}
-	command := strings.ToLower(fields[0])
-	approved := false
-	switch command {
-	case "approve", "a":
-		approved = true
-	case "deny", "d":
-		approved = false
-	default:
-		return false, nil
-	}
-	if len(fields) < 2 {
-		return true, fmt.Errorf("%s requires an approval id", command)
-	}
-	approvalID := fields[1]
-	reason := strings.TrimSpace(strings.Join(fields[2:], " "))
-	if reason == "" {
-		fmt.Fprint(stdout, "reason: ")
-		rawReason, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
-			return true, err
-		}
-		reason = strings.TrimSpace(rawReason)
-	}
-	return true, runConsoleApprovalDecision(ctx, stdout, socketPath, approvalID, approved, reason)
-}
-
-func runConsoleApprovalDecision(ctx context.Context, stdout io.Writer, socketPath string, approvalID string, approved bool, reason string) error {
-	approvalID = strings.TrimSpace(approvalID)
-	if approvalID == "" {
-		return fmt.Errorf("approval id must not be blank")
-	}
-	reason = strings.TrimSpace(reason)
-	if reason == "" {
-		return fmt.Errorf("approval reason is required")
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	client := newConsoleApprovalClient(socketPath, "decision")
-	defer client.CloseIdleConnections()
-	defer func() {
-		_ = client.CloseSession(context.Background())
-	}()
-
-	response, err := client.DecidePendingApproval(ctx, approvalID, approved, reason)
-	if err != nil {
-		return err
-	}
-	action := "denied"
-	if approved {
-		action = "approved"
-	}
-	if strings.TrimSpace(response.AuditEventHash) == "" {
-		fmt.Fprintf(stdout, "approval %s %s\n", approvalID, action)
-	} else {
-		fmt.Fprintf(stdout, "approval %s %s audit_event_hash=%s\n", approvalID, action, response.AuditEventHash)
-	}
-	if response.Status == controlapipkg.ResponseStatusError {
-		return fmt.Errorf("approval decision returned status %q", response.Status)
-	}
-	return nil
 }
 
 func collectConsoleSnapshot(repoRoot string, claudeDir string, socketPath string, eventCount int) (consoleSnapshot, error) {
@@ -231,6 +159,7 @@ func collectConsoleSnapshot(repoRoot string, claudeDir string, socketPath string
 		FetchedAtUTC: time.Now().UTC().Format(time.RFC3339),
 		Status:       statusReport,
 	}
+	snapshot.OperatorGrants = collectConsoleOperatorGrantStatus(repoRoot)
 
 	if statusReport.Daemon.Healthy {
 		approvals, err := collectConsoleApprovals(socketPath)
@@ -249,8 +178,32 @@ func collectConsoleSnapshot(repoRoot string, claudeDir string, socketPath string
 	} else {
 		snapshot.AuditVerified = true
 		snapshot.RecentAuditEvents = events
+		snapshot.DecisionSummary = summarizeConsoleDecisions(events)
 	}
 	return snapshot, nil
+}
+
+func collectConsoleOperatorGrantStatus(repoRoot string) consoleOperatorGrantStatus {
+	loadResult, err := config.LoadOperatorOverrideDocumentWithHash(repoRoot)
+	if err != nil {
+		return consoleOperatorGrantStatus{Error: err.Error()}
+	}
+	status := consoleOperatorGrantStatus{
+		Present:        loadResult.Present,
+		SignatureKeyID: strings.TrimSpace(loadResult.SignatureKeyID),
+		ContentSHA256:  strings.TrimSpace(loadResult.ContentSHA256),
+		ActiveByClass:  map[string]int{},
+	}
+	for _, grant := range loadResult.Document.Grants {
+		switch strings.TrimSpace(grant.State) {
+		case "active":
+			status.ActiveGrantCount++
+			status.ActiveByClass[strings.TrimSpace(grant.Class)]++
+		case "revoked":
+			status.RevokedGrantCount++
+		}
+	}
+	return status
 }
 
 func collectConsoleApprovals(socketPath string) ([]controlapipkg.OperatorApprovalSummary, error) {
@@ -272,7 +225,7 @@ func collectConsoleApprovals(socketPath string) ([]controlapipkg.OperatorApprova
 
 func newConsoleApprovalClient(socketPath string, suffix string) *loopgate.Client {
 	client := loopgate.NewClient(socketPath)
-	client.ConfigureSession("loopgate-console", defaultCommandSessionID("console-"+strings.TrimSpace(suffix)), []string{"approval.read", "approval.write"})
+	client.ConfigureSession("loopgate-console", defaultCommandSessionID("console-"+strings.TrimSpace(suffix)), []string{"approval.read"})
 	return client
 }
 
@@ -358,6 +311,21 @@ func summarizeConsoleAuditEvent(event ledger.Event) consoleAuditEvent {
 	return summary
 }
 
+func summarizeConsoleDecisions(events []consoleAuditEvent) consoleDecisionSummary {
+	var summary consoleDecisionSummary
+	for _, event := range events {
+		switch strings.ToLower(strings.TrimSpace(event.Decision)) {
+		case "allow":
+			summary.Allow++
+		case "ask":
+			summary.Ask++
+		case "block":
+			summary.Block++
+		}
+	}
+	return summary
+}
+
 func consoleAuditEventSummary(event consoleAuditEvent, data map[string]interface{}) string {
 	switch {
 	case event.Capability != "" && event.RequestID != "":
@@ -416,6 +384,8 @@ func printConsoleSnapshot(output io.Writer, snapshot consoleSnapshot, interactiv
 	fmt.Fprintln(output)
 
 	printConsoleOverview(output, snapshot.Status)
+	printConsoleGrantSummary(output, snapshot.OperatorGrants)
+	printConsoleDecisionSummary(output, snapshot)
 	printConsoleApprovals(output, snapshot)
 	printConsoleAuditEvents(output, snapshot)
 	printConsoleNextSteps(output, snapshot.Status)
@@ -446,6 +416,60 @@ func printConsoleOverview(output io.Writer, report operatorStatusReport) {
 	} else if report.Live != nil && report.Live.Error != "" {
 		fmt.Fprintf(output, "  live: unavailable warning=%q\n", report.Live.Error)
 	}
+	fmt.Fprintln(output)
+}
+
+func printConsoleGrantSummary(output io.Writer, status consoleOperatorGrantStatus) {
+	fmt.Fprintln(output, "Operator Grants")
+	if status.Error != "" {
+		fmt.Fprintf(output, "  unavailable: %s\n\n", status.Error)
+		return
+	}
+	if !status.Present {
+		fmt.Fprintln(output, "  operator_policy: absent")
+		fmt.Fprintln(output, "  active_grants: 0")
+		fmt.Fprintln(output)
+		return
+	}
+	fmt.Fprintf(output, "  operator_policy: signed")
+	if status.SignatureKeyID != "" {
+		fmt.Fprintf(output, " key_id=%s", status.SignatureKeyID)
+	}
+	if status.ContentSHA256 != "" {
+		fmt.Fprintf(output, " sha256=%s", consoleHashPrefix(status.ContentSHA256))
+	}
+	fmt.Fprintln(output)
+	fmt.Fprintf(output, "  active_grants: %d\n", status.ActiveGrantCount)
+	fmt.Fprintf(output, "  revoked_grants: %d\n", status.RevokedGrantCount)
+	if len(status.ActiveByClass) > 0 {
+		classes := make([]string, 0, len(status.ActiveByClass))
+		for className := range status.ActiveByClass {
+			if strings.TrimSpace(className) != "" {
+				classes = append(classes, className)
+			}
+		}
+		sort.Strings(classes)
+		for _, className := range classes {
+			fmt.Fprintf(output, "  class.%s: %d\n", className, status.ActiveByClass[className])
+		}
+	}
+	fmt.Fprintln(output)
+}
+
+func printConsoleDecisionSummary(output io.Writer, snapshot consoleSnapshot) {
+	fmt.Fprintln(output, "Recent Decisions")
+	if snapshot.AuditVerifyError != "" {
+		fmt.Fprintf(output, "  unavailable: %s\n\n", snapshot.AuditVerifyError)
+		return
+	}
+	if !snapshot.AuditVerified {
+		fmt.Fprintln(output, "  unavailable: audit ledger not verified")
+		fmt.Fprintln(output)
+		return
+	}
+	fmt.Fprintf(output, "  allow: %d\n", snapshot.DecisionSummary.Allow)
+	fmt.Fprintf(output, "  ask: %d\n", snapshot.DecisionSummary.Ask)
+	fmt.Fprintf(output, "  block: %d\n", snapshot.DecisionSummary.Block)
 	fmt.Fprintln(output)
 }
 
@@ -535,8 +559,6 @@ func printConsoleNextSteps(output io.Writer, report operatorStatusReport) {
 func printConsoleHelp(output io.Writer) {
 	fmt.Fprintln(output, "Commands")
 	fmt.Fprintln(output, "  refresh | r")
-	fmt.Fprintln(output, "  approve <approval-id> <reason>")
-	fmt.Fprintln(output, "  deny <approval-id> <reason>")
 	fmt.Fprintln(output, "  help | h")
 	fmt.Fprintln(output, "  quit | q")
 }

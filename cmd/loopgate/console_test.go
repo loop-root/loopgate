@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"strings"
 	"testing"
 
@@ -81,6 +80,58 @@ func TestPrintConsoleSnapshot_RendersPendingApprovals(t *testing.T) {
 	}
 }
 
+func TestPrintConsoleSnapshot_RendersOperatorGrantsAndDecisionSummary(t *testing.T) {
+	snapshot := consoleSnapshot{
+		FetchedAtUTC:  "2026-04-24T12:00:00Z",
+		AuditVerified: true,
+		OperatorGrants: consoleOperatorGrantStatus{
+			Present:           true,
+			SignatureKeyID:    "test-key",
+			ContentSHA256:     "0123456789abcdef9999",
+			ActiveGrantCount:  2,
+			RevokedGrantCount: 1,
+			ActiveByClass: map[string]int{
+				"repo_edit_safe":   1,
+				"repo_read_search": 1,
+			},
+		},
+		DecisionSummary: consoleDecisionSummary{
+			Allow: 18,
+			Ask:   3,
+			Block: 1,
+		},
+		Status: operatorStatusReport{
+			OperatorMode: "source-checkout",
+			DaemonMode:   "foreground-or-manual",
+			SocketPath:   "/tmp/loopgate.sock",
+			Policy: operatorPolicyStatus{
+				Profile:        "strict",
+				SignatureKeyID: "test-key",
+			},
+		},
+	}
+
+	var output bytes.Buffer
+	printConsoleSnapshot(&output, snapshot, false)
+	rendered := output.String()
+	for _, expected := range []string{
+		"Operator Grants",
+		"operator_policy: signed key_id=test-key sha256=0123456789abcdef",
+		"active_grants: 2",
+		"revoked_grants: 1",
+		"class.repo_edit_safe: 1",
+		"class.repo_read_search: 1",
+		"Recent Decisions",
+		"allow: 18",
+		"ask: 3",
+		"block: 1",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected rendered console to contain %q, got %q", expected, rendered)
+		}
+	}
+}
+
 func TestSummarizeConsoleAuditEvent_UsesRequestAndEventHash(t *testing.T) {
 	summary := summarizeConsoleAuditEvent(ledger.Event{
 		TS:      "2026-04-24T12:00:00Z",
@@ -105,13 +156,33 @@ func TestSummarizeConsoleAuditEvent_UsesRequestAndEventHash(t *testing.T) {
 	}
 }
 
-func TestRunConsoleApprovalDecisionRequiresReason(t *testing.T) {
-	var output bytes.Buffer
-	err := runConsoleApprovalDecision(context.Background(), &output, "/tmp/missing.sock", "approval-1", true, "")
-	if err == nil {
-		t.Fatal("expected missing approval reason to fail before opening a session")
+func TestSummarizeConsoleDecisions_CountsAllowAskBlock(t *testing.T) {
+	summary := summarizeConsoleDecisions([]consoleAuditEvent{
+		{Decision: "allow"},
+		{Decision: "ASK"},
+		{Decision: " block "},
+		{Decision: "deny"},
+		{Status: "success"},
+	})
+
+	if summary.Allow != 1 || summary.Ask != 1 || summary.Block != 1 {
+		t.Fatalf("expected allow/ask/block counts, got %#v", summary)
 	}
-	if !strings.Contains(err.Error(), "approval reason is required") {
-		t.Fatalf("expected reason error, got %v", err)
+}
+
+func TestPrintConsoleHelp_IsReadOnly(t *testing.T) {
+	var output bytes.Buffer
+	printConsoleHelp(&output)
+	rendered := output.String()
+
+	for _, expected := range []string{"refresh | r", "help | h", "quit | q"} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected console help to contain %q, got %q", expected, rendered)
+		}
+	}
+	for _, forbidden := range []string{"approve", "deny"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("expected read-only console help to omit %q, got %q", forbidden, rendered)
+		}
 	}
 }

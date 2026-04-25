@@ -52,7 +52,8 @@ The TUI must preserve these invariants:
 - Approval creation, decision validation, and execution gating stay server-side.
 - The TUI renders derived views; it does not maintain authoritative approval,
   audit, policy, or daemon state.
-- Every mutation is routed through existing Loopgate CLI or HTTP-on-UDS APIs.
+- The first implementation slice is read-only. Future mutations must route
+  through existing Loopgate CLI or HTTP-on-UDS APIs.
 - If Loopgate is unavailable, the TUI shows that truth instead of simulating
   state from local files.
 - Raw secrets, tokens, request MAC keys, and secret-bearing payloads are never
@@ -113,13 +114,17 @@ Shows:
 
 Allowed actions:
 
+- refresh pending approval list
+- show related audit timeline when available
+
+Future actions:
+
 - approve with a required operator reason
 - deny with a required operator reason
-- show related audit timeline
 
 Rules:
 
-- approval decisions must call the existing approval path
+- approval decisions, when added, must call the existing approval path
 - stale, expired, resolved, or cross-session approvals must not be resurrected
 - display summaries must be redacted and bounded
 
@@ -247,15 +252,15 @@ ConsoleSnapshot
 Rules:
 
 - refresh is explicit or timer-driven only after design review
-- mutation actions invalidate the relevant snapshot and refetch from Loopgate
+- future mutation actions invalidate the relevant snapshot and refetch from Loopgate
 - stale snapshots are visibly marked stale
 - errors are rendered as first-class state, not swallowed
 
 ## Security and recovery notes
 
 - If status fetch fails, show `unreachable` and the exact safe next command.
-- If approval submission fails, keep the approval in unknown/stale state until
-  refetched from Loopgate.
+- When approval submission is later added, failed submissions must leave the
+  approval in unknown/stale state until refetched from Loopgate.
 - If audit verification fails, show the failure and do not present recent events
   as trusted audit truth.
 - If policy validation fails, block apply and surface the typed failure.
@@ -267,9 +272,9 @@ Rules:
 The first implementation should include:
 
 - unit tests for redaction and display formatting
-- tests that approval actions call the existing approval API path
+- tests that the first console slice does not expose mutation commands
 - tests for unreachable Loopgate state
-- tests that stale snapshots are labeled stale after mutation errors
+- tests that audit-derived activity is hidden when verification fails
 - golden tests for compact status rendering
 - manual smoke test with `loopgate setup`, `loopgate status`, `loopgate test`,
   and one approval-required Claude action
@@ -280,9 +285,11 @@ Build only the useful center first:
 
 1. `loopgate console` opens to Overview.
 2. It can refresh daemon, policy, hook, and audit-integrity status.
-3. It lists pending approvals.
-4. It can approve or deny one pending approval with a required reason.
-5. It shows the last 20 recent audit-derived events.
+3. It summarizes signed operator grants without treating them as authority.
+4. It lists pending approvals as display-safe summaries.
+5. It shows recent allow, ask, and block decision counts from verified audit
+   events.
+6. It shows the last 20 recent audit-derived events.
 
 That slice proves the console is an admin surface for the real governed path,
 not a parallel product shell.
