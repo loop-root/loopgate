@@ -14,7 +14,8 @@ Use it when changing:
 
 `internal/loopgate/` is the control plane and authority boundary.
 
-**Planning:** phased roadmap in repo-root `sprints/` (latest dated `*.md`); durable decisions in `docs/ADR/`. Update this map when you add or rename primary files here.
+Durable decisions live in `docs/adr/`. Product planning lives under
+`docs/roadmap/`. Update this map when you add or rename primary files here.
 
 For integrators it matters in four ways:
 
@@ -50,6 +51,8 @@ For integrators it matters in four ways:
   - approval token authentication, approval audit/state mutation, and operator-facing reason shaping
 - `approval/`
   - pure approval lifecycle primitives, pending approval model, manifest hashing/backfill, and decision validation rules that do not require `Server`
+- `approval/approval_map.md`
+  - package-level map for pure approval lifecycle and decision validation
 - `capability_result_runtime.go`
   - result classification, structured result shaping, and per-field metadata derivation for capability execution and configured remote capabilities
 - `capability_execution_runtime.go`
@@ -66,6 +69,13 @@ For integrators it matters in four ways:
     - `ui.go` for UI/event envelopes and folder-access status contracts
     - `audit_export.go` for audit-export operator responses
   - runtime code and clients import `controlapi` directly; the temporary compatibility re-exports have been removed
+- `controlapi/controlapi_map.md`
+  - package-level map for local HTTP-on-UDS wire contracts
+- `protocol/`
+  - canonical capability request and approval decision envelopes
+  - strips provider-native metadata from authority paths
+- `protocol/protocol_map.md`
+  - package-level map for canonical request validation and hashing
 
 ### Retired legacy surface
 

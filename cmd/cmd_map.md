@@ -21,6 +21,7 @@ Use it when changing:
     - `quickstart`
     - `setup`
     - `status`
+    - `console`
     - `test`
     - `install-hooks`
     - `install-launch-agent`
@@ -30,6 +31,7 @@ Use it when changing:
   - `quickstart` is the non-interactive recommended-default path: it delegates to `setup -yes` so first-time onboarding stays on the same signer-init, signed-policy, hook-install, and optional LaunchAgent code path
   - `setup` is the guided first-run path: local signer init/reuse, `balanced` / `strict` / `read-only` starter policy selection, signed policy write, hook install, and optional macOS LaunchAgent install, ending with a deterministic operator summary that now includes `operator_mode`, derived `readiness_state`, and a compact `next_steps:` block
   - `status` is the quick operator summary: repo-local signed-policy posture, signer verification, `operator_mode`, derived `daemon_mode`, derived `launch_agent_state`, hook install state, LaunchAgent state, socket health, and optional live UI-approved status/event projection
+  - `console` is the local read-only admin console: derived daemon, policy, hook, grant, approval, decision, and verified audit summaries without becoming an approval or policy authority path
   - `test` is the local governed smoke test: it verifies setup, reuses or temporarily starts Loopgate, executes a governed `fs_list`, confirms matching UI/audit evidence, and prints operator next steps that distinguish temporary-daemon proof from reusable running state
   - `install-hooks` copies the tracked hook bundle from `claude/hooks/scripts/` into the target Claude config dir and wires the supported hook events into `settings.json`
   - `install-launch-agent` writes a per-repo macOS LaunchAgent plist pointed at the current Loopgate binary and can load it immediately with `launchctl`

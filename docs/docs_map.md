@@ -13,9 +13,9 @@ This file maps **`docs/`** — design intent, setup, RFCs, and benchmarks. Use w
 - `docs/roadmap/admin_console_tui_mvp.md` — bounded local admin-console TUI spec
 - `docs/roadmap/harness_usability_execution_plan.md` — focused plan for Claude usability and future harness readiness
 
-## Architecture Decision Records (`docs/ADR/`)
+## Architecture Decision Records (`docs/adr/`)
 
-Timestamped decisions (context, tradeoff, escape hatch). **Index:** `docs/ADR/README.md`.
+Timestamped decisions (context, tradeoff, escape hatch). **Index:** `docs/adr/README.md`.
 
 ## Historical archive
 
@@ -77,6 +77,19 @@ in the separate `ARCHIVED` repository under `ARCHIVED/docs/`.
 - `docs/loopgate_v1_product_contract.md` — current Claude-first v1 product contract
 - `docs/contributor/` — contributor engineering guidance that expands the root contract in `AGENTS.md`
 - `docs/assets/` — shared assets
+
+## Repository Maps
+
+Repo and package maps live next to the code they describe:
+
+- `context_map.md` — repo-wide orientation
+- `cmd/cmd_map.md` — executable entrypoints
+- `internal/*/*_map.md` and `internal/loopgate/*/*_map.md` — package-level
+  maps for authority, policy, audit, sandbox, tools, secrets, and support
+  packages
+- `claude/claude_map.md` — Claude Code hook bundle
+- `scripts/scripts_map.md` — operational scripts
+- `.github/workflows/workflows_map.md` — CI workflows
 
 ## Relationship notes
 

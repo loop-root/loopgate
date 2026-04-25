@@ -70,6 +70,7 @@ machine-local artifacts, not source of truth.
 - `cmd/loopgate-policy-sign/` — detached policy signing
 - `cmd/loopgate-policy-admin/` — validate, diff, explain, and apply signed policy
 - `cmd/loopgate-doctor/` — local diagnostics and report helpers
+- `cmd/cmd_map.md` — executable entrypoint map
 
 ### `internal/loopgate/`
 
@@ -84,6 +85,13 @@ The authority core:
 
 If a change touches trust, approvals, request integrity, or capability
 execution, start here.
+
+Important subpackage maps:
+
+- `internal/loopgate/loopgate_map.md` — authority runtime package map
+- `internal/loopgate/approval/approval_map.md` — pure approval lifecycle rules
+- `internal/loopgate/controlapi/controlapi_map.md` — local wire contracts
+- `internal/loopgate/protocol/protocol_map.md` — canonical request envelopes
 
 ### `internal/ledger/` and `internal/audit/`
 
@@ -127,6 +135,15 @@ This package defines:
 - typed capability schemas and registry behavior
 - filesystem, host-folder, and shell tool implementations
 - the current governed execution surface used by Loopgate
+
+### Operational support maps
+
+- `claude/claude_map.md` — checked-in Claude Code hook bundle
+- `scripts/scripts_map.md` — release, install, and verification scripts
+- `.github/workflows/workflows_map.md` — CI workflow map
+- `internal/troubleshoot/troubleshoot_map.md` — doctor/report/bundle helpers
+- `internal/loopdiag/loopdiag_map.md` — non-authoritative diagnostic logs
+- `internal/testutil/testutil_map.md` — test-only signed-policy fixtures
 
 ## Docs map
 
