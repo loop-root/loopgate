@@ -16,6 +16,20 @@ confused:
 The current implementation is conservative by design: explicit trust
 boundaries, no plaintext persistence, and fail-closed behavior.
 
+## Redaction is defense-in-depth
+
+`internal/secrets/redact.go` catches common token shapes and sensitive field
+names, but regex redaction is not a cryptographic boundary and cannot identify
+every possible secret format. Treat redacted previews as an operator usability
+aid, not as permission to place unstructured secret-bearing data in audit or
+diagnostic records.
+
+For security-relevant audit paths, prefer fingerprints and bounded metadata:
+hash command text, URLs, queries, request bodies, or tool outputs instead of
+storing raw content. Where raw content might contain credentials, log a digest,
+type, size, status, and explicit redaction marker rather than the content
+itself.
+
 ## 1) Core types
 
 Defined in `internal/secrets/types.go`:

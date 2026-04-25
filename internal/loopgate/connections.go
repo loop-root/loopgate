@@ -133,7 +133,9 @@ func (connectionRecord connectionRecord) statusSummary() controlapipkg.Connectio
 }
 
 func connectionRecordKey(provider string, subject string) string {
-	return provider + ":" + subject
+	trimmedProvider := strings.TrimSpace(provider)
+	trimmedSubject := strings.TrimSpace(subject)
+	return fmt.Sprintf("%d:%s%d:%s", len(trimmedProvider), trimmedProvider, len(trimmedSubject), trimmedSubject)
 }
 
 func normalizedConnectionScopes(rawScopes []string) []string {
@@ -183,7 +185,11 @@ func loadConnectionRecords(path string) (map[string]connectionRecord, error) {
 		if err := loadedRecord.Validate(); err != nil {
 			return nil, fmt.Errorf("validate connection record: %w", err)
 		}
-		connectionRecords[connectionRecordKey(loadedRecord.Provider, loadedRecord.Subject)] = loadedRecord
+		recordKey := connectionRecordKey(loadedRecord.Provider, loadedRecord.Subject)
+		if _, exists := connectionRecords[recordKey]; exists {
+			return nil, fmt.Errorf("duplicate connection record for provider %q subject %q", loadedRecord.Provider, loadedRecord.Subject)
+		}
+		connectionRecords[recordKey] = loadedRecord
 	}
 	return connectionRecords, nil
 }

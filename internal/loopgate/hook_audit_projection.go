@@ -68,10 +68,35 @@ func buildHookAuditProjection(req controlapipkg.HookPreValidateRequest, repoRoot
 		}
 	}
 
-	if strings.TrimSpace(req.CWD) != "" {
-		auditProjection["hook_cwd"] = filepath.Clean(strings.TrimSpace(req.CWD))
+	if cwdProjection := safeHookCWDProjection(req.CWD, repoRoot); len(cwdProjection) > 0 {
+		for fieldName, fieldValue := range cwdProjection {
+			auditProjection[fieldName] = fieldValue
+		}
 	}
 	return auditProjection
+}
+
+func safeHookCWDProjection(rawCWD string, repoRoot string) map[string]interface{} {
+	trimmedCWD := strings.TrimSpace(rawCWD)
+	if trimmedCWD == "" {
+		return nil
+	}
+	cleanedCWD := filepath.Clean(trimmedCWD)
+	projection := map[string]interface{}{
+		"hook_cwd_sha256": sha256Hex(cleanedCWD),
+	}
+	if !filepath.IsAbs(cleanedCWD) {
+		projection["hook_cwd_state"] = "invalid_relative"
+		return projection
+	}
+	cleanRepoRoot := filepath.Clean(repoRoot)
+	if !pathWithinRoot(cleanedCWD, cleanRepoRoot) {
+		projection["hook_cwd_state"] = "outside_repo"
+		return projection
+	}
+	projection["hook_cwd_state"] = "inside_repo"
+	projection["hook_cwd"] = cleanedCWD
+	return projection
 }
 
 func mergeHookAuditProjection(auditData map[string]interface{}, req controlapipkg.HookPreValidateRequest, repoRoot string, includePreviews bool) map[string]interface{} {

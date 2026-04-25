@@ -50,6 +50,8 @@ func runGrants(args []string, stdout io.Writer, stderr io.Writer) int {
 		return runOverrideList(args[1:], stdout, stderr, "grants list")
 	case "add", "grant":
 		return runOverrideGrant(args[1:], stdout, stderr, "grants "+sub)
+	case "grant-edit-path":
+		return runOverrideGrantEditPath(args[1:], stdout, stderr)
 	case "revoke", "remove":
 		return runOverrideRevoke(args[1:], stdout, stderr, "grants "+sub)
 	default:
@@ -141,6 +143,7 @@ func runOverrideGrantEditPath(args []string, stdout io.Writer, stderr io.Writer)
 	pathFlag := fs.String("path", "", "repo-relative or absolute subtree path to allow for Edit and MultiEdit")
 	privateKeyPathFlag := fs.String("private-key-file", "", "path to a PKCS#8 PEM-encoded Ed25519 private key")
 	keyIDFlag := fs.String("key-id", "", "trusted signing key identifier (defaults to the current signed policy key_id)")
+	dryRunFlag := fs.Bool("dry-run", false, "preview the grant without writing or reloading operator overrides")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -155,6 +158,7 @@ func runOverrideGrantEditPath(args []string, stdout io.Writer, stderr io.Writer)
 		SocketPathFlag:     *socketPathFlag,
 		PrivateKeyPathFlag: *privateKeyPathFlag,
 		KeyIDFlag:          *keyIDFlag,
+		DryRun:             *dryRunFlag,
 	}, stdout, stderr)
 }
 

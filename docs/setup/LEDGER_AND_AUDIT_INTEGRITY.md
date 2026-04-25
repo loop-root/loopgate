@@ -50,6 +50,14 @@ So:
 
 - Treat these logs as **strong evidence of ordering and integrity while the file remains under Loopgate’s control**, not as **unforgeable proof** against a compromised local user or offline disk editing.
 - **File permissions** (`0600` on sensitive paths), **full-disk encryption**, and **least-privilege** on the Mac account remain part of the real-world boundary.
+- The shipped Claude Code policy denies `runtime/state` for read/search/write
+  hook paths so governed agent work cannot normally read, edit, or replace the
+  local audit ledger. Preserve that denial in custom policies unless you have a
+  separate audit retention design.
+- If you need non-repudiation against a local filesystem writer, export audit
+  events to an append-only sink outside the governed workspace, such as a
+  remote collector, external syslog, or write-once object storage. The local
+  hash chain alone is not that sink.
 
 ## HMAC checkpoints
 

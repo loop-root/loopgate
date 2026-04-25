@@ -37,7 +37,10 @@ func WriteOperatorBundle(repoRoot string, rc config.RuntimeConfig, outDir string
 		return nil
 	}
 
-	diagDir := filepath.Join(repoRoot, filepath.Clean(rc.Logging.Diagnostic.ResolvedDirectory()))
+	diagDir, err := diagnosticDirectoryWithinRepo(repoRoot, rc.Logging.Diagnostic.ResolvedDirectory())
+	if err != nil {
+		return err
+	}
 	basenames := []string{
 		rc.Logging.Diagnostic.Files.Audit,
 		rc.Logging.Diagnostic.Files.Server,
@@ -65,6 +68,30 @@ func WriteOperatorBundle(repoRoot string, rc config.RuntimeConfig, outDir string
 		}
 	}
 	return nil
+}
+
+func diagnosticDirectoryWithinRepo(repoRoot string, rawDiagnosticDirectory string) (string, error) {
+	cleanRepoRoot := filepath.Clean(repoRoot)
+	diagnosticDirectory := filepath.Clean(strings.TrimSpace(rawDiagnosticDirectory))
+	if diagnosticDirectory == "" || diagnosticDirectory == "." {
+		return cleanRepoRoot, nil
+	}
+	if filepath.IsAbs(diagnosticDirectory) {
+		return "", fmt.Errorf("diagnostic log directory must be repo-relative, got %q", diagnosticDirectory)
+	}
+	resolvedDiagnosticDirectory := filepath.Clean(filepath.Join(cleanRepoRoot, diagnosticDirectory))
+	if !pathWithinRoot(resolvedDiagnosticDirectory, cleanRepoRoot) {
+		return "", fmt.Errorf("diagnostic log directory %q escapes repository root", diagnosticDirectory)
+	}
+	return resolvedDiagnosticDirectory, nil
+}
+
+func pathWithinRoot(targetPath string, rootPath string) bool {
+	relativePath, err := filepath.Rel(rootPath, targetPath)
+	if err != nil {
+		return false
+	}
+	return relativePath == "." || (relativePath != ".." && !strings.HasPrefix(relativePath, ".."+string(filepath.Separator)))
 }
 
 func tailFileLines(path string, maxLines int) (string, error) {

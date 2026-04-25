@@ -96,6 +96,7 @@ tools:
         allowed_roots:
           - "."
         denied_paths:
+          - "runtime/state"
           - "core/policy"
           - ".claude/settings.json"
       Edit:
@@ -103,11 +104,19 @@ tools:
         requires_approval: true
         allowed_roots:
           - "."
+        denied_paths:
+          - "runtime/state"
+          - "core/policy"
+          - ".claude/settings.json"
       MultiEdit:
         enabled: true
         requires_approval: true
         allowed_roots:
           - "."
+        denied_paths:
+          - "runtime/state"
+          - "core/policy"
+          - ".claude/settings.json"
       WebFetch:
         enabled: false
         allowed_domains: []

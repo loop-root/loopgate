@@ -199,6 +199,26 @@ func TestShellExec_DoesNotInheritAmbientSecrets(t *testing.T) {
 	}
 }
 
+func TestShellExec_EmptyWorkDirDoesNotExposeAmbientHome(t *testing.T) {
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "real-home"))
+
+	tool := &ShellExec{
+		AllowedCommands: []string{"env"},
+	}
+	result, err := tool.Execute(context.Background(), map[string]string{
+		"command": "env",
+	})
+	if err != nil {
+		t.Fatalf("execute shell command: %v", err)
+	}
+	if strings.Contains(result, "HOME="+os.Getenv("HOME")) {
+		t.Fatalf("expected ambient HOME to be absent, got %q", result)
+	}
+	if !strings.Contains(result, "HOME="+emptyShellHome) {
+		t.Fatalf("expected HOME to use empty shell home %q, got %q", emptyShellHome, result)
+	}
+}
+
 func TestShellExec_RejectsCommandOutsidePolicyAllowlist(t *testing.T) {
 	tool := &ShellExec{
 		WorkDir:         t.TempDir(),

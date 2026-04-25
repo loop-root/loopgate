@@ -142,6 +142,52 @@ func TestRegisterConnection_PersistsSecretRefOnly(t *testing.T) {
 	}
 }
 
+func TestConnectionRecordKey_DistinguishesColonContainingIdentifiers(t *testing.T) {
+	leftKey := connectionRecordKey("a:b", "c")
+	rightKey := connectionRecordKey("a", "b:c")
+
+	if leftKey == rightKey {
+		t.Fatalf("expected distinct connection keys for colon-containing identifiers, got %q", leftKey)
+	}
+}
+
+func TestLoadConnectionRecords_DoesNotCollideColonContainingIdentifiers(t *testing.T) {
+	connectionPath := filepath.Join(t.TempDir(), "connections.json")
+	connectionJSON := `{
+  "connections": [
+    {
+      "provider": "a:b",
+      "grant_type": "public_read",
+      "subject": "c",
+      "scopes": ["read"],
+      "credential": {},
+      "status": "ready",
+      "created_at_utc": "2026-04-24T00:00:00Z"
+    },
+    {
+      "provider": "a",
+      "grant_type": "public_read",
+      "subject": "b:c",
+      "scopes": ["read"],
+      "credential": {},
+      "status": "ready",
+      "created_at_utc": "2026-04-24T00:00:01Z"
+    }
+  ]
+}`
+	if err := os.WriteFile(connectionPath, []byte(connectionJSON), 0o600); err != nil {
+		t.Fatalf("write connection records: %v", err)
+	}
+
+	connectionRecords, err := loadConnectionRecords(connectionPath)
+	if err != nil {
+		t.Fatalf("load connection records: %v", err)
+	}
+	if len(connectionRecords) != 2 {
+		t.Fatalf("expected two non-colliding connection records, got %#v", connectionRecords)
+	}
+}
+
 func TestResolveConnectionSecret_UsesLoopgateOwnedReference(t *testing.T) {
 	repoRoot := t.TempDir()
 	_, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))

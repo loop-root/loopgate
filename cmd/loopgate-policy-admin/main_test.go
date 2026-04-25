@@ -835,6 +835,33 @@ func TestRunOverridesGrant_DryRunDoesNotWriteOverrideDocument(t *testing.T) {
 	}
 }
 
+func TestRunGrantsGrantEditPathAlias_DryRunDoesNotWriteOverrideDocument(t *testing.T) {
+	repoRoot := t.TempDir()
+	signerFixture := newTestPolicySignerFixture(t)
+	signerFixture.writeSignedPolicy(t, repoRoot, delegatedRepoEditPolicyYAML())
+	if err := os.MkdirAll(filepath.Join(repoRoot, "docs"), 0o755); err != nil {
+		t.Fatalf("mkdir docs dir: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run([]string{"grants", "grant-edit-path", "-repo", repoRoot, "-path", "docs", "-dry-run"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "operator grant preview") || !strings.Contains(output, "grant_class: repo_edit_safe") {
+		t.Fatalf("expected grant-edit-path alias preview output, got %q", output)
+	}
+	loadResult, err := config.LoadOperatorOverrideDocumentWithHash(repoRoot)
+	if err != nil {
+		t.Fatalf("LoadOperatorOverrideDocumentWithHash after dry run: %v", err)
+	}
+	if loadResult.Present {
+		t.Fatalf("expected dry-run not to write operator override document, got %#v", loadResult)
+	}
+}
+
 func TestRunOverridesGrant_RejectsUnsupportedPathScopedClass(t *testing.T) {
 	repoRoot := t.TempDir()
 	signerFixture := newTestPolicySignerFixture(t)

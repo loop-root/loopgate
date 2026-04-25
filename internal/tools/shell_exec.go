@@ -15,6 +15,7 @@ import (
 const (
 	defaultShellTimeout = 30 * time.Second
 	maxOutputBytes      = 256 * 1024 // 256 KB
+	emptyShellHome      = "/nonexistent-loopgate-home"
 )
 
 var hermeticShellPATHEntries = []string{
@@ -305,7 +306,7 @@ func minimalShellEnvironment(workDir string, searchPath string) []string {
 	if strings.TrimSpace(workDir) != "" {
 		appendIfPresent("HOME", workDir)
 	} else {
-		appendIfPresent("HOME", os.Getenv("HOME"))
+		appendIfPresent("HOME", emptyShellHome)
 	}
 	appendIfPresent("SHELL", "/bin/sh")
 	return envVars
