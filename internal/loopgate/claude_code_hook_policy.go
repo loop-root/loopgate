@@ -4,11 +4,13 @@ import (
 	"fmt"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"loopgate/internal/config"
 	policypkg "loopgate/internal/policy"
+	"loopgate/internal/safety"
 )
 
 func (server *Server) evaluateClaudeCodeHookPolicy(req controlapipkg.HookPreValidateRequest, toolDef struct {
@@ -27,15 +29,15 @@ func (server *Server) evaluateClaudeCodeHookPolicy(req controlapipkg.HookPreVali
 		toolPolicy = config.ClaudeCodeToolPolicy{}
 	}
 
-	if constraintResult, constrained := server.applyClaudeCodeHookConstraints(req, toolPolicy); constrained {
-		return constraintResult
-	}
-
 	if toolPolicy.Enabled != nil && !*toolPolicy.Enabled {
 		return policypkg.CheckResult{
 			Decision: policypkg.Deny,
 			Reason:   fmt.Sprintf("%s is disabled by Claude Code tool policy", req.ToolName),
 		}
+	}
+
+	if constraintResult, constrained := server.applyClaudeCodeHookConstraints(req, toolPolicy); constrained {
+		return constraintResult
 	}
 
 	overrideEligible := false
@@ -156,25 +158,39 @@ func (server *Server) applyClaudeCodePathConstraints(req controlapipkg.HookPreVa
 	}
 
 	for _, targetPath := range targetPaths {
-		resolvedTargetPath := resolveHookTargetPath(targetPath, req.CWD, server.repoRoot)
+		resolvedTargetPath, err := server.resolveClaudeCodeHookPolicyPath(req, targetPath, allowedRoots, deniedPaths)
+		if err != nil {
+			displayPath := resolvedTargetPath
+			if strings.TrimSpace(displayPath) == "" {
+				displayPath = strings.TrimSpace(targetPath)
+			}
+			switch {
+			case strings.Contains(err.Error(), "path is outside allowed roots"):
+				return policypkg.CheckResult{
+					Decision: policypkg.Deny,
+					Reason:   fmt.Sprintf("%s target %q is outside allowed roots", req.ToolName, displayPath),
+				}, true
+			case strings.Contains(err.Error(), "path is denied by policy"):
+				return policypkg.CheckResult{
+					Decision: policypkg.Deny,
+					Reason:   fmt.Sprintf("%s target %q matches denied path policy", req.ToolName, displayPath),
+				}, true
+			case strings.Contains(err.Error(), "symlink path"):
+				return policypkg.CheckResult{
+					Decision: policypkg.Deny,
+					Reason:   fmt.Sprintf("%s target %q uses a symlink path", req.ToolName, displayPath),
+				}, true
+			default:
+				return policypkg.CheckResult{
+					Decision: policypkg.Deny,
+					Reason:   fmt.Sprintf("%s path policy could not resolve target path", req.ToolName),
+				}, true
+			}
+		}
 		if resolvedTargetPath == "" {
 			return policypkg.CheckResult{
 				Decision: policypkg.Deny,
 				Reason:   fmt.Sprintf("%s path policy could not resolve target path", req.ToolName),
-			}, true
-		}
-
-		if len(allowedRoots) > 0 && !pathMatchesAnyPolicyRoot(resolvedTargetPath, allowedRoots, server.repoRoot) {
-			return policypkg.CheckResult{
-				Decision: policypkg.Deny,
-				Reason:   fmt.Sprintf("%s target %q is outside allowed roots", req.ToolName, resolvedTargetPath),
-			}, true
-		}
-
-		if pathMatchesAnyPolicyRoot(resolvedTargetPath, deniedPaths, server.repoRoot) {
-			return policypkg.CheckResult{
-				Decision: policypkg.Deny,
-				Reason:   fmt.Sprintf("%s target %q matches denied path policy", req.ToolName, resolvedTargetPath),
 			}, true
 		}
 	}
@@ -260,41 +276,35 @@ func hookTargetPaths(req controlapipkg.HookPreValidateRequest) ([]string, bool) 
 }
 
 func resolveHookTargetPath(rawTargetPath string, cwd string, repoRoot string) string {
+	candidatePath, err := hookTargetCandidatePath(rawTargetPath, cwd, repoRoot)
+	if err != nil {
+		return ""
+	}
+	return candidatePath
+}
+
+func hookTargetCandidatePath(rawTargetPath string, cwd string, repoRoot string) (string, error) {
 	trimmedTargetPath := strings.TrimSpace(rawTargetPath)
 	if trimmedTargetPath == "" {
-		return ""
+		return "", fmt.Errorf("empty target path")
 	}
+	var candidatePath string
 	if filepath.IsAbs(trimmedTargetPath) {
-		return filepath.Clean(trimmedTargetPath)
-	}
-	if strings.TrimSpace(cwd) != "" {
-		return filepath.Clean(filepath.Join(cwd, trimmedTargetPath))
-	}
-	return filepath.Clean(filepath.Join(repoRoot, trimmedTargetPath))
-}
-
-func pathMatchesAnyPolicyRoot(targetPath string, configuredPaths []string, repoRoot string) bool {
-	for _, configuredPath := range configuredPaths {
-		resolvedConfiguredPath := resolvePolicyConfiguredPath(configuredPath, repoRoot)
-		if resolvedConfiguredPath == "" {
-			continue
+		candidatePath = trimmedTargetPath
+	} else if strings.TrimSpace(cwd) != "" {
+		trimmedCWD := strings.TrimSpace(cwd)
+		if !filepath.IsAbs(trimmedCWD) {
+			return "", fmt.Errorf("hook cwd must be absolute")
 		}
-		if pathWithinRoot(targetPath, resolvedConfiguredPath) {
-			return true
-		}
+		candidatePath = filepath.Join(trimmedCWD, trimmedTargetPath)
+	} else {
+		candidatePath = filepath.Join(repoRoot, trimmedTargetPath)
 	}
-	return false
-}
-
-func resolvePolicyConfiguredPath(configuredPath string, repoRoot string) string {
-	trimmedConfiguredPath := strings.TrimSpace(configuredPath)
-	if trimmedConfiguredPath == "" {
-		return ""
+	absCandidatePath, err := filepath.Abs(filepath.Clean(candidatePath))
+	if err != nil {
+		return "", err
 	}
-	if filepath.IsAbs(trimmedConfiguredPath) {
-		return filepath.Clean(trimmedConfiguredPath)
-	}
-	return filepath.Clean(filepath.Join(repoRoot, trimmedConfiguredPath))
+	return filepath.Clean(absCandidatePath), nil
 }
 
 func pathWithinRoot(targetPath string, rootPath string) bool {
@@ -306,6 +316,90 @@ func pathWithinRoot(targetPath string, rootPath string) bool {
 		return true
 	}
 	return relativePath != ".." && !strings.HasPrefix(relativePath, ".."+string(filepath.Separator))
+}
+
+func (server *Server) resolveClaudeCodeHookPolicyPath(req controlapipkg.HookPreValidateRequest, rawTargetPath string, allowedRoots []string, deniedPaths []string) (string, error) {
+	candidatePath, err := hookTargetCandidatePath(rawTargetPath, req.CWD, server.repoRoot)
+	if err != nil {
+		return "", err
+	}
+
+	allowedRootsForResolution := allowedRoots
+	if len(allowedRootsForResolution) == 0 {
+		allowedRootsForResolution = []string{string(filepath.Separator)}
+	}
+
+	explanation, err := safety.ExplainSafePath(server.repoRoot, allowedRootsForResolution, deniedPaths, candidatePath)
+	if err != nil {
+		return explanation.ResolvedAbs, err
+	}
+
+	switch req.ToolName {
+	case "Read", "Glob", "Grep":
+		if _, statErr := os.Stat(explanation.ResolvedAbs); statErr != nil {
+			return explanation.ResolvedAbs, fmt.Errorf("target_path_not_resolved: %w", statErr)
+		}
+	case "Write", "Edit", "MultiEdit":
+		usesSymlinkPath, symlinkErr := mutatingHookPathUsesSymlinkPath(server.repoRoot, candidatePath)
+		if symlinkErr != nil {
+			return explanation.ResolvedAbs, fmt.Errorf("symlink path validation failed: %w", symlinkErr)
+		}
+		if usesSymlinkPath {
+			return explanation.ResolvedAbs, fmt.Errorf("symlink path denied")
+		}
+	}
+
+	return explanation.ResolvedAbs, nil
+}
+
+func mutatingHookPathUsesSymlinkPath(repoRoot string, candidatePath string) (bool, error) {
+	inspectionPath := candidatePath
+	if _, err := os.Lstat(inspectionPath); err != nil {
+		if !os.IsNotExist(err) {
+			return false, err
+		}
+		inspectionPath = filepath.Dir(inspectionPath)
+	}
+
+	startPath, relativePath := symlinkInspectionStart(repoRoot, inspectionPath)
+	if relativePath == "." {
+		return false, nil
+	}
+
+	currentPath := startPath
+	for _, pathPart := range strings.Split(relativePath, string(filepath.Separator)) {
+		if pathPart == "" || pathPart == "." {
+			continue
+		}
+		if pathPart == ".." {
+			return false, fmt.Errorf("path escapes symlink inspection root")
+		}
+		currentPath = filepath.Join(currentPath, pathPart)
+		fileInfo, err := os.Lstat(currentPath)
+		if err != nil {
+			return false, err
+		}
+		if fileInfo.Mode()&os.ModeSymlink != 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func symlinkInspectionStart(repoRoot string, inspectionPath string) (string, string) {
+	cleanRepoRoot := filepath.Clean(repoRoot)
+	cleanInspectionPath := filepath.Clean(inspectionPath)
+	if relativePath, err := filepath.Rel(cleanRepoRoot, cleanInspectionPath); err == nil && relativePath != ".." && !strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+		return cleanRepoRoot, filepath.Clean(relativePath)
+	}
+
+	volumeName := filepath.VolumeName(cleanInspectionPath)
+	rootPath := volumeName + string(filepath.Separator)
+	relativePath, err := filepath.Rel(rootPath, cleanInspectionPath)
+	if err != nil {
+		return rootPath, "."
+	}
+	return rootPath, filepath.Clean(relativePath)
 }
 
 func hostMatchesDomain(host string, allowedDomain string) bool {
