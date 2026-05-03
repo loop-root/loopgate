@@ -26,6 +26,7 @@ func (server *Server) configureAuditRuntime() {
 	}
 	server.auditRuntime = auditruntime.New(auditruntime.Options{
 		Path:          server.auditPath,
+		AnchorPath:    filepath.Join(server.repoRoot, "runtime", "state", "audit_ledger_anchor.json"),
 		LedgerRuntime: server.auditLedgerRuntime,
 		Now:           server.now,
 		Append: func(path string, auditEvent ledger.Event) error {

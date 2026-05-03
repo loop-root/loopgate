@@ -151,6 +151,7 @@ type Runtime struct {
     sequence uint64
     lastHash string
     eventsSinceCheckpoint int
+    anchorPath string
     append func(path string, event ledger.Event) error
     loadCheckpointSecret func(context.Context) ([]byte, error)
     tenancyForSession func(sessionID string) (tenantID, userID string)
@@ -171,6 +172,9 @@ Names can change during implementation; the dependency shape should not.
 - No code acquires `Server.mu` while holding the audit runtime lock.
 - HMAC checkpoint events participate in the same chain and update the same
   sequence/last-hash state.
+- When HMAC checkpoints are enabled, the runtime writes a signed local head
+  anchor after successful appends and compares it on startup before trusting the
+  loaded head.
 - Checkpoint secrets are zeroed after use by the caller that loads them.
 - Tenancy is resolved before entering audit append serialization.
 - Diagnostic text logs remain derived from successful authoritative audit
@@ -188,7 +192,8 @@ go test ./internal/audit ./internal/ledger ./internal/loopgate
 Specific high-signal tests:
 
 - `TestLogEvent_AppendsConfiguredAuditHMACCheckpoint`
-- `TestLoadAuditChainState_RestoresEventsSinceCheckpoint`
+- `TestNewServerFailsClosedOnReplacedAuditLedgerWithAnchor`
+- `TestNewServer_RestoresAuditCheckpointCadenceFromLedger`
 - `TestAuditIntegrityModeMessage_*`
 - audit-unavailable denial tests in `server_request_auth_runtime_test.go`
 - audit export request/failure tests in `server_audit_export_handlers_test.go`

@@ -177,6 +177,55 @@ func TestNewServer_RestoresAuditCheckpointCadenceFromLedger(t *testing.T) {
 	}
 }
 
+func TestNewServerFailsClosedOnReplacedAuditLedgerWithAnchor(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeSignedTestPolicyYAML(t, repoRoot, loopgatePolicyYAML(false))
+
+	runtimeConfig := config.DefaultRuntimeConfig()
+	runtimeConfig.Logging.AuditLedger.HMACCheckpoint.Enabled = true
+	runtimeConfig.Logging.AuditLedger.HMACCheckpoint.IntervalEvents = 2
+	runtimeConfig.Logging.AuditLedger.HMACCheckpoint.SecretRef = &config.AuditLedgerHMACSecretRef{
+		ID:          "audit_ledger_hmac",
+		Backend:     "env",
+		AccountName: "LOOPGATE_AUDIT_LEDGER_HMAC",
+		Scope:       "test",
+	}
+	if err := config.WriteRuntimeConfigYAML(repoRoot, runtimeConfig); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+	t.Setenv("LOOPGATE_AUDIT_LEDGER_HMAC", "test-audit-hmac-key")
+
+	serverOne, err := NewServer(repoRoot, newShortLoopgateSocketPath(t))
+	if err != nil {
+		t.Fatalf("new first server: %v", err)
+	}
+	if err := serverOne.logEvent("capability.requested", "", map[string]interface{}{"capability": "fs_read"}); err != nil {
+		t.Fatalf("log anchored event: %v", err)
+	}
+
+	auditPath := filepath.Join(repoRoot, "runtime", "state", "loopgate_events.jsonl")
+	if err := os.Remove(auditPath); err != nil {
+		t.Fatalf("remove original audit ledger: %v", err)
+	}
+	replacementRuntime := ledger.NewAppendRuntime()
+	if err := replacementRuntime.Append(auditPath, ledger.Event{
+		TS:      time.Now().UTC().Format(time.RFC3339Nano),
+		Type:    "capability.requested",
+		Session: "",
+		Data: map[string]interface{}{
+			"audit_sequence": int64(1),
+			"capability":     "synthetic_fs_read",
+		},
+	}); err != nil {
+		t.Fatalf("write replacement audit ledger: %v", err)
+	}
+
+	_, err = NewServer(repoRoot, newShortLoopgateSocketPath(t))
+	if !errors.Is(err, ledger.ErrLedgerIntegrity) {
+		t.Fatalf("expected ledger integrity failure for replaced audit ledger, got %v", err)
+	}
+}
+
 func TestEnsureDefaultAuditLedgerCheckpointSecret_BootstrapsMissingDefaultKey(t *testing.T) {
 	runtimeConfig := config.DefaultRuntimeConfig()
 	runtimeConfig.Logging.AuditLedger.HMACCheckpoint = config.DefaultAuditLedgerHMACCheckpoint()

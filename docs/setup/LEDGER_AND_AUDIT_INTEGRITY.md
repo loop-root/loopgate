@@ -96,6 +96,20 @@ tampering** for parties that hold the key; it is **not** a substitute for
 **out-of-band** retention (append-only export, central aggregation) where the
 operator needs evidence off the workstation.
 
+Loopgate also maintains a small signed local head anchor at
+`runtime/state/audit_ledger_anchor.json` when HMAC checkpoints are enabled. The
+anchor is HMAC-signed with the audit checkpoint secret and records the latest
+audit sequence, latest event hash, active ledger byte size, and checkpoint
+cadence counter. On startup, Loopgate compares the verified ledger head to this
+anchor and fails closed on mismatch. This closes the common whole-ledger
+replacement path where a forged JSONL file is internally consistent but no
+longer matches the last keyed head Loopgate wrote.
+
+The anchor is also a performance guardrail: once present, startup can restore
+the checkpoint cadence counter from the signed anchor instead of rescanning all
+HMAC checkpoint events on the normal path. Full ledger verification remains
+available through the explicit verification tools below.
+
 Current operator verification path:
 
 - `./bin/loopgate-ledger verify`

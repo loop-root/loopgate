@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ type TenancyLookupFunc func(sessionID string) (tenantID, userID string)
 
 type Options struct {
 	Path                 string
+	AnchorPath           string
 	Append               AppendFunc
 	LedgerRuntime        *ledger.AppendRuntime
 	Now                  NowFunc
@@ -40,6 +42,7 @@ type Runtime struct {
 	mu sync.Mutex
 
 	path                 string
+	anchorPath           string
 	append               AppendFunc
 	ledgerRuntime        *ledger.AppendRuntime
 	now                  NowFunc
@@ -60,6 +63,7 @@ func New(options Options) *Runtime {
 	}
 	return &Runtime{
 		path:                 options.Path,
+		anchorPath:           options.AnchorPath,
 		append:               options.Append,
 		ledgerRuntime:        options.LedgerRuntime,
 		now:                  now,
@@ -100,23 +104,36 @@ func (runtime *Runtime) Load(ctx context.Context, rotationSettings ledger.Rotati
 		return nil
 	}
 
-	orderedPaths, err := ledger.OrderedSegmentedPaths(runtime.path, rotationSettings)
-	if err != nil {
-		return fmt.Errorf("ordered audit ledger paths: %w", err)
-	}
 	rawSecretBytes, err := runtime.loadCheckpointSecretBytes(ctx)
 	if err != nil {
 		return err
 	}
 	defer zeroSecretBytes(rawSecretBytes)
 
-	checkpointInspection, err := ledger.InspectAuditHMACCheckpoints(orderedPaths, rawSecretBytes)
+	anchor, anchorFound, err := runtime.loadAndVerifyAnchor(rawSecretBytes, uint64(lastAuditSequence), lastAuditHash)
 	if err != nil {
-		return fmt.Errorf("inspect audit hmac checkpoints: %w", err)
+		return err
+	}
+	eventsSinceCheckpoint := 0
+	if anchorFound {
+		eventsSinceCheckpoint = anchor.EventsSinceCheckpoint
+	} else {
+		orderedPaths, err := ledger.OrderedSegmentedPaths(runtime.path, rotationSettings)
+		if err != nil {
+			return fmt.Errorf("ordered audit ledger paths: %w", err)
+		}
+		checkpointInspection, err := ledger.InspectAuditHMACCheckpoints(orderedPaths, rawSecretBytes)
+		if err != nil {
+			return fmt.Errorf("inspect audit hmac checkpoints: %w", err)
+		}
+		eventsSinceCheckpoint = checkpointInspection.OrdinaryEventsSinceLastCheckpoint
+		if err := runtime.storeAnchor(rawSecretBytes, uint64(lastAuditSequence), lastAuditHash, eventsSinceCheckpoint); err != nil {
+			return err
+		}
 	}
 
 	runtime.mu.Lock()
-	runtime.eventsSinceCheckpoint = checkpointInspection.OrdinaryEventsSinceLastCheckpoint
+	runtime.eventsSinceCheckpoint = eventsSinceCheckpoint
 	runtime.mu.Unlock()
 	return nil
 }
@@ -170,6 +187,9 @@ func (runtime *Runtime) Record(eventType string, sessionID string, data map[stri
 	runtime.eventsSinceCheckpoint++
 	runtime.emitAfterAppend(auditEvent)
 	if err := runtime.appendHMACCheckpointIfDueLocked(); err != nil {
+		return "", err
+	}
+	if err := runtime.storeAnchorLocked(); err != nil {
 		return "", err
 	}
 	return eventHash, nil
@@ -256,6 +276,76 @@ func (runtime *Runtime) appendHMACCheckpointIfDueLocked() error {
 	runtime.eventsSinceCheckpoint = 0
 	runtime.emitAfterAppend(checkpointEvent)
 	return nil
+}
+
+func (runtime *Runtime) loadAndVerifyAnchor(key []byte, lastAuditSequence uint64, lastAuditHash string) (auditLedgerAnchor, bool, error) {
+	if runtime.anchorPath == "" {
+		return auditLedgerAnchor{}, false, nil
+	}
+	anchor, found, err := loadAuditLedgerAnchor(runtime.anchorPath, key)
+	if err != nil {
+		return auditLedgerAnchor{}, false, err
+	}
+	if found {
+		if anchor.AuditSequence != lastAuditSequence || anchor.LastEventHash != lastAuditHash {
+			return auditLedgerAnchor{}, true, fmt.Errorf(
+				"%w: audit ledger anchor head mismatch (anchor sequence=%d, ledger sequence=%d)",
+				ledger.ErrLedgerIntegrity,
+				anchor.AuditSequence,
+				lastAuditSequence,
+			)
+		}
+		activeSizeBytes, err := runtime.activeLedgerSizeBytes()
+		if err != nil {
+			return auditLedgerAnchor{}, true, err
+		}
+		if anchor.ActiveSizeBytes != activeSizeBytes {
+			return auditLedgerAnchor{}, true, fmt.Errorf(
+				"%w: audit ledger anchor active size mismatch (anchor bytes=%d, ledger bytes=%d)",
+				ledger.ErrLedgerIntegrity,
+				anchor.ActiveSizeBytes,
+				activeSizeBytes,
+			)
+		}
+		return anchor, true, nil
+	}
+	return auditLedgerAnchor{}, false, nil
+}
+
+func (runtime *Runtime) storeAnchorLocked() error {
+	hmacCheckpointConfig := runtime.currentHMACCheckpointConfig()
+	if !hmacCheckpointConfig.Enabled || runtime.anchorPath == "" {
+		return nil
+	}
+	rawSecretBytes, err := runtime.loadCheckpointSecretBytes(context.Background())
+	if err != nil {
+		return err
+	}
+	defer zeroSecretBytes(rawSecretBytes)
+	return runtime.storeAnchor(rawSecretBytes, runtime.sequence, runtime.lastHash, runtime.eventsSinceCheckpoint)
+}
+
+func (runtime *Runtime) storeAnchor(key []byte, auditSequence uint64, lastEventHash string, eventsSinceCheckpoint int) error {
+	activeSizeBytes, err := runtime.activeLedgerSizeBytes()
+	if err != nil {
+		return err
+	}
+	return storeAuditLedgerAnchor(runtime.anchorPath, key, runtime.now().UTC(), auditSequence, lastEventHash, eventsSinceCheckpoint, activeSizeBytes)
+}
+
+func (runtime *Runtime) activeLedgerSizeBytes() (int64, error) {
+	activeSizeBytes := int64(0)
+	if runtime.path != "" {
+		fileInfo, err := os.Stat(runtime.path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return 0, fmt.Errorf("stat audit ledger for anchor: %w", err)
+			}
+		} else {
+			activeSizeBytes = fileInfo.Size()
+		}
+	}
+	return activeSizeBytes, nil
 }
 
 func (runtime *Runtime) currentHMACCheckpointConfig() config.AuditLedgerHMACCheckpoint {
