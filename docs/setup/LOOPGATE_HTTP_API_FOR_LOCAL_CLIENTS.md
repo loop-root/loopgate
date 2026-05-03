@@ -222,7 +222,7 @@ This matches `computeRequestSignature` in `internal/loopgate/client.go`.
 
 ## 7. Routes registered today (inventory)
 
-The following paths are registered on the Loopgate mux (`internal/loopgate/server.go`). **Method** is mostly **POST** for mutations; **GET** where noted. Exact auth and signing requirements follow the handler (authenticate + `verifySignedRequest` patterns); when unsure, mirror `internal/loopgate/client.go`.
+The following paths are registered on the Loopgate mux (`internal/loopgate/server_routes.go`). **Method** is mostly **POST** for mutations; **GET** where noted. Exact auth and signing requirements follow the handler (authenticate + `verifySignedRequest` patterns); when unsure, mirror `internal/loopgate/client.go`.
 
 | Path | Typical use |
 |------|-------------|

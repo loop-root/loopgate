@@ -667,54 +667,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/health", server.handleHealth)
-	mux.HandleFunc("/v1/status", server.handleStatus)
-	mux.HandleFunc("/v1/control/approvals", server.handleControlApprovals)
-	mux.HandleFunc("/v1/control/approvals/", server.handleControlApprovalDecision)
-	mux.HandleFunc("/v1/ui/status", server.handleUIStatus)
-	mux.HandleFunc("/v1/ui/operator-mount-write-grants", server.handleUIOperatorMountWriteGrants)
-	mux.HandleFunc("/v1/ui/events", server.handleUIEvents)
-	mux.HandleFunc("/v1/ui/events/recent", server.handleUIRecentEvents)
-	mux.HandleFunc("/v1/ui/approvals", server.handleUIApprovals)
-	mux.HandleFunc("/v1/ui/approvals/", server.handleUIApprovalDecision)
-	mux.HandleFunc("/v1/ui/folder-access", server.handleFolderAccess)
-	mux.HandleFunc("/v1/ui/folder-access/sync", server.handleFolderAccessSync)
-	mux.HandleFunc("/v1/ui/shared-folder", server.handleSharedFolderStatus)
-	mux.HandleFunc("/v1/ui/shared-folder/sync", server.handleSharedFolderSync)
-	mux.HandleFunc("/v1/diagnostic/report", server.handleDiagnosticReport)
-	mux.HandleFunc("/v1/mcp-gateway/inventory", server.handleMCPGatewayInventory)
-	mux.HandleFunc("/v1/mcp-gateway/server/status", server.handleMCPGatewayServerStatus)
-	mux.HandleFunc("/v1/mcp-gateway/decision", server.handleMCPGatewayDecision)
-	mux.HandleFunc("/v1/mcp-gateway/server/ensure-launched", server.handleMCPGatewayEnsureLaunched)
-	mux.HandleFunc("/v1/mcp-gateway/server/stop", server.handleMCPGatewayServerStop)
-	mux.HandleFunc("/v1/mcp-gateway/invocation/validate", server.handleMCPGatewayInvocationValidate)
-	mux.HandleFunc("/v1/mcp-gateway/invocation/request-approval", server.handleMCPGatewayInvocationRequestApproval)
-	mux.HandleFunc("/v1/mcp-gateway/invocation/decide-approval", server.handleMCPGatewayInvocationDecideApproval)
-	mux.HandleFunc("/v1/mcp-gateway/invocation/validate-execution", server.handleMCPGatewayInvocationValidateExecution)
-	mux.HandleFunc("/v1/mcp-gateway/invocation/execute", server.handleMCPGatewayInvocationExecute)
-	mux.HandleFunc("/v1/audit/export/flush", server.handleAuditExportFlush)
-	mux.HandleFunc("/v1/audit/export/trust-check", server.handleAuditExportTrustCheck)
-	mux.HandleFunc("/v1/session/open", server.handleSessionOpen)
-	mux.HandleFunc("/v1/session/close", server.handleSessionClose)
-	mux.HandleFunc("/v1/session/mac-keys", server.handleSessionMACKeys)
-	mux.HandleFunc("/v1/capabilities/execute", server.handleCapabilityExecute)
-	mux.HandleFunc("/v1/connections/status", server.handleConnectionsStatus)
-	mux.HandleFunc("/v1/connections/validate", server.handleConnectionValidate)
-	mux.HandleFunc("/v1/connections/pkce/start", server.handleConnectionPKCEStart)
-	mux.HandleFunc("/v1/connections/pkce/complete", server.handleConnectionPKCEComplete)
-	mux.HandleFunc("/v1/sites/inspect", server.handleSiteInspect)
-	mux.HandleFunc("/v1/sites/trust-draft", server.handleSiteTrustDraft)
-	mux.HandleFunc("/v1/sandbox/import", server.handleSandboxImport)
-	mux.HandleFunc("/v1/sandbox/stage", server.handleSandboxStage)
-	mux.HandleFunc("/v1/sandbox/metadata", server.handleSandboxMetadata)
-	mux.HandleFunc("/v1/sandbox/export", server.handleSandboxExport)
-	mux.HandleFunc("/v1/sandbox/list", server.handleSandboxList)
-	mux.HandleFunc("/v1/quarantine/metadata", server.handleQuarantineMetadata)
-	mux.HandleFunc("/v1/quarantine/view", server.handleQuarantineView)
-	mux.HandleFunc("/v1/quarantine/prune", server.handleQuarantinePrune)
-	mux.HandleFunc("/v1/config/", server.handleConfig)
-	mux.HandleFunc("/v1/approvals/", server.handleApprovalDecision)
-	mux.HandleFunc("/v1/hook/pre-validate", server.handleHookPreValidate)
+	server.registerRoutes(mux)
 
 	diagnostic, diagErr := loopdiag.Open(repoRoot, server.runtimeConfig.Logging.Diagnostic)
 	if diagErr != nil {
@@ -1509,90 +1462,6 @@ func (server *Server) activeSessionsForPeerUIDLocked(peerUID uint32) int {
 		}
 	}
 	return activeSessionCount
-}
-
-func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
-	server.mu.Lock()
-	defer server.mu.Unlock()
-
-	if server.fsReadRateLimit <= 0 {
-		return false
-	}
-
-	nowUTC := server.now().UTC()
-	cutoff := nowUTC.Add(-fsReadRateWindow)
-
-	timestamps := server.replayState.sessionReadCounts[controlSessionID]
-	// Prune old entries.
-	pruned := make([]time.Time, 0, len(timestamps))
-	for _, ts := range timestamps {
-		if ts.After(cutoff) {
-			pruned = append(pruned, ts)
-		}
-	}
-	if len(pruned) >= server.fsReadRateLimit {
-		server.replayState.sessionReadCounts[controlSessionID] = pruned
-		return true
-	}
-	server.replayState.sessionReadCounts[controlSessionID] = append(pruned, nowUTC)
-	return false
-}
-
-func (server *Server) checkHookPreValidateRateLimit(peerUID uint32) bool {
-	server.mu.Lock()
-	defer server.mu.Unlock()
-
-	if server.hookPreValidateRateLimit <= 0 || server.hookPreValidateRateWindow <= 0 {
-		return false
-	}
-
-	nowUTC := server.now().UTC()
-	cutoff := nowUTC.Add(-server.hookPreValidateRateWindow)
-
-	timestamps := server.replayState.hookPreValidateCounts[peerUID]
-	pruned := make([]time.Time, 0, len(timestamps))
-	for _, timestamp := range timestamps {
-		if timestamp.After(cutoff) {
-			pruned = append(pruned, timestamp)
-		}
-	}
-	if len(pruned) >= server.hookPreValidateRateLimit {
-		server.replayState.hookPreValidateCounts[peerUID] = pruned
-		return true
-	}
-	server.replayState.hookPreValidateCounts[peerUID] = append(pruned, nowUTC)
-	return false
-}
-
-func (server *Server) checkHookPeerAuthFailureRateLimit(rateLimitKey string) bool {
-	server.mu.Lock()
-	defer server.mu.Unlock()
-
-	if server.hookPeerAuthFailureRateLimit <= 0 || server.hookPeerAuthFailureWindow <= 0 {
-		return false
-	}
-
-	trimmedRateLimitKey := strings.TrimSpace(rateLimitKey)
-	if trimmedRateLimitKey == "" {
-		trimmedRateLimitKey = "unknown"
-	}
-
-	nowUTC := server.now().UTC()
-	cutoff := nowUTC.Add(-server.hookPeerAuthFailureWindow)
-
-	timestamps := server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey]
-	pruned := make([]time.Time, 0, len(timestamps))
-	for _, timestamp := range timestamps {
-		if timestamp.After(cutoff) {
-			pruned = append(pruned, timestamp)
-		}
-	}
-	if len(pruned) >= server.hookPeerAuthFailureRateLimit {
-		server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey] = pruned
-		return true
-	}
-	server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey] = append(pruned, nowUTC)
-	return false
 }
 
 func randomHex(byteCount int) (string, error) {

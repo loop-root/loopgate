@@ -43,6 +43,12 @@ For integrators it matters in four ways:
   - dispatch point for capability-specific execution paths such as host-folder plan/apply helpers
   - now also contains some legacy actor-scoped branches that should continue shrinking rather than becoming product surface
   - handler panics and operator-relevant errors should log via the diagnostic **`slog`** loggers (`internal/loopdiag`, levels from `config/runtime.yaml` → `logging.diagnostic`) with **`tenant_id` / `user_id`** on the log record when a control session is bound, so admins can troubleshoot without a debugger and filter by tenant in multi-tenant deployments
+- `server_routes.go`
+  - central route registration for the local HTTP-on-UDS control plane
+  - update this when adding, retiring, or moving `/v1/...` routes
+- `server_rate_limit.go`
+  - in-memory sliding-window rate limit helpers for hot control-plane paths
+  - keeps overload controls visible as part of the throughput hardening story
 - `folder_access.go`
   - authoritative folder-grant storage
   - compare-before-sync mirror logic
