@@ -82,6 +82,13 @@ first start, `loopgate-doctor report` may show `bootstrap_pending`.
 If Keychain creation or access is denied, Loopgate fails closed rather than
 silently downgrading to hash-chain-only mode.
 
+The shipped runtime config also sets
+`logging.audit_ledger.require_hmac_checkpoint: true`. That is the production
+guardrail for the replacement-ledger problem: when this guard is true, Loopgate
+refuses to load a config where `logging.audit_ledger.hmac_checkpoint.enabled`
+is false. In plain terms, an operator cannot accidentally run a
+production-oriented profile in hash-chain-only mode.
+
 Checkpoint lines still participate in the same **append-only hash chain** as
 other events. Verification helpers live in **`internal/ledger`**
 (`VerifyAuditLedgerHMACCheckpointEvent`). This improves **detectability of

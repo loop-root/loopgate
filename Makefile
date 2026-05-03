@@ -10,7 +10,7 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X main.buildVersion=$(VERSION) -X main.buildCommit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)
 GOFILES := $(shell find . -type f -name '*.go' -not -path './runtime/*' | sort)
 
-.PHONY: build quickstart install-local uninstall-local dist install-smoke fmt fmt-check vet test test-race test-e2e test-fuzz-smoke lint script-check policy-check policy-sign-coverage-check vuln ship-check clean
+.PHONY: build quickstart install-local uninstall-local dist install-smoke fmt fmt-check vet test test-race test-e2e test-fuzz-smoke bench lint script-check policy-check policy-sign-coverage-check vuln ship-check clean
 
 build:
 	mkdir -p bin
@@ -71,6 +71,9 @@ test-e2e:
 test-fuzz-smoke:
 	$(GO) test ./internal/config -run=^$$ -fuzz=FuzzParsePolicyDocument -fuzztime=5s
 	$(GO) test ./internal/loopgate -run=^$$ -fuzz=FuzzDecodeJSONBytesCapabilityRequest -fuzztime=5s
+
+bench:
+	$(GO) test -run=^$$ -bench=. -benchmem ./internal/loopgate
 
 lint:
 	$(GOLANGCI_LINT) run

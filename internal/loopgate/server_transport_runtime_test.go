@@ -2,12 +2,14 @@ package loopgate
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 )
 
@@ -127,4 +129,55 @@ func TestWrapHTTPHandlerRecoversPanics(t *testing.T) {
 	if requestIDHeader := recorder.Header().Get(loopgateRequestIDHeader); requestIDHeader == "" {
 		t.Fatal("expected request id header to be set on panic response")
 	}
+}
+
+func TestWrapHTTPHandlerRejectsWhenInFlightLimitSaturated(t *testing.T) {
+	server := &Server{
+		httpRequestSlots: make(chan struct{}, 1),
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var handlerCalls int32
+
+	handler := server.wrapHTTPHandler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		atomic.AddInt32(&handlerCalls, 1)
+		close(started)
+		<-release
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		request := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusNoContent {
+			t.Errorf("first request expected status %d, got %d", http.StatusNoContent, recorder.Code)
+		}
+	}()
+	<-started
+
+	secondRequest := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
+	secondRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(secondRecorder, secondRequest)
+	if secondRecorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request expected status %d, got %d", http.StatusTooManyRequests, secondRecorder.Code)
+	}
+	if requestIDHeader := secondRecorder.Header().Get(loopgateRequestIDHeader); requestIDHeader == "" {
+		t.Fatal("expected saturated response to include request id header")
+	}
+	var denial controlapipkg.CapabilityResponse
+	if err := json.Unmarshal(secondRecorder.Body.Bytes(), &denial); err != nil {
+		t.Fatalf("decode saturated response: %v", err)
+	}
+	if denial.DenialCode != controlapipkg.DenialCodeControlPlaneStateSaturated {
+		t.Fatalf("expected denial code %q, got %q", controlapipkg.DenialCodeControlPlaneStateSaturated, denial.DenialCode)
+	}
+	if gotCalls := atomic.LoadInt32(&handlerCalls); gotCalls != 1 {
+		t.Fatalf("expected saturated request not to reach handler; handler calls=%d", gotCalls)
+	}
+
+	close(release)
+	<-firstDone
 }

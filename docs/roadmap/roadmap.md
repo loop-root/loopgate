@@ -58,6 +58,10 @@ repository. Continuity-specific planning now belongs in the separate
 - continue removing retired legacy seams from active code and docs
 - keep Loopgate focused on governance, not assistant behavior or memory
 - reduce unnecessary dependencies and local-only baggage
+- reduce `internal/loopgate` by extracting clear authority domains only after
+  documenting their local invariants
+- make setup, maps, and design docs easier for agents to load by adding
+  metadata, related-code links, and task-specific "start here" sections
 
 ## Definition of "clean enough"
 
@@ -77,6 +81,7 @@ The repository is in the right shape when:
 4. remove the last unnecessary historical naming from active comments, tests, and maps
 5. harden the local audit integrity story further
 6. keep the operator setup and demo workflows tight and readable
+7. execute the refactor and agent-first docs plan without broad rewrites
 
 ## Implementation roadmaps
 
@@ -84,3 +89,4 @@ The repository is in the right shape when:
 - `loopgate_v1_product_gaps.md` — product and UX improvements for operator confidence and OSS launch readiness
 - `admin_console_tui_mvp.md` — local admin-console TUI scope and authority contract
 - `harness_usability_execution_plan.md` — focused plan for Claude usability and future harness readiness
+- `refactor_and_agent_first_docs_plan.md` — maintainability and agent-readable documentation plan

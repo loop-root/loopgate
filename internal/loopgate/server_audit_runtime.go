@@ -3,57 +3,44 @@ package loopgate
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"loopgate/internal/audit"
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
+	"loopgate/internal/loopgate/auditruntime"
 	"loopgate/internal/secrets"
 )
 
 func (server *Server) loadAuditChainState() error {
-	var (
-		lastAuditSequence int64
-		lastAuditHash     string
-		err               error
-	)
-	if server.auditLedgerRuntime != nil {
-		lastAuditSequence, lastAuditHash, err = server.auditLedgerRuntime.ReadSegmentedChainState(server.auditPath, "audit_sequence", server.auditLedgerRotationSettings())
-	} else {
-		lastAuditSequence, lastAuditHash, err = ledger.ReadSegmentedChainState(server.auditPath, "audit_sequence", server.auditLedgerRotationSettings())
-	}
-	if err != nil {
-		return err
-	}
-	server.audit.sequence = uint64(lastAuditSequence)
-	server.audit.lastHash = lastAuditHash
-	server.audit.eventsSinceCheckpoint = 0
-	if !server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint.Enabled {
-		return nil
-	}
+	server.configureAuditRuntime()
+	return server.auditRuntime.Load(context.Background(), server.auditLedgerRotationSettings())
+}
 
-	orderedPaths, err := ledger.OrderedSegmentedPaths(server.auditPath, server.auditLedgerRotationSettings())
-	if err != nil {
-		return fmt.Errorf("ordered audit ledger paths: %w", err)
+func (server *Server) configureAuditRuntime() {
+	if server == nil {
+		return
 	}
-	rawSecretBytes, err := server.loadAuditLedgerCheckpointSecret(context.Background())
-	if err != nil {
-		return err
-	}
-	defer zeroSecretBytes(rawSecretBytes)
-
-	checkpointInspection, err := ledger.InspectAuditHMACCheckpoints(orderedPaths, rawSecretBytes)
-	if err != nil {
-		return fmt.Errorf("inspect audit hmac checkpoints: %w", err)
-	}
-	server.audit.eventsSinceCheckpoint = checkpointInspection.OrdinaryEventsSinceLastCheckpoint
-	return nil
+	server.auditRuntime = auditruntime.New(auditruntime.Options{
+		Path:          server.auditPath,
+		LedgerRuntime: server.auditLedgerRuntime,
+		Now:           server.now,
+		Append: func(path string, auditEvent ledger.Event) error {
+			if server.appendAuditEvent == nil {
+				return fmt.Errorf("audit append function is nil")
+			}
+			return server.appendAuditEvent(path, auditEvent)
+		},
+		HMACCheckpointConfig: func() config.AuditLedgerHMACCheckpoint {
+			return server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint
+		},
+		LoadCheckpointSecret: server.loadAuditLedgerCheckpointSecret,
+		TenancyForSession:    server.tenantUserForControlSession,
+		AfterAppend:          server.diagnosticTextAfterAuditEvent,
+	})
 }
 
 func (server *Server) ensureDefaultAuditLedgerCheckpointSecret(ctx context.Context) error {
@@ -133,7 +120,8 @@ func mergeAuditTenancyFromControlSession(auditData map[string]interface{}, sessi
 }
 
 // tenantUserForControlSession returns tenancy fields for audit and diagnostic enrichment.
-// It acquires server.mu without holding server.audit.mu so logEvent stays free of lock-order inversions.
+// It acquires server.mu before auditRuntime takes its internal commit lock so logEvent
+// stays free of lock-order inversions.
 func (server *Server) tenantUserForControlSession(controlSessionID string) (tenantID string, userID string) {
 	if strings.TrimSpace(controlSessionID) == "" {
 		return "", ""
@@ -153,118 +141,10 @@ func (server *Server) logEvent(eventType string, sessionID string, data map[stri
 }
 
 func (server *Server) logEventWithHash(eventType string, sessionID string, data map[string]interface{}) (string, error) {
-	safeData := copyInterfaceMap(data)
-	_, hasTenant := safeData["tenant_id"]
-	_, hasUser := safeData["user_id"]
-	if !hasTenant || !hasUser {
-		lookupTenantID, lookupUserID := server.tenantUserForControlSession(sessionID)
-		if !hasTenant {
-			safeData["tenant_id"] = lookupTenantID
-		}
-		if !hasUser {
-			safeData["user_id"] = lookupUserID
-		}
+	if server.auditRuntime == nil {
+		server.configureAuditRuntime()
 	}
-
-	// server.audit.mu is held for the full duration including the disk write.
-	// This is intentional: the hash-chain requires that sequence numbers and
-	// previous-event hashes are assigned, written, and committed atomically.
-	// Splitting the lock would require a rollback protocol and creates
-	// new failure modes. Acceptable because Loopgate is single-client and
-	// all capability paths are request-driven (not concurrent hot paths).
-	server.audit.mu.Lock()
-	defer server.audit.mu.Unlock()
-
-	nextSequence := server.audit.sequence + 1
-	safeData["audit_sequence"] = nextSequence
-	// The shared ledger append path always assigns ledger_sequence before
-	// hashing/writing the event. Keep the precomputed audit hash aligned with the
-	// final stored bytes by setting the mirrored sequence value up front.
-	safeData["ledger_sequence"] = nextSequence
-	safeData["previous_event_hash"] = server.audit.lastHash
-
-	auditEvent := ledger.Event{
-		TS:      server.now().UTC().Format(time.RFC3339Nano),
-		Type:    eventType,
-		Session: sessionID,
-		Data:    safeData,
-	}
-	eventHash, err := hashAuditEvent(auditEvent)
-	if err != nil {
-		return "", fmt.Errorf("hash audit event: %w", err)
-	}
-	auditEvent.Data["event_hash"] = eventHash
-
-	if err := audit.NewLedgerWriter(server.appendAuditEvent, nil).Record(server.auditPath, audit.ClassMustPersist, auditEvent); err != nil {
-		return "", err
-	}
-	server.audit.sequence = nextSequence
-	server.audit.lastHash = eventHash
-	server.audit.eventsSinceCheckpoint++
-	server.diagnosticTextAfterAuditEvent(auditEvent)
-	if err := server.appendAuditHMACCheckpointIfDueLocked(); err != nil {
-		return "", err
-	}
-	return eventHash, nil
-}
-
-func (server *Server) appendAuditHMACCheckpointIfDueLocked() error {
-	hmacCheckpointConfig := server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint
-	if !hmacCheckpointConfig.Enabled || hmacCheckpointConfig.IntervalEvents <= 0 {
-		return nil
-	}
-	if server.audit.eventsSinceCheckpoint < hmacCheckpointConfig.IntervalEvents {
-		return nil
-	}
-
-	rawSecretBytes, err := server.loadAuditLedgerCheckpointSecret(context.Background())
-	if err != nil {
-		return err
-	}
-	defer zeroSecretBytes(rawSecretBytes)
-
-	checkpointTimestampUTC := server.now().UTC().Format(time.RFC3339Nano)
-	checkpointMAC := ledger.ComputeAuditLedgerCheckpointHMAC(
-		rawSecretBytes,
-		ledger.BuildAuditLedgerCheckpointHMACMessageV1(
-			int64(server.audit.sequence),
-			server.audit.lastHash,
-			checkpointTimestampUTC,
-		),
-	)
-	checkpointData := map[string]interface{}{
-		"checkpoint_schema_version": int64(ledger.AuditLedgerCheckpointSchemaVersion),
-		"through_audit_sequence":    int64(server.audit.sequence),
-		"through_event_hash":        server.audit.lastHash,
-		"checkpoint_timestamp_utc":  checkpointTimestampUTC,
-		"checkpoint_hmac_sha256":    hex.EncodeToString(checkpointMAC),
-	}
-
-	nextSequence := server.audit.sequence + 1
-	checkpointData["audit_sequence"] = nextSequence
-	checkpointData["ledger_sequence"] = nextSequence
-	checkpointData["previous_event_hash"] = server.audit.lastHash
-
-	checkpointEvent := ledger.Event{
-		TS:      checkpointTimestampUTC,
-		Type:    ledger.AuditLedgerHMACCheckpointEventType,
-		Session: "",
-		Data:    checkpointData,
-	}
-	checkpointHash, err := hashAuditEvent(checkpointEvent)
-	if err != nil {
-		return fmt.Errorf("hash audit checkpoint event: %w", err)
-	}
-	checkpointEvent.Data["event_hash"] = checkpointHash
-
-	if err := audit.NewLedgerWriter(server.appendAuditEvent, nil).Record(server.auditPath, audit.ClassMustPersist, checkpointEvent); err != nil {
-		return err
-	}
-	server.audit.sequence = nextSequence
-	server.audit.lastHash = checkpointHash
-	server.audit.eventsSinceCheckpoint = 0
-	server.diagnosticTextAfterAuditEvent(checkpointEvent)
-	return nil
+	return server.auditRuntime.Record(eventType, sessionID, data)
 }
 
 func (server *Server) loadAuditLedgerCheckpointSecret(ctx context.Context) ([]byte, error) {
@@ -367,15 +247,7 @@ func (server *Server) AuditIntegrityModeMessage() string {
 	if server == nil {
 		return ""
 	}
-	hc := server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint
-	if hc.Enabled {
-		interval := hc.IntervalEvents
-		if interval <= 0 {
-			interval = 256
-		}
-		return fmt.Sprintf("Audit integrity: hash-chain + HMAC checkpoints (every %d events)", interval)
-	}
-	return "Audit integrity: hash-chain only (HMAC checkpoints disabled)"
+	return auditruntime.IntegrityModeMessage(server.runtimeConfig.Logging.AuditLedger.HMACCheckpoint)
 }
 
 // DiagnosticLogDirectoryMessage returns a stderr hint when operator diagnostic slog files are active.
@@ -392,6 +264,13 @@ func (server *Server) DiagnosticLogDirectoryMessage() string {
 	}
 	return fmt.Sprintf("Loopgate diagnostic slog files: %s (server.log, socket.log, client.log, …). "+
 		"runtime/logs/loopgate.log is only start.sh stdout/stderr, not these.", absoluteDiagnosticDir)
+}
+
+func (server *Server) auditRuntimeSnapshot() auditruntime.State {
+	if server == nil || server.auditRuntime == nil {
+		return auditruntime.State{}
+	}
+	return server.auditRuntime.Snapshot()
 }
 
 func copyInterfaceMap(input map[string]interface{}) map[string]interface{} {

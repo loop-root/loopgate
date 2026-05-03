@@ -39,6 +39,13 @@ Loopgate is:
 - security-sensitive
 - local-first
 - governance-focused
+- heavily AI-assisted in its implementation and documentation
+
+Treat this repository accordingly: review changes with the same skepticism you
+would apply to generated code, prefer tests and concrete evidence over claims,
+and do not treat fluent explanations or generated-looking structure as proof of
+correctness. The project goal is still careful engineering, but the provenance
+matters for how operators and contributors should evaluate it.
 
 Loopgate is **not** yet:
 - a stable compatibility target

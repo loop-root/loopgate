@@ -18,6 +18,7 @@ import (
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
 	"loopgate/internal/loopdiag"
+	"loopgate/internal/loopgate/auditruntime"
 	policypkg "loopgate/internal/policy"
 	"loopgate/internal/sandbox"
 	"loopgate/internal/secrets"
@@ -34,29 +35,6 @@ type peerIdentity struct {
 	UID  uint32
 	PID  int
 	EPID int
-}
-
-type auditState struct {
-	// mu serializes the authoritative append-only audit chain state.
-	//
-	// Protected fields:
-	//   - sequence
-	//   - lastHash
-	//   - eventsSinceCheckpoint
-	//
-	// Why this lock exists:
-	//   - hash-chain sequencing and disk append must behave like one logical commit
-	//   - two concurrent writers must never assign the same sequence or previous hash
-	//
-	// Sequencing rule:
-	//   - treat audit.mu as a leaf lock
-	//   - resolve any control-session-derived metadata before taking audit.mu
-	//   - never acquire control-plane mu while holding audit.mu
-	mu sync.Mutex
-
-	sequence              uint64
-	lastHash              string
-	eventsSinceCheckpoint int
 }
 
 type uiState struct {
@@ -239,10 +217,10 @@ type sessionControlState struct {
 //     another domain.
 //   - mu is the primary state lock for sessions, tokens, approvals, replay
 //     tables, and other authoritative control-plane state.
-//   - audit.mu is a strict leaf lock for append-only audit sequencing and disk
-//     persistence. Never acquire mu while holding audit.mu. logEvent* helpers
-//     intentionally resolve tenancy before taking audit.mu so we never invert
-//     into audit.mu -> mu.
+//   - auditRuntime owns append-only audit sequencing and disk persistence.
+//     Its internal lock is a strict leaf lock: never acquire mu from inside
+//     audit runtime callbacks. logEvent* resolves tenancy before audit commit
+//     so we never invert into audit runtime -> mu.
 //   - If future code truly must hold more than one of these at once, document
 //     the exact acquisition order in the same change before merging. Do not
 //     introduce ad hoc nested locking.
@@ -282,10 +260,15 @@ type Server struct {
 	server                   *http.Server
 	// diagnostic is optional operator text logging (runtime/logs); not authoritative audit.
 	diagnostic *loopdiag.Manager
+	// httpRequestSlots bounds concurrent HTTP handler execution so a local
+	// hammering loop cannot create unbounded goroutines waiting on audit/fsync,
+	// control-plane locks, or capability execution.
+	httpRequestSlotsMu sync.RWMutex
+	httpRequestSlots   chan struct{}
 
-	// audit owns the append-only audit chain sequencing state.
-	// See auditState above and docs/design_overview/loopgate_locking.md.
-	audit auditState
+	// auditRuntime owns append-only audit chain sequencing state and keeps each
+	// hash-chain append as one logical commit.
+	auditRuntime *auditruntime.Runtime
 
 	// auditExportMu protects export-side progress state that is derived from the
 	// immutable ledger but persisted independently for batching/retry.
@@ -310,8 +293,8 @@ type Server struct {
 	//     duplicate/misaligned derived artifacts
 	//
 	// Sequencing rule:
-	//   - keep promotionMu isolated from mu/audit.mu; collect control-plane context
-	//     first, then enter promotion code
+	//   - keep promotionMu isolated from mu/audit runtime; collect control-plane
+	//     context first, then enter promotion code
 	//
 	// Protected fields:
 	//   - promotionDuplicateIndex
@@ -583,6 +566,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		resolveExePath:      resolveExecutablePath,
 		processExists:       processExists,
 		resolveUserHomeDir:  os.UserHomeDir,
+		httpRequestSlots:    make(chan struct{}, runtimeConfig.ControlPlane.MaxInFlightHTTPRequests),
 		providerRuntime: providerRuntimeState{
 			tokens:                 make(map[string]providerAccessToken),
 			configuredConnections:  configuredConnections,

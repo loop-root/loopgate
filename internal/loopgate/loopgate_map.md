@@ -17,6 +17,14 @@ Use it when changing:
 Durable decisions live in `docs/adr/`. Product planning lives under
 `docs/roadmap/`. Update this map when you add or rename primary files here.
 
+Package-boundary direction: keep `internal/loopgate` as the HTTP/control-plane
+adapter and authority wiring layer. Cohesive runtime domains should generally
+move to sibling `internal/...` packages (`internal/controlruntime`,
+`internal/approvalruntime`, `internal/auditruntime`, `internal/connections`,
+`internal/mcpgateway`, `internal/hostaccess`) rather than new deep packages
+under `internal/loopgate/`. `internal/loopgate` may import those packages; they
+must not import `internal/loopgate`.
+
 For integrators it matters in four ways:
 
 - it defines which capabilities actually exist
@@ -44,7 +52,15 @@ For integrators it matters in four ways:
   - `/v1/status`
   - current global capability inventory surface
 - `server_audit_runtime.go`
-  - append-only audit chain state, persisted audit-event recording, and operator diagnostic log helpers
+  - compatibility facade for audit recording, secret loading, and operator diagnostic log helpers
+- `auditruntime/`
+  - append-only audit chain sequencing, startup chain load, HMAC checkpoint creation, and persisted must-persist audit append serialization
+  - first extraction slice; future cleanup should consider moving it to sibling
+    `internal/auditruntime` once imports and tests are stable
+- `audit_runtime_extraction_map.md`
+  - current extraction boundary for moving Loopgate-specific audit sequencing
+    and HMAC checkpoint policy out of the main package without weakening
+    must-persist audit semantics
 - `server_response_runtime.go`
   - JSON response writing, audit-unavailable responses, and control-plane denial-to-HTTP status mapping
 - `approval_flow.go`

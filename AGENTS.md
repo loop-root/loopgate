@@ -1,6 +1,6 @@
 # Loopgate Agent Contract
 
-**Last updated:** 2026-04-20
+**Last updated:** 2026-05-03
 
 This is the canonical root instruction file for agentic contributors in this
 repo. Keep it short, strict, and focused on the non-negotiable contract.
@@ -73,6 +73,21 @@ When you change code, always evaluate:
 7. Tests required
 
 Prefer the smallest change that keeps the trust model intact.
+
+## Package boundary guidance
+
+`internal/loopgate` is the HTTP/control-plane adapter and authority wiring
+package. Do not keep growing it as a catch-all runtime package.
+
+When extracting cohesive runtime domains, prefer sibling internal packages such
+as `internal/controlruntime`, `internal/approvalruntime`,
+`internal/auditruntime`, `internal/connections`, `internal/mcpgateway`, or
+`internal/hostaccess` over deeper packages under `internal/loopgate/`.
+
+Dependency direction must stay one-way: `internal/loopgate` may import these
+runtime packages, but runtime packages must not import `internal/loopgate`.
+Keep authority-owning state behind narrow APIs and pass dependencies
+explicitly.
 
 ## Required review stance
 
