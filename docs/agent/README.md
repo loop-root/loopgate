@@ -32,6 +32,11 @@ preserving Loopgate's authority boundary.
 - [Loopgate ledger skill](./skills/loopgate-ledger/SKILL.md) — procedural guide
   for verifying and inspecting the local audit ledger without confusing
   convenience views for trust checks.
+- [Loopgate policy signing skill](./skills/loopgate-policy-sign/SKILL.md) —
+  procedural guide for detached policy signatures and signer setup checks.
+- [Loopgate policy admin skill](./skills/loopgate-policy-admin/SKILL.md) —
+  procedural guide for policy validation, explanation, hot apply, approvals,
+  and bounded operator grants.
 
 ## How to use this directory
 
