@@ -29,6 +29,17 @@ preserving Loopgate's authority boundary.
 - [Loopgate doctor skill](./skills/loopgate-doctor/SKILL.md) — procedural guide
   for setup checks, diagnostic reports, bundles, denial explanations, and live
   trust checks.
+- [Loopgate ledger skill](./skills/loopgate-ledger/SKILL.md) — procedural guide
+  for verifying and inspecting the local audit ledger without confusing
+  convenience views for trust checks.
+- [Loopgate policy signing skill](./skills/loopgate-policy-sign/SKILL.md) —
+  procedural guide for detached policy signatures and signer setup checks.
+- [Loopgate policy admin skill](./skills/loopgate-policy-admin/SKILL.md) —
+  procedural guide for policy validation, explanation, hot apply, approvals,
+  and bounded operator grants.
+- [Loopgate operator skill](./skills/loopgate-operator/SKILL.md) — procedural
+  guide for setup, server start, status, smoke tests, hooks, LaunchAgent, and
+  uninstall workflows.
 
 ## How to use this directory
 

@@ -40,9 +40,14 @@ For integrators it matters in four ways:
   - server construction
   - tool registry wiring
   - capability summaries derived from the registry
-  - dispatch point for capability-specific execution paths such as host-folder plan/apply helpers
-  - now also contains some legacy actor-scoped branches that should continue shrinking rather than becoming product surface
+  - Unix-socket serve lifecycle and shutdown persistence
   - handler panics and operator-relevant errors should log via the diagnostic **`slog`** loggers (`internal/loopdiag`, levels from `config/runtime.yaml` → `logging.diagnostic`) with **`tenant_id` / `user_id`** on the log record when a control session is bound, so admins can troubleshoot without a debugger and filter by tenant in multi-tenant deployments
+- `server_state.go`
+  - `Server` state model, lock domains, request context identity, capability/session token types, and in-memory safety bounds
+  - keep locking invariant updates here when adding authoritative state or new mutex families
+- `server_capability_execution.go`
+  - capability request execution pipeline from normalized request through policy decision, approval creation, execution-token checks, tool dispatch, result classification, quarantine persistence, audit, and UI projection
+  - keep capability execution branching here instead of regrowing `server.go`
 - `server_routes.go`
   - central route registration for the local HTTP-on-UDS control plane
   - update this when adding, retiring, or moving `/v1/...` routes
