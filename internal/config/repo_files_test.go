@@ -93,6 +93,9 @@ func TestRepositoryRuntimeConfigFile_LoadsWithStrictSchema(t *testing.T) {
 	if runtimeConfig.ControlPlane.MaxInFlightHTTPRequests <= 0 {
 		t.Fatal("expected positive max_in_flight_http_requests")
 	}
+	if runtimeConfig.ControlPlane.MaxInFlightCapabilityExecutions <= 0 {
+		t.Fatal("expected positive max_in_flight_capability_executions")
+	}
 }
 
 func TestRepositoryPolicyFile_AllowsRepoDocsButDeniesSensitiveRoots(t *testing.T) {

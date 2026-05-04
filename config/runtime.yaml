@@ -8,6 +8,10 @@ control_plane:
   # from creating unbounded goroutines waiting on audit fsync, state locks,
   # provider calls, or subprocess execution.
   max_in_flight_http_requests: 256
+  # Bounds concurrent capability execution/approval authority paths. Keep this
+  # lower than the HTTP handler limit so health/config/status routes can still
+  # respond while expensive tool and audit work is saturated.
+  max_in_flight_capability_executions: 64
 
 # Reserved deployment identity fields. Leave empty for the current local-first
 # open-source build; they are not part of the active setup flow.

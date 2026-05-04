@@ -88,11 +88,12 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 		reportSecurityWarning: func(eventCode string, cause error) {
 			fmt.Fprintf(os.Stderr, "WARN: security event=%s class=%s\n", eventCode, secrets.LoopgateOperatorErrorClass(cause))
 		},
-		resolvePeerIdentity: peerIdentityFromConn,
-		resolveExePath:      resolveExecutablePath,
-		processExists:       processExists,
-		resolveUserHomeDir:  os.UserHomeDir,
-		httpRequestSlots:    make(chan struct{}, runtimeConfig.ControlPlane.MaxInFlightHTTPRequests),
+		resolvePeerIdentity:      peerIdentityFromConn,
+		resolveExePath:           resolveExecutablePath,
+		processExists:            processExists,
+		resolveUserHomeDir:       os.UserHomeDir,
+		httpRequestSlots:         make(chan struct{}, runtimeConfig.ControlPlane.MaxInFlightHTTPRequests),
+		capabilityExecutionSlots: make(chan struct{}, runtimeConfig.ControlPlane.MaxInFlightCapabilityExecutions),
 		providerRuntime: providerRuntimeState{
 			tokens:                 make(map[string]providerAccessToken),
 			configuredConnections:  configuredConnections,
