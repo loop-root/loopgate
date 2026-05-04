@@ -259,6 +259,10 @@ type Server struct {
 	// control-plane locks, or capability execution.
 	httpRequestSlotsMu sync.RWMutex
 	httpRequestSlots   chan struct{}
+	// capabilityExecutionSlots bounds the expensive authority path independently
+	// from generic HTTP handler concurrency.
+	capabilityExecutionSlotsMu sync.RWMutex
+	capabilityExecutionSlots   chan struct{}
 
 	// auditRuntime owns append-only audit chain sequencing state and keeps each
 	// hash-chain append as one logical commit.

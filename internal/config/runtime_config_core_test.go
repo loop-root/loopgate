@@ -27,6 +27,9 @@ func TestLoadRuntimeConfig_MissingFileGetsDefaults(t *testing.T) {
 	if runtimeConfig.ControlPlane.MaxInFlightHTTPRequests != DefaultMaxInFlightHTTPRequests {
 		t.Fatalf("unexpected max in-flight HTTP request default: %d", runtimeConfig.ControlPlane.MaxInFlightHTTPRequests)
 	}
+	if runtimeConfig.ControlPlane.MaxInFlightCapabilityExecutions != DefaultMaxInFlightCapabilityExecutions {
+		t.Fatalf("unexpected max in-flight capability execution default: %d", runtimeConfig.ControlPlane.MaxInFlightCapabilityExecutions)
+	}
 	if runtimeConfig.Logging.AuditExport.Enabled {
 		t.Fatal("expected audit export to default disabled")
 	}
@@ -181,6 +184,35 @@ logging:
 		t.Fatal("expected non-positive max_in_flight_http_requests to fail")
 	}
 	if !strings.Contains(err.Error(), "max_in_flight_http_requests") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadRuntimeConfig_RejectsNonPositiveMaxInFlightCapabilityExecutions(t *testing.T) {
+	repoRoot := t.TempDir()
+	runtimeConfigPath := filepath.Join(repoRoot, "config", "runtime.yaml")
+	if err := os.MkdirAll(filepath.Dir(runtimeConfigPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	rawRuntimeConfig := `version: "1"
+control_plane:
+  max_in_flight_capability_executions: -1
+logging:
+  audit_ledger:
+    max_event_bytes: 262144
+    rotate_at_bytes: 134217728
+    segment_dir: "runtime/state/loopgate_event_segments"
+    manifest_path: "runtime/state/loopgate_event_segments/manifest.jsonl"
+`
+	if err := os.WriteFile(runtimeConfigPath, []byte(rawRuntimeConfig), 0o600); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	_, err := LoadRuntimeConfig(repoRoot)
+	if err == nil {
+		t.Fatal("expected non-positive max_in_flight_capability_executions to fail")
+	}
+	if !strings.Contains(err.Error(), "max_in_flight_capability_executions") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

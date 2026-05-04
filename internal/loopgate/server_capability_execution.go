@@ -19,6 +19,12 @@ func (server *Server) executeCapabilityRequest(ctx context.Context, tokenClaims 
 	}
 	capabilityRequest = normalizedRequest
 
+	releaseCapabilityExecutionSlot, slotAcquired := server.tryAcquireCapabilityExecutionSlot()
+	if !slotAcquired {
+		return capabilityExecutionSaturatedResponse(capabilityRequest.RequestID)
+	}
+	defer releaseCapabilityExecutionSlot()
+
 	policyRuntime := server.currentPolicyRuntime()
 	tool, earlyResponse := server.resolveCapabilityExecutionTool(policyRuntime, tokenClaims, capabilityRequest)
 	if earlyResponse != nil {

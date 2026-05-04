@@ -117,6 +117,7 @@ func TestValidateDecisionRequest_DeniesExpectedFailures(t *testing.T) {
 			validationError := ValidateDecisionRequest(testCase.pendingApproval, testCase.decisionRequest, testCase.decisionActor)
 			if validationError == nil {
 				t.Fatalf("expected validation failure")
+				return
 			}
 			if validationError.Code != testCase.expectedCode {
 				t.Fatalf("expected code %q, got %q", testCase.expectedCode, validationError.Code)

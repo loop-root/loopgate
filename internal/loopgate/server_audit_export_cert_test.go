@@ -116,6 +116,7 @@ func certificatePublicKeyPinSHA256(t *testing.T, certificatePEM string) string {
 	decodedBlock, _ := pem.Decode([]byte(certificatePEM))
 	if decodedBlock == nil {
 		t.Fatal("decode certificate pem")
+		return ""
 	}
 	parsedCertificate, err := x509.ParseCertificate(decodedBlock.Bytes)
 	if err != nil {

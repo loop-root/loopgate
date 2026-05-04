@@ -22,6 +22,7 @@ const runtimeConfigVersion = "1"
 const DefaultSupersededLineageRetentionWindow = 30 * 24 * time.Hour
 const expectedSessionClientExecutableEnv = "LOOPGATE_EXPECTED_SESSION_CLIENT_EXECUTABLE"
 const DefaultMaxInFlightHTTPRequests = 256
+const DefaultMaxInFlightCapabilityExecutions = 64
 const DefaultAuditLedgerHMACCheckpointIntervalEvents = 256
 const defaultAuditLedgerHMACSecretID = "audit_ledger_hmac"
 const defaultAuditLedgerHMACSecretBackend = secrets.BackendMacOSKeychain
@@ -147,6 +148,10 @@ type RuntimeConfig struct {
 		// This protects Loopgate from unbounded goroutine buildup behind audit/fsync,
 		// state locks, network calls, or subprocess execution.
 		MaxInFlightHTTPRequests int `yaml:"max_in_flight_http_requests" json:"max_in_flight_http_requests"`
+		// MaxInFlightCapabilityExecutions bounds concurrent capability execution requests.
+		// This is narrower than the HTTP limit so health/config/status handlers can still run
+		// while expensive tool execution, approval creation, and durable audit paths are busy.
+		MaxInFlightCapabilityExecutions int `yaml:"max_in_flight_capability_executions" json:"max_in_flight_capability_executions"`
 	} `yaml:"control_plane" json:"control_plane"`
 }
 
@@ -270,6 +275,9 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	if runtimeConfig.ControlPlane.MaxInFlightHTTPRequests == 0 {
 		runtimeConfig.ControlPlane.MaxInFlightHTTPRequests = DefaultMaxInFlightHTTPRequests
 	}
+	if runtimeConfig.ControlPlane.MaxInFlightCapabilityExecutions == 0 {
+		runtimeConfig.ControlPlane.MaxInFlightCapabilityExecutions = DefaultMaxInFlightCapabilityExecutions
+	}
 	hc := &runtimeConfig.Logging.AuditLedger.HMACCheckpoint
 	// Default only the unset (zero) case so negative values fail validation instead of being coerced.
 	if hc.Enabled && hc.IntervalEvents == 0 {
@@ -345,6 +353,9 @@ func validateRuntimeConfig(repoRoot string, runtimeConfig RuntimeConfig) error {
 	}
 	if runtimeConfig.ControlPlane.MaxInFlightHTTPRequests <= 0 {
 		return fmt.Errorf("control_plane.max_in_flight_http_requests must be positive")
+	}
+	if runtimeConfig.ControlPlane.MaxInFlightCapabilityExecutions <= 0 {
+		return fmt.Errorf("control_plane.max_in_flight_capability_executions must be positive")
 	}
 	if runtimeConfig.Logging.AuditLedger.RequireHMACCheckpoint && !runtimeConfig.Logging.AuditLedger.HMACCheckpoint.Enabled {
 		return fmt.Errorf("logging.audit_ledger.require_hmac_checkpoint requires logging.audit_ledger.hmac_checkpoint.enabled")

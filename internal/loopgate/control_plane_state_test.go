@@ -106,6 +106,7 @@ func TestRecordAuthNonce_RollsBackWhenReplayPersistenceFails(t *testing.T) {
 	denial := server.recordAuthNonce("session-a", "nonce-a")
 	if denial == nil {
 		t.Fatal("expected persistence failure denial")
+		return
 	}
 	if denial.Status != controlapipkg.ResponseStatusError || denial.DenialCode != controlapipkg.DenialCodeAuditUnavailable {
 		t.Fatalf("expected audit unavailable denial, got %#v", denial)

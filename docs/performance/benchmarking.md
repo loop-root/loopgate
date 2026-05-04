@@ -64,6 +64,18 @@ healthy cost: the audit ledger is the durable authority record. Optimize around
 bounded concurrency, batching for export, startup anchors, and backpressure
 before considering any durability tradeoff.
 
+Loopgate has two configurable overload guardrails in `config/runtime.yaml`:
+
+- `control_plane.max_in_flight_http_requests` bounds total concurrent local
+  control-plane HTTP handlers.
+- `control_plane.max_in_flight_capability_executions` bounds the narrower
+  capability execution and approval-creation authority path so health, status,
+  and config routes can remain available while tool/audit work is saturated.
+
+When the capability execution limit is saturated, Loopgate fails closed with
+`control_plane_state_saturated` and metadata that marks the denial as
+retryable for agents.
+
 ## Initial Local Baseline
 
 Captured on 2026-05-04 with:
