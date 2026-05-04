@@ -73,7 +73,7 @@ test-fuzz-smoke:
 	$(GO) test ./internal/loopgate -run=^$$ -fuzz=FuzzDecodeJSONBytesCapabilityRequest -fuzztime=5s
 
 bench:
-	$(GO) test -run=^$$ -bench=. -benchmem ./internal/loopgate
+	$(GO) test -run=^$$ -bench=. -benchmem ./internal/loopgate ./internal/ledger
 
 lint:
 	$(GOLANGCI_LINT) run

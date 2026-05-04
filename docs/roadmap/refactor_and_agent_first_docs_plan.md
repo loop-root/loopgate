@@ -107,17 +107,21 @@ clear ownership.
 
 ### Slice 1: benchmark baseline
 
-Status: started.
+Status: expanded baseline in progress.
 
 Add benchmark coverage for:
 
 - unauthenticated health route baseline
 - audited hook pre-validation path
 - direct audit append path
+- direct ledger append path
+- capability execution path
+- approval creation path
+- audit-ledger startup path
 
 Success criteria:
 
-- `make bench` prints p50/p95/p99 latency metrics
+- `make bench` prints p50/p95/p99 latency and throughput metrics
 - benchmark results make the audit/fsync bottleneck visible
 - no benchmark requires a running daemon or external service
 
@@ -284,6 +288,10 @@ The first local in-process benchmark shows:
 - `/v1/health` wrapper/handler overhead is tiny
 - audited hook pre-validation and direct audit append have similar latency
 - audit append/fsync is the dominant cost in the audited hook path
+- capability execution and approval creation add visible overhead above the
+  audit/fsync floor and should be the next throughput inspection targets
+- server startup with a small active audit ledger is currently fast enough to
+  treat as watchlist, not the first bottleneck
 
 That is expected and mostly healthy. We should optimize around bounded overload
 and batching/export design, not by weakening audit durability.
