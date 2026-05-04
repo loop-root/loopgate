@@ -50,7 +50,7 @@ jobs:
           make policy-sign-coverage-check 2>&1 | tee artifacts/policy-sign-coverage.log
       - name: upload test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-logs-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
@@ -86,7 +86,7 @@ jobs:
           make test-e2e 2>&1 | tee artifacts/test-e2e.log
       - name: upload e2e logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-logs-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
@@ -119,7 +119,7 @@ jobs:
           make install-smoke 2>&1 | tee artifacts/install-smoke.log
       - name: upload install smoke logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: install-smoke-logs-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
