@@ -565,3 +565,193 @@ surfaces:
     docs:
       - docs/setup/POLICY_REFERENCE.md
       - docs/setup/POLICY_SIGNING.md
+
+  - id: loopgate.server
+    kind: cli
+    command: "loopgate"
+    source: cmd/loopgate/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-authority-boundary-server
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      environment:
+        - name: "LOOPGATE_REPO_ROOT"
+          required: false
+        - name: "LOOPGATE_SOCKET"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+      opens:
+        - runtime/state/loopgate.sock
+      writes:
+        - runtime/state
+        - runtime/logs
+        - runtime/state/loopgate_events.jsonl
+    errors:
+      posture: "Fails closed on server initialization, signed policy, secure secret storage, audit integrity, or socket serve errors."
+      redaction: "Startup output must not include secrets, tokens, private keys, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-operator/SKILL.md
+    docs:
+      - docs/setup/GETTING_STARTED.md
+      - docs/setup/SETUP.md
+      - docs/setup/OPERATOR_GUIDE.md
+
+  - id: loopgate.setup
+    kind: cli
+    command: "loopgate init|setup|quickstart"
+    source: cmd/loopgate/hooks.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-first-run-setup-and-signer-initialization
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      subcommands:
+        - name: "init"
+          writes_state: true
+        - name: "setup"
+          writes_state: true
+        - name: "quickstart"
+          writes_state: true
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-install-hooks"
+          required: false
+        - name: "-yes"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+      writes:
+        - core/policy/policy.yaml
+        - core/policy/policy.yaml.sig
+        - operator policy-signing material outside repo
+        - optional Claude hook settings
+        - optional macOS LaunchAgent plist
+    errors:
+      posture: "Returns non-zero when setup choices are incomplete, python3 is unavailable for hook install, policy signing fails, hook install fails, or LaunchAgent install/load fails."
+      redaction: "May print key ids and paths, but must not print private key bytes or secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-operator/SKILL.md
+    docs:
+      - docs/setup/GETTING_STARTED.md
+      - docs/setup/SETUP.md
+      - docs/setup/AGENT_ASSISTED_SETUP.md
+      - docs/setup/POLICY_SIGNING.md
+
+  - id: loopgate.operator-inspect
+    kind: cli
+    command: "loopgate status|test|console|explain"
+    source: cmd/loopgate/status.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: local-operator-read-and-smoke-test
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities:
+        - ui.read
+        - fs_list
+    inputs:
+      subcommands:
+        - name: "status"
+          writes_state: false
+        - name: "test"
+          writes_state: true
+        - name: "console"
+          writes_state: false
+        - name: "explain"
+          writes_state: false
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+        - name: "-live"
+          required: false
+        - name: "-once"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for invalid inputs, setup-readiness failures, daemon/socket failures, or governed smoke-test denial/failure."
+      redaction: "Operator summaries and console output must avoid secrets and raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-operator/SKILL.md
+    docs:
+      - docs/setup/GETTING_STARTED.md
+      - docs/setup/SETUP.md
+      - docs/setup/OPERATOR_GUIDE.md
+
+  - id: loopgate.lifecycle
+    kind: cli
+    command: "loopgate install-hooks|remove-hooks|install-launch-agent|remove-launch-agent|uninstall"
+    source: cmd/loopgate/hooks.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-operator-lifecycle-and-offboarding
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      subcommands:
+        - name: "install-hooks"
+          writes_state: true
+        - name: "remove-hooks"
+          writes_state: true
+        - name: "install-launch-agent"
+          writes_state: true
+        - name: "remove-launch-agent"
+          writes_state: true
+        - name: "uninstall"
+          writes_state: true
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-claude-dir"
+          required: false
+        - name: "-load"
+          required: false
+        - name: "-purge"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+      writes:
+        - user Claude settings
+        - user Claude hook scripts
+        - macOS LaunchAgent plist
+        - optional runtime purge
+        - optional managed install removal
+    errors:
+      posture: "Returns non-zero when hook settings cannot be read/written, LaunchAgent install/remove fails, or uninstall cleanup cannot complete."
+      redaction: "Do not print hook payloads, private keys, tokens, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-operator/SKILL.md
+    docs:
+      - docs/setup/GETTING_STARTED.md
+      - docs/setup/SETUP.md
+      - docs/setup/OPERATOR_GUIDE.md

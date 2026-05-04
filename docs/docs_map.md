@@ -58,6 +58,7 @@ separate `ARCHIVED` repository.
 - `skills/loopgate-ledger/SKILL.md` — audit ledger verification and inspection workflow
 - `skills/loopgate-policy-sign/SKILL.md` — detached policy signature and signer setup workflow
 - `skills/loopgate-policy-admin/SKILL.md` — policy inspection, live apply, approvals, and signed grant workflow
+- `skills/loopgate-operator/SKILL.md` — setup, server, status, smoke test, hooks, LaunchAgent, and uninstall workflow
 
 ## Roadmap and threat model
 

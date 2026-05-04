@@ -37,6 +37,9 @@ preserving Loopgate's authority boundary.
 - [Loopgate policy admin skill](./skills/loopgate-policy-admin/SKILL.md) —
   procedural guide for policy validation, explanation, hot apply, approvals,
   and bounded operator grants.
+- [Loopgate operator skill](./skills/loopgate-operator/SKILL.md) — procedural
+  guide for setup, server start, status, smoke tests, hooks, LaunchAgent, and
+  uninstall workflows.
 
 ## How to use this directory
 
