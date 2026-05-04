@@ -29,7 +29,7 @@ jobs:
           make test-fuzz-smoke 2>&1 | tee artifacts/test-fuzz-smoke.log
       - name: upload fuzz smoke logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-fuzz-smoke-logs-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
@@ -70,7 +70,7 @@ jobs:
           make policy-sign-coverage-check 2>&1 | tee artifacts/policy-sign-coverage.log
       - name: upload ship-readiness logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-ship-readiness-logs-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
