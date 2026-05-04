@@ -235,6 +235,44 @@ func BenchmarkApprovalCreationLatency(b *testing.B) {
 	})
 }
 
+func BenchmarkUIEventEmissionLatency(b *testing.B) {
+	b.Run("full_replay_buffer", func(b *testing.B) {
+		fixedNow := time.Date(2026, time.May, 4, 12, 0, 0, 0, time.UTC)
+		server := &Server{
+			now: func() time.Time {
+				return fixedNow
+			},
+		}
+		server.ui.events = make([]controlapipkg.UIEventEnvelope, maxUIEventBuffer, maxUIEventBuffer+1)
+		for index := range server.ui.events {
+			server.ui.events[index] = controlapipkg.UIEventEnvelope{
+				ControlSessionID: "bench-ui-session",
+				ID:               benchmarkRequestID("ui-event", uint64(index)),
+				Type:             controlapipkg.UIEventTypeWarning,
+				TS:               fixedNow.Format(timeLayoutRFC3339Nano),
+				Data:             controlapipkg.UIEventWarning{Message: "preloaded"},
+			}
+		}
+		server.ui.sequence = uint64(maxUIEventBuffer)
+
+		b.ReportAllocs()
+		durations := make([]int64, b.N)
+
+		b.ResetTimer()
+		startedAll := time.Now()
+		for index := 0; index < b.N; index++ {
+			startedAt := time.Now()
+			server.emitUIEvent("bench-ui-session", controlapipkg.UIEventTypeWarning, controlapipkg.UIEventWarning{Message: "benchmark"})
+			durations[index] = time.Since(startedAt).Nanoseconds()
+		}
+		elapsed := time.Since(startedAll)
+		b.StopTimer()
+
+		reportLatencyPercentiles(b, durations)
+		reportThroughput(b, b.N, elapsed)
+	})
+}
+
 func BenchmarkServerStartupLatency(b *testing.B) {
 	repoRoot := newLoopgateBenchmarkRepoRoot(b)
 	seedBenchmarkAuditLedger(b, repoRoot, 250)

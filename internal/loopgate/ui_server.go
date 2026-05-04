@@ -694,7 +694,9 @@ func (server *Server) emitUIEvent(controlSessionID string, eventType string, eve
 	uiEventEnvelope.ID = strconv.FormatUint(server.ui.sequence, 10)
 	server.ui.events = append(server.ui.events, uiEventEnvelope)
 	if len(server.ui.events) > maxUIEventBuffer {
-		server.ui.events = append([]controlapipkg.UIEventEnvelope(nil), server.ui.events[len(server.ui.events)-maxUIEventBuffer:]...)
+		copy(server.ui.events, server.ui.events[len(server.ui.events)-maxUIEventBuffer:])
+		clear(server.ui.events[maxUIEventBuffer:])
+		server.ui.events = server.ui.events[:maxUIEventBuffer]
 	}
 	subscribers := make([]uiEventSubscriber, 0, len(server.ui.subscribers))
 	for _, subscriber := range server.ui.subscribers {
