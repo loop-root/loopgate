@@ -76,6 +76,9 @@ separate `ARCHIVED` repository.
 
 ## Benchmarks and extracted subsystems
 
+- `docs/performance/benchmarking.md` — current local benchmark coverage,
+  commands, metric meanings, and change rules
+
 Historical benchmark notes live in the separate `ARCHIVED` repository. Extracted continuity subsystem material now lives in the sibling `continuity` repository.
 
 ## Archived planning and reports
