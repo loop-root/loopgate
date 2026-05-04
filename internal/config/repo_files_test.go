@@ -84,6 +84,15 @@ func TestRepositoryRuntimeConfigFile_LoadsWithStrictSchema(t *testing.T) {
 	if runtimeConfig.Logging.AuditLedger.VerifyClosedSegmentsOnStartup == nil {
 		t.Fatal("expected audit verify_closed_segments_on_startup to be populated")
 	}
+	if !runtimeConfig.Logging.AuditLedger.RequireHMACCheckpoint {
+		t.Fatal("expected repository runtime config to require audit HMAC checkpoints")
+	}
+	if !runtimeConfig.Logging.AuditLedger.HMACCheckpoint.Enabled {
+		t.Fatal("expected repository runtime config to enable audit HMAC checkpoints")
+	}
+	if runtimeConfig.ControlPlane.MaxInFlightHTTPRequests <= 0 {
+		t.Fatal("expected positive max_in_flight_http_requests")
+	}
 }
 
 func TestRepositoryPolicyFile_AllowsRepoDocsButDeniesSensitiveRoots(t *testing.T) {

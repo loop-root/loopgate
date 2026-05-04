@@ -17,6 +17,14 @@ Use it when changing:
 Durable decisions live in `docs/adr/`. Product planning lives under
 `docs/roadmap/`. Update this map when you add or rename primary files here.
 
+Package-boundary direction: keep `internal/loopgate` as the HTTP/control-plane
+adapter and authority wiring layer. Cohesive runtime domains should generally
+move to sibling `internal/...` packages (`internal/controlruntime`,
+`internal/approvalruntime`, `internal/auditruntime`, `internal/connections`,
+`internal/mcpgateway`, `internal/hostaccess`) rather than new deep packages
+under `internal/loopgate/`. `internal/loopgate` may import those packages; they
+must not import `internal/loopgate`.
+
 For integrators it matters in four ways:
 
 - it defines which capabilities actually exist
@@ -32,9 +40,20 @@ For integrators it matters in four ways:
   - server construction
   - tool registry wiring
   - capability summaries derived from the registry
-  - dispatch point for capability-specific execution paths such as host-folder plan/apply helpers
-  - now also contains some legacy actor-scoped branches that should continue shrinking rather than becoming product surface
+  - Unix-socket serve lifecycle and shutdown persistence
   - handler panics and operator-relevant errors should log via the diagnostic **`slog`** loggers (`internal/loopdiag`, levels from `config/runtime.yaml` → `logging.diagnostic`) with **`tenant_id` / `user_id`** on the log record when a control session is bound, so admins can troubleshoot without a debugger and filter by tenant in multi-tenant deployments
+- `server_state.go`
+  - `Server` state model, lock domains, request context identity, capability/session token types, and in-memory safety bounds
+  - keep locking invariant updates here when adding authoritative state or new mutex families
+- `server_capability_execution.go`
+  - capability request execution pipeline from normalized request through policy decision, approval creation, execution-token checks, tool dispatch, result classification, quarantine persistence, audit, and UI projection
+  - keep capability execution branching here instead of regrowing `server.go`
+- `server_routes.go`
+  - central route registration for the local HTTP-on-UDS control plane
+  - update this when adding, retiring, or moving `/v1/...` routes
+- `server_rate_limit.go`
+  - in-memory sliding-window rate limit helpers for hot control-plane paths
+  - keeps overload controls visible as part of the throughput hardening story
 - `folder_access.go`
   - authoritative folder-grant storage
   - compare-before-sync mirror logic
@@ -44,7 +63,15 @@ For integrators it matters in four ways:
   - `/v1/status`
   - current global capability inventory surface
 - `server_audit_runtime.go`
-  - append-only audit chain state, persisted audit-event recording, and operator diagnostic log helpers
+  - compatibility facade for audit recording, secret loading, and operator diagnostic log helpers
+- `auditruntime/`
+  - append-only audit chain sequencing, startup chain load, HMAC checkpoint creation, and persisted must-persist audit append serialization
+  - first extraction slice; future cleanup should consider moving it to sibling
+    `internal/auditruntime` once imports and tests are stable
+- `audit_runtime_extraction_map.md`
+  - current extraction boundary for moving Loopgate-specific audit sequencing
+    and HMAC checkpoint policy out of the main package without weakening
+    must-persist audit semantics
 - `server_response_runtime.go`
   - JSON response writing, audit-unavailable responses, and control-plane denial-to-HTTP status mapping
 - `approval_flow.go`

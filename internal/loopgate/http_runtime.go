@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net"
 	"net/http"
 	"os"
@@ -95,6 +96,27 @@ func (server *Server) wrapHTTPHandler(next http.Handler) http.Handler {
 		recorder := &responseStatusRecorder{ResponseWriter: writer}
 		recorder.Header().Set(loopgateRequestIDHeader, requestID)
 
+		releaseRequestSlot, slotAcquired := server.tryAcquireHTTPRequestSlot()
+		if !slotAcquired {
+			if server.diagnostic != nil && server.diagnostic.Server != nil {
+				server.diagnostic.Server.Warn("http_request_saturated",
+					"request_id", requestID,
+					"method", request.Method,
+					"path", request.URL.Path,
+					"remote", request.RemoteAddr,
+					"denial_code", controlapipkg.DenialCodeControlPlaneStateSaturated,
+				)
+			}
+			server.writeJSON(recorder, http.StatusTooManyRequests, controlapipkg.CapabilityResponse{
+				RequestID:    requestID,
+				Status:       controlapipkg.ResponseStatusDenied,
+				DenialReason: "control plane is saturated",
+				DenialCode:   controlapipkg.DenialCodeControlPlaneStateSaturated,
+			})
+			return
+		}
+		defer releaseRequestSlot()
+
 		startedAt := time.Now()
 		if server.diagnostic != nil && server.diagnostic.Client != nil {
 			server.diagnostic.Client.Debug("http_request_started",
@@ -140,6 +162,35 @@ func (server *Server) wrapHTTPHandler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(recorder, request)
 	})
+}
+
+func (server *Server) tryAcquireHTTPRequestSlot() (func(), bool) {
+	if server == nil {
+		return func() {}, true
+	}
+	server.httpRequestSlotsMu.RLock()
+	slots := server.httpRequestSlots
+	server.httpRequestSlotsMu.RUnlock()
+	if slots == nil {
+		return func() {}, true
+	}
+	select {
+	case slots <- struct{}{}:
+		return func() {
+			<-slots
+		}, true
+	default:
+		return nil, false
+	}
+}
+
+func (server *Server) configureHTTPRequestSlots(maxInFlightRequests int) {
+	if server == nil || maxInFlightRequests <= 0 {
+		return
+	}
+	server.httpRequestSlotsMu.Lock()
+	server.httpRequestSlots = make(chan struct{}, maxInFlightRequests)
+	server.httpRequestSlotsMu.Unlock()
 }
 
 func (server *Server) allocateHTTPRequestID() string {

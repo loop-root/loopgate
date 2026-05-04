@@ -1,0 +1,757 @@
+version: "1"
+updated: "2026-05-04"
+description: "Supported Loopgate surfaces that an assisting agent can inspect or invoke without becoming an authority source."
+surfaces:
+  - id: loopgate-doctor.setup-check
+    kind: cli
+    command: "loopgate-doctor setup-check"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-read-with-optional-daemon-probe
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+        - name: "-claude-dir"
+          required: false
+        - name: "-json"
+          required: false
+    outputs:
+      formats:
+        - text
+        - json
+      preferred_for_agents: json
+    errors:
+      posture: "Returns non-zero on command/encode failures. Human stderr currently uses an ERROR prefix."
+      redaction: "Must not include secrets, tokens, private keys, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/AGENT_ASSISTED_SETUP.md
+
+  - id: loopgate-doctor.report
+    kind: cli
+    command: "loopgate-doctor report"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: offline-local-diagnostic-read
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+    outputs:
+      formats:
+        - json
+      preferred_for_agents: json
+    errors:
+      posture: "Returns non-zero when repo resolution, config loading, or report encoding fails."
+      redaction: "Diagnostic output must avoid secrets, tokens, private keys, and raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-doctor.bundle
+    kind: cli
+    command: "loopgate-doctor bundle"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - support-agent
+      - human-operator
+    authority:
+      mode: offline-local-diagnostic-read-with-bundle-write
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-out"
+          required: true
+        - name: "-log-lines"
+          required: false
+    outputs:
+      formats:
+        - files
+      writes:
+        - report.json
+        - diagnostic log tails
+    errors:
+      posture: "Returns non-zero when the bundle directory, report, or log-tail writes fail."
+      redaction: "Bundles are diagnostic artifacts. Review before sharing outside the local trust boundary."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+
+  - id: loopgate-doctor.explain-denial
+    kind: cli
+    command: "loopgate-doctor explain-denial"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: verified-ledger-read
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-approval-id"
+          required: false
+        - name: "-request-id"
+          required: false
+        - name: "-hook-session-id"
+          required: false
+        - name: "-tool-use-id"
+          required: false
+        - name: "-hook-event-name"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for invalid selectors or ledger verification/read failures."
+      redaction: "Do not echo secret-bearing payloads from related audit events."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-doctor.trust-check
+    kind: cli
+    command: "loopgate-doctor trust-check"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: live-local-control-plane-read
+      requires_running_loopgate: true
+      writes_state: false
+      control_capabilities:
+        - diagnostic.read
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero if the daemon is unavailable or audit-export trust preflight fails."
+      redaction: "Do not log socket contents, session secrets, tokens, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md
+
+  - id: loopgate-ledger.verify
+    kind: cli
+    command: "loopgate-ledger verify"
+    source: cmd/loopgate-ledger/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: verified-ledger-integrity-read
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero when runtime config, chain verification, or HMAC checkpoint verification fails."
+      redaction: "Verification output must not include secrets, tokens, private keys, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-ledger/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-ledger.summary
+    kind: cli
+    command: "loopgate-ledger summary"
+    source: cmd/loopgate-ledger/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: active-ledger-convenience-read-unverified
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for unreadable or malformed active JSONL except a missing active file, which reports zero events."
+      redaction: "Summary output must not include raw event payloads."
+    skill: docs/agent/skills/loopgate-ledger/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-ledger.tail
+    kind: cli
+    command: "loopgate-ledger tail"
+    source: cmd/loopgate-ledger/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: active-ledger-convenience-read-unverified
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-n"
+          required: false
+        - name: "-verbose"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for read failures. Malformed tail entries are printed as malformed and do not by themselves verify or repair the ledger."
+      redaction: "Verbose tail is designed for readable redacted previews, but agents must still avoid echoing secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-ledger/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-ledger.demo-reset
+    kind: cli
+    command: "loopgate-ledger demo-reset"
+    source: cmd/loopgate-ledger/main.go
+    stability: supported-demo-only
+    audience:
+      - demo-agent
+      - human-operator
+    authority:
+      mode: destructive-local-demo-state-reset
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+        - name: "-yes"
+          required: true
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns 2 without -yes. Returns non-zero if Loopgate appears to be running, runtime config fails to load, or reset cannot complete."
+      redaction: "Reset output lists removed local paths only. Do not include secret-bearing file contents."
+    skill: docs/agent/skills/loopgate-ledger/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-policy-sign.sign
+    kind: cli
+    command: "loopgate-policy-sign"
+    source: cmd/loopgate-policy-sign/main.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-policy-signature-write-with-operator-private-key
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo-root"
+          required: false
+        - name: "-policy-file"
+          required: false
+        - name: "-private-key-file"
+          required: false
+        - name: "-key-id"
+          required: false
+      environment:
+        - name: "LOOPGATE_POLICY_SIGNING_PRIVATE_KEY_FILE"
+          required: false
+    outputs:
+      formats:
+        - text
+      writes:
+        - core/policy/policy.yaml.sig
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero when key resolution, policy read, private key parse, signing, or signature write fails."
+      redaction: "Never print private key material, trusted public key material, tokens, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-policy-sign/SKILL.md
+    docs:
+      - docs/setup/POLICY_SIGNING.md
+      - docs/setup/POLICY_SIGNING_ROTATION.md
+      - docs/setup/POLICY_REFERENCE.md
+
+  - id: loopgate-policy-sign.verify-setup
+    kind: cli
+    command: "loopgate-policy-sign -verify-setup"
+    source: cmd/loopgate-policy-sign/main.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-policy-signing-trust-check
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo-root"
+          required: false
+        - name: "-private-key-file"
+          required: false
+        - name: "-key-id"
+          required: false
+      environment:
+        - name: "LOOPGATE_POLICY_SIGNING_PRIVATE_KEY_FILE"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero unless the requested key_id, current policy signature, trusted public key, and operator private key line up."
+      redaction: "May print signer key path and permissions, but must not print private key bytes or other secret material."
+    skill: docs/agent/skills/loopgate-policy-sign/SKILL.md
+    docs:
+      - docs/setup/POLICY_SIGNING.md
+      - docs/setup/POLICY_SIGNING_ROTATION.md
+
+  - id: loopgate-policy-admin.inspect
+    kind: cli
+    command: "loopgate-policy-admin validate|explain|diff|render-template"
+    source: cmd/loopgate-policy-admin/main.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - review-agent
+      - human-operator
+    authority:
+      mode: local-policy-inspection
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      subcommands:
+        - name: "validate"
+          writes_state: false
+        - name: "explain"
+          writes_state: false
+        - name: "diff"
+          writes_state: false
+        - name: "render-template"
+          writes_state: false
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-policy-file"
+          required: false
+        - name: "-signature-file"
+          required: false
+        - name: "-tool"
+          required: false
+        - name: "-right-policy-file"
+          required: true-for-diff
+        - name: "-preset"
+          required: false
+    outputs:
+      formats:
+        - text
+        - yaml
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero on strict YAML parse failures, unsupported tools, missing required diff inputs, or signature verification failures when a signature is required or supplied."
+      redaction: "Do not include private keys, tokens, or raw secret-bearing payloads in policy review summaries."
+    skill: docs/agent/skills/loopgate-policy-admin/SKILL.md
+    docs:
+      - docs/setup/POLICY_REFERENCE.md
+      - docs/setup/POLICY_SIGNING.md
+
+  - id: loopgate-policy-admin.apply
+    kind: cli
+    command: "loopgate-policy-admin apply"
+    source: cmd/loopgate-policy-admin/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - human-operator
+    authority:
+      mode: live-local-control-plane-policy-reload
+      requires_running_loopgate: true
+      writes_state: true
+      control_capabilities:
+        - config.read
+        - config.write
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+        - name: "-verify-setup"
+          required: false
+        - name: "-private-key-file"
+          required: false
+        - name: "-key-id"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero if signed policy load, optional signer setup verification, running policy read, policy reload, or post-reload hash comparison fails."
+      redaction: "May print policy paths and hashes, but must not print signing key material or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-policy-admin/SKILL.md
+    docs:
+      - docs/setup/POLICY_SIGNING.md
+      - docs/setup/POLICY_REFERENCE.md
+      - docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md
+
+  - id: loopgate-policy-admin.approvals
+    kind: cli
+    command: "loopgate-policy-admin approvals"
+    source: cmd/loopgate-policy-admin/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - human-operator
+    authority:
+      mode: live-local-control-plane-approval-decision
+      requires_running_loopgate: true
+      writes_state: true
+      control_capabilities:
+        - approval.read
+        - approval.write
+    inputs:
+      subcommands:
+        - name: "list"
+          writes_state: false
+        - name: "approve"
+          writes_state: true
+        - name: "deny"
+          writes_state: true
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+        - name: "-reason"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for missing/unknown approval ids, daemon/socket errors, or control-plane decision failures."
+      redaction: "Reason text is recorded in audit; keep it concise and do not include secrets."
+    skill: docs/agent/skills/loopgate-policy-admin/SKILL.md
+    docs:
+      - docs/setup/OPERATOR_GUIDE.md
+      - docs/setup/DOCTOR_AND_LEDGER.md
+
+  - id: loopgate-policy-admin.grants
+    kind: cli
+    command: "loopgate-policy-admin grants"
+    source: cmd/loopgate-policy-admin/operator_overrides.go
+    stability: supported
+    audience:
+      - operator-agent
+      - human-operator
+    authority:
+      mode: signed-operator-override-grant-management
+      requires_running_loopgate: true
+      writes_state: true
+      control_capabilities:
+        - config.read
+        - config.write
+    inputs:
+      subcommands:
+        - name: "list"
+          writes_state: false
+        - name: "add"
+          writes_state: true
+        - name: "revoke"
+          writes_state: true
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-all"
+          required: false
+        - name: "-path"
+          required: true-for-add
+        - name: "-socket"
+          required: false
+        - name: "-private-key-file"
+          required: false
+        - name: "-key-id"
+          required: false
+        - name: "-dry-run"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero if the parent policy does not delegate persistent grants, the path escapes policy bounds, signing fails, disk write fails, or live reload fails."
+      redaction: "Never print private key material. Treat signed operator override documents as authority-bearing state."
+    skill: docs/agent/skills/loopgate-policy-admin/SKILL.md
+    docs:
+      - docs/setup/POLICY_REFERENCE.md
+      - docs/setup/POLICY_SIGNING.md
+
+  - id: loopgate.server
+    kind: cli
+    command: "loopgate"
+    source: cmd/loopgate/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-authority-boundary-server
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      environment:
+        - name: "LOOPGATE_REPO_ROOT"
+          required: false
+        - name: "LOOPGATE_SOCKET"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+      opens:
+        - runtime/state/loopgate.sock
+      writes:
+        - runtime/state
+        - runtime/logs
+        - runtime/state/loopgate_events.jsonl
+    errors:
+      posture: "Fails closed on server initialization, signed policy, secure secret storage, audit integrity, or socket serve errors."
+      redaction: "Startup output must not include secrets, tokens, private keys, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-operator/SKILL.md
+    docs:
+      - docs/setup/GETTING_STARTED.md
+      - docs/setup/SETUP.md
+      - docs/setup/OPERATOR_GUIDE.md
+
+  - id: loopgate.setup
+    kind: cli
+    command: "loopgate init|setup|quickstart"
+    source: cmd/loopgate/hooks.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-first-run-setup-and-signer-initialization
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      subcommands:
+        - name: "init"
+          writes_state: true
+        - name: "setup"
+          writes_state: true
+        - name: "quickstart"
+          writes_state: true
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-install-hooks"
+          required: false
+        - name: "-yes"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+      writes:
+        - core/policy/policy.yaml
+        - core/policy/policy.yaml.sig
+        - operator policy-signing material outside repo
+        - optional Claude hook settings
+        - optional macOS LaunchAgent plist
+    errors:
+      posture: "Returns non-zero when setup choices are incomplete, python3 is unavailable for hook install, policy signing fails, hook install fails, or LaunchAgent install/load fails."
+      redaction: "May print key ids and paths, but must not print private key bytes or secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-operator/SKILL.md
+    docs:
+      - docs/setup/GETTING_STARTED.md
+      - docs/setup/SETUP.md
+      - docs/setup/AGENT_ASSISTED_SETUP.md
+      - docs/setup/POLICY_SIGNING.md
+
+  - id: loopgate.operator-inspect
+    kind: cli
+    command: "loopgate status|test|console|explain"
+    source: cmd/loopgate/status.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: local-operator-read-and-smoke-test
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities:
+        - ui.read
+        - fs_list
+    inputs:
+      subcommands:
+        - name: "status"
+          writes_state: false
+        - name: "test"
+          writes_state: true
+        - name: "console"
+          writes_state: false
+        - name: "explain"
+          writes_state: false
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+        - name: "-live"
+          required: false
+        - name: "-once"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for invalid inputs, setup-readiness failures, daemon/socket failures, or governed smoke-test denial/failure."
+      redaction: "Operator summaries and console output must avoid secrets and raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-operator/SKILL.md
+    docs:
+      - docs/setup/GETTING_STARTED.md
+      - docs/setup/SETUP.md
+      - docs/setup/OPERATOR_GUIDE.md
+
+  - id: loopgate.lifecycle
+    kind: cli
+    command: "loopgate install-hooks|remove-hooks|install-launch-agent|remove-launch-agent|uninstall"
+    source: cmd/loopgate/hooks.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-operator-lifecycle-and-offboarding
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      subcommands:
+        - name: "install-hooks"
+          writes_state: true
+        - name: "remove-hooks"
+          writes_state: true
+        - name: "install-launch-agent"
+          writes_state: true
+        - name: "remove-launch-agent"
+          writes_state: true
+        - name: "uninstall"
+          writes_state: true
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-claude-dir"
+          required: false
+        - name: "-load"
+          required: false
+        - name: "-purge"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+      writes:
+        - user Claude settings
+        - user Claude hook scripts
+        - macOS LaunchAgent plist
+        - optional runtime purge
+        - optional managed install removal
+    errors:
+      posture: "Returns non-zero when hook settings cannot be read/written, LaunchAgent install/remove fails, or uninstall cleanup cannot complete."
+      redaction: "Do not print hook payloads, private keys, tokens, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-operator/SKILL.md
+    docs:
+      - docs/setup/GETTING_STARTED.md
+      - docs/setup/SETUP.md
+      - docs/setup/OPERATOR_GUIDE.md

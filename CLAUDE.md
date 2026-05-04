@@ -1,6 +1,6 @@
 # Loopgate Claude Contract
 
-**Last updated:** 2026-04-20
+**Last updated:** 2026-05-03
 
 `AGENTS.md` is the canonical instruction file for this repo. This file exists
 as a compatibility entrypoint for Claude-oriented tooling and repeats only the
@@ -23,6 +23,9 @@ short non-negotiable contract.
 - Do not add hidden authority paths or client-side “fake authority.”
 - Do not add background autonomous lifecycle workers without explicit design
   review.
+- Keep `internal/loopgate` as the HTTP/control-plane adapter. New cohesive
+  runtime domains should usually become sibling `internal/...` packages, and
+  those packages must not import `internal/loopgate`.
 
 ## Contributor docs
 

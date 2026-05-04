@@ -21,6 +21,7 @@ const runtimeConfigVersion = "1"
 
 const DefaultSupersededLineageRetentionWindow = 30 * 24 * time.Hour
 const expectedSessionClientExecutableEnv = "LOOPGATE_EXPECTED_SESSION_CLIENT_EXECUTABLE"
+const DefaultMaxInFlightHTTPRequests = 256
 const DefaultAuditLedgerHMACCheckpointIntervalEvents = 256
 const defaultAuditLedgerHMACSecretID = "audit_ledger_hmac"
 const defaultAuditLedgerHMACSecretBackend = secrets.BackendMacOSKeychain
@@ -123,6 +124,7 @@ type RuntimeConfig struct {
 			SegmentDir                    string                    `yaml:"segment_dir" json:"segment_dir"`
 			ManifestPath                  string                    `yaml:"manifest_path" json:"manifest_path"`
 			VerifyClosedSegmentsOnStartup *bool                     `yaml:"verify_closed_segments_on_startup" json:"verify_closed_segments_on_startup"`
+			RequireHMACCheckpoint         bool                      `yaml:"require_hmac_checkpoint" json:"require_hmac_checkpoint"`
 			HMACCheckpoint                AuditLedgerHMACCheckpoint `yaml:"hmac_checkpoint" json:"hmac_checkpoint"`
 		} `yaml:"audit_ledger" json:"audit_ledger"`
 		AuditExport AuditExport `yaml:"audit_export" json:"audit_export"`
@@ -141,6 +143,10 @@ type RuntimeConfig struct {
 		// ExpectedSessionClientExecutable, when non-empty, requires POST /v1/session/open peers to
 		// resolve to this absolute executable path (after filepath.Clean). Empty disables pinning.
 		ExpectedSessionClientExecutable string `yaml:"expected_session_client_executable" json:"expected_session_client_executable"`
+		// MaxInFlightHTTPRequests bounds concurrent local control-plane HTTP handlers.
+		// This protects Loopgate from unbounded goroutine buildup behind audit/fsync,
+		// state locks, network calls, or subprocess execution.
+		MaxInFlightHTTPRequests int `yaml:"max_in_flight_http_requests" json:"max_in_flight_http_requests"`
 	} `yaml:"control_plane" json:"control_plane"`
 }
 
@@ -261,6 +267,9 @@ func applyRuntimeConfigDefaults(runtimeConfig *RuntimeConfig) {
 	if strings.TrimSpace(runtimeConfig.Logging.AuditExport.TLS.ServerName) == "" {
 		runtimeConfig.Logging.AuditExport.TLS.ServerName = ""
 	}
+	if runtimeConfig.ControlPlane.MaxInFlightHTTPRequests == 0 {
+		runtimeConfig.ControlPlane.MaxInFlightHTTPRequests = DefaultMaxInFlightHTTPRequests
+	}
 	hc := &runtimeConfig.Logging.AuditLedger.HMACCheckpoint
 	// Default only the unset (zero) case so negative values fail validation instead of being coerced.
 	if hc.Enabled && hc.IntervalEvents == 0 {
@@ -333,6 +342,12 @@ func validateRuntimeConfig(repoRoot string, runtimeConfig RuntimeConfig) error {
 	}
 	if err := validateExpectedSessionClientExecutable(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); err != nil {
 		return err
+	}
+	if runtimeConfig.ControlPlane.MaxInFlightHTTPRequests <= 0 {
+		return fmt.Errorf("control_plane.max_in_flight_http_requests must be positive")
+	}
+	if runtimeConfig.Logging.AuditLedger.RequireHMACCheckpoint && !runtimeConfig.Logging.AuditLedger.HMACCheckpoint.Enabled {
+		return fmt.Errorf("logging.audit_ledger.require_hmac_checkpoint requires logging.audit_ledger.hmac_checkpoint.enabled")
 	}
 	if err := validateAuditLedgerHMACCheckpoint(runtimeConfig.Logging.AuditLedger.HMACCheckpoint); err != nil {
 		return err

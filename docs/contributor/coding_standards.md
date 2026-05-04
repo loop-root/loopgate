@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-20
+**Last updated:** 2026-05-03
 
 # Coding Standards
 
@@ -95,6 +95,39 @@ Avoid:
 - broad implicit defaults
 - hidden global state
 - speculative abstractions before the lifecycle and authority model are clear
+
+## Package boundaries
+
+Use package boundaries to make ownership and authority explicit.
+
+`internal/loopgate` should remain the HTTP/control-plane adapter and server
+wiring layer. It may coordinate runtime packages, decode/encode HTTP payloads,
+and bind runtime decisions to audit, diagnostics, and responses. It should not
+grow indefinitely as the home for every authority-owning subsystem.
+
+When extracting a cohesive runtime domain, prefer a sibling internal package
+over another deep subpackage under `internal/loopgate/`. Good target shapes are:
+
+- `internal/controlruntime` for control sessions, tokens, replay, and nonce
+  state
+- `internal/approvalruntime` for approval lifecycle, decision, and rollback
+  orchestration
+- `internal/auditruntime` for Loopgate audit sequencing/checkpoint runtime
+- `internal/connections` for provider connection records, credentials, PKCE,
+  and provider-token cache behavior
+- `internal/mcpgateway` for MCP gateway manifests, launch state, approvals,
+  execution, and policy decisions
+- `internal/hostaccess` for host-folder grants and plan/apply behavior
+
+Dependency direction matters more than the package name: `internal/loopgate`
+may import these runtime packages, but these runtime packages must not import
+`internal/loopgate`. If a candidate extraction needs to import `loopgate`, the
+boundary is not ready; pass dependencies through small interfaces or callbacks
+instead.
+
+Do not create vague packages like `internal/common`, `internal/util`, or
+`internal/runtime`. A package should have one obvious owner and one obvious
+reason to change.
 
 ## Documentation expectations
 

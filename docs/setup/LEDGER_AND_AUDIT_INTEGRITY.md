@@ -82,12 +82,37 @@ first start, `loopgate-doctor report` may show `bootstrap_pending`.
 If Keychain creation or access is denied, Loopgate fails closed rather than
 silently downgrading to hash-chain-only mode.
 
+The shipped runtime config also sets
+`logging.audit_ledger.require_hmac_checkpoint: true`. That is the production
+guardrail for the replacement-ledger problem: when this guard is true, Loopgate
+refuses to load a config where `logging.audit_ledger.hmac_checkpoint.enabled`
+is false. In plain terms, an operator cannot accidentally run a
+production-oriented profile in hash-chain-only mode.
+
 Checkpoint lines still participate in the same **append-only hash chain** as
 other events. Verification helpers live in **`internal/ledger`**
 (`VerifyAuditLedgerHMACCheckpointEvent`). This improves **detectability of
 tampering** for parties that hold the key; it is **not** a substitute for
 **out-of-band** retention (append-only export, central aggregation) where the
 operator needs evidence off the workstation.
+
+Loopgate also maintains a small signed local head anchor at
+`runtime/state/audit_ledger_anchor.json` when HMAC checkpoints are enabled. The
+anchor is HMAC-signed with the audit checkpoint secret and records the latest
+audit sequence, latest event hash, active ledger byte size, and checkpoint
+cadence counter. On startup, Loopgate compares the verified ledger head to this
+anchor and fails closed on mismatch. This closes the common whole-ledger
+replacement path where a forged JSONL file is internally consistent but no
+longer matches the last keyed head Loopgate wrote.
+
+The anchor is also a performance guardrail. When the active ledger file's OS
+file state still matches the signed anchor and there are no sealed rotation
+segments to inspect, startup can restore the ledger head and checkpoint cadence
+counter from the anchor instead of rescanning the active JSONL. If the file
+state differs, if a rotation manifest contains sealed segments, or if the anchor
+is missing, Loopgate falls back to the full startup verification path. Full
+ledger verification remains available through the explicit verification tools
+below.
 
 Current operator verification path:
 

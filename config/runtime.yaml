@@ -4,6 +4,10 @@ version: "1"
 # Empty = disabled (default). Use for shipped desktop bundles with a stable client binary path.
 control_plane:
   expected_session_client_executable: ""
+  # Bounds concurrent local control-plane HTTP handlers. This keeps overload
+  # from creating unbounded goroutines waiting on audit fsync, state locks,
+  # provider calls, or subprocess execution.
+  max_in_flight_http_requests: 256
 
 # Reserved deployment identity fields. Leave empty for the current local-first
 # open-source build; they are not part of the active setup flow.
@@ -18,6 +22,10 @@ logging:
     segment_dir: "runtime/state/loopgate_event_segments"
     manifest_path: "runtime/state/loopgate_event_segments/manifest.jsonl"
     verify_closed_segments_on_startup: true
+    # Production/HIPAA-prep guard: refuse to start if checkpoints are disabled.
+    # This prevents silently falling back to hash-chain-only ledgers, which can
+    # be replaced wholesale by a same-user filesystem writer.
+    require_hmac_checkpoint: true
     # Default tamper-evidence posture: HMAC-SHA256 checkpoints over the hash-chain head
     # with a key stored outside the JSONL. On macOS-first Loopgate, first server start
     # bootstraps this default key into Keychain if it does not exist yet.

@@ -429,6 +429,7 @@ func (server *Server) applyRuntimeConfigReloaded(reloadedRuntimeConfig config.Ru
 	server.auditExportStatePath = filepath.Join(server.repoRoot, reloadedRuntimeConfig.Logging.AuditExport.StatePath)
 	server.expectedClientPath = normalizeSessionExecutablePinPath(reloadedRuntimeConfig.ControlPlane.ExpectedSessionClientExecutable)
 	server.mu.Unlock()
+	server.configureHTTPRequestSlots(reloadedRuntimeConfig.ControlPlane.MaxInFlightHTTPRequests)
 }
 
 func (server *Server) applyConfiguredConnectionsReloaded(configuredConnections map[string]configuredConnection, configuredCapabilities map[string]configuredCapability) {
