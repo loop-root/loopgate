@@ -8,8 +8,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
+
+type countingJSONValue struct {
+	marshalCalls *int32
+}
+
+func (value countingJSONValue) MarshalJSON() ([]byte, error) {
+	atomic.AddInt32(value.marshalCalls, 1)
+	return []byte(`{"nested":"value"}`), nil
+}
 
 func TestAppendWithRotation_ReturnsErrorWhenSyncFails(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -55,6 +65,37 @@ func TestAppendWithRotation_ReturnsErrorWhenSyncFails(t *testing.T) {
 	}
 	if _, found := loadCachedChainState(normalizeLedgerPath(activePath), "ledger_sequence", activeFileState); found {
 		t.Fatal("expected sync failure to clear cached chain state")
+	}
+}
+
+func TestPrepareLedgerEventLineCanonicalizesCustomValuesOnce(t *testing.T) {
+	var marshalCalls int32
+	preparedEvent, eventLineBytes, eventHash, err := prepareLedgerEventLine(0, "", Event{
+		TS:      "2026-05-04T12:00:00Z",
+		Type:    "audit.test",
+		Session: "session-a",
+		Data: map[string]interface{}{
+			"custom": countingJSONValue{marshalCalls: &marshalCalls},
+		},
+	})
+	if err != nil {
+		t.Fatalf("prepare ledger event line: %v", err)
+	}
+	if gotCalls := atomic.LoadInt32(&marshalCalls); gotCalls != 1 {
+		t.Fatalf("expected custom value to be canonicalized once, got %d marshal calls", gotCalls)
+	}
+	if preparedEvent.Data["event_hash"] != eventHash {
+		t.Fatalf("prepared event hash mismatch: %#v", preparedEvent.Data)
+	}
+	if !strings.HasSuffix(string(eventLineBytes), "\n") {
+		t.Fatalf("expected JSONL event line to end with newline: %q", eventLineBytes)
+	}
+	storedHash, err := hashStoredChainEvent(preparedEvent)
+	if err != nil {
+		t.Fatalf("hash stored event: %v", err)
+	}
+	if storedHash != eventHash {
+		t.Fatalf("stored hash mismatch: got %q want %q", storedHash, eventHash)
 	}
 }
 

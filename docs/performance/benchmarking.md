@@ -39,6 +39,7 @@ go test -run=^$ -bench=. -benchmem -benchtime=5s ./internal/loopgate ./internal/
 - serial ledger append with fsync
 - parallel ledger append with fsync
 - serial ledger append without fsync to isolate JSON/hash/chain overhead
+- ledger event-line preparation and canonicalization overhead
 
 Follow-up profile:
 

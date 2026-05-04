@@ -328,6 +328,32 @@ func hashEvent(event Event) (string, error) {
 	return fmt.Sprintf("%x", payloadHash[:]), nil
 }
 
+// hashCanonicalEvent hashes an event whose Data values have already been
+// normalized by canonicalizeEvent. It strips event_hash without re-walking the
+// full payload, which keeps append preparation from canonicalizing the same
+// audit data twice.
+func hashCanonicalEvent(event Event) (string, error) {
+	canonicalEvent := event
+	if canonicalEvent.Data != nil {
+		if _, hasEventHash := canonicalEvent.Data["event_hash"]; hasEventHash {
+			canonicalData := make(map[string]interface{}, len(canonicalEvent.Data)-1)
+			for key, value := range canonicalEvent.Data {
+				if key == "event_hash" {
+					continue
+				}
+				canonicalData[key] = value
+			}
+			canonicalEvent.Data = canonicalData
+		}
+	}
+	payloadBytes, err := json.Marshal(canonicalEvent)
+	if err != nil {
+		return "", err
+	}
+	payloadHash := sha256.Sum256(payloadBytes)
+	return fmt.Sprintf("%x", payloadHash[:]), nil
+}
+
 // ComputeEventHash returns the append-chain hash for event after normalizing it
 // into a JSON-compatible representation. The canonical bytes rely on
 // encoding/json's deterministic ordering of string-keyed map objects.

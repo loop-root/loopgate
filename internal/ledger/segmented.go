@@ -539,15 +539,15 @@ func prepareLedgerEventLine(lastSequence int64, lastEventHash string, ledgerEven
 	}
 	preparedEvent.Data["ledger_sequence"] = lastSequence + 1
 	preparedEvent.Data["previous_event_hash"] = lastEventHash
-	eventHash, err := hashEvent(preparedEvent)
+	preparedEvent, err := canonicalizeEvent(preparedEvent, false)
+	if err != nil {
+		return Event{}, nil, "", err
+	}
+	eventHash, err := hashCanonicalEvent(preparedEvent)
 	if err != nil {
 		return Event{}, nil, "", err
 	}
 	preparedEvent.Data["event_hash"] = eventHash
-	preparedEvent, err = canonicalizeEvent(preparedEvent, false)
-	if err != nil {
-		return Event{}, nil, "", err
-	}
 	eventLineBytes, err := json.Marshal(preparedEvent)
 	if err != nil {
 		return Event{}, nil, "", err

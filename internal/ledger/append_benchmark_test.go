@@ -22,6 +22,17 @@ func BenchmarkAppendRuntimeLatency(b *testing.B) {
 	})
 }
 
+func BenchmarkPrepareLedgerEventLine(b *testing.B) {
+	ledgerEvent := benchmarkLedgerEvent(1)
+	b.ReportAllocs()
+
+	for index := 0; index < b.N; index++ {
+		if _, _, _, err := prepareLedgerEventLine(int64(index), "previous-hash", ledgerEvent); err != nil {
+			b.Fatalf("prepare ledger event line: %v", err)
+		}
+	}
+}
+
 func benchmarkAppendRuntime(b *testing.B, syncLedger bool, parallel bool) {
 	b.Helper()
 	b.ReportAllocs()
