@@ -31,6 +31,7 @@ go test -run=^$ -bench=. -benchmem -benchtime=5s ./internal/loopgate ./internal/
 - direct audited server audit append
 - in-process `fs_read` capability execution
 - `fs_write` approval creation under parallel load
+- UI event emission while the replay buffer is full
 - server startup with a seeded active audit ledger
 
 `internal/ledger/append_benchmark_test.go` covers:

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -461,5 +463,40 @@ func TestUIEventsReplayAndFilterAuditOnlyResults(t *testing.T) {
 	}
 	if !containsUIEventType(recentEvents, controlapipkg.UIEventTypeApprovalPending) {
 		t.Fatalf("expected approval.pending event in recent ui events, got %#v", recentEvents)
+	}
+}
+
+func TestEmitUIEventReusesReplayBufferBackingArrayAfterOverflow(t *testing.T) {
+	server := &Server{
+		now: func() time.Time {
+			return time.Date(2026, time.May, 4, 12, 0, 0, 0, time.UTC)
+		},
+	}
+	server.ui.events = make([]controlapipkg.UIEventEnvelope, maxUIEventBuffer, maxUIEventBuffer+1)
+	for index := range server.ui.events {
+		server.ui.events[index] = controlapipkg.UIEventEnvelope{
+			ControlSessionID: "session-a",
+			ID:               strconv.Itoa(index + 1),
+			Type:             controlapipkg.UIEventTypeWarning,
+			TS:               "2026-05-04T12:00:00Z",
+			Data:             controlapipkg.UIEventWarning{Message: "preloaded"},
+		}
+	}
+	server.ui.sequence = uint64(maxUIEventBuffer)
+	initialBackingArray := fmt.Sprintf("%p", &server.ui.events[0])
+
+	server.emitUIEvent("session-a", controlapipkg.UIEventTypeWarning, controlapipkg.UIEventWarning{Message: "overflow"})
+	afterFirstOverflowBackingArray := fmt.Sprintf("%p", &server.ui.events[0])
+	server.emitUIEvent("session-a", controlapipkg.UIEventTypeWarning, controlapipkg.UIEventWarning{Message: "overflow again"})
+	afterSecondOverflowBackingArray := fmt.Sprintf("%p", &server.ui.events[0])
+
+	if len(server.ui.events) != maxUIEventBuffer {
+		t.Fatalf("expected ui event buffer length %d, got %d", maxUIEventBuffer, len(server.ui.events))
+	}
+	if afterFirstOverflowBackingArray != initialBackingArray || afterSecondOverflowBackingArray != initialBackingArray {
+		t.Fatalf("expected overflow trim to reuse backing array, got initial=%s first=%s second=%s", initialBackingArray, afterFirstOverflowBackingArray, afterSecondOverflowBackingArray)
+	}
+	if server.ui.events[0].ID != "3" {
+		t.Fatalf("expected replay buffer to drop oldest events after two overflows, first id=%q", server.ui.events[0].ID)
 	}
 }
