@@ -1,4 +1,4 @@
-**Last updated:** 2026-04-24
+**Last updated:** 2026-05-04
 
 # Docs Map
 
@@ -8,6 +8,8 @@ This file maps **`docs/`** — design intent, setup, RFCs, and benchmarks. Use w
 
 - `docs/loopgate_v1_product_contract.md` — the current v1 product boundary and success bar
 - `docs/README.md` — top-level docs index
+- `docs/agent/README.md` — agent-facing surface index and usage contract
+- `docs/agent/agent_surfaces.yaml` — machine-readable command/API/docs surface manifest for assisting agents
 - `docs/setup/GETTING_STARTED.md` — shortest path to a governed local Claude workflow
 - `docs/setup/AGENT_ASSISTED_SETUP.md` — contract for using another agent to help set up governed Claude Code
 - `docs/roadmap/admin_console_tui_mvp.md` — bounded local admin-console TUI spec
@@ -47,6 +49,12 @@ separate `ARCHIVED` repository.
 - `LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md` — HTTP over Unix socket for integrators
 - `POLICY_SIGNING.md` — detached policy signature workflow and signer CLI
 - `POLICY_SIGNING_ROTATION.md` — operator runbook for signer restore, trust-anchor rotation, and emergency replacement
+
+## Agent surfaces (`docs/agent/`)
+
+- `README.md` — agent-facing contract and index
+- `agent_surfaces.yaml` — supported agent-usable surfaces, trust posture, docs, and skills
+- `skills/loopgate-doctor/SKILL.md` — diagnostic workflow for setup checks, reports, bundles, denial explanations, and live trust checks
 
 ## Roadmap and threat model
 

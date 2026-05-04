@@ -1,0 +1,178 @@
+version: "1"
+updated: "2026-05-04"
+description: "Supported Loopgate surfaces that an assisting agent can inspect or invoke without becoming an authority source."
+surfaces:
+  - id: loopgate-doctor.setup-check
+    kind: cli
+    command: "loopgate-doctor setup-check"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - human-operator
+    authority:
+      mode: local-read-with-optional-daemon-probe
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+        - name: "-claude-dir"
+          required: false
+        - name: "-json"
+          required: false
+    outputs:
+      formats:
+        - text
+        - json
+      preferred_for_agents: json
+    errors:
+      posture: "Returns non-zero on command/encode failures. Human stderr currently uses an ERROR prefix."
+      redaction: "Must not include secrets, tokens, private keys, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/AGENT_ASSISTED_SETUP.md
+
+  - id: loopgate-doctor.report
+    kind: cli
+    command: "loopgate-doctor report"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - setup-agent
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: offline-local-diagnostic-read
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+    outputs:
+      formats:
+        - json
+      preferred_for_agents: json
+    errors:
+      posture: "Returns non-zero when repo resolution, config loading, or report encoding fails."
+      redaction: "Diagnostic output must avoid secrets, tokens, private keys, and raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-doctor.bundle
+    kind: cli
+    command: "loopgate-doctor bundle"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - support-agent
+      - human-operator
+    authority:
+      mode: offline-local-diagnostic-read-with-bundle-write
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-out"
+          required: true
+        - name: "-log-lines"
+          required: false
+    outputs:
+      formats:
+        - files
+      writes:
+        - report.json
+        - diagnostic log tails
+    errors:
+      posture: "Returns non-zero when the bundle directory, report, or log-tail writes fail."
+      redaction: "Bundles are diagnostic artifacts. Review before sharing outside the local trust boundary."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+
+  - id: loopgate-doctor.explain-denial
+    kind: cli
+    command: "loopgate-doctor explain-denial"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: verified-ledger-read
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-approval-id"
+          required: false
+        - name: "-request-id"
+          required: false
+        - name: "-hook-session-id"
+          required: false
+        - name: "-tool-use-id"
+          required: false
+        - name: "-hook-event-name"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for invalid selectors or ledger verification/read failures."
+      redaction: "Do not echo secret-bearing payloads from related audit events."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-doctor.trust-check
+    kind: cli
+    command: "loopgate-doctor trust-check"
+    source: cmd/loopgate-doctor/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: live-local-control-plane-read
+      requires_running_loopgate: true
+      writes_state: false
+      control_capabilities:
+        - diagnostic.read
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero if the daemon is unavailable or audit-export trust preflight fails."
+      redaction: "Do not log socket contents, session secrets, tokens, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-doctor/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md
