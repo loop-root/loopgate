@@ -29,6 +29,9 @@ preserving Loopgate's authority boundary.
 - [Loopgate doctor skill](./skills/loopgate-doctor/SKILL.md) — procedural guide
   for setup checks, diagnostic reports, bundles, denial explanations, and live
   trust checks.
+- [Loopgate ledger skill](./skills/loopgate-ledger/SKILL.md) — procedural guide
+  for verifying and inspecting the local audit ledger without confusing
+  convenience views for trust checks.
 
 ## How to use this directory
 

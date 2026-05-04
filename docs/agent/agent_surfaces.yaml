@@ -176,3 +176,130 @@ surfaces:
     docs:
       - docs/setup/DOCTOR_AND_LEDGER.md
       - docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md
+
+  - id: loopgate-ledger.verify
+    kind: cli
+    command: "loopgate-ledger verify"
+    source: cmd/loopgate-ledger/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: verified-ledger-integrity-read
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero when runtime config, chain verification, or HMAC checkpoint verification fails."
+      redaction: "Verification output must not include secrets, tokens, private keys, or raw secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-ledger/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-ledger.summary
+    kind: cli
+    command: "loopgate-ledger summary"
+    source: cmd/loopgate-ledger/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: active-ledger-convenience-read-unverified
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for unreadable or malformed active JSONL except a missing active file, which reports zero events."
+      redaction: "Summary output must not include raw event payloads."
+    skill: docs/agent/skills/loopgate-ledger/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-ledger.tail
+    kind: cli
+    command: "loopgate-ledger tail"
+    source: cmd/loopgate-ledger/main.go
+    stability: supported
+    audience:
+      - operator-agent
+      - support-agent
+      - human-operator
+    authority:
+      mode: active-ledger-convenience-read-unverified
+      requires_running_loopgate: false
+      writes_state: false
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-n"
+          required: false
+        - name: "-verbose"
+          required: false
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns non-zero for read failures. Malformed tail entries are printed as malformed and do not by themselves verify or repair the ledger."
+      redaction: "Verbose tail is designed for readable redacted previews, but agents must still avoid echoing secret-bearing payloads."
+    skill: docs/agent/skills/loopgate-ledger/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md
+
+  - id: loopgate-ledger.demo-reset
+    kind: cli
+    command: "loopgate-ledger demo-reset"
+    source: cmd/loopgate-ledger/main.go
+    stability: supported-demo-only
+    audience:
+      - demo-agent
+      - human-operator
+    authority:
+      mode: destructive-local-demo-state-reset
+      requires_running_loopgate: false
+      writes_state: true
+      control_capabilities: []
+    inputs:
+      flags:
+        - name: "-repo"
+          required: false
+        - name: "-socket"
+          required: false
+        - name: "-yes"
+          required: true
+    outputs:
+      formats:
+        - text
+      preferred_for_agents: text-summary
+    errors:
+      posture: "Returns 2 without -yes. Returns non-zero if Loopgate appears to be running, runtime config fails to load, or reset cannot complete."
+      redaction: "Reset output lists removed local paths only. Do not include secret-bearing file contents."
+    skill: docs/agent/skills/loopgate-ledger/SKILL.md
+    docs:
+      - docs/setup/DOCTOR_AND_LEDGER.md
+      - docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md

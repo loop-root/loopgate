@@ -84,6 +84,7 @@ func TestAgentSurfacesManifestIsUsable(t *testing.T) {
 
 		requireRepoPathExists(t, root, surface.ID, "source", surface.Source)
 		requireRepoPathExists(t, root, surface.ID, "skill", surface.Skill)
+		requireSkillFrontmatter(t, root, surface.ID, surface.Skill)
 		for _, docPath := range surface.Docs {
 			requireRepoPathExists(t, root, surface.ID, "doc", docPath)
 		}
@@ -110,6 +111,36 @@ func requireRepoPathExists(t *testing.T, root, surfaceID, fieldName, relPath str
 	if _, err := os.Stat(fullPath); err != nil {
 		t.Fatalf("%s %s path %s is not readable: %v", surfaceID, fieldName, relPath, err)
 	}
+}
+
+func requireSkillFrontmatter(t *testing.T, root, surfaceID, relPath string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, filepath.Clean(relPath)))
+	if err != nil {
+		t.Fatalf("%s read skill %s: %v", surfaceID, relPath, err)
+	}
+	content := string(data)
+	if !strings.HasPrefix(content, "---\n") {
+		t.Fatalf("%s skill %s must start with YAML frontmatter", surfaceID, relPath)
+	}
+	rest := strings.TrimPrefix(content, "---\n")
+	end := strings.Index(rest, "\n---\n")
+	if end < 0 {
+		t.Fatalf("%s skill %s must close YAML frontmatter", surfaceID, relPath)
+	}
+	frontmatter := rest[:end]
+	requireFrontmatterField(t, surfaceID, relPath, frontmatter, "name:")
+	requireFrontmatterField(t, surfaceID, relPath, frontmatter, "description:")
+}
+
+func requireFrontmatterField(t *testing.T, surfaceID, relPath, frontmatter, field string) {
+	t.Helper()
+	for _, line := range strings.Split(frontmatter, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), field) && strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), field)) != "" {
+			return
+		}
+	}
+	t.Fatalf("%s skill %s frontmatter missing non-empty %s field", surfaceID, relPath, strings.TrimSuffix(field, ":"))
 }
 
 func findRepoRoot(t *testing.T) string {

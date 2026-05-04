@@ -55,6 +55,7 @@ separate `ARCHIVED` repository.
 - `README.md` — agent-facing contract and index
 - `agent_surfaces.yaml` — supported agent-usable surfaces, trust posture, docs, and skills
 - `skills/loopgate-doctor/SKILL.md` — diagnostic workflow for setup checks, reports, bundles, denial explanations, and live trust checks
+- `skills/loopgate-ledger/SKILL.md` — audit ledger verification and inspection workflow
 
 ## Roadmap and threat model
 
