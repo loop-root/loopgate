@@ -105,10 +105,14 @@ anchor and fails closed on mismatch. This closes the common whole-ledger
 replacement path where a forged JSONL file is internally consistent but no
 longer matches the last keyed head Loopgate wrote.
 
-The anchor is also a performance guardrail: once present, startup can restore
-the checkpoint cadence counter from the signed anchor instead of rescanning all
-HMAC checkpoint events on the normal path. Full ledger verification remains
-available through the explicit verification tools below.
+The anchor is also a performance guardrail. When the active ledger file's OS
+file state still matches the signed anchor and there are no sealed rotation
+segments to inspect, startup can restore the ledger head and checkpoint cadence
+counter from the anchor instead of rescanning the active JSONL. If the file
+state differs, if a rotation manifest contains sealed segments, or if the anchor
+is missing, Loopgate falls back to the full startup verification path. Full
+ledger verification remains available through the explicit verification tools
+below.
 
 Current operator verification path:
 

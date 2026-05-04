@@ -79,6 +79,36 @@ func (runtime *Runtime) Load(ctx context.Context, rotationSettings ledger.Rotati
 		return fmt.Errorf("audit runtime is nil")
 	}
 
+	hmacCheckpointConfig := runtime.currentHMACCheckpointConfig()
+	if hmacCheckpointConfig.Enabled {
+		rawSecretBytes, err := runtime.loadCheckpointSecretBytes(ctx)
+		if err != nil {
+			return err
+		}
+		defer zeroSecretBytes(rawSecretBytes)
+
+		anchor, anchorFound, err := loadAuditLedgerAnchor(runtime.anchorPath, rawSecretBytes)
+		if err != nil {
+			return err
+		}
+		if anchorFound {
+			if loaded, err := runtime.loadFromAnchorIfFileStateMatches(anchor, rotationSettings); err != nil {
+				return err
+			} else if loaded {
+				return nil
+			}
+		}
+		return runtime.loadByScanning(ctx, rotationSettings, rawSecretBytes)
+	}
+
+	return runtime.loadByScanning(ctx, rotationSettings, nil)
+}
+
+func (runtime *Runtime) loadByScanning(ctx context.Context, rotationSettings ledger.RotationSettings, rawSecretBytes []byte) error {
+	if runtime == nil {
+		return fmt.Errorf("audit runtime is nil")
+	}
+
 	var (
 		lastAuditSequence int64
 		lastAuditHash     string
@@ -104,11 +134,14 @@ func (runtime *Runtime) Load(ctx context.Context, rotationSettings ledger.Rotati
 		return nil
 	}
 
-	rawSecretBytes, err := runtime.loadCheckpointSecretBytes(ctx)
-	if err != nil {
-		return err
+	if rawSecretBytes == nil {
+		loadedSecretBytes, err := runtime.loadCheckpointSecretBytes(ctx)
+		if err != nil {
+			return err
+		}
+		rawSecretBytes = loadedSecretBytes
+		defer zeroSecretBytes(rawSecretBytes)
 	}
-	defer zeroSecretBytes(rawSecretBytes)
 
 	anchor, anchorFound, err := runtime.loadAndVerifyAnchor(rawSecretBytes, uint64(lastAuditSequence), lastAuditHash)
 	if err != nil {
@@ -136,6 +169,53 @@ func (runtime *Runtime) Load(ctx context.Context, rotationSettings ledger.Rotati
 	runtime.eventsSinceCheckpoint = eventsSinceCheckpoint
 	runtime.mu.Unlock()
 	return nil
+}
+
+func (runtime *Runtime) loadFromAnchorIfFileStateMatches(anchor auditLedgerAnchor, rotationSettings ledger.RotationSettings) (bool, error) {
+	if runtime.anchorPath == "" || runtime.path == "" {
+		return false, nil
+	}
+	if rotationSettings.RotateAtBytes > 0 && segmentedManifestHasEntries(rotationSettings.ManifestPath) {
+		return false, nil
+	}
+	activeFileState, err := ledger.ReadFileState(runtime.path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("read audit ledger file state: %w", err)
+	}
+	if anchor.ActiveFileState != activeFileState {
+		return false, nil
+	}
+	if err := runtime.primeAppendCacheFromAnchor(anchor); err != nil {
+		return false, err
+	}
+	runtime.mu.Lock()
+	runtime.sequence = anchor.AuditSequence
+	runtime.lastHash = anchor.LastEventHash
+	runtime.eventsSinceCheckpoint = anchor.EventsSinceCheckpoint
+	runtime.mu.Unlock()
+	return true, nil
+}
+
+func (runtime *Runtime) primeAppendCacheFromAnchor(anchor auditLedgerAnchor) error {
+	if runtime.path == "" {
+		return nil
+	}
+	fileHandle, err := os.Open(runtime.path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("open audit ledger for anchor cache prime: %w", err)
+	}
+	defer fileHandle.Close()
+	lastSequence := int64(anchor.AuditSequence)
+	if runtime.ledgerRuntime != nil {
+		return runtime.ledgerRuntime.PrimeAppendChainState(runtime.path, fileHandle, lastSequence, anchor.LastEventHash)
+	}
+	return ledger.PrimeAppendChainState(runtime.path, fileHandle, lastSequence, anchor.LastEventHash)
 }
 
 func (runtime *Runtime) Record(eventType string, sessionID string, data map[string]interface{}) (string, error) {
@@ -295,16 +375,16 @@ func (runtime *Runtime) loadAndVerifyAnchor(key []byte, lastAuditSequence uint64
 				lastAuditSequence,
 			)
 		}
-		activeSizeBytes, err := runtime.activeLedgerSizeBytes()
+		activeFileState, err := runtime.activeLedgerFileState()
 		if err != nil {
 			return auditLedgerAnchor{}, true, err
 		}
-		if anchor.ActiveSizeBytes != activeSizeBytes {
+		if anchor.ActiveFileState != activeFileState {
 			return auditLedgerAnchor{}, true, fmt.Errorf(
 				"%w: audit ledger anchor active size mismatch (anchor bytes=%d, ledger bytes=%d)",
 				ledger.ErrLedgerIntegrity,
 				anchor.ActiveSizeBytes,
-				activeSizeBytes,
+				activeFileState.Size,
 			)
 		}
 		return anchor, true, nil
@@ -326,26 +406,33 @@ func (runtime *Runtime) storeAnchorLocked() error {
 }
 
 func (runtime *Runtime) storeAnchor(key []byte, auditSequence uint64, lastEventHash string, eventsSinceCheckpoint int) error {
-	activeSizeBytes, err := runtime.activeLedgerSizeBytes()
+	activeFileState, err := runtime.activeLedgerFileState()
 	if err != nil {
 		return err
 	}
-	return storeAuditLedgerAnchor(runtime.anchorPath, key, runtime.now().UTC(), auditSequence, lastEventHash, eventsSinceCheckpoint, activeSizeBytes)
+	return storeAuditLedgerAnchor(runtime.anchorPath, key, runtime.now().UTC(), auditSequence, lastEventHash, eventsSinceCheckpoint, activeFileState)
 }
 
-func (runtime *Runtime) activeLedgerSizeBytes() (int64, error) {
-	activeSizeBytes := int64(0)
-	if runtime.path != "" {
-		fileInfo, err := os.Stat(runtime.path)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return 0, fmt.Errorf("stat audit ledger for anchor: %w", err)
-			}
-		} else {
-			activeSizeBytes = fileInfo.Size()
-		}
+func (runtime *Runtime) activeLedgerFileState() (ledger.FileState, error) {
+	if runtime.path == "" {
+		return ledger.FileState{}, nil
 	}
-	return activeSizeBytes, nil
+	fileState, err := ledger.ReadFileState(runtime.path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ledger.FileState{}, nil
+		}
+		return ledger.FileState{}, fmt.Errorf("stat audit ledger for anchor: %w", err)
+	}
+	return fileState, nil
+}
+
+func segmentedManifestHasEntries(path string) bool {
+	if path == "" {
+		return false
+	}
+	fileInfo, err := os.Stat(path)
+	return err == nil && fileInfo.Size() > 0
 }
 
 func (runtime *Runtime) currentHMACCheckpointConfig() config.AuditLedgerHMACCheckpoint {

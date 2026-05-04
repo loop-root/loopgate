@@ -175,6 +175,9 @@ Names can change during implementation; the dependency shape should not.
 - When HMAC checkpoints are enabled, the runtime writes a signed local head
   anchor after successful appends and compares it on startup before trusting the
   loaded head.
+- The anchor fast path is limited to the active-file case where the OS file
+  state still matches the signed anchor. Rotated ledgers fall back to the full
+  startup verification path until a separate sealed-segment state digest exists.
 - Checkpoint secrets are zeroed after use by the caller that loads them.
 - Tenancy is resolved before entering audit append serialization.
 - Diagnostic text logs remain derived from successful authoritative audit

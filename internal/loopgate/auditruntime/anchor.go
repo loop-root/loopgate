@@ -16,13 +16,14 @@ import (
 const auditLedgerAnchorSchemaVersion = 1
 
 type auditLedgerAnchor struct {
-	V                     int    `json:"v"`
-	UpdatedAt             string `json:"updated_at"`
-	AuditSequence         uint64 `json:"audit_sequence"`
-	LastEventHash         string `json:"last_event_hash"`
-	EventsSinceCheckpoint int    `json:"events_since_checkpoint"`
-	ActiveSizeBytes       int64  `json:"active_size_bytes"`
-	HMACSHA256            string `json:"hmac_sha256"`
+	V                     int              `json:"v"`
+	UpdatedAt             string           `json:"updated_at"`
+	AuditSequence         uint64           `json:"audit_sequence"`
+	LastEventHash         string           `json:"last_event_hash"`
+	EventsSinceCheckpoint int              `json:"events_since_checkpoint"`
+	ActiveSizeBytes       int64            `json:"active_size_bytes"`
+	ActiveFileState       ledger.FileState `json:"active_file_state"`
+	HMACSHA256            string           `json:"hmac_sha256"`
 }
 
 func loadAuditLedgerAnchor(path string, key []byte) (auditLedgerAnchor, bool, error) {
@@ -43,7 +44,7 @@ func loadAuditLedgerAnchor(path string, key []byte) (auditLedgerAnchor, bool, er
 	return anchor, true, nil
 }
 
-func storeAuditLedgerAnchor(path string, key []byte, now time.Time, auditSequence uint64, lastEventHash string, eventsSinceCheckpoint int, activeSizeBytes int64) error {
+func storeAuditLedgerAnchor(path string, key []byte, now time.Time, auditSequence uint64, lastEventHash string, eventsSinceCheckpoint int, activeFileState ledger.FileState) error {
 	if path == "" {
 		return nil
 	}
@@ -53,7 +54,8 @@ func storeAuditLedgerAnchor(path string, key []byte, now time.Time, auditSequenc
 		AuditSequence:         auditSequence,
 		LastEventHash:         lastEventHash,
 		EventsSinceCheckpoint: eventsSinceCheckpoint,
-		ActiveSizeBytes:       activeSizeBytes,
+		ActiveSizeBytes:       activeFileState.Size,
+		ActiveFileState:       activeFileState,
 	}
 	anchor.HMACSHA256 = computeAuditLedgerAnchorHMACHex(anchor, key)
 
@@ -90,6 +92,9 @@ func verifyAuditLedgerAnchor(anchor auditLedgerAnchor, key []byte) error {
 	if anchor.EventsSinceCheckpoint < 0 {
 		return fmt.Errorf("%w: audit ledger anchor has negative events_since_checkpoint", ledger.ErrLedgerIntegrity)
 	}
+	if anchor.ActiveFileState.Size != anchor.ActiveSizeBytes {
+		return fmt.Errorf("%w: audit ledger anchor active file size mismatch", ledger.ErrLedgerIntegrity)
+	}
 	storedMAC, err := hex.DecodeString(anchor.HMACSHA256)
 	if err != nil {
 		return fmt.Errorf("%w: audit ledger anchor hmac hex: %v", ledger.ErrLedgerIntegrity, err)
@@ -105,11 +110,15 @@ func verifyAuditLedgerAnchor(anchor auditLedgerAnchor, key []byte) error {
 }
 
 func computeAuditLedgerAnchorHMACHex(anchor auditLedgerAnchor, key []byte) string {
-	message := fmt.Appendf(nil, "loopgate-audit-ledger-anchor-v1\n%d\n%s\n%d\n%d\n%s\n",
+	message := fmt.Appendf(nil, "loopgate-audit-ledger-anchor-v1\n%d\n%s\n%d\n%d\n%d\n%d\n%d\n%d\n%s\n",
 		anchor.AuditSequence,
 		anchor.LastEventHash,
 		anchor.EventsSinceCheckpoint,
-		anchor.ActiveSizeBytes,
+		anchor.ActiveFileState.Size,
+		anchor.ActiveFileState.Device,
+		anchor.ActiveFileState.Inode,
+		anchor.ActiveFileState.ChangeTimeSeconds,
+		anchor.ActiveFileState.ChangeTimeNanos,
 		anchor.UpdatedAt,
 	)
 	mac := hmac.New(sha256.New, key)
