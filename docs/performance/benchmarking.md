@@ -39,6 +39,11 @@ go test -run=^$ -bench=. -benchmem -benchtime=5s ./internal/loopgate ./internal/
 - parallel ledger append with fsync
 - serial ledger append without fsync to isolate JSON/hash/chain overhead
 
+Follow-up profile:
+
+- `docs/performance/capability_approval_profile_2026-05-04.md` records the
+  first CPU/allocation profile for capability execution and approval creation.
+
 ## Reading The Numbers
 
 Go always reports `ns/op`. These benchmarks also report:

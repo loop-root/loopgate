@@ -78,6 +78,8 @@ separate `ARCHIVED` repository.
 
 - `docs/performance/benchmarking.md` — current local benchmark coverage,
   commands, metric meanings, and change rules
+- `docs/performance/capability_approval_profile_2026-05-04.md` — first
+  profile-backed hotspot report for capability execution and approval creation
 
 Historical benchmark notes live in the separate `ARCHIVED` repository. Extracted continuity subsystem material now lives in the sibling `continuity` repository.
 
