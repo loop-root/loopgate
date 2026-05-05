@@ -6,6 +6,7 @@ import (
 	"io"
 	"loopgate/internal/ledger"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -43,7 +44,7 @@ func TestInspectSite_HTTPSReturnsCertificateInfo(t *testing.T) {
 	}
 }
 
-func TestInspectSite_UntrustedHTTPSReturnsCertificateWithoutDraftSuggestion(t *testing.T) {
+func TestInspectSite_UntrustedHTTPSReturnsNoDraftSuggestion(t *testing.T) {
 	repoRoot := t.TempDir()
 	providerServer := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -60,8 +61,8 @@ func TestInspectSite_UntrustedHTTPSReturnsCertificateWithoutDraftSuggestion(t *t
 	if !inspectionResponse.HTTPS {
 		t.Fatalf("expected https inspection, got %#v", inspectionResponse)
 	}
-	if inspectionResponse.Certificate == nil || inspectionResponse.Certificate.Subject == "" {
-		t.Fatalf("expected certificate details for invalid TLS, got %#v", inspectionResponse)
+	if inspectionResponse.Certificate != nil {
+		t.Fatalf("expected invalid TLS inspection to omit certificate details, got %#v", inspectionResponse)
 	}
 	if inspectionResponse.TLSValid {
 		t.Fatalf("expected untrusted test TLS to remain invalid, got %#v", inspectionResponse)
@@ -71,6 +72,41 @@ func TestInspectSite_UntrustedHTTPSReturnsCertificateWithoutDraftSuggestion(t *t
 	}
 	if inspectionResponse.DraftSuggestion != nil {
 		t.Fatalf("expected invalid TLS inspection to omit draft suggestion, got %#v", inspectionResponse)
+	}
+}
+
+func TestInspectSite_RejectsPrivateNetworkTarget(t *testing.T) {
+	repoRoot := t.TempDir()
+	client, _, _ := startLoopgateServer(t, repoRoot, loopgateHTTPPolicyYAML(false))
+
+	_, err := client.InspectSite(context.Background(), controlapipkg.SiteInspectionRequest{URL: "https://10.0.0.1/status"})
+	if err == nil {
+		t.Fatal("expected private network target to be rejected")
+	}
+	if !strings.Contains(err.Error(), controlapipkg.DenialCodeSiteInspectionNetworkDenied) {
+		t.Fatalf("expected network-denied error, got %v", err)
+	}
+}
+
+func TestSiteInspectionIPAllowed(t *testing.T) {
+	testCases := []struct {
+		name    string
+		rawIP   string
+		allowed bool
+	}{
+		{name: "loopback", rawIP: "127.0.0.1", allowed: true},
+		{name: "public", rawIP: "8.8.8.8", allowed: true},
+		{name: "private", rawIP: "10.0.0.1", allowed: false},
+		{name: "metadata link local", rawIP: "169.254.169.254", allowed: false},
+		{name: "unspecified", rawIP: "0.0.0.0", allowed: false},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if allowed := siteInspectionIPAllowed(net.ParseIP(testCase.rawIP)); allowed != testCase.allowed {
+				t.Fatalf("expected allowed=%v for %s, got %v", testCase.allowed, testCase.rawIP, allowed)
+			}
+		})
 	}
 }
 

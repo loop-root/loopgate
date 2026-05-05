@@ -29,6 +29,7 @@ var (
 	errSiteTrustDraftUnavailable        = fmt.Errorf("site_trust_draft_not_available")
 	errSiteTrustDraftAlreadyExists      = fmt.Errorf("site_trust_draft_exists")
 	errSiteInspectionContentUnsupported = fmt.Errorf("site_inspection_unsupported_content_type")
+	errSiteInspectionNetworkDenied      = fmt.Errorf("site_inspection_network_denied")
 )
 
 type validatedSiteTarget struct {
@@ -187,7 +188,7 @@ func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite val
 		Target: validatedSite,
 		HTTPS:  validatedSite.Scheme == "https",
 	}
-	inspectionClient := server.siteInspectionHTTPClient(validatedSite, &inspected)
+	inspectionClient := server.siteInspectionHTTPClient(validatedSite)
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, validatedSite.NormalizedURL, nil)
 	if err != nil {
 		return inspectedSite{}, fmt.Errorf("build inspection request: %w", err)
@@ -195,7 +196,7 @@ func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite val
 
 	httpResponse, err := inspectionClient.Do(httpRequest)
 	if err != nil {
-		if inspected.HTTPS && inspected.Certificate != nil && !inspected.TLSValid {
+		if inspected.HTTPS && isSiteTLSVerificationError(err) {
 			return inspected, nil
 		}
 		return inspectedSite{}, fmt.Errorf("inspect site request failed: %w", err)
@@ -220,9 +221,7 @@ func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite val
 		if inspected.Certificate == nil {
 			inspected.Certificate = certificateInfoForLeaf(httpResponse.TLS.PeerCertificates[0])
 		}
-		if !inspected.TLSValid {
-			inspected.TLSValid = verifySiteCertificate(validatedSite.Hostname, httpResponse.TLS.PeerCertificates, nil) == nil
-		}
+		inspected.TLSValid = true
 	}
 	if validatedSite.Scheme == "http" && isLocalhostHost(validatedSite.Hostname) {
 		inspected.TLSValid = false
@@ -230,7 +229,7 @@ func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite val
 	return inspected, nil
 }
 
-func (server *Server) siteInspectionHTTPClient(validatedSite validatedSiteTarget, inspected *inspectedSite) *http.Client {
+func (server *Server) siteInspectionHTTPClient(validatedSite validatedSiteTarget) *http.Client {
 	timeout := 10 * time.Second
 	policyRuntime := server.currentPolicyRuntime()
 	if policyRuntime.httpClient != nil && policyRuntime.httpClient.Timeout > 0 {
@@ -242,23 +241,15 @@ func (server *Server) siteInspectionHTTPClient(validatedSite validatedSiteTarget
 			transport = configuredTransport.Clone()
 		}
 	}
-	if validatedSite.Scheme == "https" {
-		if transport.TLSClientConfig == nil {
-			transport.TLSClientConfig = &tls.Config{}
-		} else {
-			transport.TLSClientConfig = transport.TLSClientConfig.Clone()
-		}
-		rootPool := transport.TLSClientConfig.RootCAs
-		transport.TLSClientConfig.InsecureSkipVerify = true
-		transport.TLSClientConfig.VerifyConnection = func(connectionState tls.ConnectionState) error {
-			if len(connectionState.PeerCertificates) > 0 {
-				inspected.Certificate = certificateInfoForLeaf(connectionState.PeerCertificates[0])
-			}
-			verifyErr := verifySiteCertificate(validatedSite.Hostname, connectionState.PeerCertificates, rootPool)
-			inspected.TLSValid = verifyErr == nil
-			return verifyErr
-		}
+	if transport.TLSClientConfig != nil {
+		transport.TLSClientConfig = transport.TLSClientConfig.Clone()
+		transport.TLSClientConfig.InsecureSkipVerify = false
 	}
+	transport.Proxy = nil
+	transport.DialContext = siteInspectionDialContext(validatedSite)
+	transport.DialTLSContext = nil
+	//nolint:staticcheck // Clear the deprecated hook so legacy transports cannot bypass siteInspectionDialContext.
+	transport.DialTLS = nil
 	return &http.Client{
 		Timeout:   timeout,
 		Transport: transport,
@@ -281,6 +272,80 @@ func (server *Server) siteInspectionHTTPClient(validatedSite validatedSiteTarget
 	}
 }
 
+func siteInspectionDialContext(validatedSite validatedSiteTarget) func(context.Context, string, string) (net.Conn, error) {
+	dialer := &net.Dialer{}
+	return func(ctx context.Context, network string, address string) (net.Conn, error) {
+		dialAddress, err := siteInspectionDialAddress(ctx, net.DefaultResolver, validatedSite, address)
+		if err != nil {
+			return nil, err
+		}
+		return dialer.DialContext(ctx, network, dialAddress)
+	}
+}
+
+func siteInspectionDialAddress(ctx context.Context, resolver *net.Resolver, validatedSite validatedSiteTarget, address string) (string, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return "", fmt.Errorf("%w: malformed dial address", errSiteInspectionNetworkDenied)
+	}
+	if !strings.EqualFold(host, validatedSite.Hostname) {
+		return "", fmt.Errorf("%w: dial host changed", errSiteInspectionNetworkDenied)
+	}
+
+	if parsedIP := net.ParseIP(host); parsedIP != nil {
+		if !siteInspectionIPAllowed(parsedIP) {
+			return "", fmt.Errorf("%w: host resolves to private or reserved address", errSiteInspectionNetworkDenied)
+		}
+		return net.JoinHostPort(parsedIP.String(), port), nil
+	}
+
+	resolvedAddresses, err := resolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return "", fmt.Errorf("resolve site inspection host: %w", err)
+	}
+	if len(resolvedAddresses) == 0 {
+		return "", fmt.Errorf("%w: host did not resolve", errSiteInspectionNetworkDenied)
+	}
+	for _, resolvedAddress := range resolvedAddresses {
+		if !siteInspectionIPAllowed(resolvedAddress.IP) {
+			return "", fmt.Errorf("%w: host resolves to private or reserved address", errSiteInspectionNetworkDenied)
+		}
+	}
+	return net.JoinHostPort(resolvedAddresses[0].IP.String(), port), nil
+}
+
+func siteInspectionIPAllowed(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	return !ip.IsPrivate() &&
+		!ip.IsUnspecified() &&
+		!ip.IsLinkLocalUnicast() &&
+		!ip.IsLinkLocalMulticast() &&
+		!ip.IsInterfaceLocalMulticast() &&
+		!ip.IsMulticast()
+}
+
+func isSiteTLSVerificationError(err error) bool {
+	var certificateVerificationError *tls.CertificateVerificationError
+	if errors.As(err, &certificateVerificationError) {
+		return true
+	}
+	var hostnameError x509.HostnameError
+	if errors.As(err, &hostnameError) {
+		return true
+	}
+	var unknownAuthorityError x509.UnknownAuthorityError
+	if errors.As(err, &unknownAuthorityError) {
+		return true
+	}
+	var certificateInvalidError x509.CertificateInvalidError
+	return errors.As(err, &certificateInvalidError)
+}
+
 func certificateInfoForLeaf(leafCertificate *x509.Certificate) *controlapipkg.SiteCertificateInfo {
 	if leafCertificate == nil {
 		return nil
@@ -294,32 +359,6 @@ func certificateInfoForLeaf(leafCertificate *x509.Certificate) *controlapipkg.Si
 		NotAfterUTC:       leafCertificate.NotAfter.UTC().Format(time.RFC3339Nano),
 		FingerprintSHA256: hex.EncodeToString(fingerprint[:]),
 	}
-}
-
-func verifySiteCertificate(hostname string, peerCertificates []*x509.Certificate, rootPool *x509.CertPool) error {
-	if len(peerCertificates) == 0 {
-		return fmt.Errorf("missing peer certificate")
-	}
-	if rootPool == nil {
-		systemRootPool, err := x509.SystemCertPool()
-		if err != nil || systemRootPool == nil {
-			systemRootPool = x509.NewCertPool()
-		}
-		rootPool = systemRootPool
-	}
-	intermediatePool := x509.NewCertPool()
-	for _, intermediateCertificate := range peerCertificates[1:] {
-		intermediatePool.AddCert(intermediateCertificate)
-	}
-	leafCertificate := peerCertificates[0]
-	if _, err := leafCertificate.Verify(x509.VerifyOptions{
-		Roots:         rootPool,
-		Intermediates: intermediatePool,
-		CurrentTime:   time.Now(),
-	}); err != nil {
-		return err
-	}
-	return leafCertificate.VerifyHostname(hostname)
 }
 
 func buildSiteTrustDraftSuggestion(inspected inspectedSite) (controlapipkg.SiteTrustDraftSuggestion, error) {
@@ -571,7 +610,7 @@ func writeSiteTrustDraftFile(path string, draftConfig connectionConfigFile) erro
 
 func siteInspectionHTTPStatus(err error) int {
 	switch {
-	case errors.Is(err, errSiteURLInvalid), errors.Is(err, errSiteHTTPSRequired), errors.Is(err, errSiteInspectionContentUnsupported):
+	case errors.Is(err, errSiteURLInvalid), errors.Is(err, errSiteHTTPSRequired), errors.Is(err, errSiteInspectionContentUnsupported), errors.Is(err, errSiteInspectionNetworkDenied):
 		return http.StatusBadRequest
 	case errors.Is(err, errSiteTrustDraftUnavailable):
 		return http.StatusConflict
@@ -594,6 +633,8 @@ func siteTrustDenialCode(err error) string {
 		return controlapipkg.DenialCodeSiteTrustDraftExists
 	case errors.Is(err, errSiteInspectionContentUnsupported):
 		return controlapipkg.DenialCodeSiteInspectionUnsupportedType
+	case errors.Is(err, errSiteInspectionNetworkDenied):
+		return controlapipkg.DenialCodeSiteInspectionNetworkDenied
 	default:
 		return controlapipkg.DenialCodeExecutionFailed
 	}
