@@ -39,12 +39,18 @@ type mcpGatewayJSONRPCResponseEnvelope struct {
 	Error   *mcpGatewayJSONRPCError `json:"error,omitempty"`
 }
 
-func buildMCPGatewayJSONRPCFrame(messageBodyBytes []byte) []byte {
+func buildMCPGatewayJSONRPCFrame(messageBodyBytes []byte) ([]byte, error) {
+	if len(messageBodyBytes) > mcpGatewayMaxMessageBodyBytes {
+		return nil, fmt.Errorf("mcp gateway frame body exceeds maximum size")
+	}
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(messageBodyBytes))
-	frame := make([]byte, 0, len(header)+len(messageBodyBytes))
+	if len(header) > mcpGatewayMaxMessageHeaderBytes {
+		return nil, fmt.Errorf("mcp gateway frame header exceeds maximum size")
+	}
+	frame := make([]byte, 0, len(header))
 	frame = append(frame, []byte(header)...)
 	frame = append(frame, messageBodyBytes...)
-	return frame
+	return frame, nil
 }
 
 func writeMCPGatewayJSONRPCFrame(launchedServer *mcpGatewayLaunchedServer, messageBodyBytes []byte) error {
@@ -54,7 +60,11 @@ func writeMCPGatewayJSONRPCFrame(launchedServer *mcpGatewayLaunchedServer, messa
 	if len(messageBodyBytes) == 0 {
 		return fmt.Errorf("mcp gateway message body is required")
 	}
-	if _, err := launchedServer.StdinWriter.Write(buildMCPGatewayJSONRPCFrame(messageBodyBytes)); err != nil {
+	frameBytes, err := buildMCPGatewayJSONRPCFrame(messageBodyBytes)
+	if err != nil {
+		return err
+	}
+	if _, err := launchedServer.StdinWriter.Write(frameBytes); err != nil {
 		return fmt.Errorf("write mcp gateway frame: %w", err)
 	}
 	return nil

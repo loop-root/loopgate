@@ -83,6 +83,7 @@ const (
 	DenialCodeSiteTrustDraftNotAvailable    = "site_trust_draft_not_available"
 	DenialCodeSiteTrustDraftExists          = "site_trust_draft_exists"
 	DenialCodeSiteInspectionUnsupportedType = "site_inspection_unsupported_content_type"
+	DenialCodeSiteInspectionNetworkDenied   = "site_inspection_network_denied"
 	DenialCodeSandboxPathInvalid            = "sandbox_path_invalid"
 	DenialCodeSandboxSourceUnavailable      = "sandbox_source_unavailable"
 	DenialCodeSandboxDestinationExists      = "sandbox_destination_exists"
