@@ -52,7 +52,7 @@ the review either missed or described imprecisely.
 | F-12 | Valid | Text redaction is best effort. Structured-field redaction is the real boundary and should be easier to enforce. |
 | F-13 | Plausible | Repeated symlink resolution may be a throughput cost. Validate with benchmarks before optimizing. |
 | F-14 | Plausible | `openat` traversal shape is correct. The suggested flag/test cleanup is reasonable but not urgent. |
-| F-15 | Valid | Install wrapper sets `LOOPGATE_REPO_ROOT` to a versioned install dir, so audit state is split by version. Fix before production claims. |
+| F-15 | Remediated | Install wrapper now points `LOOPGATE_REPO_ROOT` at a stable managed state root while binaries remain versioned. The installer migrates legacy per-version `runtime/`, `core/`, and `config/` into the stable root on first upgrade. |
 | F-16 | Valid | `--yes` makes quickstart install and load the LaunchAgent. That should require explicit consent or much louder output. |
 | F-17 | Valid | Checksum-from-same-release verifies corruption, not release provenance. Archive signatures are the stronger story. |
 | F-18 | Valid | `internal/loopgate` still has over 200 top-level Go files. Continue extracting cohesive runtime domains to sibling packages. |
@@ -64,11 +64,10 @@ the review either missed or described imprecisely.
 
 ## Remediation order
 
-1. Fix F-15 so operator state and audit history survive binary upgrades.
-2. Fix F-07 with ledger canonicalization goldens and unsafe integer guards.
-3. Start F-18 with low-risk package moves that preserve dependency direction.
-4. Fix F-01 and F-16 for clearer operator behavior.
-5. Reassess F-04 with the existing benchmark harness and add control-plane
+1. Fix F-07 with ledger canonicalization goldens and unsafe integer guards.
+2. Continue F-18 with low-risk package moves that preserve dependency direction.
+3. Fix F-01 and F-16 for clearer operator behavior.
+4. Reassess F-04 with the existing benchmark harness and add control-plane
    state counters if the lock/prune path shows up under load.
 
 ## God-package extraction rule

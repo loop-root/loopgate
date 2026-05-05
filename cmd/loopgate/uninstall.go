@@ -119,6 +119,12 @@ type uninstallPurgeResult struct {
 	ManagedInstallRootRemoved bool
 }
 
+type managedInstallRootInfo struct {
+	Present     bool
+	InstallRoot string
+	StateRoot   string
+}
+
 func purgeLoopgateLocalState(ctx context.Context, repoRoot string) (uninstallPurgeResult, error) {
 	result := uninstallPurgeResult{}
 
@@ -169,9 +175,11 @@ func purgeLoopgateLocalState(ctx context.Context, repoRoot string) (uninstallPur
 		}
 	}
 
-	if managedInstallRootPresent(repoRoot) {
-		if err := os.RemoveAll(repoRoot); err != nil {
-			return result, fmt.Errorf("remove managed install root %s: %w", repoRoot, err)
+	managedInfo := loadManagedInstallRootInfo(repoRoot)
+	if managedInfo.Present {
+		removeRoot := managedInfoRemovalRoot(repoRoot, managedInfo)
+		if err := os.RemoveAll(removeRoot); err != nil {
+			return result, fmt.Errorf("remove managed install root %s: %w", removeRoot, err)
 		}
 		result.ManagedInstallRootRemoved = true
 	}
@@ -181,10 +189,44 @@ func purgeLoopgateLocalState(ctx context.Context, repoRoot string) (uninstallPur
 }
 
 func managedInstallRootPresent(repoRoot string) bool {
-	if _, err := os.Stat(filepath.Join(repoRoot, managedInstallRootMarkerFilename)); err == nil {
-		return true
+	return loadManagedInstallRootInfo(repoRoot).Present
+}
+
+func loadManagedInstallRootInfo(repoRoot string) managedInstallRootInfo {
+	markerBytes, err := os.ReadFile(filepath.Join(repoRoot, managedInstallRootMarkerFilename))
+	if err != nil {
+		return managedInstallRootInfo{}
 	}
-	return false
+	info := managedInstallRootInfo{Present: true}
+	for _, line := range strings.Split(string(markerBytes), "\n") {
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		switch strings.TrimSpace(key) {
+		case "install_root":
+			info.InstallRoot = filepath.Clean(strings.TrimSpace(value))
+		case "state_root":
+			info.StateRoot = filepath.Clean(strings.TrimSpace(value))
+		}
+	}
+	return info
+}
+
+func managedInfoRemovalRoot(repoRoot string, info managedInstallRootInfo) string {
+	cleanRepoRoot := filepath.Clean(repoRoot)
+	cleanInstallRoot := filepath.Clean(strings.TrimSpace(info.InstallRoot))
+	cleanStateRoot := filepath.Clean(strings.TrimSpace(info.StateRoot))
+	if cleanInstallRoot == "" || cleanInstallRoot == "." || cleanInstallRoot == string(os.PathSeparator) {
+		return cleanRepoRoot
+	}
+	if cleanStateRoot != cleanRepoRoot {
+		return cleanRepoRoot
+	}
+	if filepath.Clean(filepath.Join(cleanInstallRoot, "state")) != cleanRepoRoot {
+		return cleanRepoRoot
+	}
+	return cleanInstallRoot
 }
 
 func removePathIfPresent(path string) (bool, error) {

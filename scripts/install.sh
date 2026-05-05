@@ -13,7 +13,8 @@ By default this script:
   - detects the current OS and CPU architecture
   - resolves the latest GitHub release tag
   - downloads the matching release archive plus checksums
-  - installs a self-contained Loopgate root under ~/.local/share/loopgate/<version>
+  - installs versioned binaries under ~/.local/share/loopgate/versions/<version>
+  - keeps operator state under ~/.local/share/loopgate/state
   - installs wrapper commands under ~/.local/bin/
 EOF
 }
@@ -83,29 +84,102 @@ write_wrapper() {
   local wrapper_path="$1"
   local tool_name="$2"
   local install_dir="$3"
+  local state_root="$4"
   cat > "$wrapper_path" <<EOF
 #!/bin/sh
 set -eu
 LOOPGATE_INSTALL_ROOT="$install_dir"
-export LOOPGATE_REPO_ROOT="\$LOOPGATE_INSTALL_ROOT"
+LOOPGATE_STATE_ROOT="$state_root"
+export LOOPGATE_REPO_ROOT="\$LOOPGATE_STATE_ROOT"
 exec "\$LOOPGATE_INSTALL_ROOT/bin/$tool_name" "\$@"
 EOF
   chmod 755 "$wrapper_path"
 }
 
 write_install_marker() {
-  local install_dir="$1"
+  local marker_dir="$1"
   local version="$2"
   local repo="$3"
   local os_name="$4"
   local arch_name="$5"
-  cat > "$install_dir/.loopgate-install-root" <<EOF
+  local install_root="$6"
+  local install_dir="$7"
+  local state_root="$8"
+  mkdir -p "$marker_dir"
+  cat > "$marker_dir/.loopgate-install-root" <<EOF
+layout_version=2
 version=$version
 repo=$repo
 os=$os_name
 arch=$arch_name
+install_root=$install_root
+binary_root=$install_dir
+state_root=$state_root
 installed_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
+}
+
+assert_managed_path_safe() {
+  local path="$1"
+  local description="$2"
+  [[ -n "$path" ]] || die "$description must not be empty"
+  [[ "$path" != "/" ]] || die "$description must not be /"
+}
+
+find_legacy_repo_root() {
+  local install_root="$1"
+  local newest=""
+  local candidate
+  for candidate in "$install_root"/*; do
+    [[ -d "$candidate" ]] || continue
+    case "$(basename "$candidate")" in
+      state|versions) continue ;;
+    esac
+    [[ -f "$candidate/.loopgate-install-root" ]] || continue
+    if [[ -z "$newest" || "$candidate/.loopgate-install-root" -nt "$newest/.loopgate-install-root" ]]; then
+      newest="$candidate"
+    fi
+  done
+  printf '%s\n' "$newest"
+}
+
+migrate_legacy_state_if_needed() {
+  local legacy_root="$1"
+  local state_root="$2"
+  [[ -n "$legacy_root" ]] || return 0
+  [[ -d "$legacy_root" ]] || return 0
+
+  mkdir -p "$state_root"
+  if [[ ! -d "$state_root/runtime" && -d "$legacy_root/runtime" ]]; then
+    cp -pR "$legacy_root/runtime" "$state_root/runtime"
+  fi
+  if [[ ! -d "$state_root/core" && -d "$legacy_root/core" ]]; then
+    cp -pR "$legacy_root/core" "$state_root/core"
+  fi
+  if [[ ! -d "$state_root/config" && -d "$legacy_root/config" ]]; then
+    cp -pR "$legacy_root/config" "$state_root/config"
+  fi
+}
+
+seed_state_root() {
+  local payload_dir="$1"
+  local state_root="$2"
+  local policy_path="$state_root/core/policy/policy.yaml"
+  local signature_path="$state_root/core/policy/policy.yaml.sig"
+  local hooks_dir="$state_root/claude/hooks/scripts"
+
+  mkdir -p "$state_root"
+  chmod 700 "$state_root"
+
+  if [[ ! -e "$policy_path" && ! -e "$signature_path" ]]; then
+    mkdir -p "$state_root/core/policy"
+    cp "$payload_dir/core/policy/policy.yaml" "$policy_path"
+    cp "$payload_dir/core/policy/policy.yaml.sig" "$signature_path"
+  fi
+
+  rm -rf "$hooks_dir"
+  mkdir -p "$hooks_dir"
+  cp -R "$payload_dir/claude/hooks/scripts/." "$hooks_dir/"
 }
 
 REPO="loop-root/loopgate"
@@ -194,19 +268,33 @@ tar -C "$EXTRACT_DIR" -xzf "$ARCHIVE_PATH"
 PAYLOAD_DIR="$EXTRACT_DIR/$ARCHIVE_BASENAME"
 [[ -d "$PAYLOAD_DIR" ]] || die "release archive did not contain expected root directory ${ARCHIVE_BASENAME}"
 
-INSTALL_DIR="${INSTALL_ROOT}/${VERSION}"
+VERSIONS_ROOT="${INSTALL_ROOT}/versions"
+INSTALL_DIR="${VERSIONS_ROOT}/${VERSION}"
+STATE_ROOT="${INSTALL_ROOT}/state"
+assert_managed_path_safe "$INSTALL_ROOT" "install root"
+assert_managed_path_safe "$INSTALL_DIR" "versioned install root"
+assert_managed_path_safe "$STATE_ROOT" "state root"
 rm -rf "$INSTALL_DIR"
-mkdir -p "$INSTALL_ROOT" "$BIN_DIR"
+mkdir -p "$VERSIONS_ROOT" "$BIN_DIR"
+LEGACY_REPO_ROOT="$(find_legacy_repo_root "$INSTALL_ROOT")"
 mv "$PAYLOAD_DIR" "$INSTALL_DIR"
-write_install_marker "$INSTALL_DIR" "$VERSION" "$REPO" "$TARGET_OS" "$TARGET_ARCH"
+migrate_legacy_state_if_needed "$LEGACY_REPO_ROOT" "$STATE_ROOT"
+seed_state_root "$INSTALL_DIR" "$STATE_ROOT"
+write_install_marker "$INSTALL_DIR" "$VERSION" "$REPO" "$TARGET_OS" "$TARGET_ARCH" "$INSTALL_ROOT" "$INSTALL_DIR" "$STATE_ROOT"
+write_install_marker "$STATE_ROOT" "$VERSION" "$REPO" "$TARGET_OS" "$TARGET_ARCH" "$INSTALL_ROOT" "$INSTALL_DIR" "$STATE_ROOT"
 
 for tool_name in loopgate loopgate-doctor loopgate-ledger loopgate-policy-admin loopgate-policy-sign; do
-  write_wrapper "$BIN_DIR/$tool_name" "$tool_name" "$INSTALL_DIR"
+  write_wrapper "$BIN_DIR/$tool_name" "$tool_name" "$INSTALL_DIR" "$STATE_ROOT"
 done
 
 printf 'install OK\n'
 printf 'version: %s\n' "$VERSION"
-printf 'install_root: %s\n' "$INSTALL_DIR"
+printf 'install_root: %s\n' "$INSTALL_ROOT"
+printf 'binary_root: %s\n' "$INSTALL_DIR"
+printf 'state_root: %s\n' "$STATE_ROOT"
+if [[ -n "$LEGACY_REPO_ROOT" ]]; then
+  printf 'migrated_legacy_root: %s\n' "$LEGACY_REPO_ROOT"
+fi
 printf 'bin_dir: %s\n' "$BIN_DIR"
 printf 'next_steps:\n'
 printf '  - ensure %s is on PATH\n' "$BIN_DIR"

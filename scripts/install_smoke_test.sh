@@ -45,8 +45,12 @@ export GOCACHE="$GOCACHE_DIR"
 
 ARCHIVE_PATH="$DIST_DIR/loopgate_${VERSION}_${TARGET_OS}_${TARGET_ARCH}.tar.gz"
 CHECKSUMS_PATH="$DIST_DIR/loopgate_${VERSION}_checksums.txt"
-INSTALL_DIR="$HOME_DIR/.local/share/loopgate/$VERSION"
+MANAGED_ROOT="$HOME_DIR/.local/share/loopgate"
+VERSIONED_INSTALL_DIR="$MANAGED_ROOT/versions/$VERSION"
+STATE_ROOT="$MANAGED_ROOT/state"
 BIN_DIR="$HOME_DIR/.local/bin"
+LEGACY_ROOT="$MANAGED_ROOT/vlegacy"
+LEGACY_AUDIT_MARKER="$LEGACY_ROOT/runtime/state/legacy_audit_marker.txt"
 
 [[ -f "$ARCHIVE_PATH" ]] || die "expected release archive at $ARCHIVE_PATH"
 [[ -f "$CHECKSUMS_PATH" ]] || die "expected checksums file at $CHECKSUMS_PATH"
@@ -54,12 +58,20 @@ BIN_DIR="$HOME_DIR/.local/bin"
 export HOME="$HOME_DIR"
 export PATH="$BIN_DIR:$ORIGINAL_PATH"
 
+mkdir -p "$(dirname "$LEGACY_AUDIT_MARKER")"
+printf 'legacy audit state\n' > "$LEGACY_AUDIT_MARKER"
+printf 'version=vlegacy\n' > "$LEGACY_ROOT/.loopgate-install-root"
+
 "$ROOT_DIR/scripts/install.sh" \
   --version "$VERSION" \
   --archive-file "$ARCHIVE_PATH" \
   --checksums-file "$CHECKSUMS_PATH"
 
-[[ -f "$INSTALL_DIR/.loopgate-install-root" ]] || die "missing managed install marker at $INSTALL_DIR/.loopgate-install-root"
+[[ -f "$VERSIONED_INSTALL_DIR/.loopgate-install-root" ]] || die "missing managed install marker at $VERSIONED_INSTALL_DIR/.loopgate-install-root"
+[[ -f "$STATE_ROOT/.loopgate-install-root" ]] || die "missing state install marker at $STATE_ROOT/.loopgate-install-root"
+[[ -f "$STATE_ROOT/core/policy/policy.yaml" ]] || die "missing stable policy at $STATE_ROOT/core/policy/policy.yaml"
+[[ -d "$STATE_ROOT/claude/hooks/scripts" ]] || die "missing stable hook source bundle at $STATE_ROOT/claude/hooks/scripts"
+[[ -f "$STATE_ROOT/runtime/state/legacy_audit_marker.txt" ]] || die "expected legacy runtime state to migrate into stable state root"
 
 cd "$WORK_DIR"
 
@@ -95,7 +107,7 @@ uninstall_output="$(loopgate uninstall --purge -claude-dir "$CLAUDE_DIR")"
 require_contains "$uninstall_output" "uninstall OK" "uninstall output"
 require_contains "$uninstall_output" "removed_managed_install_root: true" "uninstall output"
 
-[[ ! -d "$INSTALL_DIR" ]] || die "expected managed install root to be removed"
+[[ ! -d "$MANAGED_ROOT" ]] || die "expected managed install root to be removed"
 [[ ! -e "$BIN_DIR/loopgate" ]] || die "expected installed loopgate wrapper to be removed"
 [[ ! -e "$CLAUDE_DIR/hooks/loopgate_pretool.py" ]] || die "expected uninstall --purge to remove Loopgate hook script"
 if [[ -f "$CLAUDE_DIR/settings.json" ]] && grep -q 'loopgate_pretool.py' "$CLAUDE_DIR/settings.json"; then

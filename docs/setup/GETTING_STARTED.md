@@ -55,8 +55,9 @@ loopgate status
 loopgate test
 ```
 
-That installs the latest published macOS release under
-`~/.local/share/loopgate/<version>` and installs wrapper commands under
+That installs the latest published macOS release binaries under
+`~/.local/share/loopgate/versions/<version>`, keeps operator state under
+`~/.local/share/loopgate/state`, and installs wrapper commands under
 `~/.local/bin`.
 
 If you prefer a source checkout, the fastest source-first path is still:
