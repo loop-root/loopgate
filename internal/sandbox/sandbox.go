@@ -228,6 +228,9 @@ func ResolveHostSource(rawHostPath string) (string, fs.FileInfo, error) {
 		}
 		return "", nil, fmt.Errorf("%w: evaluate source symlinks: %v", ErrSandboxSourceUnavailable, err)
 	}
+	if !sandboxPathExpressionPattern.MatchString(resolvedPath) {
+		return "", nil, fmt.Errorf("%w: source path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	fileInfo, err := os.Stat(resolvedPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -255,6 +258,9 @@ func ResolveHostDestination(rawHostPath string) (string, error) {
 		}
 		return "", fmt.Errorf("%w: resolve destination parent: %v", ErrSandboxPathInvalid, err)
 	}
+	if !sandboxPathExpressionPattern.MatchString(resolvedParentPath) {
+		return "", fmt.Errorf("%w: destination parent contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	parentInfo, err := os.Stat(resolvedParentPath)
 	if err != nil {
 		return "", fmt.Errorf("%w: stat destination parent: %v", ErrSandboxPathInvalid, err)
@@ -262,7 +268,11 @@ func ResolveHostDestination(rawHostPath string) (string, error) {
 	if !parentInfo.IsDir() {
 		return "", fmt.Errorf("%w: destination parent is not a directory", ErrSandboxPathInvalid)
 	}
-	return filepath.Join(resolvedParentPath, filepath.Base(absolutePath)), nil
+	resolvedDestinationPath := filepath.Join(resolvedParentPath, filepath.Base(absolutePath))
+	if !sandboxPathExpressionPattern.MatchString(resolvedDestinationPath) {
+		return "", fmt.Errorf("%w: destination path contains unsupported characters", ErrSandboxPathInvalid)
+	}
+	return resolvedDestinationPath, nil
 }
 
 func CopyPathAtomic(sourcePath string, destinationPath string) (string, error) {
