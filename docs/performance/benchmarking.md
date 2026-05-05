@@ -41,6 +41,10 @@ go test -run=^$ -bench=. -benchmem -benchtime=5s ./internal/loopgate ./internal/
 - serial ledger append without fsync to isolate JSON/hash/chain overhead
 - ledger event-line preparation and canonicalization overhead
 
+`internal/safety/safepath_benchmark_test.go` covers:
+
+- existing-file strict path explanation overhead
+
 Follow-up profile:
 
 - `docs/performance/capability_approval_profile_2026-05-04.md` records the

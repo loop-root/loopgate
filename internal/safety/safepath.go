@@ -11,6 +11,8 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+var evalSymlinks = filepath.EvalSymlinks
+
 func rejectNullByte(rawPath string) error {
 	if strings.ContainsRune(rawPath, 0) {
 		return fmt.Errorf("path contains null byte")
@@ -33,7 +35,7 @@ func resolvePathStrict(path string) (string, error) {
 	}
 
 	// Fast path: the full path already exists — resolve it directly.
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+	if resolved, err := evalSymlinks(path); err == nil {
 		return resolved, nil
 	}
 
@@ -47,7 +49,7 @@ func resolvePathStrict(path string) (string, error) {
 		return "", fmt.Errorf("invalid_basename: %w", err)
 	}
 
-	resolvedParent, err := filepath.EvalSymlinks(parentDir)
+	resolvedParent, err := evalSymlinks(parentDir)
 	if err != nil {
 		return "", fmt.Errorf("parent_directory_not_resolved: %w", err)
 	}
@@ -73,6 +75,14 @@ func validateBaseName(name string) error {
 }
 
 func cleanAbs(path string) (string, error) {
+	return cleanAbsWithSymlinkResolution(path, true)
+}
+
+func cleanAbsNoSymlink(path string) (string, error) {
+	return cleanAbsWithSymlinkResolution(path, false)
+}
+
+func cleanAbsWithSymlinkResolution(path string, resolveSymlinks bool) (string, error) {
 	if path == "" {
 		return "", errors.New("empty path")
 	}
@@ -87,9 +97,11 @@ func cleanAbs(path string) (string, error) {
 
 	// Canonicalize symlinked prefixes when possible (macOS often returns /var paths)
 	// so allow/deny comparisons match resolved targets (e.g., /var -> /private/var).
-	if symResolved, symErr := filepath.EvalSymlinks(absPath); symErr == nil {
-		if resolvedAbs, absErr := filepath.Abs(symResolved); absErr == nil {
-			absPath = filepath.Clean(resolvedAbs)
+	if resolveSymlinks {
+		if symResolved, symErr := evalSymlinks(absPath); symErr == nil {
+			if resolvedAbs, absErr := filepath.Abs(symResolved); absErr == nil {
+				absPath = filepath.Clean(resolvedAbs)
+			}
 		}
 	}
 
@@ -147,7 +159,7 @@ func SafePath(repoRoot string, allowedRoots []string, deniedPaths []string, user
 		abs = filepath.Join(repoAbs, userPath)
 	}
 
-	abs, err = cleanAbs(abs)
+	abs, err = cleanAbsNoSymlink(abs)
 	if err != nil {
 		return "", err
 	}
@@ -159,7 +171,7 @@ func SafePath(repoRoot string, allowedRoots []string, deniedPaths []string, user
 		return "", fmt.Errorf("symlink_resolution_failed: %w", resolveErr)
 	}
 	var resolvedAbs string
-	resolvedAbs, err = cleanAbs(resolvedRaw)
+	resolvedAbs, err = cleanAbsNoSymlink(resolvedRaw)
 	if err != nil {
 		return "", fmt.Errorf("symlink_resolution_failed: %w", err)
 	}
@@ -251,7 +263,7 @@ func ExplainSafePath(repoRoot string, allowedRoots []string, deniedPaths []strin
 	} else {
 		abs = filepath.Join(repoAbs, userPath)
 	}
-	abs, err = cleanAbs(abs)
+	abs, err = cleanAbsNoSymlink(abs)
 	if err != nil {
 		explanation.Decision = "error"
 		return explanation, err
@@ -264,7 +276,7 @@ func ExplainSafePath(repoRoot string, allowedRoots []string, deniedPaths []strin
 		return explanation, fmt.Errorf("symlink_resolution_failed: %w", resolveErr)
 	}
 	var resolvedAbs string
-	resolvedAbs, err = cleanAbs(resolvedRaw)
+	resolvedAbs, err = cleanAbsNoSymlink(resolvedRaw)
 	if err != nil {
 		explanation.Decision = "deny:symlink_resolution_failed"
 		return explanation, fmt.Errorf("symlink_resolution_failed: %w", err)

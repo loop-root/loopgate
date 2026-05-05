@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -34,6 +35,32 @@ func TestSafePath_AllowsNormalFileUnderRepo(t *testing.T) {
 	}
 	if !strings.HasPrefix(abs, repoCanon) {
 		t.Fatalf("expected resolved path under repo. got=%q repo=%q repoCanon=%q", abs, repo, repoCanon)
+	}
+}
+
+func TestExplainSafePathAvoidsDuplicateCandidateSymlinkResolution(t *testing.T) {
+	repo := t.TempDir()
+	writeFile(t, filepath.Join(repo, "body", "real.txt"), "hello")
+
+	originalEvalSymlinks := evalSymlinks
+	var evalCalls int32
+	evalSymlinks = func(path string) (string, error) {
+		atomic.AddInt32(&evalCalls, 1)
+		return originalEvalSymlinks(path)
+	}
+	defer func() {
+		evalSymlinks = originalEvalSymlinks
+	}()
+
+	explanation, err := ExplainSafePath(repo, []string{"."}, nil, "body/real.txt")
+	if err != nil {
+		t.Fatalf("expected allow, got err: %v", err)
+	}
+	if explanation.Decision != "allow" {
+		t.Fatalf("expected allow decision, got %#v", explanation)
+	}
+	if gotCalls := atomic.LoadInt32(&evalCalls); gotCalls > 3 {
+		t.Fatalf("expected at most three symlink resolutions for existing allowed path, got %d", gotCalls)
 	}
 }
 
