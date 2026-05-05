@@ -58,9 +58,8 @@ Start with domains that already have separate concepts, locks, or maps:
      emission, audit export coordination where it touches local append state
    - invariant: audit append failure for security-relevant actions remains a
      hard failure
-   - package direction: migrate toward sibling `internal/auditruntime`; the
-     current `internal/loopgate/auditruntime` package is a first extraction
-     slice, not the default pattern for future runtime packages
+   - package direction: `internal/auditruntime` owns the extracted runtime
+     state; keep `internal/loopgate` as the HTTP/control-plane adapter
 
 2. **Control session and replay state**
    - candidate code: session open/close, session MAC rotation, request replay,
@@ -146,7 +145,7 @@ Planning artifact:
 
 Implementation artifact:
 
-- `internal/loopgate/auditruntime/runtime.go`
+- `internal/auditruntime/runtime.go`
 
 ### Slice 3: test decomposition
 

@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"loopgate/internal/auditruntime"
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
-	"loopgate/internal/loopgate/auditruntime"
 	"loopgate/internal/secrets"
 )
 

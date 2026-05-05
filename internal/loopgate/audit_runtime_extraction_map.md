@@ -9,7 +9,7 @@ tags:
 related_code:
   - ./server.go
   - ./server_audit_runtime.go
-  - ./auditruntime/runtime.go
+  - ../auditruntime/runtime.go
   - ./audit_export_batch.go
   - ./audit_export_state.go
   - ./audit_export_sender.go
@@ -57,15 +57,14 @@ Three packages participate in audit, but they are different layers:
 
 The extraction target is only the third layer.
 
-As of 2026-05-03, `internal/loopgate/auditruntime` owns the audit sequence,
+As of 2026-05-05, `internal/auditruntime` owns the audit sequence,
 last-hash state, checkpoint counter, append serialization lock, startup load,
 and HMAC checkpoint creation. `Server.logEvent` and `Server.logEventWithHash`
 remain compatibility facades so the rest of `internal/loopgate` does not churn.
 
-This was a safe first extraction slice. The preferred steady-state package
-shape is a sibling package such as `internal/auditruntime`, with
-`internal/loopgate` importing it as an adapter/wiring layer. Do not add more
-runtime subpackages under `internal/loopgate/` by default.
+This is now a sibling runtime package. `internal/loopgate` imports it as an
+adapter/wiring layer. Do not add more runtime subpackages under
+`internal/loopgate/` by default.
 
 ## Current state fields
 
@@ -88,7 +87,7 @@ audit runtime interface already exposes the needed verified ledger read method.
 
 ## Current functions
 
-Moved into `internal/loopgate/auditruntime`:
+Moved into `internal/auditruntime`:
 
 - authoritative startup chain load
 - authoritative event recording
@@ -214,8 +213,8 @@ should remain visible as the dominant cost for audited paths.
 ## First implementation slice
 
 1. Create a narrow audit runtime package. The first slice used
-   `internal/loopgate/auditruntime`; future cleanup should migrate it to
-   sibling `internal/auditruntime` when doing so is low churn.
+   `internal/loopgate/auditruntime`; the low-churn sibling migration to
+   `internal/auditruntime` landed on 2026-05-05.
 2. Move only pure audit sequencing/checkpoint code.
 3. Keep `Server.logEvent` and `Server.logEventWithHash` as delegating methods
    for compatibility with current call sites.

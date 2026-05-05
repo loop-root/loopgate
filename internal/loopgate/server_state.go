@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"loopgate/internal/auditruntime"
 	"loopgate/internal/config"
 	"loopgate/internal/ledger"
 	"loopgate/internal/loopdiag"
-	"loopgate/internal/loopgate/auditruntime"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	policypkg "loopgate/internal/policy"
 	"loopgate/internal/sandbox"
