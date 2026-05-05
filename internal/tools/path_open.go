@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"loopgate/internal/safety"
@@ -18,6 +19,8 @@ type validatedPath struct {
 	RelativeParts      []string
 	InputPathIsSymlink bool
 }
+
+var toolsPathExpressionPattern = regexp.MustCompile(`^[^\x00]+$`)
 
 func resolveValidatedPath(repoRoot string, allowedRoots []string, deniedPaths []string, userPath string) (validatedPath, error) {
 	candidateInputPath, err := rawCandidatePath(repoRoot, userPath)
@@ -172,6 +175,9 @@ func openParentDirectoryNoFollowForWrite(validated validatedPath) (*os.File, str
 }
 
 func isSymlinkPath(candidatePath string) bool {
+	if !toolsPathExpressionPattern.MatchString(candidatePath) {
+		return false
+	}
 	fileInfo, err := os.Lstat(candidatePath)
 	if err != nil {
 		return false
