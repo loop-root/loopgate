@@ -64,10 +64,12 @@ For integrators it matters in four ways:
   - current global capability inventory surface
 - `server_audit_runtime.go`
   - compatibility facade for audit recording, secret loading, and operator diagnostic log helpers
-- `auditruntime/`
+- `../auditruntime/`
   - append-only audit chain sequencing, startup chain load, HMAC checkpoint creation, and persisted must-persist audit append serialization
-  - first extraction slice; future cleanup should consider moving it to sibling
-    `internal/auditruntime` once imports and tests are stable
+  - sibling runtime package imported by `internal/loopgate`; it must not import
+    `internal/loopgate`
+- `../auditruntime/auditruntime_map.md`
+  - package-level map for the extracted audit runtime boundary
 - `audit_runtime_extraction_map.md`
   - current extraction boundary for moving Loopgate-specific audit sequencing
     and HMAC checkpoint policy out of the main package without weakening
