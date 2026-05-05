@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -23,6 +24,9 @@ var (
 	ErrSandboxSourceUnavailable = errors.New("sandbox source is unavailable")
 	ErrSandboxDestinationExists = errors.New("sandbox destination already exists")
 	ErrSymlinkNotAllowed        = errors.New("symlink entries are not allowed")
+
+	sandboxPathExpressionPattern = regexp.MustCompile(`^[^\x00]+$`)
+	sandboxPathComponentPattern  = regexp.MustCompile(`^[^/\\\x00]+$`)
 )
 
 const (
@@ -262,6 +266,9 @@ func ResolveHostDestination(rawHostPath string) (string, error) {
 }
 
 func CopyPathAtomic(sourcePath string, destinationPath string) (string, error) {
+	if !sandboxPathExpressionPattern.MatchString(destinationPath) {
+		return "", fmt.Errorf("%w: destination path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	if _, err := os.Lstat(destinationPath); err == nil {
 		return "", fmt.Errorf("%w: %s", ErrSandboxDestinationExists, destinationPath)
 	} else if !os.IsNotExist(err) {
@@ -286,7 +293,17 @@ func MirrorPathAtomicWithFinalize(sourcePath string, destinationPath string, fin
 	return copyPathIntoDestination(sourcePath, destinationPath, true, finalize)
 }
 
+func RemoveCopiedPathForRollback(destinationPath string) error {
+	if !sandboxPathExpressionPattern.MatchString(destinationPath) {
+		return fmt.Errorf("%w: destination path contains unsupported characters", ErrSandboxPathInvalid)
+	}
+	return os.RemoveAll(destinationPath)
+}
+
 func copyPathIntoDestination(sourcePath string, destinationPath string, allowReplace bool, finalize func(entryType string) error) (string, error) {
+	if !sandboxPathExpressionPattern.MatchString(sourcePath) || !sandboxPathExpressionPattern.MatchString(destinationPath) {
+		return "", fmt.Errorf("%w: copy path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	if !allowReplace {
 		if _, err := os.Lstat(destinationPath); err == nil {
 			return "", fmt.Errorf("%w: %s", ErrSandboxDestinationExists, destinationPath)
@@ -302,6 +319,9 @@ func copyPathIntoDestination(sourcePath string, destinationPath string, allowRep
 	defer sourceFileHandle.Close()
 
 	temporaryPath := destinationPath + ".tmp"
+	if !sandboxPathExpressionPattern.MatchString(temporaryPath) {
+		return "", fmt.Errorf("%w: temporary path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	_ = os.RemoveAll(temporaryPath)
 
 	entryType := "file"
@@ -319,6 +339,10 @@ func copyPathIntoDestination(sourcePath string, destinationPath string, allowRep
 	}
 
 	backupPath := destinationPath + ".bak"
+	if !sandboxPathExpressionPattern.MatchString(backupPath) {
+		_ = os.RemoveAll(temporaryPath)
+		return "", fmt.Errorf("%w: backup path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	_ = os.RemoveAll(backupPath)
 	destinationExists := false
 	if _, err := os.Lstat(destinationPath); err == nil {
@@ -369,6 +393,9 @@ func copyPathIntoDestination(sourcePath string, destinationPath string, allowRep
 }
 
 func syncParentDirectory(targetPath string) error {
+	if !sandboxPathExpressionPattern.MatchString(targetPath) {
+		return fmt.Errorf("%w: target path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	destinationDir, err := os.Open(filepath.Dir(targetPath))
 	if err != nil {
 		return fmt.Errorf("open destination parent: %w", err)
@@ -444,6 +471,9 @@ func ensureWithinRoot(rootPath string, targetPath string) error {
 }
 
 func copyDirectoryNoSymlinksFromHandle(sourceDirectoryHandle *os.File, destinationDirectoryPath string) error {
+	if !sandboxPathExpressionPattern.MatchString(destinationDirectoryPath) {
+		return fmt.Errorf("%w: destination directory path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	sourceDirectoryInfo, err := sourceDirectoryHandle.Stat()
 	if err != nil {
 		return fmt.Errorf("stat opened source directory: %w", err)
@@ -463,6 +493,9 @@ func copyDirectoryNoSymlinksFromHandle(sourceDirectoryHandle *os.File, destinati
 
 	for _, sourceDirectoryEntry := range sourceDirectoryEntries {
 		childName := sourceDirectoryEntry.Name()
+		if !sandboxPathComponentPattern.MatchString(childName) {
+			return fmt.Errorf("%w: child entry name contains unsupported characters", ErrSandboxPathInvalid)
+		}
 		childSourceHandle, childSourceInfo, err := openChildPathReadOnlyNoFollow(sourceDirectoryHandle, childName, false)
 		if err != nil {
 			return wrapSandboxSourceOpenError(filepath.Join(sourceDirectoryHandle.Name(), childName), err)
@@ -491,6 +524,9 @@ func copyDirectoryNoSymlinksFromHandle(sourceDirectoryHandle *os.File, destinati
 }
 
 func copyFileNoSymlinksFromHandle(sourceFileHandle *os.File, sourceFileInfo fs.FileInfo, destinationFilePath string) error {
+	if !sandboxPathExpressionPattern.MatchString(destinationFilePath) {
+		return fmt.Errorf("%w: destination file path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	if sourceFileInfo.IsDir() {
 		return fmt.Errorf("%w: source entry %s is a directory", ErrSandboxPathInvalid, sourceFileHandle.Name())
 	}
@@ -522,6 +558,9 @@ func copyFileNoSymlinksFromHandle(sourceFileHandle *os.File, sourceFileInfo fs.F
 }
 
 func openSourcePathReadOnlyNoFollow(sourcePath string) (*os.File, fs.FileInfo, error) {
+	if !sandboxPathExpressionPattern.MatchString(sourcePath) {
+		return nil, nil, fmt.Errorf("%w: source path contains unsupported characters", ErrSandboxPathInvalid)
+	}
 	canonicalSourcePath, err := filepath.Abs(filepath.Clean(sourcePath))
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve source path: %w", err)
@@ -562,6 +601,10 @@ func openAbsolutePathReadOnlyNoFollow(absolutePath string, requireDirectory bool
 	currentDirectoryHandle := rootDirectoryHandle
 
 	for pathPartIndex, pathPart := range pathParts {
+		if !sandboxPathComponentPattern.MatchString(pathPart) {
+			_ = currentDirectoryHandle.Close()
+			return nil, fmt.Errorf("%w: path component contains unsupported characters", ErrSandboxPathInvalid)
+		}
 		openFlags := unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NOFOLLOW | unix.O_NONBLOCK
 		isLastPart := pathPartIndex == len(pathParts)-1
 		if !isLastPart || requireDirectory {
@@ -572,7 +615,13 @@ func openAbsolutePathReadOnlyNoFollow(absolutePath string, requireDirectory bool
 			_ = currentDirectoryHandle.Close()
 			return nil, err
 		}
-		nextHandle := os.NewFile(uintptr(nextFD), filepath.Join(currentDirectoryHandle.Name(), pathPart))
+		nextHandleName := filepath.Join(currentDirectoryHandle.Name(), pathPart)
+		if !sandboxPathExpressionPattern.MatchString(nextHandleName) {
+			_ = unix.Close(nextFD)
+			_ = currentDirectoryHandle.Close()
+			return nil, fmt.Errorf("%w: opened path contains unsupported characters", ErrSandboxPathInvalid)
+		}
+		nextHandle := os.NewFile(uintptr(nextFD), nextHandleName)
 		if err := currentDirectoryHandle.Close(); err != nil {
 			_ = nextHandle.Close()
 			return nil, fmt.Errorf("close traversed source directory: %w", err)
@@ -585,6 +634,9 @@ func openAbsolutePathReadOnlyNoFollow(absolutePath string, requireDirectory bool
 
 func openChildPathReadOnlyNoFollow(parentDirectoryHandle *os.File, childName string, requireDirectory bool) (*os.File, fs.FileInfo, error) {
 	if childName == "" || childName == "." || childName == ".." || strings.ContainsRune(childName, os.PathSeparator) {
+		return nil, nil, fmt.Errorf("invalid child entry name %q", childName)
+	}
+	if !sandboxPathComponentPattern.MatchString(childName) {
 		return nil, nil, fmt.Errorf("invalid child entry name %q", childName)
 	}
 

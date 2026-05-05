@@ -480,7 +480,7 @@ func (server *Server) exportSandboxArtifact(tokenClaims capabilityToken, exportR
 		"content_sha256":        exportResponse.ContentSHA256,
 		"size_bytes":            exportResponse.SizeBytes,
 	}); err != nil {
-		_ = os.RemoveAll(resolvedDestinationPath)
+		_ = sandbox.RemoveCopiedPathForRollback(resolvedDestinationPath)
 		return controlapipkg.SandboxOperationResponse{}, fmt.Errorf("%w: %v", errSandboxAuditUnavailable, err)
 	}
 	return exportResponse, nil

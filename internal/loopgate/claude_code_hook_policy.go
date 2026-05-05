@@ -336,6 +336,9 @@ func (server *Server) resolveClaudeCodeHookPolicyPath(req controlapipkg.HookPreV
 
 	switch req.ToolName {
 	case "Read", "Glob", "Grep":
+		if !loopgatePathExpressionPattern.MatchString(explanation.ResolvedAbs) {
+			return explanation.ResolvedAbs, fmt.Errorf("target_path_not_resolved: path contains unsupported characters")
+		}
 		if _, statErr := os.Stat(explanation.ResolvedAbs); statErr != nil {
 			return explanation.ResolvedAbs, fmt.Errorf("target_path_not_resolved: %w", statErr)
 		}
@@ -354,6 +357,9 @@ func (server *Server) resolveClaudeCodeHookPolicyPath(req controlapipkg.HookPreV
 
 func mutatingHookPathUsesSymlinkPath(repoRoot string, candidatePath string) (bool, error) {
 	inspectionPath := candidatePath
+	if !loopgatePathExpressionPattern.MatchString(inspectionPath) {
+		return false, fmt.Errorf("path contains unsupported characters")
+	}
 	if _, err := os.Lstat(inspectionPath); err != nil {
 		if !os.IsNotExist(err) {
 			return false, err
@@ -375,6 +381,9 @@ func mutatingHookPathUsesSymlinkPath(repoRoot string, candidatePath string) (boo
 			return false, fmt.Errorf("path escapes symlink inspection root")
 		}
 		currentPath = filepath.Join(currentPath, pathPart)
+		if !loopgatePathExpressionPattern.MatchString(currentPath) {
+			return false, fmt.Errorf("path contains unsupported characters")
+		}
 		fileInfo, err := os.Lstat(currentPath)
 		if err != nil {
 			return false, err

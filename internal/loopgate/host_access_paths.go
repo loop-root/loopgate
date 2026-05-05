@@ -6,6 +6,7 @@ import (
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -15,6 +16,11 @@ type hostAccessRelativePath struct {
 	Display string
 	Parts   []string
 }
+
+var (
+	loopgatePathExpressionPattern = regexp.MustCompile(`^[^\x00]+$`)
+	loopgatePathComponentPattern  = regexp.MustCompile(`^[^/\\\x00]+$`)
+)
 
 type hostAccessPathPolicyError struct {
 	message string
@@ -81,6 +87,9 @@ func wrapHostAccessOpenError(pathPart string, err error) error {
 }
 
 func openHostRootDirectoryReadOnly(rootPath string) (int, error) {
+	if !loopgatePathExpressionPattern.MatchString(rootPath) {
+		return -1, newHostAccessPathPolicyError("granted folder root contains unsupported characters")
+	}
 	rootFD, err := unix.Open(rootPath, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY, 0)
 	if err != nil {
 		return -1, fmt.Errorf("open granted folder root: %w", err)
@@ -118,11 +127,17 @@ func openHostPathReadOnly(rootPath string, rawRelativePath string, expectDirecto
 		if !expectDirectory {
 			return nil, normalizedPath, newHostAccessPathPolicyError("path is a directory, not a file")
 		}
+		if !loopgatePathExpressionPattern.MatchString(currentLabel) {
+			return nil, normalizedPath, newHostAccessPathPolicyError("opened path contains unsupported characters")
+		}
 		currentFD = -1
 		return os.NewFile(uintptr(rootFD), currentLabel), normalizedPath, nil
 	}
 
 	for pathPartIndex, pathPart := range normalizedPath.Parts {
+		if !loopgatePathComponentPattern.MatchString(pathPart) {
+			return nil, normalizedPath, newHostAccessPathPolicyError("path component contains unsupported characters")
+		}
 		openFlags := unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NOFOLLOW
 		isLastPart := pathPartIndex == len(normalizedPath.Parts)-1
 		if !isLastPart || expectDirectory {
@@ -146,6 +161,10 @@ func openHostPathReadOnly(rootPath string, rawRelativePath string, expectDirecto
 
 	currentFDForFile := currentFD
 	currentFD = -1
+	if !loopgatePathExpressionPattern.MatchString(currentLabel) {
+		_ = unix.Close(currentFDForFile)
+		return nil, normalizedPath, newHostAccessPathPolicyError("opened path contains unsupported characters")
+	}
 	fileHandle := os.NewFile(uintptr(currentFDForFile), currentLabel)
 	if !expectDirectory {
 		fileInfo, statErr := fileHandle.Stat()
