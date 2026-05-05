@@ -110,6 +110,29 @@ func TestSiteInspectionIPAllowed(t *testing.T) {
 	}
 }
 
+func TestSiteInspectionURLPattern(t *testing.T) {
+	testCases := []struct {
+		name    string
+		rawURL  string
+		matches bool
+	}{
+		{name: "trusted https host", rawURL: "https://status.example.com/api/status", matches: true},
+		{name: "localhost http", rawURL: "http://localhost:8080/status", matches: true},
+		{name: "loopback https", rawURL: "https://127.0.0.1:8443/", matches: true},
+		{name: "nonlocal http", rawURL: "http://example.com/status", matches: false},
+		{name: "query data", rawURL: "https://status.example.com/api/status?token=secret", matches: false},
+		{name: "userinfo", rawURL: "https://user@example.com/status", matches: false},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if matches := siteInspectionURLPattern.MatchString(testCase.rawURL); matches != testCase.matches {
+				t.Fatalf("expected matches=%v for %q, got %v", testCase.matches, testCase.rawURL, matches)
+			}
+		})
+	}
+}
+
 func TestCreateTrustDraft_WritesLocalhostStatusDraft(t *testing.T) {
 	repoRoot := t.TempDir()
 	providerServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

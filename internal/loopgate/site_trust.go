@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -30,6 +31,8 @@ var (
 	errSiteTrustDraftAlreadyExists      = fmt.Errorf("site_trust_draft_exists")
 	errSiteInspectionContentUnsupported = fmt.Errorf("site_inspection_unsupported_content_type")
 	errSiteInspectionNetworkDenied      = fmt.Errorf("site_inspection_network_denied")
+
+	siteInspectionURLPattern = regexp.MustCompile(`^(?:https://(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?|http://(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?)(?:/[A-Za-z0-9._~%!$&'()*+,;=:@/-]*)?$`)
 )
 
 type validatedSiteTarget struct {
@@ -187,6 +190,9 @@ func (server *Server) fetchSiteInspection(ctx context.Context, validatedSite val
 	inspected := inspectedSite{
 		Target: validatedSite,
 		HTTPS:  validatedSite.Scheme == "https",
+	}
+	if !siteInspectionURLPattern.MatchString(validatedSite.NormalizedURL) {
+		return inspectedSite{}, fmt.Errorf("%w: unsupported inspection url shape", errSiteURLInvalid)
 	}
 	inspectionClient := server.siteInspectionHTTPClient(validatedSite)
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, validatedSite.NormalizedURL, nil)
