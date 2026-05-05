@@ -106,9 +106,11 @@ loopgate test
 ```
 
 The installer downloads the latest published release archive for your macOS
-architecture, installs a self-contained Loopgate root under
-`~/.local/share/loopgate/<version>`, and installs wrapper commands under
-`~/.local/bin`.
+architecture, installs versioned binaries under
+`~/.local/share/loopgate/versions/<version>`, keeps operator state under
+`~/.local/share/loopgate/state`, and installs wrapper commands under
+`~/.local/bin`. The stable state root is intentional: audit history and local
+policy state survive binary upgrades.
 
 If you want to pin a specific release candidate:
 

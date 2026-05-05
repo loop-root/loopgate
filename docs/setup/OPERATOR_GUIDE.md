@@ -58,8 +58,9 @@ curl -fsSL https://raw.githubusercontent.com/loop-root/loopgate/main/scripts/ins
 loopgate setup
 ```
 
-That installs the latest published Loopgate release under
-`~/.local/share/loopgate/<version>`, installs wrapper commands under
+That installs the latest published Loopgate release binaries under
+`~/.local/share/loopgate/versions/<version>`, keeps operator state under
+`~/.local/share/loopgate/state`, installs wrapper commands under
 `~/.local/bin`, and then runs the guided setup flow from the installed
 binaries.
 

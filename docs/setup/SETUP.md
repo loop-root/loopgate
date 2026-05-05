@@ -19,8 +19,10 @@ loopgate status
 loopgate test
 ```
 
-That installs the latest published Loopgate release under `~/.local/share/loopgate/<version>`
-and installs wrapper commands under `~/.local/bin`.
+That installs the latest published Loopgate release binaries under
+`~/.local/share/loopgate/versions/<version>`, keeps operator state under
+`~/.local/share/loopgate/state`, and installs wrapper commands under
+`~/.local/bin`.
 
 If you prefer to work from a source checkout instead, use:
 
@@ -149,8 +151,8 @@ Default socket:
 runtime/state/loopgate.sock
 ```
 
-For a published install, that resolves under the installed Loopgate root, for
-example `~/.local/share/loopgate/<version>/runtime/state/loopgate.sock`.
+For a published install, that resolves under the stable operator state root, for
+example `~/.local/share/loopgate/state/runtime/state/loopgate.sock`.
 
 On the first successful Loopgate start, the default Keychain-backed audit HMAC
 checkpoint key is bootstrapped automatically for the shipped macOS-first
@@ -247,6 +249,10 @@ If Loopgate is already running, hot-apply the signed on-disk policy:
 
 - Runtime config: `config/runtime.yaml`
 - Signed policy: `core/policy/policy.yaml` and `core/policy/policy.yaml.sig`
+
+For a published install those paths live under
+`~/.local/share/loopgate/state` so upgrades replace binaries without orphaning
+audit history or local policy state.
 
 Important current note:
 - some compatibility-oriented names and future-facing fields still exist in the repo as cleanup debt

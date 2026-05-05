@@ -30,11 +30,15 @@ checkout and in CI.
 - `install.sh`
   - installs published release archives without requiring a Go toolchain
   - supports local archive/checksum inputs for smoke tests
+  - keeps versioned binaries under `versions/<version>` and stable operator
+    state under `state`
   - installs wrapper commands under the selected bin directory
 
 - `install_smoke_test.sh`
   - builds a local archive
   - installs into a temporary home
+  - verifies legacy per-version runtime state migrates into the stable state
+    root
   - runs setup/status/hook install and optional governed smoke test
   - verifies uninstall/purge behavior
 

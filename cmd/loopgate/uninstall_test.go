@@ -154,6 +154,57 @@ func TestRunUninstall_PurgeRemovesManagedInstallRoot(t *testing.T) {
 	}
 }
 
+func TestRunUninstall_PurgeRemovesManagedStableInstallRoot(t *testing.T) {
+	sourceRepoRoot := prepareOperatorTestRepo(t, "balanced")
+	claudeDir := t.TempDir()
+	installRoot := filepath.Join(t.TempDir(), "loopgate")
+	stateRoot := filepath.Join(installRoot, "state")
+	versionRoot := filepath.Join(installRoot, "versions", "vtest")
+	if err := os.MkdirAll(filepath.Dir(stateRoot), 0o700); err != nil {
+		t.Fatalf("MkdirAll state parent: %v", err)
+	}
+	if err := os.Rename(sourceRepoRoot, stateRoot); err != nil {
+		t.Fatalf("Rename source repo to managed state root: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(versionRoot, "bin"), 0o755); err != nil {
+		t.Fatalf("MkdirAll version root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(versionRoot, "bin", "loopgate"), []byte("binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile versioned binary: %v", err)
+	}
+	marker := strings.Join([]string{
+		"layout_version=2",
+		"version=vtest",
+		"install_root=" + installRoot,
+		"binary_root=" + versionRoot,
+		"state_root=" + stateRoot,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(stateRoot, managedInstallRootMarkerFilename), []byte(marker), 0o600); err != nil {
+		t.Fatalf("WriteFile state marker: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := runUninstall([]string{
+		"-repo-root", stateRoot,
+		"-claude-dir", claudeDir,
+		"--purge",
+	}, &stdout, &stderr); err != nil {
+		t.Fatalf("runUninstall: %v stderr=%s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(installRoot); !os.IsNotExist(err) {
+		t.Fatalf("expected managed install root removed by purge, got %v", err)
+	}
+	if !strings.Contains(stdout.String(), "removed_managed_install_root: true") {
+		t.Fatalf("expected managed install root removal output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "offboarding_state: purged-managed-install") {
+		t.Fatalf("expected purged-managed-install state, got %q", stdout.String())
+	}
+}
+
 func TestRunUninstall_DefaultManagedInstallUsesBarePurgeHint(t *testing.T) {
 	repoRoot := prepareOperatorTestRepo(t, "balanced")
 	claudeDir := t.TempDir()
