@@ -1,7 +1,7 @@
-# Approval Package Map
+# Approval Runtime Map
 
-This file maps `internal/loopgate/approval/`, the pure approval lifecycle
-package used by the Loopgate authority runtime.
+This file maps `internal/approvalruntime/`, the pure approval lifecycle package
+used by the Loopgate authority runtime.
 
 Use it when changing:
 
@@ -12,8 +12,8 @@ Use it when changing:
 
 ## Core Role
 
-`approval/` owns approval rules that do not need `Server` state. It is the
-small, testable core behind Loopgate's operator approval flow.
+`approvalruntime` owns approval rules that do not need `Server` state. It is
+the small, testable core behind Loopgate's operator approval flow.
 
 The package exists so lifecycle invariants stay pure and reusable:
 
@@ -51,9 +51,10 @@ The package exists so lifecycle invariants stay pure and reusable:
 ## Relationship Notes
 
 - Server integration lives in `internal/loopgate/approval_flow.go`.
-- Wire request shapes live in `internal/loopgate/protocol/` and
+- Wire request shapes live in `internal/protocol/` and
   `internal/loopgate/controlapi/`.
 - Stable denial-code strings live in `internal/loopgate/controlapi/core.go`.
+- This package must not import `internal/loopgate`.
 
 ## Important Watchouts
 

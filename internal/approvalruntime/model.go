@@ -1,10 +1,10 @@
-package approval
+package approvalruntime
 
 import (
 	"strings"
 	"time"
 
-	protocolpkg "loopgate/internal/loopgate/protocol"
+	protocolpkg "loopgate/internal/protocol"
 )
 
 const (

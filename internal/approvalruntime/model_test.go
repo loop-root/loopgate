@@ -1,10 +1,10 @@
-package approval
+package approvalruntime
 
 import (
 	"testing"
 	"time"
 
-	protocolpkg "loopgate/internal/loopgate/protocol"
+	protocolpkg "loopgate/internal/protocol"
 )
 
 func TestBackfillPendingApprovalManifest_PopulatesManifestAndBodyHash(t *testing.T) {

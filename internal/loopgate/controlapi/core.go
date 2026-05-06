@@ -6,7 +6,7 @@ import (
 
 	"loopgate/internal/config"
 	"loopgate/internal/identifiers"
-	protocolpkg "loopgate/internal/loopgate/protocol"
+	protocolpkg "loopgate/internal/protocol"
 )
 
 const (

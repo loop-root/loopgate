@@ -259,7 +259,7 @@ The following paths are registered on the Loopgate mux (`internal/loopgate/serve
 | `POST /v1/ui/approvals/{id}/decision` | UI approval path (**signed + `X-Loopgate-Approval-Token`**, body `{ "approved": bool }`) |
 | `GET` / `PUT /v1/ui/folder-access`, `POST /v1/ui/folder-access/sync`, `GET /v1/ui/shared-folder`, `POST /v1/ui/shared-folder/sync` | Folder access UI helpers (**`folder_access.read`** / **`folder_access.write`**) |
 
-For **request/response JSON shapes**, use `internal/loopgate/controlapi/` as the source of truth (field names are `json` tagged). The signed capability-execute envelope itself lives in `internal/loopgate/protocol/capability.go`.
+For **request/response JSON shapes**, use `internal/loopgate/controlapi/` as the source of truth (field names are `json` tagged). The signed capability-execute envelope itself lives in `internal/protocol/capability.go`.
 
 `GET /v1/status` only includes connection summaries when the session token
 includes **`connection.read`**. Use `GET /v1/connections/status` when the client

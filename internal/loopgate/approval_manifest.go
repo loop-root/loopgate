@@ -1,9 +1,9 @@
 package loopgate
 
 import (
-	approvalpkg "loopgate/internal/loopgate/approval"
+	approvalpkg "loopgate/internal/approvalruntime"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
-	protocolpkg "loopgate/internal/loopgate/protocol"
+	protocolpkg "loopgate/internal/protocol"
 )
 
 // capabilityRequestBodySHA256 computes the SHA256 of the JSON-serialized capability request.

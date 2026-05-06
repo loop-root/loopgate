@@ -1,9 +1,9 @@
-package approval
+package approvalruntime
 
 import (
 	"strings"
 
-	protocolpkg "loopgate/internal/loopgate/protocol"
+	protocolpkg "loopgate/internal/protocol"
 )
 
 type DecisionValidationCode string

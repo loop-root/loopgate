@@ -1,9 +1,9 @@
-package approval
+package approvalruntime
 
 import (
 	"testing"
 
-	protocolpkg "loopgate/internal/loopgate/protocol"
+	protocolpkg "loopgate/internal/protocol"
 )
 
 func TestValidateDecisionRequest_AllowsOwnerBoundPendingApproval(t *testing.T) {
