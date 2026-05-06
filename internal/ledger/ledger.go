@@ -8,8 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	"golang.org/x/sys/unix"
@@ -18,6 +21,10 @@ import (
 // SchemaVersion is the current ledger event schema version.
 // Increment this when making breaking changes to the Event structure.
 const SchemaVersion = 1
+
+const maxSafeJSONInteger = int64(1<<53 - 1)
+
+const minSafeJSONInteger = -maxSafeJSONInteger
 
 var ErrLedgerIntegrity = errors.New("ledger integrity anomaly")
 
@@ -301,11 +308,30 @@ func chainSequenceValue(event Event, sequenceField string) (int64, error) {
 func sequenceValueFromRaw(rawSequence interface{}, sequenceField string) (int64, error) {
 	switch typedSequence := rawSequence.(type) {
 	case float64:
+		if math.Trunc(typedSequence) != typedSequence {
+			return 0, fmt.Errorf("%w: invalid non-integer %s", ErrLedgerIntegrity, sequenceField)
+		}
+		if typedSequence < float64(minSafeJSONInteger) || typedSequence > float64(maxSafeJSONInteger) {
+			return 0, fmt.Errorf("%w: unsafe JSON integer %s", ErrLedgerIntegrity, sequenceField)
+		}
 		return int64(typedSequence), nil
+	case json.Number:
+		sequenceValue, err := parseSafeJSONInteger(typedSequence)
+		if err != nil {
+			return 0, fmt.Errorf("%w: invalid %s: %v", ErrLedgerIntegrity, sequenceField, err)
+		}
+		return sequenceValue, nil
 	case int64:
+		if err := validateSafeJSONInteger(typedSequence); err != nil {
+			return 0, fmt.Errorf("%w: invalid %s: %v", ErrLedgerIntegrity, sequenceField, err)
+		}
 		return typedSequence, nil
 	case int:
-		return int64(typedSequence), nil
+		sequenceValue := int64(typedSequence)
+		if err := validateSafeJSONInteger(sequenceValue); err != nil {
+			return 0, fmt.Errorf("%w: invalid %s: %v", ErrLedgerIntegrity, sequenceField, err)
+		}
+		return sequenceValue, nil
 	default:
 		return 0, fmt.Errorf("%w: invalid %s type", ErrLedgerIntegrity, sequenceField)
 	}
@@ -355,8 +381,11 @@ func hashCanonicalEvent(event Event) (string, error) {
 }
 
 // ComputeEventHash returns the append-chain hash for event after normalizing it
-// into a JSON-compatible representation. The canonical bytes rely on
-// encoding/json's deterministic ordering of string-keyed map objects.
+// into a JSON-compatible representation. The canonical bytes are locked by
+// TestCanonicalEventJSON_GoldenBytesAndHash and rely on encoding/json's
+// deterministic ordering of string-keyed map objects. Integer payload values
+// must stay within JSON's safe integer range so a write/read round trip cannot
+// silently change the value hashed into the chain.
 func ComputeEventHash(event Event) (string, error) {
 	return hashEvent(event)
 }
@@ -413,20 +442,36 @@ func canonicalizeValue(rawValue interface{}) (interface{}, error) {
 	case nil,
 		string,
 		bool,
-		json.Number,
 		float64,
-		float32,
-		int,
-		int8,
-		int16,
-		int32,
-		int64,
-		uint,
-		uint8,
-		uint16,
-		uint32,
-		uint64:
+		float32:
 		return typedValue, nil
+	case json.Number:
+		if isJSONIntegerLiteral(string(typedValue)) {
+			if _, err := parseSafeJSONInteger(typedValue); err != nil {
+				return nil, err
+			}
+		}
+		return typedValue, nil
+	case int:
+		return canonicalizeSignedInteger(int64(typedValue))
+	case int8:
+		return canonicalizeSignedInteger(int64(typedValue))
+	case int16:
+		return canonicalizeSignedInteger(int64(typedValue))
+	case int32:
+		return canonicalizeSignedInteger(int64(typedValue))
+	case int64:
+		return canonicalizeSignedInteger(typedValue)
+	case uint:
+		return canonicalizeUnsignedInteger(uint64(typedValue))
+	case uint8:
+		return canonicalizeUnsignedInteger(uint64(typedValue))
+	case uint16:
+		return canonicalizeUnsignedInteger(uint64(typedValue))
+	case uint32:
+		return canonicalizeUnsignedInteger(uint64(typedValue))
+	case uint64:
+		return canonicalizeUnsignedInteger(typedValue)
 	case json.RawMessage:
 		return append(json.RawMessage(nil), typedValue...), nil
 	case []byte:
@@ -468,8 +513,48 @@ func canonicalizeValue(rawValue interface{}) (interface{}, error) {
 			}
 			return nil, err
 		}
-		return canonicalValue, nil
+		return canonicalizeValue(canonicalValue)
 	}
+}
+
+func canonicalizeSignedInteger(value int64) (interface{}, error) {
+	if err := validateSafeJSONInteger(value); err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+func canonicalizeUnsignedInteger(value uint64) (interface{}, error) {
+	if value > uint64(maxSafeJSONInteger) {
+		return nil, fmt.Errorf("unsafe JSON integer %d exceeds max safe value %d", value, maxSafeJSONInteger)
+	}
+	return value, nil
+}
+
+func parseSafeJSONInteger(value json.Number) (int64, error) {
+	parsedValue, err := strconv.ParseInt(string(value), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse integer %q: %w", value, err)
+	}
+	if err := validateSafeJSONInteger(parsedValue); err != nil {
+		return 0, err
+	}
+	return parsedValue, nil
+}
+
+func validateSafeJSONInteger(value int64) error {
+	if value < minSafeJSONInteger || value > maxSafeJSONInteger {
+		return fmt.Errorf("unsafe JSON integer %d outside safe range [%d,%d]", value, minSafeJSONInteger, maxSafeJSONInteger)
+	}
+	return nil
+}
+
+func isJSONIntegerLiteral(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	return !strings.ContainsAny(value, ".eE")
 }
 
 func (runtime *AppendRuntime) cacheVerifiedChainStateFromFileHandle(fileHandle *os.File, sequenceField string, lastSequence int64, lastHash string) {

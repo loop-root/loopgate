@@ -146,6 +146,127 @@ func TestComputeEventHash_DeterministicAcrossMapInsertionOrder(t *testing.T) {
 	}
 }
 
+func TestCanonicalEventJSON_GoldenBytesAndHash(t *testing.T) {
+	event := Event{
+		V:       SchemaVersion,
+		TS:      "2026-05-05T12:34:56.789Z",
+		Type:    "ledger.canonical.golden",
+		Session: "session-golden",
+		Data: map[string]interface{}{
+			"nested": map[string]interface{}{
+				"name":  "nested",
+				"inner": int64(7),
+			},
+			"previous_event_hash": "prev",
+			"event_hash":          "must-be-stripped-before-hashing",
+			"list": []interface{}{
+				map[string]interface{}{
+					"z": "zed",
+					"a": "aye",
+				},
+				"tail",
+			},
+			"null":  nil,
+			"bool":  true,
+			"float": 1.5,
+			"int":   int64(42),
+			"alpha": "first",
+		},
+	}
+
+	gotBytes, err := marshalCanonicalEventJSON(event, true)
+	if err != nil {
+		t.Fatalf("marshal canonical event: %v", err)
+	}
+	const wantJSON = `{"v":1,"ts":"2026-05-05T12:34:56.789Z","type":"ledger.canonical.golden","session":"session-golden","data":{"alpha":"first","bool":true,"float":1.5,"int":42,"list":[{"a":"aye","z":"zed"},"tail"],"nested":{"inner":7,"name":"nested"},"null":null,"previous_event_hash":"prev"}}`
+	if string(gotBytes) != wantJSON {
+		t.Fatalf("canonical JSON changed\nwant: %s\n got: %s", wantJSON, gotBytes)
+	}
+
+	gotHash, err := ComputeEventHash(event)
+	if err != nil {
+		t.Fatalf("compute event hash: %v", err)
+	}
+	const wantHash = "ad53d29c342358f8662c0dac3b8b3e02616730c9dcce0131a8934d6751c5290f"
+	if gotHash != wantHash {
+		t.Fatalf("canonical event hash changed: want %s got %s", wantHash, gotHash)
+	}
+}
+
+func TestComputeEventHash_RejectsUnsafeJSONIntegers(t *testing.T) {
+	cases := []struct {
+		name  string
+		value interface{}
+	}{
+		{name: "uint64", value: uint64(1<<53 + 1)},
+		{name: "int64", value: int64(1 << 53)},
+		{name: "negative int64", value: int64(-(1 << 53))},
+		{name: "json number", value: json.Number("9007199254740993")},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			event := Event{
+				TS:      "2026-05-05T00:00:00Z",
+				Type:    "ledger.unsafe.integer",
+				Session: "session-a",
+				Data: map[string]interface{}{
+					"unsafe": tc.value,
+				},
+			}
+
+			_, err := ComputeEventHash(event)
+			if err == nil {
+				t.Fatal("expected unsafe integer to be rejected")
+			}
+			if !strings.Contains(err.Error(), "unsafe JSON integer") {
+				t.Fatalf("expected unsafe JSON integer error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestReadVerifiedChainState_RejectsFractionalSequence(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "fractional-sequence.jsonl")
+	event := Event{
+		TS:      "2026-05-05T00:00:00Z",
+		Type:    "ledger.bad.sequence",
+		Session: "session-a",
+		Data: map[string]interface{}{
+			"ledger_sequence":     1.5,
+			"previous_event_hash": "",
+		},
+	}
+	eventHash, err := ComputeEventHash(event)
+	if err != nil {
+		t.Fatalf("compute event hash: %v", err)
+	}
+	event.Data["event_hash"] = eventHash
+	lineBytes, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
+	lineBytes = append(lineBytes, '\n')
+	if err := os.WriteFile(path, lineBytes, 0o600); err != nil {
+		t.Fatalf("write fractional sequence ledger: %v", err)
+	}
+
+	fileHandle, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open ledger: %v", err)
+	}
+	defer fileHandle.Close()
+
+	_, _, err = ReadVerifiedChainState(fileHandle, "ledger_sequence")
+	if !errors.Is(err, ErrLedgerIntegrity) {
+		t.Fatalf("expected ErrLedgerIntegrity, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "non-integer ledger_sequence") {
+		t.Fatalf("expected non-integer sequence error, got %v", err)
+	}
+}
+
 func TestAppend_FailsClosedOnMalformedPriorLedgerLine(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "corrupt.jsonl")
