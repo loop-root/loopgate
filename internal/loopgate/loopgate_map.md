@@ -67,7 +67,7 @@ For integrators it matters in four ways:
 - `../controlruntime/`
   - extracted control-plane runtime primitives that do not require `Server`;
     currently owns session MAC epoch math, key derivation, candidate rotation
-    keys, and private rotation-master storage
+    keys, private rotation-master storage, and nonce replay persistence stores
 - `../controlruntime/controlruntime_map.md`
   - package-level map for extracted control runtime boundaries
 - `../auditruntime/`

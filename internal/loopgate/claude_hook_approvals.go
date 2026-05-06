@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"loopgate/internal/controlruntime"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
@@ -330,7 +331,7 @@ func (server *Server) saveClaudeHookApprovalStateLocked(storageKey string, appro
 	if err != nil {
 		return fmt.Errorf("marshal claude hook approval state: %w", err)
 	}
-	if err := atomicWritePrivateJSON(server.claudeHookApprovalsPath(storageKey), stateBytes); err != nil {
+	if err := controlruntime.AtomicWritePrivateJSON(server.claudeHookApprovalsPath(storageKey), stateBytes); err != nil {
 		return fmt.Errorf("save claude hook approval state: %w", err)
 	}
 	return nil

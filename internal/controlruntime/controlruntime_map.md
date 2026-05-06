@@ -24,6 +24,18 @@ Dependency direction is one-way:
   - deterministic key derivation coverage
   - response-model coverage that proves epoch key material is not exposed
   - private master-file permissions and symlink rejection coverage
+- `nonce_replay.go`
+  - snapshot and append-only JSONL nonce replay persistence
+  - legacy snapshot fallback when the append-only log has not been created yet
+  - truncated-tail tolerance for crash recovery
+  - deterministic compaction of live nonce replay entries
+  - private state-file writes for replay persistence
+- `nonce_replay_test.go`
+  - snapshot round-trip and pruning coverage
+  - append-only log round-trip coverage
+  - truncated-tail and malformed-middle-record coverage
+  - legacy snapshot fallback coverage
+  - compaction coverage
 
 ## Invariants
 
@@ -34,6 +46,12 @@ Dependency direction is one-way:
 - Clients receive only derived per-session MAC keys, never epoch key material
   or the rotation master.
 - Candidate signing keys are derived from previous/current/next epochs only.
+- Nonce replay storage preserves fail-closed caller semantics by returning
+  persistence errors instead of hiding them.
+- The append-only nonce replay log may ignore a truncated final line, but
+  malformed middle records remain hard failures.
+- Replay storage owns persistence only; Loopgate still owns the authoritative
+  duplicate/saturation decisions under `server.mu`.
 
 ## Adapter Boundary
 
@@ -43,3 +61,10 @@ Dependency direction is one-way:
 - maps `controlruntime.SessionMACKeys` into `controlapi.SessionMACKeysResponse`
 - keeps signed-request verification tied to Loopgate's existing request-auth
   denial behavior
+
+`internal/loopgate/control_plane_state.go` remains the adapter for nonce replay
+decisions:
+
+- checks duplicates and capacity under `server.mu`
+- rolls back in-memory nonce state if persistence fails
+- maps persistence failure to the existing fail-closed control-plane denial

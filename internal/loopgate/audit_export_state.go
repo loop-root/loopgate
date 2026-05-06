@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"loopgate/internal/config"
+	"loopgate/internal/controlruntime"
 )
 
 const auditExportStateSchemaVersion = "1"
@@ -86,7 +87,7 @@ func (server *Server) saveAuditExportStateLocked(stateFile auditExportStateFile)
 	if err != nil {
 		return fmt.Errorf("marshal audit export state: %w", err)
 	}
-	if err := atomicWritePrivateJSON(server.auditExportStatePath, stateBytes); err != nil {
+	if err := controlruntime.AtomicWritePrivateJSON(server.auditExportStatePath, stateBytes); err != nil {
 		return fmt.Errorf("save audit export state: %w", err)
 	}
 	return nil
