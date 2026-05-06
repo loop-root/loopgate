@@ -53,7 +53,7 @@ one set of validated wire types without importing the full `Server`.
 ## Relationship Notes
 
 - Server enforcement lives in `internal/loopgate/`.
-- Capability request canonicalization lives in `internal/loopgate/protocol/`.
+- Capability request canonicalization lives in `internal/protocol/`.
 - Public operator docs for HTTP clients live in
   `docs/setup/LOOPGATE_HTTP_API_FOR_LOCAL_CLIENTS.md`.
 

@@ -78,9 +78,9 @@ For integrators it matters in four ways:
   - JSON response writing, audit-unavailable responses, and control-plane denial-to-HTTP status mapping
 - `approval_flow.go`
   - approval token authentication, approval audit/state mutation, and operator-facing reason shaping
-- `approval/`
+- `../approvalruntime/`
   - pure approval lifecycle primitives, pending approval model, manifest hashing/backfill, and decision validation rules that do not require `Server`
-- `approval/approval_map.md`
+- `../approvalruntime/approvalruntime_map.md`
   - package-level map for pure approval lifecycle and decision validation
 - `capability_result_runtime.go`
   - result classification, structured result shaping, and per-field metadata derivation for capability execution and configured remote capabilities
@@ -100,10 +100,10 @@ For integrators it matters in four ways:
   - runtime code and clients import `controlapi` directly; the temporary compatibility re-exports have been removed
 - `controlapi/controlapi_map.md`
   - package-level map for local HTTP-on-UDS wire contracts
-- `protocol/`
+- `../protocol/`
   - canonical capability request and approval decision envelopes
   - strips provider-native metadata from authority paths
-- `protocol/protocol_map.md`
+- `../protocol/protocol_map.md`
   - package-level map for canonical request validation and hashing
 
 ### Retired legacy surface

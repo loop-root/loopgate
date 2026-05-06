@@ -61,14 +61,23 @@ Start with domains that already have separate concepts, locks, or maps:
    - package direction: `internal/auditruntime` owns the extracted runtime
      state; keep `internal/loopgate` as the HTTP/control-plane adapter
 
-2. **Control session and replay state**
+2. **Protocol and approval runtime**
+   - candidate code: canonical capability/approval request envelopes, approval
+     state machine, approval manifest hashing, and decision validation
+   - invariant: approval decisions remain bound to owner, nonce, manifest, and
+     single-use lifecycle state
+   - package direction: `internal/protocol` and `internal/approvalruntime` own
+     the pure request/approval logic; `internal/loopgate` keeps audit,
+     transport, and handler wiring
+
+3. **Control session and replay state**
    - candidate code: session open/close, session MAC rotation, request replay,
      nonce replay, expiry pruning
    - invariant: do not split logical auth/expiry transitions across lock
-     windows
+   windows
    - package direction: `internal/controlruntime`
 
-3. **Claude hook runtime**
+4. **Claude hook runtime**
    - candidate code: hook pre-validation, hook lifecycle cache, hook approvals,
      hook audit projection
    - invariant: hook path remains fail closed and model/tool input stays

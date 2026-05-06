@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	approvalpkg "loopgate/internal/loopgate/approval"
+	approvalpkg "loopgate/internal/approvalruntime"
 )
 
 const (

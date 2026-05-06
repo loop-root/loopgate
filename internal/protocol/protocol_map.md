@@ -1,6 +1,6 @@
 # Protocol Package Map
 
-This file maps `internal/loopgate/protocol/`, the canonical request envelope
+This file maps `internal/protocol/`, the canonical request envelope
 package for capability execution and approval decisions.
 
 Use it when changing:
@@ -36,10 +36,11 @@ names are accepted only so they can be ignored and stripped from the wire.
 
 - `internal/loopgate/controlapi/core.go` aliases `CapabilityRequest` for the
   local control-plane contract.
-- `internal/loopgate/approval/` hashes `CapabilityRequest` into approval
+- `internal/approvalruntime/` hashes `CapabilityRequest` into approval
   manifests.
 - `internal/loopgate/request_body_runtime.go` handles signed body verification
   around these payloads.
+- This package must not import `internal/loopgate`.
 
 ## Important Watchouts
 

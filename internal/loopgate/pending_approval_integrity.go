@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	approvalpkg "loopgate/internal/loopgate/approval"
+	approvalpkg "loopgate/internal/approvalruntime"
 	"loopgate/internal/secrets"
 	toolspkg "loopgate/internal/tools"
 )
