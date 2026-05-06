@@ -11,14 +11,7 @@ type seenRequest = controlruntime.SeenRequest
 
 type authNonceReplayStore = controlruntime.AuthNonceReplayStore
 
-type usedToken struct {
-	TokenID           string
-	ParentTokenID     string
-	ControlSessionID  string
-	Capability        string
-	NormalizedArgHash string
-	ConsumedAt        time.Time
-}
+type usedToken = controlruntime.UsedToken
 
 func (server *Server) pruneExpiredLocked() {
 	nowUTC := server.now().UTC()
@@ -257,19 +250,19 @@ func (server *Server) countPendingMCPGatewayApprovalRequestsForSessionLocked(con
 // recordRequest returns nil when the request_id is accepted for replay tracking, or a denial
 // when duplicate or when the replay map is saturated (fail closed — no eviction).
 func (server *Server) recordRequest(controlSessionID string, capabilityRequest controlapipkg.CapabilityRequest) *controlapipkg.CapabilityResponse {
-	requestKey := controlSessionID + ":" + capabilityRequest.RequestID
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	server.pruneExpiredLocked()
-	if _, found := server.replayState.seenRequests[requestKey]; found {
+	recordedRequest, recordStatus := controlruntime.RecordSeenRequest(server.replayState.seenRequests, server.maxSeenRequestReplayEntries, controlSessionID, capabilityRequest.RequestID, server.now().UTC())
+	switch recordStatus {
+	case controlruntime.ReplayRecordDuplicate:
 		return &controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
 			Status:       controlapipkg.ResponseStatusDenied,
 			DenialReason: "duplicate request_id was rejected",
 			DenialCode:   controlapipkg.DenialCodeRequestReplayDetected,
 		}
-	}
-	if len(server.replayState.seenRequests) >= server.maxSeenRequestReplayEntries {
+	case controlruntime.ReplayRecordSaturated:
 		return &controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
 			Status:       controlapipkg.ResponseStatusDenied,
@@ -277,11 +270,7 @@ func (server *Server) recordRequest(controlSessionID string, capabilityRequest c
 			DenialCode:   controlapipkg.DenialCodeReplayStateSaturated,
 		}
 	}
-	server.replayState.seenRequests[requestKey] = seenRequest{
-		ControlSessionID: controlSessionID,
-		SeenAt:           server.now().UTC(),
-	}
-	server.noteReplayWindowCandidateLocked(server.replayState.seenRequests[requestKey].SeenAt)
+	server.noteReplayWindowCandidateLocked(recordedRequest.SeenAt)
 	return nil
 }
 
@@ -310,7 +299,8 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 	defer server.mu.Unlock()
 
 	server.pruneExpiredLocked()
-	if _, alreadyUsed := server.replayState.usedTokens[tokenClaims.TokenID]; alreadyUsed {
+	consumedToken, consumeStatus := controlruntime.ConsumeUsedToken(server.replayState.usedTokens, tokenClaims.TokenID, tokenClaims.ParentTokenID, tokenClaims.ControlSessionID, capabilityRequest.Capability, normalizedArgumentHash(capabilityRequest.Arguments), server.now().UTC())
+	if consumeStatus == controlruntime.ReplayRecordDuplicate {
 		return controlapipkg.CapabilityResponse{
 			RequestID:    capabilityRequest.RequestID,
 			Status:       controlapipkg.ResponseStatusDenied,
@@ -318,15 +308,7 @@ func (server *Server) consumeExecutionToken(tokenClaims capabilityToken, capabil
 			DenialCode:   controlapipkg.DenialCodeCapabilityTokenReused,
 		}, true
 	}
-	server.replayState.usedTokens[tokenClaims.TokenID] = usedToken{
-		TokenID:           tokenClaims.TokenID,
-		ParentTokenID:     tokenClaims.ParentTokenID,
-		ControlSessionID:  tokenClaims.ControlSessionID,
-		Capability:        capabilityRequest.Capability,
-		NormalizedArgHash: normalizedArgumentHash(capabilityRequest.Arguments),
-		ConsumedAt:        server.now().UTC(),
-	}
-	server.noteReplayWindowCandidateLocked(server.replayState.usedTokens[tokenClaims.TokenID].ConsumedAt)
+	server.noteReplayWindowCandidateLocked(consumedToken.ConsumedAt)
 	return controlapipkg.CapabilityResponse{}, false
 }
 

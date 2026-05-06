@@ -36,6 +36,17 @@ Dependency direction is one-way:
   - truncated-tail and malformed-middle-record coverage
   - legacy snapshot fallback coverage
   - compaction coverage
+- `replay_decisions.go`
+  - request replay key construction
+  - bounded in-memory request replay recording
+  - single-use execution token consumption recording
+  - pure accepted/duplicate/saturated statuses for Loopgate adapters to map to
+    denial responses
+- `replay_decisions_test.go`
+  - accepted request replay coverage
+  - duplicate request replay coverage
+  - saturated request replay coverage
+  - accepted and duplicate single-use token coverage
 
 ## Invariants
 
@@ -52,6 +63,8 @@ Dependency direction is one-way:
   malformed middle records remain hard failures.
 - Replay storage owns persistence only; Loopgate still owns the authoritative
   duplicate/saturation decisions under `server.mu`.
+- In-memory replay helpers return status values only. They do not import
+  `controlapi`, choose HTTP status codes, or shape denial text.
 
 ## Adapter Boundary
 
@@ -63,8 +76,9 @@ Dependency direction is one-way:
   denial behavior
 
 `internal/loopgate/control_plane_state.go` remains the adapter for nonce replay
-decisions:
+and replay decision mapping:
 
 - checks duplicates and capacity under `server.mu`
 - rolls back in-memory nonce state if persistence fails
 - maps persistence failure to the existing fail-closed control-plane denial
+- maps pure replay helper statuses to existing control-plane denial codes
