@@ -85,13 +85,21 @@ Start with domains that already have separate concepts, locks, or maps:
    - package direction: keep handler glue in `internal/loopgate`; move pure
      runtime/policy state only if a cohesive sibling package emerges
 
-4. **Provider connections**
+5. **Host access path runtime**
+   - candidate code: granted-root relative path normalization, `openat`
+     traversal, no-symlink checks, and path policy errors
+   - invariant: host filesystem access remains rooted under explicit grants and
+     symlink traversal stays fail closed
+   - package direction: `internal/hostaccess` owns low-level path primitives;
+     `internal/loopgate` keeps approval, audit, and HTTP response wiring
+
+6. **Provider connections**
    - candidate code: connection records, PKCE, configured capabilities, token
      issuance/cache
    - invariant: clients never receive long-lived provider secrets
    - package direction: `internal/connections`
 
-5. **MCP gateway**
+7. **MCP gateway**
    - candidate code: manifests, launch state, approval requests, execution
    - invariant: execution remains request-driven and auditable
    - package direction: `internal/mcpgateway`

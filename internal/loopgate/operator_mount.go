@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"loopgate/internal/hostaccess"
 	"loopgate/internal/safety"
 	toolspkg "loopgate/internal/tools"
 )
@@ -74,7 +75,7 @@ func canonicalizeOperatorMountPath(raw string) (string, error) {
 	if isDangerousOperatorMountPath(resolved) {
 		return "", errors.New("path is not permitted for operator mount")
 	}
-	if !loopgatePathExpressionPattern.MatchString(resolved) {
+	if !hostaccess.ValidPathExpression(resolved) {
 		return "", errors.New("path contains unsupported characters")
 	}
 	fi, err := os.Stat(resolved)
