@@ -86,6 +86,11 @@ For integrators it matters in four ways:
   - result classification, structured result shaping, and per-field metadata derivation for capability execution and configured remote capabilities
 - `capability_execution_runtime.go`
   - capability-risk classification, actor-scoped session helpers, execution-token derivation, capability request normalization, and capability-set helpers
+- `../hostaccess/`
+  - low-level host filesystem path traversal helpers for granted-root access;
+    uses no `internal/loopgate` imports
+- `../hostaccess/hostaccess_map.md`
+  - package-level map for host access path traversal boundaries
 - `request_body_runtime.go`
   - strict JSON body decode and signed-body verification helpers shared across HTTP handlers
 - `controlapi/`

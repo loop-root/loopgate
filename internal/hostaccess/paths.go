@@ -1,9 +1,8 @@
-package loopgate
+package hostaccess
 
 import (
 	"errors"
 	"fmt"
-	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,64 +11,61 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type hostAccessRelativePath struct {
+type RelativePath struct {
 	Display string
 	Parts   []string
 }
 
 var (
-	loopgatePathExpressionPattern = regexp.MustCompile(`^[^\x00]+$`)
-	loopgatePathComponentPattern  = regexp.MustCompile(`^[^/\\\x00]+$`)
+	pathExpressionPattern = regexp.MustCompile(`^[^\x00]+$`)
+	pathComponentPattern  = regexp.MustCompile(`^[^/\\\x00]+$`)
 )
 
-type hostAccessPathPolicyError struct {
+type PathPolicyError struct {
 	message string
 }
 
-func (err *hostAccessPathPolicyError) Error() string {
+func (err *PathPolicyError) Error() string {
 	return err.message
 }
 
-func newHostAccessPathPolicyError(message string) error {
-	return &hostAccessPathPolicyError{message: message}
+func newPathPolicyError(message string) error {
+	return &PathPolicyError{message: message}
 }
 
-func isHostAccessPathPolicyError(err error) bool {
-	var target *hostAccessPathPolicyError
+func IsPathPolicyError(err error) bool {
+	var target *PathPolicyError
 	return errors.As(err, &target)
 }
 
-func hostAccessPathErrorCode(err error) string {
-	if isHostAccessPathPolicyError(err) {
-		return controlapipkg.DenialCodeInvalidCapabilityArguments
-	}
-	return controlapipkg.DenialCodeExecutionFailed
+func ValidPathExpression(path string) bool {
+	return pathExpressionPattern.MatchString(path)
 }
 
-func normalizeHostAccessRelativePath(raw string) (hostAccessRelativePath, error) {
+func NormalizeRelativePath(raw string) (RelativePath, error) {
 	trimmed := strings.TrimSpace(raw)
 	trimmed = strings.TrimLeft(trimmed, `/\`)
 	if trimmed == "" {
-		return hostAccessRelativePath{}, nil
+		return RelativePath{}, nil
 	}
 
 	cleaned := filepath.Clean(filepath.FromSlash(trimmed))
 	if cleaned == "." {
-		return hostAccessRelativePath{}, nil
+		return RelativePath{}, nil
 	}
 	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(os.PathSeparator)) {
-		return hostAccessRelativePath{}, newHostAccessPathPolicyError("path escapes granted folder root")
+		return RelativePath{}, newPathPolicyError("path escapes granted folder root")
 	}
 
 	rawParts := strings.Split(cleaned, string(os.PathSeparator))
 	parts := make([]string, 0, len(rawParts))
 	for _, part := range rawParts {
 		if part == "" || part == "." || part == ".." {
-			return hostAccessRelativePath{}, newHostAccessPathPolicyError("path must not contain parent segments")
+			return RelativePath{}, newPathPolicyError("path must not contain parent segments")
 		}
 		parts = append(parts, part)
 	}
-	return hostAccessRelativePath{
+	return RelativePath{
 		Display: strings.Join(parts, "/"),
 		Parts:   parts,
 	}, nil
@@ -78,17 +74,17 @@ func normalizeHostAccessRelativePath(raw string) (hostAccessRelativePath, error)
 func wrapHostAccessOpenError(pathPart string, err error) error {
 	switch {
 	case errors.Is(err, unix.ELOOP):
-		return newHostAccessPathPolicyError("path traverses a symlink, which is not allowed")
+		return newPathPolicyError("path traverses a symlink, which is not allowed")
 	case errors.Is(err, unix.ENOTDIR):
-		return newHostAccessPathPolicyError("path component is not a directory")
+		return newPathPolicyError("path component is not a directory")
 	default:
 		return fmt.Errorf("open host path component %q: %w", pathPart, err)
 	}
 }
 
 func openHostRootDirectoryReadOnly(rootPath string) (int, error) {
-	if !loopgatePathExpressionPattern.MatchString(rootPath) {
-		return -1, newHostAccessPathPolicyError("granted folder root contains unsupported characters")
+	if !pathExpressionPattern.MatchString(rootPath) {
+		return -1, newPathPolicyError("granted folder root contains unsupported characters")
 	}
 	rootFD, err := unix.Open(rootPath, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY, 0)
 	if err != nil {
@@ -97,10 +93,10 @@ func openHostRootDirectoryReadOnly(rootPath string) (int, error) {
 	return rootFD, nil
 }
 
-func openHostPathReadOnly(rootPath string, rawRelativePath string, expectDirectory bool) (*os.File, hostAccessRelativePath, error) {
-	normalizedPath, err := normalizeHostAccessRelativePath(rawRelativePath)
+func OpenPathReadOnly(rootPath string, rawRelativePath string, expectDirectory bool) (*os.File, RelativePath, error) {
+	normalizedPath, err := NormalizeRelativePath(rawRelativePath)
 	if err != nil {
-		return nil, hostAccessRelativePath{}, err
+		return nil, RelativePath{}, err
 	}
 
 	rootFD, err := openHostRootDirectoryReadOnly(rootPath)
@@ -125,18 +121,18 @@ func openHostPathReadOnly(rootPath string, rawRelativePath string, expectDirecto
 
 	if len(normalizedPath.Parts) == 0 {
 		if !expectDirectory {
-			return nil, normalizedPath, newHostAccessPathPolicyError("path is a directory, not a file")
+			return nil, normalizedPath, newPathPolicyError("path is a directory, not a file")
 		}
-		if !loopgatePathExpressionPattern.MatchString(currentLabel) {
-			return nil, normalizedPath, newHostAccessPathPolicyError("opened path contains unsupported characters")
+		if !pathExpressionPattern.MatchString(currentLabel) {
+			return nil, normalizedPath, newPathPolicyError("opened path contains unsupported characters")
 		}
 		currentFD = -1
 		return os.NewFile(uintptr(rootFD), currentLabel), normalizedPath, nil
 	}
 
 	for pathPartIndex, pathPart := range normalizedPath.Parts {
-		if !loopgatePathComponentPattern.MatchString(pathPart) {
-			return nil, normalizedPath, newHostAccessPathPolicyError("path component contains unsupported characters")
+		if !pathComponentPattern.MatchString(pathPart) {
+			return nil, normalizedPath, newPathPolicyError("path component contains unsupported characters")
 		}
 		openFlags := unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NOFOLLOW
 		isLastPart := pathPartIndex == len(normalizedPath.Parts)-1
@@ -161,9 +157,9 @@ func openHostPathReadOnly(rootPath string, rawRelativePath string, expectDirecto
 
 	currentFDForFile := currentFD
 	currentFD = -1
-	if !loopgatePathExpressionPattern.MatchString(currentLabel) {
+	if !pathExpressionPattern.MatchString(currentLabel) {
 		_ = unix.Close(currentFDForFile)
-		return nil, normalizedPath, newHostAccessPathPolicyError("opened path contains unsupported characters")
+		return nil, normalizedPath, newPathPolicyError("opened path contains unsupported characters")
 	}
 	fileHandle := os.NewFile(uintptr(currentFDForFile), currentLabel)
 	if !expectDirectory {
@@ -174,19 +170,19 @@ func openHostPathReadOnly(rootPath string, rawRelativePath string, expectDirecto
 		}
 		if fileInfo.IsDir() {
 			_ = fileHandle.Close()
-			return nil, normalizedPath, newHostAccessPathPolicyError("path is a directory, not a file")
+			return nil, normalizedPath, newPathPolicyError("path is a directory, not a file")
 		}
 	}
 	return fileHandle, normalizedPath, nil
 }
 
-func openHostParentDirectory(rootPath string, rawRelativePath string) (*os.File, string, hostAccessRelativePath, error) {
-	normalizedPath, err := normalizeHostAccessRelativePath(rawRelativePath)
+func OpenParentDirectory(rootPath string, rawRelativePath string) (*os.File, string, RelativePath, error) {
+	normalizedPath, err := NormalizeRelativePath(rawRelativePath)
 	if err != nil {
-		return nil, "", hostAccessRelativePath{}, err
+		return nil, "", RelativePath{}, err
 	}
 	if len(normalizedPath.Parts) == 0 {
-		return nil, "", normalizedPath, newHostAccessPathPolicyError("path must refer to an entry beneath the granted folder")
+		return nil, "", normalizedPath, newPathPolicyError("path must refer to an entry beneath the granted folder")
 	}
 
 	rootFD, err := openHostRootDirectoryReadOnly(rootPath)
@@ -218,10 +214,10 @@ func openHostParentDirectory(rootPath string, rawRelativePath string) (*os.File,
 	return os.NewFile(uintptr(parentFD), currentLabel), normalizedPath.Parts[len(normalizedPath.Parts)-1], normalizedPath, nil
 }
 
-func lstatHostPathUnderRoot(rootPath string, rawRelativePath string) (hostAccessRelativePath, unix.Stat_t, bool, error) {
-	normalizedPath, err := normalizeHostAccessRelativePath(rawRelativePath)
+func LstatPathUnderRoot(rootPath string, rawRelativePath string) (RelativePath, unix.Stat_t, bool, error) {
+	normalizedPath, err := NormalizeRelativePath(rawRelativePath)
 	if err != nil {
-		return hostAccessRelativePath{}, unix.Stat_t{}, false, err
+		return RelativePath{}, unix.Stat_t{}, false, err
 	}
 
 	if len(normalizedPath.Parts) == 0 {
@@ -238,7 +234,7 @@ func lstatHostPathUnderRoot(rootPath string, rawRelativePath string) (hostAccess
 		return normalizedPath, rootStat, true, nil
 	}
 
-	parentHandle, baseName, normalizedPath, err := openHostParentDirectory(rootPath, rawRelativePath)
+	parentHandle, baseName, normalizedPath, err := OpenParentDirectory(rootPath, rawRelativePath)
 	if err != nil {
 		return normalizedPath, unix.Stat_t{}, false, err
 	}
@@ -254,10 +250,10 @@ func lstatHostPathUnderRoot(rootPath string, rawRelativePath string) (hostAccess
 	return normalizedPath, statResult, true, nil
 }
 
-func ensureHostDirectoryUnderRoot(rootPath string, rawRelativePath string, permissions uint32) (hostAccessRelativePath, error) {
-	normalizedPath, err := normalizeHostAccessRelativePath(rawRelativePath)
+func EnsureDirectoryUnderRoot(rootPath string, rawRelativePath string, permissions uint32) (RelativePath, error) {
+	normalizedPath, err := NormalizeRelativePath(rawRelativePath)
 	if err != nil {
-		return hostAccessRelativePath{}, err
+		return RelativePath{}, err
 	}
 
 	rootFD, err := openHostRootDirectoryReadOnly(rootPath)
@@ -306,10 +302,10 @@ func ensureHostDirectoryUnderRoot(rootPath string, rawRelativePath string, permi
 	return normalizedPath, nil
 }
 
-func hostPathModeIsDirectory(mode uint32) bool {
+func PathModeIsDirectory(mode uint32) bool {
 	return mode&unix.S_IFMT == unix.S_IFDIR
 }
 
-func hostPathModeIsSymlink(mode uint32) bool {
+func PathModeIsSymlink(mode uint32) bool {
 	return mode&unix.S_IFMT == unix.S_IFLNK
 }

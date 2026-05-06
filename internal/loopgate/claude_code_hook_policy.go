@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"loopgate/internal/config"
+	"loopgate/internal/hostaccess"
 	policypkg "loopgate/internal/policy"
 	"loopgate/internal/safety"
 )
@@ -336,7 +337,7 @@ func (server *Server) resolveClaudeCodeHookPolicyPath(req controlapipkg.HookPreV
 
 	switch req.ToolName {
 	case "Read", "Glob", "Grep":
-		if !loopgatePathExpressionPattern.MatchString(explanation.ResolvedAbs) {
+		if !hostaccess.ValidPathExpression(explanation.ResolvedAbs) {
 			return explanation.ResolvedAbs, fmt.Errorf("target_path_not_resolved: path contains unsupported characters")
 		}
 		if _, statErr := os.Stat(explanation.ResolvedAbs); statErr != nil {
@@ -357,7 +358,7 @@ func (server *Server) resolveClaudeCodeHookPolicyPath(req controlapipkg.HookPreV
 
 func mutatingHookPathUsesSymlinkPath(repoRoot string, candidatePath string) (bool, error) {
 	inspectionPath := candidatePath
-	if !loopgatePathExpressionPattern.MatchString(inspectionPath) {
+	if !hostaccess.ValidPathExpression(inspectionPath) {
 		return false, fmt.Errorf("path contains unsupported characters")
 	}
 	if _, err := os.Lstat(inspectionPath); err != nil {
@@ -381,7 +382,7 @@ func mutatingHookPathUsesSymlinkPath(repoRoot string, candidatePath string) (boo
 			return false, fmt.Errorf("path escapes symlink inspection root")
 		}
 		currentPath = filepath.Join(currentPath, pathPart)
-		if !loopgatePathExpressionPattern.MatchString(currentPath) {
+		if !hostaccess.ValidPathExpression(currentPath) {
 			return false, fmt.Errorf("path contains unsupported characters")
 		}
 		fileInfo, err := os.Lstat(currentPath)

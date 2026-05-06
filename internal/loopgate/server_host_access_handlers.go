@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,6 +14,8 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
+	"loopgate/internal/hostaccess"
+	controlapipkg "loopgate/internal/loopgate/controlapi"
 	policypkg "loopgate/internal/policy"
 	"loopgate/internal/sandbox"
 	"loopgate/internal/secrets"
@@ -42,6 +43,13 @@ type hostOrganizePlanOp struct {
 	From string `json:"from,omitempty"`
 	To   string `json:"to,omitempty"`
 	Path string `json:"path,omitempty"`
+}
+
+func hostAccessPathErrorCode(err error) string {
+	if hostaccess.IsPathPolicyError(err) {
+		return controlapipkg.DenialCodeInvalidCapabilityArguments
+	}
+	return controlapipkg.DenialCodeExecutionFailed
 }
 
 // parseHostOrganizePlanJSON decodes plan_json from capability arguments. Models and gateways vary:
@@ -272,7 +280,7 @@ func (server *Server) executeHostFolderListCapability(tokenClaims capabilityToke
 	if err != nil {
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
-	directoryHandle, listPath, err := openHostPathReadOnly(rootPath, capabilityRequest.Arguments["path"], true)
+	directoryHandle, listPath, err := hostaccess.OpenPathReadOnly(rootPath, capabilityRequest.Arguments["path"], true)
 	if err != nil {
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), hostAccessPathErrorCode(err))
 	}
@@ -344,7 +352,7 @@ func (server *Server) executeHostFolderReadCapability(tokenClaims capabilityToke
 	if err != nil {
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), controlapipkg.DenialCodeExecutionFailed)
 	}
-	fileHandle, filePath, err := openHostPathReadOnly(rootPath, capabilityRequest.Arguments["path"], false)
+	fileHandle, filePath, err := hostaccess.OpenPathReadOnly(rootPath, capabilityRequest.Arguments["path"], false)
 	if err != nil {
 		return hostAccessErrorResponse(server, tokenClaims, capabilityRequest, err.Error(), hostAccessPathErrorCode(err))
 	}
@@ -502,7 +510,7 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 	step := 0
 	for _, op := range mkdirOps {
 		step++
-		target, pathErr := ensureHostDirectoryUnderRoot(rootPath, op.Path, 0o755)
+		target, pathErr := hostaccess.EnsureDirectoryUnderRoot(rootPath, op.Path, 0o755)
 		if pathErr != nil {
 			results = append(results, applyResult{Step: step, Kind: "mkdir", Status: "error", Detail: pathErr.Error()})
 			return hostAccessApplyPartialFailure(server, tokenClaims, capabilityRequest, results)
@@ -512,7 +520,7 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 
 	for _, op := range moveOps {
 		step++
-		_, fromStat, fromExists, fromErr := lstatHostPathUnderRoot(rootPath, op.From)
+		_, fromStat, fromExists, fromErr := hostaccess.LstatPathUnderRoot(rootPath, op.From)
 		if fromErr != nil {
 			results = append(results, applyResult{Step: step, Kind: "move", Status: "error", Detail: fromErr.Error()})
 			return hostAccessApplyPartialFailure(server, tokenClaims, capabilityRequest, results)
@@ -521,7 +529,7 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 			results = append(results, applyResult{Step: step, Kind: "move", Status: "error", Detail: "source path does not exist"})
 			return hostAccessApplyPartialFailure(server, tokenClaims, capabilityRequest, results)
 		}
-		if hostPathModeIsSymlink(uint32(fromStat.Mode)) {
+		if hostaccess.PathModeIsSymlink(uint32(fromStat.Mode)) {
 			results = append(results, applyResult{Step: step, Kind: "move", Status: "error", Detail: "source path traverses a symlink, which is not allowed"})
 			return hostAccessApplyPartialFailure(server, tokenClaims, capabilityRequest, results)
 		}
@@ -529,17 +537,17 @@ func (server *Server) executeHostPlanApplyCapability(tokenClaims capabilityToken
 		if toParentPath == "." {
 			toParentPath = ""
 		}
-		if _, mkdirErr := ensureHostDirectoryUnderRoot(rootPath, toParentPath, 0o755); mkdirErr != nil {
+		if _, mkdirErr := hostaccess.EnsureDirectoryUnderRoot(rootPath, toParentPath, 0o755); mkdirErr != nil {
 			results = append(results, applyResult{Step: step, Kind: "move", Status: "error", Detail: mkdirErr.Error()})
 			return hostAccessApplyPartialFailure(server, tokenClaims, capabilityRequest, results)
 		}
 
-		fromParentHandle, fromBaseName, _, fromParentErr := openHostParentDirectory(rootPath, op.From)
+		fromParentHandle, fromBaseName, _, fromParentErr := hostaccess.OpenParentDirectory(rootPath, op.From)
 		if fromParentErr != nil {
 			results = append(results, applyResult{Step: step, Kind: "move", Status: "error", Detail: fromParentErr.Error()})
 			return hostAccessApplyPartialFailure(server, tokenClaims, capabilityRequest, results)
 		}
-		toParentHandle, toBaseName, toPath, toErr := openHostParentDirectory(rootPath, op.To)
+		toParentHandle, toBaseName, toPath, toErr := hostaccess.OpenParentDirectory(rootPath, op.To)
 		if toErr != nil {
 			fromParentHandle.Close()
 			results = append(results, applyResult{Step: step, Kind: "move", Status: "error", Detail: toErr.Error()})
@@ -655,11 +663,11 @@ func (server *Server) isLowRiskHostPlanApply(controlSessionID string, planID str
 }
 
 func hostPlanMoveIsLowRisk(rootPath string, from string, to string, plannedDirectories map[string]struct{}) bool {
-	fromPath, fromStat, fromExists, err := lstatHostPathUnderRoot(rootPath, from)
+	fromPath, fromStat, fromExists, err := hostaccess.LstatPathUnderRoot(rootPath, from)
 	if err != nil || hostPlanContainsHiddenSegment(from) {
 		return false
 	}
-	toPath, err := normalizeHostAccessRelativePath(to)
+	toPath, err := hostaccess.NormalizeRelativePath(to)
 	if err != nil || hostPlanContainsHiddenSegment(to) || len(toPath.Parts) == 0 {
 		return false
 	}
@@ -670,7 +678,7 @@ func hostPlanMoveIsLowRisk(rootPath string, from string, to string, plannedDirec
 	toExists := false
 	if !hostPlanParentIsPlanned(toPath, plannedDirectories) {
 		var statErr error
-		_, toStat, toExists, statErr = lstatHostPathUnderRoot(rootPath, toPath.Display)
+		_, toStat, toExists, statErr = hostaccess.LstatPathUnderRoot(rootPath, toPath.Display)
 		if statErr != nil {
 			return false
 		}
@@ -678,41 +686,41 @@ func hostPlanMoveIsLowRisk(rootPath string, from string, to string, plannedDirec
 	if toExists {
 		return false
 	}
-	if hostPathModeIsSymlink(uint32(toStat.Mode)) {
+	if hostaccess.PathModeIsSymlink(uint32(toStat.Mode)) {
 		return false
 	}
 	if !fromExists {
 		return true
 	}
-	if hostPathModeIsSymlink(uint32(fromStat.Mode)) || hostPathModeIsDirectory(uint32(fromStat.Mode)) {
+	if hostaccess.PathModeIsSymlink(uint32(fromStat.Mode)) || hostaccess.PathModeIsDirectory(uint32(fromStat.Mode)) {
 		return false
 	}
 	return true
 }
 
-func hostPlanPathIsLowRisk(rootPath string, rel string, plannedDirectories map[string]struct{}) (hostAccessRelativePath, bool) {
+func hostPlanPathIsLowRisk(rootPath string, rel string, plannedDirectories map[string]struct{}) (hostaccess.RelativePath, bool) {
 	if hostPlanContainsHiddenSegment(rel) {
-		return hostAccessRelativePath{}, false
+		return hostaccess.RelativePath{}, false
 	}
-	normalizedPath, statResult, exists, err := lstatHostPathUnderRoot(rootPath, rel)
+	normalizedPath, statResult, exists, err := hostaccess.LstatPathUnderRoot(rootPath, rel)
 	if err != nil || len(normalizedPath.Parts) == 0 {
-		return hostAccessRelativePath{}, false
+		return hostaccess.RelativePath{}, false
 	}
 	if exists {
-		return normalizedPath, hostPathModeIsDirectory(uint32(statResult.Mode))
+		return normalizedPath, hostaccess.PathModeIsDirectory(uint32(statResult.Mode))
 	}
 	if hostPlanParentIsPlanned(normalizedPath, plannedDirectories) {
 		return normalizedPath, true
 	}
-	parentHandle, _, _, err := openHostParentDirectory(rootPath, rel)
+	parentHandle, _, _, err := hostaccess.OpenParentDirectory(rootPath, rel)
 	if err != nil {
-		return hostAccessRelativePath{}, false
+		return hostaccess.RelativePath{}, false
 	}
 	parentHandle.Close()
 	return normalizedPath, true
 }
 
-func hostPlanParentIsPlanned(path hostAccessRelativePath, plannedDirectories map[string]struct{}) bool {
+func hostPlanParentIsPlanned(path hostaccess.RelativePath, plannedDirectories map[string]struct{}) bool {
 	if len(path.Parts) <= 1 {
 		return false
 	}
