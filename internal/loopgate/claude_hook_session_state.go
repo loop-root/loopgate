@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"loopgate/internal/controlruntime"
 )
 
 const (
@@ -168,7 +170,7 @@ func (server *Server) saveClaudeHookSessionStateLocked(stateBySessionID map[stri
 	if err != nil {
 		return fmt.Errorf("marshal claude hook session state: %w", err)
 	}
-	if err := atomicWritePrivateJSON(server.claudeHookSessionsPath, stateBytes); err != nil {
+	if err := controlruntime.AtomicWritePrivateJSON(server.claudeHookSessionsPath, stateBytes); err != nil {
 		return fmt.Errorf("save claude hook session state: %w", err)
 	}
 	return nil

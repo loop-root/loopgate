@@ -2,6 +2,7 @@ package loopgate
 
 import (
 	"context"
+	"loopgate/internal/controlruntime"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
 	"net/http"
 	"path/filepath"
@@ -161,7 +162,7 @@ func TestSignedRequestFailsClosedWhenNonceReplayPersistenceUnavailable(t *testin
 	repoRoot := t.TempDir()
 	client, _, server := startLoopgateServer(t, repoRoot, loopgatePolicyYAML(false))
 	server.noncePath = filepath.Join(repoRoot, "runtime", "state")
-	server.nonceReplayStore = appendOnlyNonceReplayStore{path: server.noncePath}
+	server.nonceReplayStore = controlruntime.NewAppendOnlyNonceReplayStore(server.noncePath, "", requestReplayWindow)
 
 	_, err := client.Status(context.Background())
 	if err == nil || !strings.Contains(err.Error(), controlapipkg.DenialCodeAuditUnavailable) {

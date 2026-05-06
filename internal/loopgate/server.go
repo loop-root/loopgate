@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"loopgate/internal/config"
+	"loopgate/internal/controlruntime"
 	"loopgate/internal/ledger"
 	"loopgate/internal/loopdiag"
 	controlapipkg "loopgate/internal/loopgate/controlapi"
@@ -139,10 +140,7 @@ func NewServerWithOptions(repoRoot string, socketPath string) (*Server, error) {
 			appliedPlanAt: make(map[string]time.Time),
 		},
 	}
-	server.nonceReplayStore = appendOnlyNonceReplayStore{
-		path:               server.noncePath,
-		legacySnapshotPath: filepath.Join(repoRoot, "runtime", "state", "nonce_replay.json"),
-	}
+	server.nonceReplayStore = controlruntime.NewAppendOnlyNonceReplayStore(server.noncePath, filepath.Join(repoRoot, "runtime", "state", "nonce_replay.json"), requestReplayWindow)
 	if pin := normalizeSessionExecutablePinPath(runtimeConfig.ControlPlane.ExpectedSessionClientExecutable); pin != "" {
 		server.expectedClientPath = pin
 	}

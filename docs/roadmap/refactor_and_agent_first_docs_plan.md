@@ -80,6 +80,10 @@ Start with domains that already have separate concepts, locks, or maps:
      candidate selection, and private rotation-master storage now live in
      `internal/controlruntime`; Loopgate keeps the HTTP/controlapi adapter and
      request-auth denial behavior
+   - progress: nonce replay snapshot/append-only persistence, legacy fallback,
+     truncated-tail recovery, and compaction now live in
+     `internal/controlruntime`; Loopgate keeps duplicate/capacity decisions and
+     fail-closed rollback under `server.mu`
 
 4. **Claude hook runtime**
    - candidate code: hook pre-validation, hook lifecycle cache, hook approvals,
