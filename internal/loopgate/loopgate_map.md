@@ -64,6 +64,12 @@ For integrators it matters in four ways:
   - current global capability inventory surface
 - `server_audit_runtime.go`
   - compatibility facade for audit recording, secret loading, and operator diagnostic log helpers
+- `../controlruntime/`
+  - extracted control-plane runtime primitives that do not require `Server`;
+    currently owns session MAC epoch math, key derivation, candidate rotation
+    keys, and private rotation-master storage
+- `../controlruntime/controlruntime_map.md`
+  - package-level map for extracted control runtime boundaries
 - `../auditruntime/`
   - append-only audit chain sequencing, startup chain load, HMAC checkpoint creation, and persisted must-persist audit append serialization
   - sibling runtime package imported by `internal/loopgate`; it must not import
