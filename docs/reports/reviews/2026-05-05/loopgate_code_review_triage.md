@@ -44,7 +44,7 @@ the review either missed or described imprecisely.
 | F-04 | Partially valid | Session and approval caps exist. Remaining concern is prune work under `server.mu`, lack of visible counters, and hot-path latency under saturation. Regrade below P0 unless benchmarks prove otherwise. |
 | F-05 | Valid | Policy signing trust-dir env override is security-relevant and should be loud, owner/mode checked, and tested. |
 | F-06 | Valid, low priority | `testing.Testing()` in production code is awkward and removable, but not an urgent runtime defect. |
-| F-07 | Valid | Canonicalization depends on stable JSON bytes. Add golden bytes tests and reject or stringify integer values that cannot safely round-trip through JSON consumers. |
+| F-07 | Remediated | Canonicalization now has golden bytes/hash coverage and rejects integer payload values outside JSON's safe integer range before hashing. Sequence parsing also rejects fractional and unsafe sequence numbers. |
 | F-08 | Valid | Ledger append success with post-write `Stat` failure is probably correct, but the warning should be observable. |
 | F-09 | Valid | HMAC checkpoint key rotation is missing; incident response story is incomplete without it. |
 | F-10 | Needs design decision | `internal/audit` is thin, but it encodes must-persist vs warn-only policy. Either document the boundary or fold it into `internal/ledger`. |
@@ -64,10 +64,9 @@ the review either missed or described imprecisely.
 
 ## Remediation order
 
-1. Fix F-07 with ledger canonicalization goldens and unsafe integer guards.
-2. Continue F-18 with low-risk package moves that preserve dependency direction.
-3. Fix F-01 and F-16 for clearer operator behavior.
-4. Reassess F-04 with the existing benchmark harness and add control-plane
+1. Continue F-18 with low-risk package moves that preserve dependency direction.
+2. Fix F-01 and F-16 for clearer operator behavior.
+3. Reassess F-04 with the existing benchmark harness and add control-plane
    state counters if the lock/prune path shows up under load.
 
 ## God-package extraction rule

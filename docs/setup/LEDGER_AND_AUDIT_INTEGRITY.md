@@ -12,6 +12,11 @@
 
 Loopgate's control-plane audit uses the shared **`internal/ledger`** machinery: monotonic sequence fields, `previous_event_hash`, and `event_hash` per line (SHA-256 over canonical JSON **excluding** the stored `event_hash`). External harnesses may reuse that package, but they are no longer part of the active Loopgate repo layout.
 
+Canonical JSON is part of the integrity contract. String-keyed map fields are
+serialized deterministically, `event_hash` is stripped before hashing, and
+integer payload values outside JSON's safe integer range are rejected instead
+of being hashed into a value that another JSON consumer may round differently.
+
 ## What the hash chain gives you
 
 - **Ordering and linkage:** Each event references the previous hash; accidental truncation, single-line corruption, or reordering is detected when the chain is verified on read/append.

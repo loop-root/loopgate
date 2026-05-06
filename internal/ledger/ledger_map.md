@@ -43,4 +43,8 @@ Use it when changing:
 - Keep append-chain cache ownership explicit. `AppendRuntime` instances may own
   cache state for a caller such as Loopgate's audit runtime; package-level
   helpers are only convenience delegates to the default runtime.
+- Canonical event bytes are a compatibility contract. Update
+  `TestCanonicalEventJSON_GoldenBytesAndHash` intentionally when changing the
+  serializer, and reject integer payload values outside JSON's safe integer
+  range rather than hashing values that may not round-trip consistently.
 - **Security semantics:** `event_hash` / `previous_event_hash` are **SHA-256 over canonical JSON** (not a secret-keyed MAC). They detect accidental corruption and intra-file tampering that breaks the chain; they do **not** prove Loopgate authorship against a same-user attacker who replaces the whole file with a new valid chain. Operators: `docs/setup/LEDGER_AND_AUDIT_INTEGRITY.md`.
