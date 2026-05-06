@@ -74,8 +74,12 @@ Start with domains that already have separate concepts, locks, or maps:
    - candidate code: session open/close, session MAC rotation, request replay,
      nonce replay, expiry pruning
    - invariant: do not split logical auth/expiry transitions across lock
-   windows
+     windows
    - package direction: `internal/controlruntime`
+   - progress: session MAC epoch math, derived-key construction, rotation
+     candidate selection, and private rotation-master storage now live in
+     `internal/controlruntime`; Loopgate keeps the HTTP/controlapi adapter and
+     request-auth denial behavior
 
 4. **Claude hook runtime**
    - candidate code: hook pre-validation, hook lifecycle cache, hook approvals,
