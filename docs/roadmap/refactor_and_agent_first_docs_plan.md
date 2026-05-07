@@ -84,6 +84,9 @@ Start with domains that already have separate concepts, locks, or maps:
      truncated-tail recovery, and compaction now live in
      `internal/controlruntime`; Loopgate keeps duplicate/capacity decisions and
      fail-closed rollback under `server.mu`
+   - progress: pure request replay and single-use token consumption table
+     helpers now live in `internal/controlruntime`; Loopgate keeps lock
+     ownership and maps helper statuses to the existing denial codes
 
 4. **Claude hook runtime**
    - candidate code: hook pre-validation, hook lifecycle cache, hook approvals,
