@@ -1,8 +1,8 @@
 package loopgate
 
 import (
+	"loopgate/internal/controlruntime"
 	"strings"
-	"time"
 )
 
 func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
@@ -13,23 +13,9 @@ func (server *Server) checkFsReadRateLimit(controlSessionID string) bool {
 		return false
 	}
 
-	nowUTC := server.now().UTC()
-	cutoff := nowUTC.Add(-fsReadRateWindow)
-
-	timestamps := server.replayState.sessionReadCounts[controlSessionID]
-	// Prune old entries.
-	pruned := make([]time.Time, 0, len(timestamps))
-	for _, ts := range timestamps {
-		if ts.After(cutoff) {
-			pruned = append(pruned, ts)
-		}
-	}
-	if len(pruned) >= server.fsReadRateLimit {
-		server.replayState.sessionReadCounts[controlSessionID] = pruned
-		return true
-	}
-	server.replayState.sessionReadCounts[controlSessionID] = append(pruned, nowUTC)
-	return false
+	decision := controlruntime.CheckSlidingWindowRateLimit(server.replayState.sessionReadCounts[controlSessionID], server.fsReadRateLimit, fsReadRateWindow, server.now().UTC())
+	server.replayState.sessionReadCounts[controlSessionID] = decision.Timestamps
+	return decision.Denied
 }
 
 func (server *Server) checkHookPreValidateRateLimit(peerUID uint32) bool {
@@ -40,22 +26,9 @@ func (server *Server) checkHookPreValidateRateLimit(peerUID uint32) bool {
 		return false
 	}
 
-	nowUTC := server.now().UTC()
-	cutoff := nowUTC.Add(-server.hookPreValidateRateWindow)
-
-	timestamps := server.replayState.hookPreValidateCounts[peerUID]
-	pruned := make([]time.Time, 0, len(timestamps))
-	for _, timestamp := range timestamps {
-		if timestamp.After(cutoff) {
-			pruned = append(pruned, timestamp)
-		}
-	}
-	if len(pruned) >= server.hookPreValidateRateLimit {
-		server.replayState.hookPreValidateCounts[peerUID] = pruned
-		return true
-	}
-	server.replayState.hookPreValidateCounts[peerUID] = append(pruned, nowUTC)
-	return false
+	decision := controlruntime.CheckSlidingWindowRateLimit(server.replayState.hookPreValidateCounts[peerUID], server.hookPreValidateRateLimit, server.hookPreValidateRateWindow, server.now().UTC())
+	server.replayState.hookPreValidateCounts[peerUID] = decision.Timestamps
+	return decision.Denied
 }
 
 func (server *Server) checkHookPeerAuthFailureRateLimit(rateLimitKey string) bool {
@@ -71,20 +44,7 @@ func (server *Server) checkHookPeerAuthFailureRateLimit(rateLimitKey string) boo
 		trimmedRateLimitKey = "unknown"
 	}
 
-	nowUTC := server.now().UTC()
-	cutoff := nowUTC.Add(-server.hookPeerAuthFailureWindow)
-
-	timestamps := server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey]
-	pruned := make([]time.Time, 0, len(timestamps))
-	for _, timestamp := range timestamps {
-		if timestamp.After(cutoff) {
-			pruned = append(pruned, timestamp)
-		}
-	}
-	if len(pruned) >= server.hookPeerAuthFailureRateLimit {
-		server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey] = pruned
-		return true
-	}
-	server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey] = append(pruned, nowUTC)
-	return false
+	decision := controlruntime.CheckSlidingWindowRateLimit(server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey], server.hookPeerAuthFailureRateLimit, server.hookPeerAuthFailureWindow, server.now().UTC())
+	server.replayState.hookPeerAuthFailureCounts[trimmedRateLimitKey] = decision.Timestamps
+	return decision.Denied
 }

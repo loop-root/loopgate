@@ -47,6 +47,16 @@ Dependency direction is one-way:
   - duplicate request replay coverage
   - saturated request replay coverage
   - accepted and duplicate single-use token coverage
+- `rate_limit.go`
+  - pure sliding-window timestamp pruning
+  - accepted/denied rate-limit decisions
+  - no mutation of caller-owned timestamp slices
+- `rate_limit_test.go`
+  - below-limit allow coverage
+  - at-limit denial coverage
+  - cutoff pruning coverage
+  - caller backing-array immutability coverage
+  - disabled-limit coverage
 
 ## Invariants
 
@@ -65,6 +75,8 @@ Dependency direction is one-way:
   duplicate/saturation decisions under `server.mu`.
 - In-memory replay helpers return status values only. They do not import
   `controlapi`, choose HTTP status codes, or shape denial text.
+- Sliding-window rate-limit helpers own timestamp math only. Loopgate keeps
+  lock ownership, rate-limit keys, and denial response mapping.
 
 ## Adapter Boundary
 
@@ -82,3 +94,9 @@ and replay decision mapping:
 - rolls back in-memory nonce state if persistence fails
 - maps persistence failure to the existing fail-closed control-plane denial
 - maps pure replay helper statuses to existing control-plane denial codes
+
+`internal/loopgate/server_rate_limit.go` remains the adapter for rate-limit
+keys and lock ownership:
+
+- checks per-session/per-peer/per-failure-key buckets under `server.mu`
+- delegates timestamp pruning and allow/deny math to `controlruntime`
