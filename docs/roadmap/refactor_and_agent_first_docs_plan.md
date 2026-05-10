@@ -87,6 +87,9 @@ Start with domains that already have separate concepts, locks, or maps:
    - progress: pure request replay and single-use token consumption table
      helpers now live in `internal/controlruntime`; Loopgate keeps lock
      ownership and maps helper statuses to the existing denial codes
+   - progress: sliding-window rate-limit timestamp math now lives in
+     `internal/controlruntime`; Loopgate keeps bucket keys, lock ownership, and
+     denial response mapping
 
 4. **Claude hook runtime**
    - candidate code: hook pre-validation, hook lifecycle cache, hook approvals,
